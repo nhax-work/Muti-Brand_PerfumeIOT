@@ -1,0 +1,11 @@
+# Ignore everything by default
+*
+
+# Keep directories traversable so Markdown files can be discovered recursively
+!*/
+
+# Track Markdown documentation
+!*.md
+
+# Track this ignore configuration
+!.gitignore
