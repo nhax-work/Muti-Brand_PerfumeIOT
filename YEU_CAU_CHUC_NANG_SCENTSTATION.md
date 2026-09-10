@@ -1,5 +1,9 @@
 # Yêu cầu chức năng hệ thống ScentStation
 
+## Phạm vi tài liệu
+
+Tài liệu chỉ mô tả các thao tác được thực hiện trực tiếp trên hệ thống ScentStation. Các công việc vật lý hoặc diễn ra ngoài hệ thống như lắp đặt, di chuyển máy, nạp/thay chai nước hoa, sửa chữa/thay linh kiện, đặt giấy thử hoặc cổ tay vào máy và truy cập kênh mua hàng bên ngoài không thuộc phạm vi yêu cầu chức năng. Hệ thống chỉ ghi nhận, theo dõi hoặc xác nhận kết quả của các công việc này khi cần.
+
 ## 1. Quản trị viên cấp cao của nền tảng
 
 Quản trị viên cấp cao chịu trách nhiệm quản lý toàn bộ nền tảng ScentStation và các thương hiệu nước hoa tham gia hệ thống.
@@ -47,31 +51,29 @@ Quản lý vận hành theo dõi hoạt động hằng ngày của máy và xử
 
 ## 4. Kỹ thuật viên
 
-Kỹ thuật viên thực hiện kiểm tra, hỗ trợ nạp nước hoa, chẩn đoán và bảo trì các máy được phân công.
+Kỹ thuật viên sử dụng hệ thống để theo dõi, chẩn đoán và ghi nhận hoạt động bảo trì của các máy được phân công.
 
 - Xem danh sách máy, cảnh báo và phiếu bảo trì được giao.
 - Xác thực tài khoản trước khi truy cập chức năng bảo trì hoặc chẩn đoán.
 - Chuyển máy sang chế độ bảo trì để ngừng tiếp nhận giao dịch mới.
-- Xem thông tin máy, phiên bản firmware, dữ liệu cảm biến, mã lỗi và các sự kiện thiết bị gần đây.
-- Thực hiện thao tác chẩn đoán được cấp quyền trên máy hoặc ngăn được chọn.
+- Gửi lệnh chẩn đoán được cấp quyền đến máy hoặc ngăn được chọn và xem kết quả trên hệ thống.
 - Thực hiện lượt xịt thử có kiểm soát và được ghi nhận riêng với lượt xịt của khách hàng.
-- Ghi kết quả kiểm tra, nguyên nhân, biện pháp xử lý và linh kiện đã thay.
+- Ghi nhận kết quả kiểm tra, nguyên nhân, biện pháp xử lý và linh kiện đã thay sau khi công việc bên ngoài hệ thống hoàn tất.
 - Hoàn thành danh sách kiểm tra bảo trì theo cấu hình.
 - Đính kèm ghi chú, hình ảnh hoặc tài liệu liên quan khi cần thiết.
-- Thực hiện kiểm tra sau bảo trì trước khi đưa máy trở lại hoạt động.
 - Chỉ đóng phiếu bảo trì sau khi ghi nhận đầy đủ kết quả sửa chữa.
 - Xem lịch sử bảo trì và lịch sử lỗi của các máy được phân công.
 
 ## 5. Nhân viên quản lý kho
 
-Nhân viên quản lý kho chịu trách nhiệm quản lý chai hoặc hộp nước hoa và thực hiện quy trình nạp hoặc thay thế.
+Nhân viên quản lý kho sử dụng hệ thống để quản lý chai hoặc hộp nước hoa và ghi nhận kết quả nạp hoặc thay thế.
 
 - Quản lý các lô nước hoa, bao gồm sản phẩm, số lô, số lượng, ngày nhập và hạn sử dụng.
 - Đăng ký từng chai hoặc hộp nước hoa bằng một mã định danh duy nhất.
 - Xem chai hoặc hộp theo trạng thái: còn trong kho, đã lắp, sắp hết, đã hết, hư hỏng hoặc hết hạn.
-- Gán một chai hoặc hộp nước hoa vào đúng ngăn máy.
-- Xác minh đúng loại nước hoa được lắp vào đúng ngăn.
-- Ghi nhận khối lượng hoặc dung lượng đo được trước và sau khi lắp.
+- Gán bản ghi của chai hoặc hộp nước hoa với ngăn máy tương ứng sau khi lắp đặt thực tế.
+- Xác nhận trên hệ thống loại nước hoa đã được lắp vào ngăn.
+- Nhập khối lượng hoặc dung lượng đã đo trước và sau khi lắp.
 - Lưu người thực hiện, thời gian, máy, ngăn, chai cũ và chai mới cho mỗi lần nạp hoặc thay thế.
 - Đối chiếu lượng tồn kho ước tính với số liệu cảm biến.
 - Ghi nhận điều chỉnh tồn kho kèm lý do bắt buộc.
@@ -89,11 +91,10 @@ Khách hàng sử dụng kiosk để chọn, thanh toán và nhận một lượ
 - Kiểm tra và xác nhận sản phẩm cùng giá trước khi tạo đơn.
 - Nhận mã QR thanh toán được tạo riêng cho đơn hàng.
 - Theo dõi trạng thái thanh toán: đang chờ, thành công, thất bại, đã hủy hoặc hết hạn.
-- Nhận hướng dẫn đặt giấy thử hoặc cổ tay vào khu vực xịt.
 - Chỉ nhận một lượt xịt sau khi backend xác nhận thanh toán thành công.
 - Theo dõi trạng thái xịt: đang xử lý, thành công hoặc thất bại.
 - Nhận hướng dẫn xử lý rõ ràng khi đã thanh toán nhưng xịt thất bại.
-- Quét mã QR sản phẩm để xem thêm thông tin, khuyến mãi hoặc kênh mua chai đầy đủ.
+- Xem thêm thông tin và khuyến mãi của sản phẩm ngay trên kiosk.
 - Tự động quay về màn hình chính sau khi hoàn tất hoặc hết thời gian chờ.
 
 ## 7. Quản lý thương hiệu, người dùng và quyền truy cập
@@ -121,7 +122,7 @@ Hệ thống phải quản lý máy trải nghiệm nước hoa và các ngăn �
 - Cấu hình sản phẩm, giá, ngưỡng sắp hết, thời gian hoặc liều lượng xịt và trạng thái của ngăn.
 - Hiển thị kết nối, chế độ hoạt động, phiên bản firmware, phiên bản cấu hình và lần liên lạc gần nhất.
 - Cho phép người có quyền bật hoặc tắt toàn bộ máy hay một số ngăn.
-- Lưu lịch sử lắp đặt, di chuyển, thay đổi đơn vị quản lý, cấu hình và bảo trì của máy.
+- Lưu lịch sử được ghi nhận trên hệ thống về việc lắp đặt, di chuyển, thay đổi đơn vị quản lý, cấu hình và bảo trì máy.
 - Ghi mọi thay đổi cấu hình quan trọng vào nhật ký kiểm toán.
 
 ## 9. Quản lý đơn hàng và thanh toán
@@ -196,7 +197,7 @@ Hệ thống phải tự động phát hiện và quản lý các vấn đề v�
 - Tạo cảnh báo khi máy offline, sắp hết nước hoa, ngăn rỗng, cửa mở, nghi ngờ rò rỉ, lỗi cảm biến, lỗi cơ cấu hoặc xịt thất bại nhiều lần.
 - Phân loại cảnh báo theo loại, mức độ, trạng thái, máy, địa điểm và thời gian phát sinh.
 - Hạn chế tạo nhiều cảnh báo trùng cho cùng một vấn đề chưa được xử lý.
-- Thông báo cho người chịu trách nhiệm qua hệ thống và các kênh bên ngoài được cấu hình.
+- Thông báo cho người chịu trách nhiệm trực tiếp trên hệ thống.
 - Cho phép người có quyền tiếp nhận, phân công, xử lý hoặc mở lại cảnh báo.
 - Tự động tạo phiếu bảo trì đối với các loại cảnh báo nghiêm trọng được cấu hình.
 - Lưu người xử lý, thời điểm tiếp nhận, nội dung xử lý và thời điểm hoàn thành.
@@ -211,10 +212,10 @@ Hệ thống phải hỗ trợ toàn bộ vòng đời bảo trì máy.
 - Phân công phiếu cho kỹ thuật viên theo thương hiệu, địa điểm, máy hoặc trách nhiệm.
 - Phân loại phiếu theo nhóm sự cố, mức độ nghiêm trọng, độ ưu tiên, trạng thái và hạn xử lý.
 - Ngăn máy có sự cố nghiêm trọng tiếp nhận đơn hàng mới.
-- Cung cấp checklist kiểm tra, sửa chữa, hỗ trợ refill và kiểm tra sau bảo trì.
+- Cung cấp checklist để ghi nhận kết quả kiểm tra, sửa chữa, refill và kiểm tra sau bảo trì.
 - Ghi kết quả chẩn đoán, biện pháp xử lý, linh kiện thay thế, chi phí và bằng chứng liên quan.
 - Theo dõi thời gian từ lúc phát hiện sự cố đến khi tiếp nhận và xử lý xong.
-- Yêu cầu kiểm tra sau bảo trì thành công trước khi đưa máy trở lại hoạt động.
+- Chỉ cho phép chuyển máy trở lại trạng thái hoạt động sau khi kết quả kiểm tra sau bảo trì đã được ghi nhận là thành công.
 - Lưu lịch sử bảo trì của từng máy và linh kiện.
 - Tạo báo cáo thời gian ngừng, lỗi lặp lại, tần suất bảo trì và hiệu quả xử lý.
 
@@ -261,4 +262,4 @@ Hệ thống phải duy trì khả năng truy vết phục vụ vận hành và 
 - Mọi thao tác refill, điều chỉnh tồn kho, xịt chẩn đoán, thay đổi giá, thay đổi quyền và hoàn tiền phải được ghi vào nhật ký kiểm toán.
 - Người dùng của một thương hiệu không được truy cập dữ liệu thuộc thương hiệu khác.
 - Kết quả xịt chưa xác định phải được kiểm tra và không được tự động tạo lệnh xịt mới.
-- Máy đang bảo trì chỉ được trở lại hoạt động sau khi hoàn thành checklist và kiểm tra sau bảo trì thành công.
+- Hệ thống chỉ cho phép chuyển máy đang bảo trì trở lại trạng thái hoạt động khi checklist đã hoàn tất và kết quả kiểm tra sau bảo trì được ghi nhận là thành công.
