@@ -1,0 +1,171 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [dev]
+
+env:
+  NODE_VERSION: '22'
+  # Lịch bật cổng chặn merge. Đổi 'false' -> 'true' đúng tuần ghi trong comment.
+  ENFORCE_COVERAGE: 'false'       # bật tuần 6
+  ENFORCE_TRACEABILITY: 'false'   # bật tuần 8
+
+jobs:
+  # ============ 5.1 Lint và typecheck ============
+  lint:
+    name: Lint và typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx eslint .
+      - run: npx prettier --check .
+
+  # ============ 5.2 + 5.3 Unit và integration ============
+  test:
+    name: Unit và integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: scent
+          POSTGRES_PASSWORD: scent_test
+          POSTGRES_DB: scentstation_test
+          TZ: UTC
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U scent"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://scent:scent_test@localhost:5433/scentstation_test
+      REDIS_URL: redis://localhost:6379
+      MQTT_URL: mqtt://localhost:1883
+      TZ: UTC
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      # Mosquitto không dùng services được vì cần mount file cấu hình
+      - name: Dựng MQTT broker
+        run: |
+          docker run -d --name mqtt -p 1883:1883 \
+            -v "${{ github.workspace }}/infra/mosquitto/config:/mosquitto/config" \
+            eclipse-mosquitto:2
+          for i in $(seq 1 15); do
+            docker exec mqtt mosquitto_sub -t '$SYS/#' -C 1 -W 2 >/dev/null 2>&1 && break
+            sleep 1
+          done
+          echo "MQTT sẵn sàng"
+
+      - run: npm ci
+      - name: Migration
+        run: npm run db:migrate
+
+      - name: Unit test
+        run: npm run test:unit
+
+      # Integration test PHẢI chạy trên Postgres thật: cơ chế chống webhook trùng
+      # và ràng buộc một hợp đồng trên mỗi slot đều dựa vào unique constraint (FR-ORD-15, FR-SLT-02)
+      - name: Integration test
+        run: npm run test:integration -- --coverage
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage/
+
+      # ============ 5.5 Cổng coverage (NFR-MTN-01) ============
+      - name: Cổng coverage cho module lõi
+        run: |
+          if [ "$ENFORCE_COVERAGE" = "true" ]; then
+            node scripts/check-coverage.mjs
+          else
+            node scripts/check-coverage.mjs || \
+              echo "::warning::Coverage module lõi dưới 60% (chưa chặn merge)"
+          fi
+
+      - name: Log MQTT khi thất bại
+        if: failure()
+        run: docker logs mqtt || true
+
+  # ============ 5.4 Contract test ============
+  contract:
+    name: Contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+
+      - name: Validate OpenAPI
+        run: npx @redocly/cli lint spec/contracts/openapi.yaml
+
+      - name: Hiện thực khớp openapi.yaml
+        run: npm run test:contract
+
+  # ============ 5.6 Spec và truy vết ============
+  spec:
+    name: Spec và truy vết
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cảnh báo nếu PR sửa contract
+        if: github.event_name == 'pull_request'
+        run: |
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- spec/contracts/ || true)
+          if [ -n "$CHANGED" ]; then
+            echo "::warning::PR sửa contract đã đóng băng:"
+            echo "$CHANGED"
+            ADR=$(git diff --name-only origin/${{ github.base_ref }}...HEAD -- spec/decisions/ || true)
+            if [ -z "$ADR" ]; then
+              echo "::error::Sửa contract phải kèm ADR trong spec/decisions/"
+              exit 1
+            fi
+          fi
+
+      - name: Ma trận truy vết
+        run: |
+          if [ "$ENFORCE_TRACEABILITY" = "true" ]; then
+            python3 scripts/check_traceability.py
+          else
+            python3 scripts/check_traceability.py || \
+              echo "::warning::Còn FR ưu tiên M chưa có test (chưa chặn merge)"
+          fi
+
+      - name: Không hardcode ngưỡng số
+        run: |
+          HITS=$(grep -rnE '\b(90|800|300|60|30)\s*\*\s*1000' src/ 2>/dev/null || true)
+          if [ -n "$HITS" ]; then
+            echo "::warning::Có thể hardcode ngưỡng số, phải lấy từ constraints.md:"
+            echo "$HITS"
+          fi

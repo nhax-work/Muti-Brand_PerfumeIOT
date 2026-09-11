@@ -1,0 +1,29 @@
+{
+  "_comment": "Gộp khối scripts này vào package.json của dự án",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc",
+
+    "db:migrate": "TODO chọn ORM: prisma migrate deploy | drizzle-kit migrate | typeorm migration:run",
+    "db:reset": "docker compose down -v && docker compose up -d && sleep 5 && npm run db:migrate && npm run db:seed",
+    "db:seed": "tsx scripts/seed.ts",
+
+    "test": "npm run test:unit && npm run test:integration && npm run test:contract",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:contract": "vitest run tests/contract",
+    "test:e2e": "vitest run tests/e2e",
+    "test:watch": "vitest",
+
+    "check:coverage": "node scripts/check-coverage.mjs",
+    "check:traceability": "python3 scripts/check_traceability.py",
+    "check:openapi": "redocly lint spec/contracts/openapi.yaml",
+    "check": "npm run lint && npm run test && npm run check:traceability",
+
+    "lint": "eslint . && tsc --noEmit",
+    "fmt": "prettier --write .",
+
+    "sim": "tsx scripts/device-simulator.ts",
+    "sim:many": "tsx scripts/device-simulator.ts --machines=50"
+  }
+}
