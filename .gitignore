@@ -9,3 +9,14 @@
 
 # Track this ignore configuration
 !.gitignore
+
+# dev-harness (local per-developer AI config, do not commit)
+.agents/
+.codex/
+.claude/
+.cursor/
+.gemini/
+harness.config.json
+AGENTS.md
+CLAUDE.md
+.cursorrules
