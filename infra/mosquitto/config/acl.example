@@ -1,0 +1,13 @@
+# Mẫu ACL — mỗi thiết bị chỉ truy cập topic của chính nó (FR-IOT-09)
+# Sinh file này tự động khi đăng ký máy mới.
+
+user scent-backend
+topic readwrite scentstation/#
+
+user machine-M001
+topic write scentstation/M001/heartbeat
+topic write scentstation/M001/telemetry
+topic write scentstation/M001/event
+topic write scentstation/M001/command/result
+topic read  scentstation/M001/command
+topic read  scentstation/M001/config
