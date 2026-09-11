@@ -1,0 +1,5 @@
+BR,FR,UseCase,TestName,Priority,Status
+BR-009,FR-SLT-02,Manage Slot Rental,test_FR_SLT_02_reject_occupied_slot,M,todo
+BR-009,FR-SLT-05,Manage Slot Rental,test_FR_SLT_05_reject_overlapping_rental,M,todo
+BR-002,FR-ORD-15,Process Payment,test_FR_ORD_15_webhook_idempotent,M,todo
+BR-013,FR-REV-01,Purchase Perfume Trial,test_FR_REV_01_revenue_owner_snapshot,M,todo

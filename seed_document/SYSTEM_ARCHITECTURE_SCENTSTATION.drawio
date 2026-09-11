@@ -1,0 +1,183 @@
+<mxfile host="app.diagrams.net" modified="2026-09-07T14:38:00.000Z" agent="Antigravity" version="21.0.0" type="device">
+  <diagram id="scentstation-sys-arch" name="ScentStation System Architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1050" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- 1. PRESENTATION LAYER -->
+        <mxCell id="pres_layer" value="Presentation Layer (Client)" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;resizeParent=1;resizeParentMax=0;resizeLast=0;collapsible=0;marginBottom=0;strokeColor=#6c8ebf;fillColor=#f5f8fc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="280" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="kiosk_app" value="&lt;b&gt;Kiosk Web Application&lt;/b&gt;&lt;br&gt;(Next.js - Kiosk Mode / Tablet)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;Touch UI, QR Dispense, Animation&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="pres_layer">
+          <mxGeometry x="25" y="50" width="230" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="web_portal" value="&lt;b&gt;Web Admin Portal&lt;/b&gt;&lt;br&gt;(Next.js + TypeScript)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;Brand Admin, Super Admin, Ops, Tech&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="pres_layer">
+          <mxGeometry x="25" y="180" width="230" height="90" as="geometry" />
+        </mxCell>
+
+        <!-- 2. APPLICATION LAYER -->
+        <mxCell id="app_layer" value="Application Layer (Server - Modular Monolith)" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;startSize=30;collapsible=0;strokeColor=#6c8ebf;fillColor=#f5f8fc;" vertex="1" parent="1">
+          <mxGeometry x="370" y="80" width="760" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="api_server" value="&lt;b&gt;NestJS API Server&lt;/b&gt;&lt;br&gt;(Node.js + NestJS + TypeScript)&lt;br&gt;&lt;font color=&quot;#444444&quot; style=&quot;font-size: 11px;&quot;&gt;Identity &amp; RBAC | Tenant Isolation | Catalog | Order Engine | Maintenance&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="app_layer">
+          <mxGeometry x="40" y="50" width="370" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="iot_gateway" value="&lt;b&gt;IoT Device Gateway &amp; Simulator&lt;/b&gt;&lt;br&gt;(DeviceGateway Contract)&lt;br&gt;&lt;font color=&quot;#444444&quot; style=&quot;font-size: 11px;&quot;&gt;Telemetry Ingestion, Dispense Command Dispatcher&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="app_layer">
+          <mxGeometry x="450" y="50" width="270" height="85" as="geometry" />
+        </mxCell>
+
+        <!-- Async Queue Sub-system -->
+        <mxCell id="queue_system" value="Async Queue System" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;startSize=25;collapsible=0;strokeColor=#6c8ebf;fillColor=#ffffff;" vertex="1" parent="app_layer">
+          <mxGeometry x="40" y="170" width="680" height="320" as="geometry" />
+        </mxCell>
+        <mxCell id="bull_worker" value="&lt;b&gt;BullMQ Worker&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Order Timeout Watcher&lt;br&gt;- Dispense Retry Processor&lt;br&gt;- Alert &amp; Telemetry Aggregation&lt;br&gt;- Email / Push Notifications&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="queue_system">
+          <mxGeometry x="30" y="50" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="bull_queue" value="&lt;b&gt;BullMQ (Job Queue)&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Order Queue&lt;br&gt;- Telemetry Queue&lt;br&gt;- Notification Queue&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="queue_system">
+          <mxGeometry x="420" y="50" width="230" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="redis_queue" value="&lt;b&gt;Redis&lt;/b&gt;&lt;br&gt;(Queue DB &amp; Cache)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="queue_system">
+          <mxGeometry x="250" y="190" width="180" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- 3. IOT & HARDWARE LAYER (Replaces n8n Orchestration) -->
+        <mxCell id="iot_layer" value="IoT &amp; Hardware Layer" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;startSize=30;collapsible=0;strokeColor=#6c8ebf;fillColor=#f5f8fc;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="80" width="370" height="520" as="geometry" />
+        </mxCell>
+        <mxCell id="mqtt_broker" value="&lt;b&gt;MQTT Broker&lt;/b&gt;&lt;br&gt;(EMQX / Mosquitto TLS)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;Topics: telemetry, heartbeat, commands, results&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="iot_layer">
+          <mxGeometry x="35" y="50" width="300" height="85" as="geometry" />
+        </mxCell>
+        <mxCell id="esp32_device" value="&lt;b&gt;IoT Device Controller&lt;/b&gt;&lt;br&gt;(ESP32 / Kiosk Hardware)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- 4x Solenoid/Pumps (Dispense)&lt;br&gt;- Load Cell + HX711 (Weight / Bottle Level)&lt;br&gt;- Door &amp; Emergency Stop Safety Sensors&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="iot_layer">
+          <mxGeometry x="35" y="180" width="300" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="device_sim" value="&lt;b&gt;Hardware Simulator&lt;/b&gt;&lt;br&gt;(Web-First Phase Mock)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;Simulates 4-slot kiosk, spray ACK, sensor telemetry&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#b85450;fillColor=#f8cecc;fontSize=12;dashed=1;" vertex="1" parent="iot_layer">
+          <mxGeometry x="35" y="370" width="300" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- 4. DATA LAYER -->
+        <mxCell id="data_layer" value="Data Layer" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;startSize=30;collapsible=0;strokeColor=#6c8ebf;fillColor=#f5f8fc;" vertex="1" parent="1">
+          <mxGeometry x="40" y="650" width="480" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="postgres_db" value="&lt;b&gt;PostgreSQL Database&lt;/b&gt;&lt;br&gt;(Prisma ORM)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Multi-tenant Data Isolation (tenant_id, RLS)&lt;br&gt;- 30 Tables: Users, Roles, Orders, Inventory, Machine&lt;br&gt;- ACID Transactions for Payment &amp; Dispense&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="data_layer">
+          <mxGeometry x="30" y="55" width="220" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="redis_cache" value="&lt;b&gt;Redis Cache&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Session Store&lt;br&gt;- API Rate Limiting&lt;br&gt;- Idempotency Locks&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="data_layer">
+          <mxGeometry x="280" y="55" width="170" height="145" as="geometry" />
+        </mxCell>
+
+        <!-- 5. EXTERNAL INTEGRATIONS -->
+        <mxCell id="ext_layer" value="External Integrations" style="swimlane;whiteSpace=wrap;html=1;fontStyle=1;align=center;verticalAlign=top;startSize=30;collapsible=0;strokeColor=#6c8ebf;fillColor=#f5f8fc;" vertex="1" parent="1">
+          <mxGeometry x="570" y="650" width="980" height="230" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_payment" value="&lt;b&gt;Payment Provider API&lt;/b&gt;&lt;br&gt;(VNPay / MoMo Sandbox)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Dynamic QR Code Generation&lt;br&gt;- Webhook / IPN Transaction Result&lt;br&gt;- Signature &amp; Idempotency verification&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="ext_layer">
+          <mxGeometry x="40" y="65" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_mail" value="&lt;b&gt;Notification &amp; Mail Service&lt;/b&gt;&lt;br&gt;(Nodemailer SMTP / Push)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Email alerts to Technicians&lt;br&gt;- Low perfume stock warning&lt;br&gt;- Maintenance ticket notifications&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="ext_layer">
+          <mxGeometry x="360" y="65" width="260" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="ext_storage" value="&lt;b&gt;S3 Object Storage&lt;/b&gt;&lt;br&gt;(Cloudflare R2 / AWS S3)&lt;br&gt;&lt;font color=&quot;#555555&quot; style=&quot;font-size: 11px;&quot;&gt;- Perfume Brand Logos &amp; Images&lt;br&gt;- Kiosk Display Media&lt;br&gt;- Maintenance Proof Attachments&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#6c8ebf;fillColor=#dae8fc;fontSize=12;" vertex="1" parent="ext_layer">
+          <mxGeometry x="680" y="65" width="260" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- CONNECTORS / EDGES -->
+        <!-- Clients -> NestJS -->
+        <mxCell id="edge1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;" edge="1" parent="1" source="kiosk_app" target="api_server">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="340" y="175" />
+              <mxPoint x="340" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;" edge="1" parent="1" source="web_portal" target="api_server">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="340" y="305" />
+              <mxPoint x="340" y="185" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- NestJS -> DB -->
+        <mxCell id="edge3" value="Prisma Client" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_server" target="postgres_db">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="540" y="630" />
+              <mxPoint x="180" y="630" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- NestJS -> BullMQ Job Queue -->
+        <mxCell id="edge4" value="enqueue" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_server" target="bull_queue">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="600" y="240" />
+              <mxPoint x="900" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Queue to Redis & Worker to Redis -->
+        <mxCell id="edge5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;" edge="1" parent="1" source="bull_queue" target="redis_queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="edge6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;" edge="1" parent="1" source="bull_worker" target="redis_queue">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- NestJS -> IoT Gateway -->
+        <mxCell id="edge7" value="Dispatch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_server" target="iot_gateway">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- IoT Gateway -> MQTT Broker -->
+        <mxCell id="edge8" value="Publish / Subscribe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="iot_gateway" target="mqtt_broker">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- MQTT Broker -> ESP32 Device -->
+        <mxCell id="edge9" value="MQTT over TLS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="mqtt_broker" target="esp32_device">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- IoT Gateway -> Simulator -->
+        <mxCell id="edge10" value="Mock Loopback" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#b85450;strokeWidth=1.5;dashed=1;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="iot_gateway" target="device_sim">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="955" y="475" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <!-- Worker to Integrations -->
+        <mxCell id="edge11" value="Webhook Verify / Poll" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_server" target="ext_payment">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="580" y="240" />
+              <mxPoint x="740" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge12" value="Dispatch Mail" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="bull_worker" target="ext_mail">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="490" y="630" />
+              <mxPoint x="1040" y="630" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="edge13" value="Upload / CDN" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#000000;strokeWidth=1.5;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="api_server" target="ext_storage">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="480" y="615" />
+              <mxPoint x="1390" y="615" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
