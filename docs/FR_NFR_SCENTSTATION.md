@@ -107,8 +107,8 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-AUTH-02 | Hệ thống phải cấp access token có thời hạn tối đa 60 phút và refresh token có thời hạn tối đa 7 ngày sau khi đăng nhập thành công | BR-003 | M |
 | FR-AUTH-03 | Hệ thống phải khóa tài khoản trong 15 phút sau 5 lần đăng nhập sai liên tiếp | BR-003 | M |
 | FR-AUTH-04 | Hệ thống phải cho phép người dùng đăng xuất và vô hiệu hóa refresh token của phiên đó | BR-003 | M |
-| FR-AUTH-05 | Hệ thống phải liên kết tài khoản Brand Admin và Report Viewer với đúng một thương hiệu; tài khoản Platform Super Admin, Operations Manager, Technician và Inventory Staff không liên kết với thương hiệu nào | BR-003, BR-004 | M |
-| FR-AUTH-06 | Hệ thống phải gán cho mỗi tài khoản một hoặc nhiều vai trò trong tập: Platform Super Admin, Operations Manager, Technician, Inventory Staff, Brand Admin, Report Viewer | BR-003 | M |
+| FR-AUTH-05 | Hệ thống phải liên kết tài khoản Brand Admin với đúng một thương hiệu; tài khoản Platform Super Admin, Operations Manager, Technician và Inventory Staff không liên kết với thương hiệu nào | BR-003, BR-004 | M |
+| FR-AUTH-06 | Hệ thống phải gán cho mỗi tài khoản một hoặc nhiều vai trò trong tập: Platform Super Admin, Operations Manager, Technician, Inventory Staff, Brand Admin | BR-003 | M |
 | FR-AUTH-07 | Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hợp đồng thuê | BR-003, BR-012 | M |
 | FR-AUTH-08 | Hệ thống phải từ chối mọi yêu cầu truy cập tài nguyên ngoài phạm vi cho phép và trả về mã lỗi 403 | BR-003 | M |
 | FR-AUTH-09 | Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy | BR-002, BR-005, BR-013 | M |
@@ -135,11 +135,9 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|---|
 | FR-USR-01 | Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu | BR-003 | M |
 | FR-USR-02 | Hệ thống phải cho phép Platform Super Admin tạo và quản lý tài khoản Operations Manager, Technician và Inventory Staff của nền tảng | BR-004 | M |
-| FR-USR-03 | Hệ thống phải cho phép Brand Admin tạo tài khoản Report Viewer trong phạm vi thương hiệu mình | BR-003 | M |
-| FR-USR-04 | Hệ thống phải ngăn Brand Admin tạo hoặc sửa tài khoản có vai trò vận hành của nền tảng | BR-004 | M |
-| FR-USR-05 | Hệ thống phải cho phép quản trị viên có thẩm quyền vô hiệu hóa tài khoản trong phạm vi quản lý của mình | BR-003 | M |
-| FR-USR-06 | Hệ thống phải cho phép quản trị viên có thẩm quyền đặt lại mật khẩu cho tài khoản trong phạm vi quản lý của mình | BR-003 | M |
-| FR-USR-07 | Hệ thống phải ngăn Brand Admin tạo hoặc sửa tài khoản thuộc thương hiệu khác | BR-003, BR-012 | M |
+| FR-USR-03 | Hệ thống phải cho phép Platform Super Admin vô hiệu hóa bất kỳ tài khoản nào trên nền tảng | BR-003 | M |
+| FR-USR-04 | Hệ thống phải cho phép Platform Super Admin đặt lại mật khẩu cho bất kỳ tài khoản nào trên nền tảng | BR-003 | M |
+| FR-USR-05 | Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa bất kỳ tài khoản nào | BR-003, BR-012 | M |
 
 ## A4. FR-PRD — Danh mục sản phẩm
 
@@ -554,6 +552,10 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 
 **Về ma trận truy vết đầy đủ.** Phần C là bảng tổng hợp. Bản nộp cần bảng chi tiết bốn cột BR → FR → Use Case → Test Case, dựng bằng bảng tính sau khi hoàn tất use case specification.
 
+**Về việc bỏ vai trò Report Viewer.** Phiên bản trước có 6 vai trò, trong đó Report Viewer là tài khoản chỉ đọc thuộc thương hiệu. Vai trò này đã được gộp vào Brand Admin. Hệ quả: mọi người dùng của một thương hiệu đều dùng chung vai trò Brand Admin và đều đặt được giá lượt xịt. Phân quyền chi tiết trong nội bộ thương hiệu, cụ thể là tách quyền xem báo cáo khỏi quyền đặt giá, nằm ngoài phạm vi MVP và được xác định là Future Work.
+
+Việc bỏ vai trò này cũng làm mọi tài khoản trên nền tảng đều do Platform Super Admin tạo và quản lý, không còn trường hợp thương hiệu tự tạo tài khoản. Ma trận kiểm thử cô lập dữ liệu ở NFR-SEC-04 giảm từ 6 xuống 5 vai trò.
+
 **Về thứ tự cắt khi tiến độ căng.** Cắt theo thứ tự: nhóm W trước, rồi nhóm S trong RPT và MNT, rồi FR-EXP-10 đến FR-EXP-12 (phần tính phí ân hạn), rồi nhóm S trong INV. **Tuyệt đối không cắt bất kỳ FR nào trong nhóm DSP, và không cắt FR-REV-01 đến FR-REV-03** — hai nhóm này là giá trị học thuật của đồ án.
 
 ---
@@ -562,10 +564,10 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 
 | Ưu tiên | Số FR |
 |---|---|
-| **M — Must** (phạm vi MVP 13 tuần) | 216 |
+| **M — Must** (phạm vi MVP 13 tuần) | 214 |
 | **S — Should** (làm nếu còn thời gian sau tuần 9) | 23 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** | **242** |
+| **Tổng FR** | **240** |
 | **Tổng NFR** | **50** |
 
 **Danh sách W:** FR-PRD-06 chiến dịch khuyến mãi · FR-IOT-15 cập nhật firmware từ xa · FR-ALR-15 thông báo qua kênh ngoài.
@@ -576,7 +578,7 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 |---|---|---|---|
 | AUTH | 12 | RFQ | 12 |
 | BND | 8 | ORD | 23 |
-| USR | 7 | DSP | 20 |
+| USR | 5 | DSP | 20 |
 | PRD | 6 | IOT | 15 |
 | MCH | 14 | ALR | 15 |
 | SLT | 18 | MNT | 16 |
