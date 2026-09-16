@@ -107,14 +107,14 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-AUTH-02 | Hệ thống phải cấp access token có thời hạn tối đa 60 phút và refresh token có thời hạn tối đa 7 ngày sau khi đăng nhập thành công | BR-003 | M |
 | FR-AUTH-03 | Hệ thống phải khóa tài khoản trong 15 phút sau 5 lần đăng nhập sai liên tiếp | BR-003 | M |
 | FR-AUTH-04 | Hệ thống phải cho phép người dùng đăng xuất và vô hiệu hóa refresh token của phiên đó | BR-003 | M |
-| FR-AUTH-05 | Hệ thống phải liên kết tài khoản Brand Admin với đúng một thương hiệu; tài khoản Platform Super Admin, Operations Manager, Technician và Inventory Staff không liên kết với thương hiệu nào | BR-003, BR-004 | M |
-| FR-AUTH-06 | Hệ thống phải gán cho mỗi tài khoản một hoặc nhiều vai trò trong tập: Platform Super Admin, Operations Manager, Technician, Inventory Staff, Brand Admin | BR-003 | M |
+| FR-AUTH-05 | Hệ thống phải liên kết tài khoản Brand Admin với đúng một thương hiệu; tài khoản Platform Super Admin, Operations Staff và Inventory Staff không liên kết với thương hiệu nào | BR-003, BR-004 | M |
+| FR-AUTH-06 | Hệ thống phải gán cho mỗi tài khoản một hoặc nhiều vai trò trong tập: Platform Super Admin, Operations Staff, Inventory Staff, Brand Admin | BR-003 | M |
 | FR-AUTH-07 | Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hợp đồng thuê | BR-003, BR-012 | M |
 | FR-AUTH-08 | Hệ thống phải từ chối mọi yêu cầu truy cập tài nguyên ngoài phạm vi cho phép và trả về mã lỗi 403 | BR-003 | M |
 | FR-AUTH-09 | Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy | BR-002, BR-005, BR-013 | M |
 | FR-AUTH-10 | Hệ thống phải thu hồi toàn bộ phiên đăng nhập đang hoạt động trong vòng 60 giây khi tài khoản bị vô hiệu hóa | BR-003 | M |
 | FR-AUTH-11 | Hệ thống phải cho phép Platform Super Admin thu hồi quyền truy cập của bất kỳ người dùng hoặc thiết bị nào | BR-003 | M |
-| FR-AUTH-12 | Hệ thống phải cho phép giới hạn phạm vi của Operations Manager và Technician theo danh sách địa điểm hoặc máy của nền tảng được phân công | BR-004 | S |
+| FR-AUTH-12 | Hệ thống phải cho phép giới hạn phạm vi của Operations Staff theo danh sách địa điểm hoặc máy của nền tảng được phân công | BR-004 | S |
 
 ## A2. FR-BND — Thương hiệu và cô lập dữ liệu
 
@@ -134,7 +134,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | Mã | Yêu cầu | BR | Ưu tiên |
 |---|---|---|---|
 | FR-USR-01 | Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu | BR-003 | M |
-| FR-USR-02 | Hệ thống phải cho phép Platform Super Admin tạo và quản lý tài khoản Operations Manager, Technician và Inventory Staff của nền tảng | BR-004 | M |
+| FR-USR-02 | Hệ thống phải cho phép Platform Super Admin tạo và quản lý tài khoản Operations Staff và Inventory Staff của nền tảng | BR-004 | M |
 | FR-USR-03 | Hệ thống phải cho phép Platform Super Admin vô hiệu hóa bất kỳ tài khoản nào trên nền tảng | BR-003 | M |
 | FR-USR-04 | Hệ thống phải cho phép Platform Super Admin đặt lại mật khẩu cho bất kỳ tài khoản nào trên nền tảng | BR-003 | M |
 | FR-USR-05 | Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa bất kỳ tài khoản nào | BR-003, BR-012 | M |
@@ -164,10 +164,13 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-MCH-08 | Hệ thống phải hiển thị trạng thái kết nối của máy ở một trong ba giá trị: ONLINE, UNSTABLE, OFFLINE | BR-004, BR-006 | M |
 | FR-MCH-09 | Hệ thống phải hiển thị chế độ hoạt động của máy ở một trong ba giá trị: NORMAL, MAINTENANCE, DISABLED | BR-004, BR-006 | M |
 | FR-MCH-10 | Hệ thống phải hiển thị phiên bản firmware, phiên bản cấu hình và thời điểm liên lạc gần nhất của mỗi máy | BR-004 | M |
-| FR-MCH-11 | Hệ thống phải cho phép Operations Manager bật hoặc tắt toàn bộ máy từ xa | BR-004 | M |
-| FR-MCH-12 | Hệ thống phải cho phép Operations Manager bật hoặc tắt từng slot riêng lẻ từ xa | BR-004 | M |
+| FR-MCH-11 | Hệ thống phải cho phép Operations Staff bật hoặc tắt toàn bộ máy từ xa | BR-004 | M |
+| FR-MCH-12 | Hệ thống phải cho phép Operations Staff bật hoặc tắt từng slot riêng lẻ từ xa | BR-004 | M |
 | FR-MCH-13 | Hệ thống phải lưu lịch sử thay đổi cấu hình máy và slot | BR-008 | M |
 | FR-MCH-14 | Hệ thống phải lưu lịch sử di chuyển máy giữa các địa điểm | BR-004 | S |
+| FR-MCH-15 | Hệ thống phải quản lý trạng thái khả dụng của slot theo tập: AVAILABLE, UNAVAILABLE, MAINTENANCE, DISABLED | BR-002, BR-005 | M |
+| FR-MCH-16 | Hệ thống phải chuyển slot sang AVAILABLE khi đồng thời thỏa: có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED; đã gán sản phẩm; có chai đang lắp với lượng còn lại đủ cho một lượt xịt; và slot không bị tắt thủ công | BR-002, BR-005 | M |
+| FR-MCH-17 | Hệ thống phải chuyển slot sang UNAVAILABLE ngay khi bất kỳ điều kiện tại FR-MCH-16 không còn thỏa | BR-002, BR-005 | M |
 
 ## A6. FR-SLT — Hợp đồng thuê slot
 
@@ -191,6 +194,17 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-SLT-16 | Hệ thống phải hiển thị cho Platform Super Admin tỷ lệ lấp đầy slot theo máy và theo địa điểm | BR-009 | S |
 | FR-SLT-17 | Hệ thống phải tạo bảng quyết toán theo kỳ cho mỗi thương hiệu, gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi tiết theo từng slot | BR-009 | M |
 | FR-SLT-18 | Hệ thống phải tính trong bảng quyết toán: doanh thu lượt xịt thuộc thương hiệu, phí thuê cố định, phần ăn chia doanh thu, phí ân hạn và số tiền phải thanh toán | BR-009, BR-013 | M |
+| FR-SLT-19 | Hệ thống phải cho phép Brand Admin xem danh sách slot đang trống (không có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED) theo máy và địa điểm, không kèm thông tin thương hiệu đã từng thuê trước đó | BR-011, BR-012 | M |
+| FR-SLT-20 | Hệ thống phải cho phép Brand Admin gửi yêu cầu thuê một hoặc nhiều slot trống, kèm kỳ hạn mong muốn | BR-011 | M |
+| FR-SLT-21 | Hệ thống phải quản lý trạng thái yêu cầu thuê theo tập: REQUESTED, APPROVED, REJECTED, CONVERTED, CANCELLED | BR-011 | M |
+| FR-SLT-22 | Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối yêu cầu thuê, kèm lý do bắt buộc khi từ chối | BR-009, BR-011 | M |
+| FR-SLT-23 | Hệ thống phải tự động tạo hợp đồng ở trạng thái DRAFT khi yêu cầu thuê được duyệt, liên kết với yêu cầu gốc, điền theo điều khoản phí và tỷ lệ ăn chia do Platform Super Admin xác nhận | BR-009 | M |
+| FR-SLT-24 | Hệ thống phải tự động chuyển hợp đồng từ DRAFT sang ACTIVE đúng ngày bắt đầu đã cấu hình, kể cả khi hệ thống có thời gian ngừng qua mốc chuyển trạng thái | BR-009 | M |
+| FR-SLT-25 | Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các yêu cầu thuê của thương hiệu mình | BR-011 | M |
+| FR-SLT-26 | Hệ thống phải ngăn Brand Admin gửi yêu cầu thuê mới trên cùng slot khi đã tồn tại yêu cầu ở trạng thái REQUESTED hoặc APPROVED chưa xử lý xong | BR-011 | M |
+| FR-SLT-27 | Hệ thống phải cho phép Brand Admin gán đúng một sản phẩm đang kinh doanh của thương hiệu mình vào slot đang có hợp đồng hiệu lực | BR-011 | M |
+| FR-SLT-28 | Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot, ghi nhận thời điểm đổi | BR-011 | M |
+| FR-SLT-29 | Hệ thống phải từ chối tạo đơn hàng tại slot chưa được gán sản phẩm | BR-002, BR-011 | M |
 
 ## A7. FR-EXP — Ân hạn, gia hạn và thanh lý hàng tồn
 
@@ -247,8 +261,8 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-10 | Hệ thống phải cập nhật lượng còn lại sau mỗi lượt xịt khách hàng hoặc lượt xịt chẩn đoán thành công | BR-005 | M |
 | FR-INV-11 | Hệ thống phải sinh cảnh báo sắp hết khi lượng còn lại xuống dưới ngưỡng đã cấu hình cho slot | BR-005 | M |
 | FR-INV-12 | Hệ thống phải chuyển slot sang trạng thái UNAVAILABLE khi lượng còn lại không đủ cho một lượt xịt | BR-005 | M |
-| FR-INV-13 | Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ, chai mới và khối lượng đo được trước và sau | BR-005, BR-008 | M |
-| FR-INV-14 | Hệ thống phải cung cấp checklist nạp nước hoa mà Inventory Staff phải hoàn thành trước khi kết thúc phiên nạp | BR-005 | M |
+| FR-INV-13 | Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ, chai mới và khối lượng đo được trước và sau, liên kết với phiếu nạp tương ứng (FR-INV-29) | BR-005, BR-008 | M |
+| FR-INV-14 | Hệ thống phải cung cấp checklist nạp nước hoa mà Inventory Staff phải hoàn thành trước khi đóng phiếu nạp | BR-005 | M |
 | FR-INV-15 | Hệ thống phải cung cấp quy trình tháo chai khỏi slot và trả về kho, ghi nhận khối lượng còn lại | BR-005, BR-013 | M |
 | FR-INV-16 | Hệ thống phải cho phép ghi nhận điều chỉnh tồn kho kèm lý do bắt buộc | BR-005 | M |
 | FR-INV-17 | Hệ thống phải lưu lịch sử lắp, nạp, tháo, điều chỉnh, thanh lý và hủy bỏ của từng chai | BR-005, BR-008 | M |
@@ -256,6 +270,16 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-19 | Hệ thống phải sinh cảnh báo nghi ngờ rò rỉ khi khối lượng đo được giảm quá 20% so với lượng tiêu thụ tính theo số lượt xịt trong cùng khoảng thời gian | BR-005 | S |
 | FR-INV-20 | Hệ thống phải sinh cảnh báo khi lô nước hoa còn dưới 30 ngày là hết hạn | BR-005 | S |
 | FR-INV-21 | Hệ thống phải cho phép tạo báo cáo tồn kho theo thương hiệu, sản phẩm, lô, máy, slot và khoảng thời gian | BR-005, BR-007 | M |
+| FR-INV-22 | Hệ thống phải cho phép Brand Admin khai báo lô hàng gửi đến kho nền tảng, gồm sản phẩm, số lượng chai, dung tích mỗi chai và ngày dự kiến gửi | BR-005 | M |
+| FR-INV-23 | Hệ thống phải quản lý trạng thái khai báo gửi hàng theo tập: DECLARED, RECEIVED, DISCREPANCY, CANCELLED | BR-005 | M |
+| FR-INV-24 | Hệ thống phải cho phép Inventory Staff đối chiếu số lượng thực nhận với khai báo của Brand Admin khi tiếp nhận lô hàng | BR-005 | M |
+| FR-INV-25 | Hệ thống phải chuyển khai báo sang trạng thái DISCREPANCY và yêu cầu ghi chú bắt buộc khi số lượng thực nhận khác số lượng khai báo | BR-005 | M |
+| FR-INV-26 | Hệ thống phải tự động tạo lô nước hoa theo FR-INV-01, liên kết với khai báo gửi hàng, khi Inventory Staff xác nhận đã tiếp nhận | BR-005, BR-008 | M |
+| FR-INV-27 | Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các lần gửi hàng của thương hiệu mình | BR-005 | M |
+| FR-INV-28 | Hệ thống phải thông báo cho Inventory Staff khi có khai báo gửi hàng mới | BR-005 | S |
+| FR-INV-29 | Hệ thống phải cho phép Inventory Staff mở phiếu nạp cho một slot trước khi thao tác, ghi nhận máy, slot, người thực hiện và thời điểm mở phiếu | BR-005 | M |
+| FR-INV-30 | Hệ thống phải tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03 cho máy có slot đang trong phiếu nạp còn mở | BR-005, BR-006 | M |
+| FR-INV-31 | Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở bình thường cho slot đó | BR-005, BR-006 | M |
 
 ## A10. FR-RFQ — Yêu cầu bổ sung nước hoa
 
@@ -297,7 +321,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED hoặc REFUNDED | BR-002 | M |
 | FR-ORD-18 | Hệ thống phải lưu toàn bộ lịch sử chuyển trạng thái của đơn hàng kèm thời điểm và nguyên nhân | BR-008 | M |
 | FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định | BR-002, BR-006 | M |
-| FR-ORD-20 | Hệ thống phải cho phép Operations Manager khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công | BR-002 | S |
+| FR-ORD-20 | Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công | BR-002 | S |
 | FR-ORD-21 | Hệ thống phải hiển thị hướng dẫn xử lý cho khách trên kiosk khi đã thanh toán nhưng lượt xịt thất bại, kèm mã tham chiếu sự cố | BR-002 | M |
 | FR-ORD-22 | Hệ thống phải cho phép tìm kiếm giao dịch theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng thái | BR-008 | M |
 | FR-ORD-23 | Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch | BR-008, BR-009 | S |
@@ -353,7 +377,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|---|
 | FR-ALR-01 | Hệ thống phải sinh cảnh báo khi máy chuyển sang trạng thái OFFLINE | BR-006 | M |
 | FR-ALR-02 | Hệ thống phải sinh cảnh báo khi slot đạt ngưỡng sắp hết hoặc chuyển sang rỗng | BR-005, BR-006 | M |
-| FR-ALR-03 | Hệ thống phải sinh cảnh báo khi thiết bị báo cửa mở quá 5 phút ngoài phiên bảo trì | BR-006, BR-010 | M |
+| FR-ALR-03 | Hệ thống phải sinh cảnh báo khi thiết bị báo cửa mở quá 5 phút ngoài phiên bảo trì và ngoài phiên nạp đang mở (FR-INV-29, FR-INV-30) | BR-006, BR-010 | M |
 | FR-ALR-04 | Hệ thống phải sinh cảnh báo khi có 3 lượt xịt thất bại liên tiếp trên cùng một slot | BR-006 | M |
 | FR-ALR-05 | Hệ thống phải sinh cảnh báo khi thiết bị báo lỗi cảm biến hoặc lỗi cơ cấu | BR-006 | M |
 | FR-ALR-06 | Hệ thống phải phân loại mỗi cảnh báo theo loại, mức độ nghiêm trọng, máy, slot, địa điểm và thời điểm phát sinh | BR-006 | M |
@@ -361,7 +385,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ALR-08 | Hệ thống phải quản lý trạng thái cảnh báo theo tập: OPEN, ACKNOWLEDGED, RESOLVED, CLOSED | BR-006 | M |
 | FR-ALR-09 | Hệ thống phải xác định danh sách thương hiệu bị ảnh hưởng bởi mỗi cảnh báo mức máy, dựa trên các slot đang có hợp đồng hiệu lực | BR-006, BR-012 | M |
 | FR-ALR-10 | Hệ thống phải thông báo cho Brand Admin các cảnh báo ảnh hưởng đến slot của thương hiệu mình, không tiết lộ thông tin slot của thương hiệu khác | BR-006, BR-012 | M |
-| FR-ALR-11 | Hệ thống phải cho phép Operations Manager tiếp nhận, phân công và đóng cảnh báo | BR-006 | M |
+| FR-ALR-11 | Hệ thống phải cho phép Operations Staff tiếp nhận, phân công và đóng cảnh báo | BR-006 | M |
 | FR-ALR-12 | Hệ thống phải lưu người xử lý, thời điểm tiếp nhận, nội dung xử lý và thời điểm hoàn thành của mỗi cảnh báo | BR-006, BR-008 | M |
 | FR-ALR-13 | Hệ thống phải tự động tạo phiếu bảo trì cho các loại cảnh báo được cấu hình là nghiêm trọng | BR-006 | S |
 | FR-ALR-14 | Hệ thống phải nâng mức cảnh báo khi quá thời hạn xử lý quy định | BR-006 | S |
@@ -371,17 +395,17 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 
 | Mã | Yêu cầu | BR | Ưu tiên |
 |---|---|---|---|
-| FR-MNT-01 | Hệ thống phải cho phép Operations Manager tạo phiếu bảo trì thủ công cho một máy | BR-006 | M |
-| FR-MNT-02 | Hệ thống phải cho phép phân công phiếu bảo trì cho một Technician của nền tảng | BR-004, BR-006 | M |
+| FR-MNT-01 | Hệ thống phải cho phép Operations Staff tạo phiếu bảo trì thủ công cho một máy | BR-006 | M |
+| FR-MNT-02 | Hệ thống phải cho phép phân công phiếu bảo trì cho một tài khoản Operations Staff cụ thể của nền tảng | BR-004, BR-006 | M |
 | FR-MNT-03 | Hệ thống phải phân loại phiếu bảo trì theo nhóm sự cố, mức độ nghiêm trọng, độ ưu tiên và hạn xử lý | BR-006 | M |
 | FR-MNT-04 | Hệ thống phải quản lý trạng thái phiếu theo tập: OPEN, ASSIGNED, IN_PROGRESS, RESOLVED, CLOSED | BR-006 | M |
-| FR-MNT-05 | Hệ thống phải cho phép Technician chuyển máy sang chế độ MAINTENANCE | BR-006 | M |
+| FR-MNT-05 | Hệ thống phải cho phép Operations Staff chuyển máy sang chế độ MAINTENANCE | BR-006 | M |
 | FR-MNT-06 | Hệ thống phải từ chối tạo đơn hàng mới trên máy đang ở chế độ MAINTENANCE | BR-002, BR-010 | M |
 | FR-MNT-07 | Hệ thống phải thông báo cho tất cả Brand Admin có slot trên máy khi máy chuyển sang chế độ MAINTENANCE | BR-006, BR-012 | M |
-| FR-MNT-08 | Hệ thống phải cho phép Technician xem dữ liệu cảm biến, mã lỗi và sự kiện thiết bị gần đây của máy được phân công | BR-006 | M |
-| FR-MNT-09 | Hệ thống phải cho phép Technician thực hiện lượt xịt chẩn đoán trên slot được chọn sau khi xác thực lại | BR-006 | M |
-| FR-MNT-10 | Hệ thống phải cho phép Technician ghi kết quả chẩn đoán, nguyên nhân, biện pháp xử lý và linh kiện đã thay | BR-006, BR-008 | M |
-| FR-MNT-11 | Hệ thống phải cung cấp checklist kiểm tra sau bảo trì mà Technician phải hoàn thành | BR-006, BR-010 | M |
+| FR-MNT-08 | Hệ thống phải cho phép Operations Staff xem dữ liệu cảm biến, mã lỗi và sự kiện thiết bị gần đây của máy được phân công | BR-006 | M |
+| FR-MNT-09 | Hệ thống phải cho phép Operations Staff thực hiện lượt xịt chẩn đoán trên slot được chọn sau khi xác thực lại | BR-006 | M |
+| FR-MNT-10 | Hệ thống phải cho phép Operations Staff ghi kết quả chẩn đoán, nguyên nhân, biện pháp xử lý và linh kiện đã thay | BR-006, BR-008 | M |
+| FR-MNT-11 | Hệ thống phải cung cấp checklist kiểm tra sau bảo trì mà Operations Staff phải hoàn thành | BR-006, BR-010 | M |
 | FR-MNT-12 | Hệ thống phải từ chối đưa máy trở lại chế độ NORMAL khi checklist kiểm tra sau bảo trì chưa hoàn thành | BR-006, BR-010 | M |
 | FR-MNT-13 | Hệ thống phải từ chối đóng phiếu bảo trì khi chưa ghi nhận kết quả xử lý | BR-006 | M |
 | FR-MNT-14 | Hệ thống phải lưu lịch sử bảo trì của từng máy | BR-006, BR-008 | M |
@@ -511,7 +535,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | Mã | Yêu cầu | Cách kiểm chứng |
 |---|---|---|
 | NFR-DAT-01 | Hệ thống phải lưu toàn bộ thời điểm ở múi giờ UTC và hiển thị theo múi giờ địa phương | Kiểm tra cơ sở dữ liệu |
-| NFR-DAT-02 | Hệ thống phải lưu số tiền dưới dạng số nguyên theo đơn vị nhỏ nhất của loại tiền | Kiểm tra lược đồ |
+| NFR-DAT-02 | Hệ thống phải lưu số tiền bằng kiểu số thập phân chính xác (`numeric`), không dùng kiểu dấu phẩy động | Kiểm tra lược đồ |
 | NFR-DAT-03 | Hệ thống phải giữ dữ liệu giao dịch, hợp đồng thuê và nhật ký kiểm toán tối thiểu 12 tháng | Kiểm tra chính sách lưu trữ |
 | NFR-DAT-04 | Hệ thống phải không lưu bất kỳ thông tin thẻ hoặc tài khoản ngân hàng nào của khách hàng | Rà soát lược đồ dữ liệu |
 | NFR-DAT-05 | Hệ thống phải có cơ chế sao lưu cơ sở dữ liệu hằng ngày trong giai đoạn chạy thử | Kiểm tra quy trình |
@@ -554,7 +578,13 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 
 **Về việc bỏ vai trò Report Viewer.** Phiên bản trước có 6 vai trò, trong đó Report Viewer là tài khoản chỉ đọc thuộc thương hiệu. Vai trò này đã được gộp vào Brand Admin. Hệ quả: mọi người dùng của một thương hiệu đều dùng chung vai trò Brand Admin và đều đặt được giá lượt xịt. Phân quyền chi tiết trong nội bộ thương hiệu, cụ thể là tách quyền xem báo cáo khỏi quyền đặt giá, nằm ngoài phạm vi MVP và được xác định là Future Work.
 
-Việc bỏ vai trò này cũng làm mọi tài khoản trên nền tảng đều do Platform Super Admin tạo và quản lý, không còn trường hợp thương hiệu tự tạo tài khoản. Ma trận kiểm thử cô lập dữ liệu ở NFR-SEC-04 giảm từ 6 xuống 5 vai trò.
+Việc bỏ vai trò này cũng làm mọi tài khoản trên nền tảng đều do Platform Super Admin tạo và quản lý, không còn trường hợp thương hiệu tự tạo tài khoản.
+
+**Về việc gộp Operations Manager và Technician thành Operations Staff.** Phiên bản trước tách hai vai trò: Operations Manager (bật/tắt máy từ xa, tiếp nhận và phân công cảnh báo, tạo phiếu bảo trì, khởi tạo hoàn tiền) và Technician (chuyển máy sang MAINTENANCE, chẩn đoán, hoàn thành checklist an toàn, đóng phiếu). Hai vai trò này đều là nhân sự nội bộ nền tảng (BR-004) và không có FR nào trong BR yêu cầu tách bạch trách nhiệm giữa người điều phối và người xử lý hiện trường, nên được gộp thành một vai trò duy nhất **Operations Staff**, quản lý toàn bộ vòng đời vận hành và sự cố của máy — từ bật/tắt máy, tiếp nhận cảnh báo, tạo và tự phân công phiếu bảo trì, đến chẩn đoán và đóng phiếu. FR-MNT-02 (phân công phiếu cho một tài khoản Operations Staff cụ thể) vẫn giữ vì nền tảng có thể có nhiều tài khoản Operations Staff khác nhau phụ trách các máy/địa điểm khác nhau (xem FR-AUTH-12).
+
+Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Super Admin, Operations Staff, Inventory Staff, Brand Admin). Ma trận kiểm thử cô lập dữ liệu ở NFR-SEC-04 (vốn xét theo thương hiệu, không theo vai trò nội bộ nền tảng) không đổi, nhưng ma trận phân quyền RBAC cần kiểm thử giảm từ 5 xuống 4 loại tài khoản.
+
+**Về phiếu nạp của Inventory Staff và cảnh báo cửa mở.** FR-ALR-03 (bản gốc) chỉ loại trừ cảnh báo cửa mở quá 5 phút khi máy đang ở chế độ MAINTENANCE, nhưng Inventory Staff nạp/tháo chai không chuyển máy sang MAINTENANCE — dẫn đến nguy cơ báo động giả mỗi khi nạp hàng quá 5 phút. Đã bổ sung khái niệm phiếu nạp (FR-INV-29 đến FR-INV-31) làm tiền điều kiện của phiên nạp: Inventory Staff phải mở phiếu trước khi thao tác, hệ thống tạm ngưng cảnh báo cửa mở cho slot/máy có phiếu đang mở, và phục hồi giám sát khi đóng phiếu. FR-ALR-03 đã được cập nhật để tham chiếu ngoại lệ này.
 
 **Về thứ tự cắt khi tiến độ căng.** Cắt theo thứ tự: nhóm W trước, rồi nhóm S trong RPT và MNT, rồi FR-EXP-10 đến FR-EXP-12 (phần tính phí ân hạn), rồi nhóm S trong INV. **Tuyệt đối không cắt bất kỳ FR nào trong nhóm DSP, và không cắt FR-REV-01 đến FR-REV-03** — hai nhóm này là giá trị học thuật của đồ án.
 
@@ -564,10 +594,10 @@ Việc bỏ vai trò này cũng làm mọi tài khoản trên nền tảng đề
 
 | Ưu tiên | Số FR |
 |---|---|
-| **M — Must** (phạm vi MVP 13 tuần) | 214 |
-| **S — Should** (làm nếu còn thời gian sau tuần 9) | 23 |
+| **M — Must** (phạm vi MVP 13 tuần) | 237 |
+| **S — Should** (làm nếu còn thời gian sau tuần 9) | 24 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** | **240** |
+| **Tổng FR** | **264** |
 | **Tổng NFR** | **50** |
 
 **Danh sách W:** FR-PRD-06 chiến dịch khuyến mãi · FR-IOT-15 cập nhật firmware từ xa · FR-ALR-15 thông báo qua kênh ngoài.
@@ -580,8 +610,20 @@ Việc bỏ vai trò này cũng làm mọi tài khoản trên nền tảng đề
 | BND | 8 | ORD | 23 |
 | USR | 5 | DSP | 20 |
 | PRD | 6 | IOT | 15 |
-| MCH | 14 | ALR | 15 |
-| SLT | 18 | MNT | 16 |
+| MCH | 17 | ALR | 15 |
+| SLT | 29 | MNT | 16 |
 | EXP | 22 | RPT | 15 |
 | REV | 7 | AUD | 11 |
-| INV | 21 | | |
+| INV | 31 | | |
+
+**Ghi chú bổ sung (2026-09-15).** FR-MCH-15÷17, FR-SLT-19÷29 và FR-INV-22÷28 được thêm để lấp các khoảng trống nghiệp vụ: (1) luồng Brand Admin tự yêu cầu thuê slot và trigger kích hoạt hợp đồng DRAFT→ACTIVE (FR-SLT-19÷26), (2) hành động gán/đổi sản phẩm cho slot như một chức năng tường minh thay vì ràng buộc ngầm định (FR-SLT-27÷29), (3) định nghĩa tường minh điều kiện AVAILABLE/UNAVAILABLE của slot, hợp nhất các ràng buộc rải rác ở FR-SLT-11 và FR-INV-12 (FR-MCH-15÷17), và (4) luồng Brand Admin khai báo và Inventory Staff đối soát lô hàng gửi đến kho nền tảng theo quyết định nghiệp vụ #1 (FR-INV-22÷28).
+
+**Ghi chú bổ sung (2026-09-16).** Sửa NFR-DAT-02 theo `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`:
+yêu cầu cũ "lưu số tiền dưới dạng số nguyên theo đơn vị nhỏ nhất của loại tiền" được thay bằng "lưu
+bằng kiểu số thập phân chính xác (`numeric`), không dùng kiểu dấu phẩy động". Lý do: VND không có đơn
+vị nhỏ hơn đồng nên hai cách biểu diễn tương đương về tập giá trị, nhưng phép nhân doanh thu với tỷ lệ
+ăn chia (`revenue_share_percent`, FR-SLT-18) cho kết quả thập phân — `numeric` giữ được phần thập phân
+đến lúc chốt sổ, còn `bigint` buộc phải chọn quy tắc làm tròn ở tầng ứng dụng cho mọi phép quyết toán.
+Tinh thần gốc của NFR-DAT-02 (cấm `float`/`double` vì sai số nhị phân) được giữ nguyên.
+
+**Ghi chú bổ sung (2 — cùng ngày).** Gộp vai trò Operations Manager và Technician thành **Operations Staff** trên toàn bộ tài liệu (chi tiết lý do ở PHẦN D); tổng số vai trò giảm còn 4. Thêm FR-INV-29÷31 (phiếu nạp) và sửa FR-ALR-03 để đóng lỗ hổng báo động giả "cửa mở quá hạn" khi Inventory Staff đang nạp hàng hợp lệ ngoài phiên bảo trì.

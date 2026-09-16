@@ -79,12 +79,18 @@ Slot chỉ được cho thuê lại sau khi hợp đồng cũ về `CLOSED` ho�
 ### DispenseCommand
 
 ```
-CREATED ──> SENT ──> ACKED ──> SUCCESS
-                        │
-                        ├──> FAILED
-                        └──> UNKNOWN   (quá DISPENSE_RESULT_TIMEOUT_SEC)
-CREATED ──> EXPIRED                    (quá DISPENSE_CMD_TTL_SEC, chưa gửi được)
+CREATED ──> SENT ──> ACKNOWLEDGED ──> SUCCEEDED
+              │             │
+              │             ├──> FAILED     (đã kích hoạt cơ cấu nhưng hỏng)
+              │             └──> UNKNOWN    (quá DISPENSE_RESULT_TIMEOUT_SEC)
+              └──> REJECTED               (thiết bị từ chối trước khi kích hoạt)
+CREATED ──> EXPIRED                        (quá DISPENSE_CMD_TTL_SEC, chưa gửi được)
 ```
+
+`REJECTED` và `FAILED` là hai kết cục khác nhau: `REJECTED` là thiết bị từ chối **trước khi** kích
+hoạt cơ cấu (FR-DSP-07 đến FR-DSP-14 — chữ ký sai, quá hạn, sai máy, trùng mã, cửa mở, đang bảo trì,
+slot rỗng), khách chưa mất lượt xịt; `FAILED` là đã kích hoạt nhưng không thành công. FR-ORD-19 và
+FR-ALR-04 phân biệt hai trường hợp này (`spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`).
 
 ### Bottle
 
