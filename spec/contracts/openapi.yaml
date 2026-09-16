@@ -1,0 +1,4190 @@
+openapi: 3.1.0
+
+# =====================================================================================
+# CONTRACT ĐÓNG BĂNG. Không sửa trực tiếp.
+# Muốn đổi: viết ADR trong spec/decisions/, TV1 duyệt, rồi sửa và chạy `make test-contract`
+# (spec/contracts/README.md).
+#
+# Phạm vi: toàn bộ FR ưu tiên M của 17 module. FR ưu tiên S/W không có endpoint ở đây.
+# Mỗi operation mở đầu `description` bằng mã FR để đối chiếu ma trận truy vết.
+#
+# Enum trong components.schemas PHẢI trùng từng giá trị với enum trong spec/contracts/schema.sql.
+# Mã lỗi PHẢI nằm trong spec/errors.md — không được đặt mã mới ở đây.
+# Ngưỡng số tham chiếu tên hằng trong spec/constraints.md — không viết số vào mô tả.
+# =====================================================================================
+
+info:
+  title: ScentStation API
+  version: 1.0.0
+  description: |
+    REST API của nền tảng ScentStation — máy trải nghiệm nước hoa theo mô hình cho thuê slot.
+
+    ## Cô lập dữ liệu ở mức slot
+
+    Người dùng thuộc thương hiệu chỉ thấy dữ liệu của slot mà thương hiệu đó đang hoặc đã từng có
+    hợp đồng, trong đúng kỳ hạn hợp đồng tương ứng (BR-003, BR-012, FR-AUTH-07, FR-BND-05).
+
+    Mọi endpoint có dữ liệu thương hiệu phải lọc qua `orders`/`slot_rentals`, **không bao giờ qua
+    `machines`** — `machines` không có `brand_id` vì một máy chứa slot của nhiều thương hiệu. Ngoài
+    phạm vi trả `FORBIDDEN_SCOPE` (403).
+
+    Đơn hàng có `revenueOwner = PLATFORM` (hàng đã thanh lý) **không** hiển thị cho Brand Admin
+    (FR-REV-06, FR-EXP-20) — lọc theo `revenueOwner`, không phải chỉ theo `brandId`.
+
+    ## Bốn vai trò
+
+    `PLATFORM_SUPER_ADMIN` · `OPERATIONS_STAFF` · `INVENTORY_STAFF` · `BRAND_ADMIN`
+
+    ## Xác thực
+
+    Bearer JWT. Access token hết hạn sau `ACCESS_TOKEN_TTL_MIN`, refresh token sau
+    `REFRESH_TOKEN_TTL_DAYS` (FR-AUTH-02). Endpoint kiosk là công khai, đánh dấu `security: []`.
+
+    Thao tác nhạy cảm (hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý, đổi cấu hình máy)
+    cần header `X-Reauth-Token` lấy từ `POST /auth/reauth`, thiếu thì trả `REAUTH_REQUIRED`
+    (FR-AUTH-09).
+
+    ## Quy ước chung
+
+    - Thời điểm: ISO-8601 có offset, lưu ở UTC (NFR-DAT-01).
+    - Tiền: chuỗi thập phân (`"35000.0000"`) để không mất chính xác khi qua JSON (NFR-DAT-02).
+    - Danh sách: phân trang bằng `page` và `pageSize`, trả kèm `total`.
+    - Lỗi: luôn có dạng `{ code, message, details? }`; `code` lấy từ `spec/errors.md`.
+  contact:
+    name: Nhóm FA26SE114
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Máy dev
+  - url: https://api.scentstation.vn/api/v1
+    description: Môi trường thật (HTTPS/TLS 1.2+ bắt buộc — NFR-SEC-01)
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: AUTH
+    description: Xác thực và phân quyền
+  - name: BND
+    description: Thương hiệu và cô lập dữ liệu
+  - name: USR
+    description: Người dùng và vai trò
+  - name: PRD
+    description: Danh mục sản phẩm
+  - name: MCH
+    description: Máy và slot
+  - name: SLT
+    description: Hợp đồng thuê slot
+  - name: EXP
+    description: Ân hạn, gia hạn và thanh lý hàng tồn
+  - name: REV
+    description: Phân tách doanh thu
+  - name: INV
+    description: Tồn kho và nạp nước hoa
+  - name: RFQ
+    description: Yêu cầu bổ sung nước hoa
+  - name: ORD
+    description: Đơn hàng và thanh toán
+  - name: DSP
+    description: Điều khiển lượt xịt
+  - name: IOT
+    description: Giao tiếp và giám sát thiết bị
+  - name: ALR
+    description: Cảnh báo
+  - name: MNT
+    description: Bảo trì
+  - name: RPT
+    description: Dashboard và báo cáo
+  - name: AUD
+    description: Nhật ký kiểm toán
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token cấp bởi `POST /auth/login`, hết hạn sau `ACCESS_TOKEN_TTL_MIN` (FR-AUTH-02).
+        Token bị thu hồi trong `SESSION_REVOKE_MAX_SEC` khi tài khoản bị vô hiệu hóa (FR-AUTH-10).
+
+  parameters:
+    page:
+      name: page
+      in: query
+      description: Trang, bắt đầu từ 1
+      schema: { type: integer, minimum: 1, default: 1 }
+    pageSize:
+      name: pageSize
+      in: query
+      description: Số bản ghi mỗi trang
+      schema: { type: integer, minimum: 1, maximum: 200, default: 20 }
+    from:
+      name: from
+      in: query
+      description: Mốc đầu khoảng thời gian (bao gồm)
+      schema: { type: string, format: date-time }
+    to:
+      name: to
+      in: query
+      description: Mốc cuối khoảng thời gian (không bao gồm)
+      schema: { type: string, format: date-time }
+    idPath:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    reauthToken:
+      name: X-Reauth-Token
+      in: header
+      required: true
+      description: |
+        Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+        (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+      schema: { type: string }
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Khóa do phía gọi sinh, duy nhất cho mỗi ý định tạo đơn. Gọi lại cùng khóa trả về chính đơn
+        đã tạo thay vì tạo đơn mới. Khớp cột `orders.idempotency_key`.
+      schema: { type: string, maxLength: 150 }
+
+  responses:
+    BadRequest:
+      description: Dữ liệu vào không hợp lệ
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            invalidRentalPeriod:
+              value: { code: INVALID_RENTAL_PERIOD, message: Ngày kết thúc phải sau ngày bắt đầu }
+    Unauthorized:
+      description: Chưa xác thực hoặc token hết hạn
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            tokenExpired:
+              value: { code: TOKEN_EXPIRED, message: Access token đã hết hạn }
+    Forbidden:
+      description: Ngoài phạm vi cho phép, hoặc cần xác thực lại
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            forbiddenScope:
+              value: { code: FORBIDDEN_SCOPE, message: Tài nguyên ngoài phạm vi slot của thương hiệu }
+            reauthRequired:
+              value: { code: REAUTH_REQUIRED, message: Thao tác này cần xác thực lại mật khẩu }
+    NotFound:
+      description: Không tìm thấy tài nguyên
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Xung đột trạng thái hoặc ràng buộc
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            slotOccupied:
+              value: { code: SLOT_OCCUPIED, message: Slot đang có hợp đồng hiệu lực }
+    Locked:
+      description: Tài khoản bị khóa
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          examples:
+            accountLocked:
+              value: { code: ACCOUNT_LOCKED, message: Tài khoản bị khóa tạm thời }
+    NoContent:
+      description: Thành công, không có nội dung trả về
+
+  schemas:
+    # ---------------------------------------------------------------------------------
+    # Kiểu dùng chung
+    # ---------------------------------------------------------------------------------
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Mã lỗi. **Chỉ dùng mã có trong `spec/errors.md`.**
+        message:
+          type: string
+          description: Mô tả cho người đọc. Trên kiosk phải là ngôn ngữ thông thường (NFR-USA-03).
+        details:
+          type: object
+          additionalProperties: true
+          description: Thông tin bổ sung, ví dụ danh sách trường không hợp lệ.
+
+    PageMeta:
+      type: object
+      required: [page, pageSize, total]
+      properties:
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer, description: Tổng số bản ghi khớp bộ lọc }
+
+    Money:
+      type: string
+      pattern: '^-?\d+(\.\d{1,4})?$'
+      description: |
+        Số tiền dạng chuỗi thập phân, tối đa 4 chữ số phần thập phân — khớp `numeric(19,4)` trong
+        CSDL. Dùng chuỗi thay vì number để không mất chính xác khi qua JSON (NFR-DAT-02, ADR-0002).
+      examples: ['35000.0000']
+
+    Currency:
+      type: string
+      minLength: 3
+      maxLength: 3
+      description: Mã tiền tệ ISO-4217
+      default: VND
+
+    # ---------------------------------------------------------------------------------
+    # Enum — phải trùng từng giá trị với enum trong spec/contracts/schema.sql
+    # ---------------------------------------------------------------------------------
+    BrandStatus:
+      type: string
+      enum: [ACTIVE, SUSPENDED, DISABLED]
+    UserStatus:
+      type: string
+      enum: [INVITED, ACTIVE, LOCKED, DISABLED]
+    RoleCode:
+      type: string
+      enum: [PLATFORM_SUPER_ADMIN, OPERATIONS_STAFF, INVENTORY_STAFF, BRAND_ADMIN]
+      description: |
+        Bốn vai trò — không phải năm. Report Viewer đã gộp vào Brand Admin; Operations Manager và
+        Technician đã gộp thành Operations Staff (`docs/FR_NFR_SCENTSTATION.md` Phần D).
+        Vai trò là dữ liệu trong bảng `roles`, enum này chỉ liệt kê tập vai trò hệ thống của MVP.
+    MachineConnectionStatus:
+      type: string
+      enum: [ONLINE, UNSTABLE, OFFLINE]
+      description: Trục kết nối, suy ra từ heartbeat (FR-MCH-08). Độc lập với chế độ hoạt động.
+    MachineOperatingMode:
+      type: string
+      enum: [NORMAL, MAINTENANCE, DISABLED]
+      description: Trục chế độ, do người vận hành đặt (FR-MCH-09). Độc lập với trạng thái kết nối.
+    SlotStatus:
+      type: string
+      enum: [AVAILABLE, UNAVAILABLE, MAINTENANCE, DISABLED]
+    BottleStatus:
+      type: string
+      enum: [IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED]
+    RefillStatus:
+      type: string
+      enum: [STARTED, COMPLETED, CANCELLED]
+    OrderStatus:
+      type: string
+      enum:
+        [
+          CREATED,
+          PENDING_PAYMENT,
+          PAID,
+          DISPENSE_REQUESTED,
+          DISPENSED,
+          FAILED,
+          EXPIRED,
+          REFUND_PENDING,
+          REFUNDED,
+        ]
+    PaymentStatus:
+      type: string
+      enum:
+        [
+          PENDING,
+          SUCCEEDED,
+          FAILED,
+          CANCELLED,
+          EXPIRED,
+          REFUND_PENDING,
+          PARTIALLY_REFUNDED,
+          REFUNDED,
+        ]
+    CommandStatus:
+      type: string
+      enum: [CREATED, SENT, ACKNOWLEDGED, SUCCEEDED, FAILED, REJECTED, EXPIRED, UNKNOWN]
+      description: |
+        `REJECTED` là thiết bị từ chối trước khi kích hoạt cơ cấu (khách chưa mất lượt xịt);
+        `FAILED` là đã kích hoạt nhưng hỏng. Phân biệt này cần cho FR-ORD-19 và FR-ALR-04
+        (ADR-0002).
+    DispenseType:
+      type: string
+      enum: [CUSTOMER, DIAGNOSTIC]
+    AlertSeverity:
+      type: string
+      enum: [INFO, WARNING, HIGH, CRITICAL]
+    AlertStatus:
+      type: string
+      enum: [OPEN, ACKNOWLEDGED, IN_PROGRESS, RESOLVED, CLOSED]
+    TicketStatus:
+      type: string
+      enum: [OPEN, ASSIGNED, IN_PROGRESS, WAITING_PART, POST_TEST, RESOLVED, CLOSED, REOPENED]
+    TicketPriority:
+      type: string
+      enum: [LOW, MEDIUM, HIGH, CRITICAL]
+    NotificationStatus:
+      type: string
+      enum: [PENDING, SENT, FAILED, READ]
+    SlotRentalStatus:
+      type: string
+      enum: [DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED]
+      description: |
+        Slot bán được ở ACTIVE, EXPIRING, GRACE, LIQUIDATED. Doanh thu thuộc BRAND ở 3 trạng thái
+        đầu, thuộc PLATFORM ở LIQUIDATED (`spec/glossary.md`).
+    RevenueOwner:
+      type: string
+      enum: [BRAND, PLATFORM]
+    KioskInteractionType:
+      type: string
+      enum: [PRODUCT_IMPRESSION, PRODUCT_SELECTED]
+    RefillRequestStatus:
+      type: string
+      enum: [SUBMITTED, ACCEPTED, REJECTED, SCHEDULED, COMPLETED, CANCELLED]
+    RefillRequestReason:
+      type: string
+      enum: [LOW_STOCK, EXPIRING, PRODUCT_CHANGE]
+    SlotRentalRequestStatus:
+      type: string
+      enum: [REQUESTED, APPROVED, REJECTED, CONVERTED, CANCELLED]
+    ShipmentDeclarationStatus:
+      type: string
+      enum: [DECLARED, RECEIVED, DISCREPANCY, CANCELLED]
+    CredentialStatus:
+      type: string
+      enum: [ACTIVE, REVOKED, EXPIRED]
+
+    # ---------------------------------------------------------------------------------
+    # AUTH
+    # ---------------------------------------------------------------------------------
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, format: password, minLength: 8 }
+    TokenPair:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, user]
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        expiresIn:
+          type: integer
+          description: Số giây còn hiệu lực của access token, bằng ACCESS_TOKEN_TTL_MIN × 60.
+        user: { $ref: '#/components/schemas/CurrentUser' }
+    CurrentUser:
+      type: object
+      required: [id, email, fullName, roles, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        brandId:
+          type: [string, 'null']
+          format: uuid
+          description: |
+            Null với tài khoản mức nền tảng. Brand Admin luôn gắn với đúng một thương hiệu
+            (FR-AUTH-05).
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleCode' }
+        permissions:
+          type: array
+          items: { type: string }
+    ReauthRequest:
+      type: object
+      required: [password]
+      properties:
+        password: { type: string, format: password }
+    ReauthResponse:
+      type: object
+      required: [reauthToken, expiresIn]
+      properties:
+        reauthToken: { type: string }
+        expiresIn: { type: integer }
+
+    # ---------------------------------------------------------------------------------
+    # BND, USR, PRD
+    # ---------------------------------------------------------------------------------
+    Brand:
+      type: object
+      required: [id, code, name, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 200 }
+        logoUrl: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        contactInfo: { type: [object, 'null'], additionalProperties: true }
+        status: { $ref: '#/components/schemas/BrandStatus' }
+        createdAt: { type: string, format: date-time }
+    BrandCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 200 }
+        description: { type: string }
+        contactInfo: { type: object, additionalProperties: true }
+    BrandSelfUpdate:
+      type: object
+      description: Trường Brand Admin tự sửa được cho thương hiệu mình (FR-BND-06).
+      properties:
+        name: { type: string, maxLength: 200 }
+        logoUrl: { type: string }
+        description: { type: string }
+        contactInfo: { type: object, additionalProperties: true }
+    User:
+      type: object
+      required: [id, email, fullName, status, roles, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        email: { type: string, format: email }
+        fullName: { type: string, maxLength: 200 }
+        status: { $ref: '#/components/schemas/UserStatus' }
+        roles:
+          type: array
+          items: { $ref: '#/components/schemas/RoleCode' }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    UserCreate:
+      type: object
+      required: [email, fullName, role]
+      properties:
+        email: { type: string, format: email }
+        fullName: { type: string, maxLength: 200 }
+        role: { $ref: '#/components/schemas/RoleCode' }
+        brandId:
+          type: string
+          format: uuid
+          description: >-
+            Bắt buộc khi role = BRAND_ADMIN, phải bỏ trống với vai trò nền tảng (FR-AUTH-05).
+    Product:
+      type: object
+      required: [id, brandId, sku, name, defaultPrice, currency, status]
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        sku: { type: string, maxLength: 100 }
+        name: { type: string, maxLength: 200 }
+        description: { type: [string, 'null'] }
+        fragranceNotes: { type: [object, 'null'], additionalProperties: true }
+        imageUrl: { type: [string, 'null'] }
+        defaultPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        fullBottleRetailPrice:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+          description: Giá bán lẻ chai đầy, dùng tính phí lưu kho khi ân hạn (FR-PRD-05, FR-EXP-10).
+        fullBottleVolumeMl: { type: [number, 'null'] }
+        status: { type: string, enum: [ACTIVE, DISCONTINUED] }
+    ProductCreate:
+      type: object
+      required: [sku, name, defaultPrice]
+      properties:
+        sku: { type: string, maxLength: 100 }
+        name: { type: string, maxLength: 200 }
+        description: { type: string }
+        fragranceNotes: { type: object, additionalProperties: true }
+        imageUrl: { type: string }
+        defaultPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        fullBottleRetailPrice: { $ref: '#/components/schemas/Money' }
+        fullBottleVolumeMl: { type: number, minimum: 0 }
+
+    # ---------------------------------------------------------------------------------
+    # MCH
+    # ---------------------------------------------------------------------------------
+    Location:
+      type: object
+      required: [id, code, name, timezone, status]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 200 }
+        address: { type: [string, 'null'] }
+        timezone: { type: string, default: Asia/Ho_Chi_Minh }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+    LocationCreate:
+      type: object
+      required: [code, name]
+      properties:
+        code: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 200 }
+        address: { type: string }
+        timezone: { type: string, default: Asia/Ho_Chi_Minh }
+    Machine:
+      type: object
+      required: [id, locationId, serialNumber, displayName, status, operatingMode]
+      description: >-
+        KHÔNG có brandId. Máy thuộc nền tảng; một máy chứa slot của nhiều thương hiệu (BR-003).
+        Quan hệ thương hiệu ↔ máy đi qua SlotRental.
+      properties:
+        id: { type: string, format: uuid }
+        locationId: { type: string, format: uuid }
+        serialNumber:
+          type: string
+          maxLength: 100
+          description: Định danh dùng trong topic MQTT (spec/contracts/mqtt.md).
+        displayName: { type: string, maxLength: 200 }
+        status: { $ref: '#/components/schemas/MachineConnectionStatus' }
+        operatingMode: { $ref: '#/components/schemas/MachineOperatingMode' }
+        lastSeenAt: { type: [string, 'null'], format: date-time }
+        firmwareVersion: { type: [string, 'null'] }
+        configurationVersion: { type: integer }
+        slotCount: { type: integer }
+    MachineCreate:
+      type: object
+      required: [locationId, serialNumber, displayName, slotCount]
+      properties:
+        locationId: { type: string, format: uuid }
+        serialNumber: { type: string, maxLength: 100 }
+        displayName: { type: string, maxLength: 200 }
+        slotCount:
+          type: integer
+          minimum: 1
+          description: Số slot cần tạo (FR-MCH-05, NFR-SCA-04).
+    MachineSlot:
+      type: object
+      required: [id, machineId, slotNumber, status]
+      properties:
+        id: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        slotNumber: { type: integer, minimum: 1 }
+        status: { $ref: '#/components/schemas/SlotStatus' }
+        calibratedDosageMl: { type: [number, 'null'] }
+        lowStockThresholdMl: { type: [number, 'null'] }
+        estimatedRemainingMl: { type: number }
+        estimatedRemainingSprays: { type: integer }
+        activeBottleId: { type: [string, 'null'], format: uuid }
+        currentRentalId: { type: [string, 'null'], format: uuid }
+    SlotConfigUpdate:
+      type: object
+      description: Hiệu chuẩn liều lượng và ngưỡng cảnh báo sắp hết cho slot (FR-MCH-06).
+      properties:
+        calibratedDosageMl: { type: number, exclusiveMinimum: 0 }
+        lowStockThresholdMl: { type: number, minimum: 0 }
+    MachineModeUpdate:
+      type: object
+      required: [operatingMode]
+      properties:
+        operatingMode: { $ref: '#/components/schemas/MachineOperatingMode' }
+        reason: { type: string }
+    MachineStatusHistoryEntry:
+      type: object
+      required: [id, occurredAt, source]
+      description: >-
+        Một hàng cho mỗi lần chuyển. Thay đổi kết nối điền cặp *ConnectionStatus và để trống cặp
+        *OperatingMode; thay đổi chế độ làm ngược lại (FR-MCH-13).
+      properties:
+        id: { type: string, format: uuid }
+        fromConnectionStatus:
+          oneOf: [{ $ref: '#/components/schemas/MachineConnectionStatus' }, { type: 'null' }]
+        toConnectionStatus:
+          oneOf: [{ $ref: '#/components/schemas/MachineConnectionStatus' }, { type: 'null' }]
+        fromOperatingMode:
+          oneOf: [{ $ref: '#/components/schemas/MachineOperatingMode' }, { type: 'null' }]
+        toOperatingMode:
+          oneOf: [{ $ref: '#/components/schemas/MachineOperatingMode' }, { type: 'null' }]
+        reason: { type: [string, 'null'] }
+        source: { type: string, enum: [HEARTBEAT, OPERATOR, SYSTEM] }
+        changedBy: { type: [string, 'null'], format: uuid }
+        occurredAt: { type: string, format: date-time }
+    DeviceCredential:
+      type: object
+      required: [id, machineId, credentialIdentifier, status, issuedAt]
+      description: >-
+        Bí mật gốc chỉ trả về đúng một lần lúc tạo, sau đó chỉ lưu băm (NFR-SEC-05). Mỗi máy một
+        bộ riêng, không dùng chung (FR-MCH-02, NFR-SEC-07).
+      properties:
+        id: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        credentialIdentifier: { type: string }
+        status: { $ref: '#/components/schemas/CredentialStatus' }
+        issuedAt: { type: string, format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        lastAuthenticatedAt: { type: [string, 'null'], format: date-time }
+    DeviceCredentialIssued:
+      allOf:
+        - $ref: '#/components/schemas/DeviceCredential'
+        - type: object
+          required: [secret]
+          properties:
+            secret:
+              type: string
+              description: Bí mật gốc. Chỉ xuất hiện trong phản hồi này, không truy xuất lại được.
+
+    # ---------------------------------------------------------------------------------
+    # SLT, EXP, REV
+    # ---------------------------------------------------------------------------------
+    SlotRental:
+      type: object
+      required:
+        [id, slotId, brandId, status, startsAt, endsAt, pricePerSpray, currency, revenueSharePercent]
+      properties:
+        id: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        fragranceProductId:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            Null chỉ trong cửa sổ DRAFT giữa lúc hợp đồng được tạo tự động (FR-SLT-23) và lúc
+            Brand Admin gán sản phẩm (FR-SLT-27). Slot chưa gán sản phẩm không nhận đơn (FR-SLT-29).
+        productAssignedAt: { type: [string, 'null'], format: date-time }
+        requestId: { type: [string, 'null'], format: uuid }
+        previousRentalId: { type: [string, 'null'], format: uuid }
+        status: { $ref: '#/components/schemas/SlotRentalStatus' }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        graceEndsAt: { type: [string, 'null'], format: date-time }
+        pricePerSpray: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+        terminatedReason: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    SlotRentalCreate:
+      type: object
+      required: [slotId, brandId, startsAt, endsAt, pricePerSpray]
+      properties:
+        slotId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        pricePerSpray:
+          $ref: '#/components/schemas/Money'
+          description: Không có giá sàn hay giá trần (FR-SLT-08).
+        currency: { $ref: '#/components/schemas/Currency' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+    SlotPriceUpdate:
+      type: object
+      required: [pricePerSpray]
+      description: >-
+        Giá mới chỉ áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ nguyên giá đã
+        chụp (FR-SLT-09, FR-ORD-06).
+      properties:
+        pricePerSpray: { $ref: '#/components/schemas/Money' }
+    SlotProductAssign:
+      type: object
+      required: [fragranceProductId]
+      description: >-
+        Sản phẩm phải đang kinh doanh và thuộc thương hiệu đang thuê slot, nếu không trả
+        PRODUCT_NOT_OWNED (FR-SLT-07, FR-SLT-27, FR-SLT-28).
+      properties:
+        fragranceProductId: { type: string, format: uuid }
+    SlotRentalRenew:
+      type: object
+      required: [startsAt, endsAt, pricePerSpray]
+      properties:
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        pricePerSpray: { $ref: '#/components/schemas/Money' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+    TerminateRequest:
+      type: object
+      required: [reason]
+      description: Lý do là bắt buộc (FR-SLT-13).
+      properties:
+        reason: { type: string, minLength: 1 }
+    AvailableSlot:
+      type: object
+      required: [slotId, machineId, slotNumber, locationName]
+      description: >-
+        Slot trống hiển thị cho Brand Admin. KHÔNG kèm bất kỳ thông tin nào về thương hiệu đã từng
+        thuê trước đó (FR-SLT-19, BR-012).
+      properties:
+        slotId: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        machineDisplayName: { type: string }
+        slotNumber: { type: integer }
+        locationId: { type: string, format: uuid }
+        locationName: { type: string }
+    SlotRentalRequest:
+      type: object
+      required: [id, slotId, brandId, desiredStartsAt, desiredEndsAt, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        requestedBy: { type: string, format: uuid }
+        desiredStartsAt: { type: string, format: date-time }
+        desiredEndsAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/SlotRentalRequestStatus' }
+        reviewedBy: { type: [string, 'null'], format: uuid }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        rejectionReason: { type: [string, 'null'] }
+        resultingRentalId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+    SlotRentalRequestCreate:
+      type: object
+      required: [slotIds, desiredStartsAt, desiredEndsAt]
+      description: >-
+        Gửi yêu cầu cho một hoặc nhiều slot trống (FR-SLT-20). Mỗi slot sinh một hàng riêng — slot
+        đã có yêu cầu REQUESTED/APPROVED chưa xử lý xong bị từ chối (FR-SLT-26).
+      properties:
+        slotIds:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+        desiredStartsAt: { type: string, format: date-time }
+        desiredEndsAt: { type: string, format: date-time }
+    SlotRentalRequestApprove:
+      type: object
+      required: [pricePerSpray]
+      description: >-
+        Duyệt và xác nhận điều khoản; hệ thống tự tạo hợp đồng DRAFT liên kết ngược về yêu cầu
+        (FR-SLT-22, FR-SLT-23).
+      properties:
+        pricePerSpray: { $ref: '#/components/schemas/Money' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+    RejectRequest:
+      type: object
+      required: [reason]
+      description: Lý do là bắt buộc khi từ chối (FR-SLT-22, FR-RFQ-06).
+      properties:
+        reason: { type: string, minLength: 1 }
+    GracePeriodUpdate:
+      type: object
+      required: [graceEndsAt]
+      description: Ấn định ngày kết thúc ân hạn cho từng hợp đồng (FR-EXP-07).
+      properties:
+        graceEndsAt: { type: string, format: date-time }
+    LiquidationResult:
+      type: object
+      required: [rentalId, liquidatedAt, bottles]
+      description: >-
+        Kết quả thanh lý: quyền sở hữu mọi chai còn tồn tại slot chuyển sang nền tảng
+        (FR-EXP-15, FR-EXP-16).
+      properties:
+        rentalId: { type: string, format: uuid }
+        liquidatedAt: { type: string, format: date-time }
+        bottles:
+          type: array
+          items: { $ref: '#/components/schemas/Bottle' }
+    Settlement:
+      type: object
+      required: [brandId, periodStart, periodEnd, lines, totals]
+      description: >-
+        Bảng quyết toán kỳ, gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi tiết theo
+        từng slot (FR-SLT-17, FR-SLT-18). Chỉ tính đơn có revenueOwner = BRAND (FR-REV-05).
+      properties:
+        brandId: { type: string, format: uuid }
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        currency: { $ref: '#/components/schemas/Currency' }
+        lines:
+          type: array
+          items: { $ref: '#/components/schemas/SettlementLine' }
+        totals: { $ref: '#/components/schemas/SettlementTotals' }
+    SettlementLine:
+      type: object
+      required: [rentalId, slotId, sprayRevenue, fixedFee, revenueShareAmount]
+      properties:
+        rentalId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        orderCount: { type: integer }
+        sprayRevenue: { $ref: '#/components/schemas/Money' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueShareAmount: { $ref: '#/components/schemas/Money' }
+        graceFee: { $ref: '#/components/schemas/Money' }
+    SettlementTotals:
+      type: object
+      required: [sprayRevenue, fixedFee, revenueShareAmount, amountDue]
+      properties:
+        sprayRevenue: { $ref: '#/components/schemas/Money' }
+        fixedFee: { $ref: '#/components/schemas/Money' }
+        revenueShareAmount: { $ref: '#/components/schemas/Money' }
+        graceFee: { $ref: '#/components/schemas/Money' }
+        amountDue: { $ref: '#/components/schemas/Money' }
+    RevenueSplit:
+      type: object
+      required: [periodStart, periodEnd, brandRevenue, platformRevenue]
+      description: >-
+        Doanh thu tách theo hai nguồn (FR-REV-04). Chỉ Platform Super Admin xem được — Brand Admin
+        không bao giờ thấy phần PLATFORM (FR-REV-06).
+      properties:
+        periodStart: { type: string, format: date }
+        periodEnd: { type: string, format: date }
+        currency: { $ref: '#/components/schemas/Currency' }
+        brandRevenue: { $ref: '#/components/schemas/Money' }
+        platformRevenue: { $ref: '#/components/schemas/Money' }
+        orderCountBrand: { type: integer }
+        orderCountPlatform: { type: integer }
+
+    # ---------------------------------------------------------------------------------
+    # INV, RFQ
+    # ---------------------------------------------------------------------------------
+    ShipmentDeclaration:
+      type: object
+      required: [id, brandId, fragranceProductId, declaredQuantity, status, createdAt]
+      description: >-
+        Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff đối chiếu khi nhận
+        (FR-INV-22 đến FR-INV-28).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        declaredQuantity: { type: integer, minimum: 1 }
+        declaredBottleVolumeMl: { type: number }
+        expectedShipDate: { type: [string, 'null'], format: date }
+        status: { $ref: '#/components/schemas/ShipmentDeclarationStatus' }
+        receivedQuantity: { type: [integer, 'null'] }
+        discrepancyNotes: { type: [string, 'null'] }
+        receivedAt: { type: [string, 'null'], format: date-time }
+        resultingBatchId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+    ShipmentDeclarationCreate:
+      type: object
+      required: [fragranceProductId, declaredQuantity, declaredBottleVolumeMl]
+      properties:
+        fragranceProductId: { type: string, format: uuid }
+        declaredQuantity: { type: integer, minimum: 1 }
+        declaredBottleVolumeMl: { type: number, exclusiveMinimum: 0 }
+        expectedShipDate: { type: string, format: date }
+    ShipmentReceive:
+      type: object
+      required: [receivedQuantity, batchNumber]
+      description: >-
+        Đối chiếu số thực nhận với khai báo. Lệch số lượng thì khai báo chuyển DISCREPANCY và
+        discrepancyNotes là bắt buộc (FR-INV-24, FR-INV-25). Nhận xong hệ thống tự tạo lô liên kết
+        ngược về khai báo (FR-INV-26).
+      properties:
+        receivedQuantity: { type: integer, minimum: 0 }
+        batchNumber: { type: string, maxLength: 100 }
+        expiresAt: { type: string, format: date-time }
+        discrepancyNotes: { type: string }
+    InventoryBatch:
+      type: object
+      required: [id, brandId, fragranceProductId, batchNumber, receivedAt, quantityReceived]
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        sourceDeclarationId: { type: [string, 'null'], format: uuid }
+        batchNumber: { type: string, maxLength: 100 }
+        receivedAt: { type: string, format: date-time }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        quantityReceived: { type: integer, minimum: 1 }
+    InventoryBatchCreate:
+      type: object
+      required: [brandId, fragranceProductId, batchNumber, receivedAt, quantityReceived]
+      properties:
+        brandId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        batchNumber: { type: string, maxLength: 100 }
+        receivedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        quantityReceived: { type: integer, minimum: 1 }
+        supplierInfo: { type: object, additionalProperties: true }
+    Bottle:
+      type: object
+      required: [id, brandId, owner, batchId, identifier, status, currentEstimatedMl]
+      description: >-
+        brandId là thương hiệu gốc, bất biến cho kiểm toán. owner là chủ sở hữu hiện tại, lật sang
+        PLATFORM khi thanh lý (FR-INV-03, FR-EXP-15). Câu hỏi "chai này của ai" đọc owner.
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        owner: { $ref: '#/components/schemas/RevenueOwner' }
+        batchId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        identifier: { type: string, maxLength: 150 }
+        status: { $ref: '#/components/schemas/BottleStatus' }
+        initialVolumeMl: { type: number }
+        currentEstimatedMl: { type: number }
+        installedSlotId: { type: [string, 'null'], format: uuid }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        sourceRentalId: { type: [string, 'null'], format: uuid }
+        liquidatedAt: { type: [string, 'null'], format: date-time }
+    BottleCreate:
+      type: object
+      required: [batchId, identifier, initialVolumeMl]
+      properties:
+        batchId: { type: string, format: uuid }
+        identifier:
+          type: string
+          maxLength: 150
+          description: Mã định danh duy nhất trong phạm vi thương hiệu (FR-INV-02).
+        initialVolumeMl: { type: number, exclusiveMinimum: 0 }
+        emptyWeightG: { type: number, minimum: 0 }
+        expiresAt: { type: string, format: date-time }
+    RefillSession:
+      type: object
+      required: [id, machineId, slotId, performedBy, status, startedAt]
+      description: >-
+        Hàng này chính là phiếu nạp. status=STARTED là phiếu đang mở (FR-INV-29); COMPLETED là
+        phiếu đã đóng (FR-INV-31). Trong lúc phiếu mở, cảnh báo cửa mở quá hạn bị tạm ngưng cho
+        máy/slot đó (FR-INV-30).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        oldBottleId: { type: [string, 'null'], format: uuid }
+        newBottleId: { type: [string, 'null'], format: uuid }
+        performedBy: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/RefillStatus' }
+        checklistCompleted: { type: boolean }
+        beforeWeightG: { type: [number, 'null'] }
+        afterWeightG: { type: [number, 'null'] }
+        notes: { type: [string, 'null'] }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+    RefillSessionOpen:
+      type: object
+      required: [slotId]
+      description: Mở phiếu nạp trước khi thao tác (FR-INV-29).
+      properties:
+        slotId: { type: string, format: uuid }
+        beforeWeightG: { type: number, minimum: 0 }
+        refillRequestId:
+          type: string
+          format: uuid
+          description: Yêu cầu bổ sung được xử lý bởi phiên này, nếu có (FR-RFQ-08).
+    RefillSessionClose:
+      type: object
+      required: [newBottleId, checklistCompleted]
+      description: >-
+        Đóng phiếu. checklistCompleted phải là true (FR-INV-14) và newBottleId bắt buộc có giá trị
+        tại thời điểm này (FR-INV-29). Chai phải thuộc thương hiệu đang thuê slot (FR-INV-06,
+        BOTTLE_NOT_OWNED), chưa quá hạn (FR-INV-08, BOTTLE_EXPIRED) và khớp sản phẩm cấu hình cho
+        slot (FR-INV-07, PRODUCT_MISMATCH).
+      properties:
+        newBottleId: { type: string, format: uuid }
+        checklistCompleted: { type: boolean, const: true }
+        afterWeightG: { type: number, minimum: 0 }
+        notes: { type: string }
+    BottleRemoval:
+      type: object
+      required: [remainingMl]
+      description: Tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại (FR-INV-15).
+      properties:
+        remainingMl: { type: number, minimum: 0 }
+        notes: { type: string }
+    InventoryAdjustment:
+      type: object
+      required: [id, bottleId, beforeQuantityMl, afterQuantityMl, differenceMl, reason, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        bottleId: { type: string, format: uuid }
+        slotId: { type: [string, 'null'], format: uuid }
+        beforeQuantityMl: { type: number }
+        afterQuantityMl: { type: number }
+        differenceMl: { type: number }
+        reason: { type: string }
+        adjustedBy: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+    InventoryAdjustmentCreate:
+      type: object
+      required: [bottleId, afterQuantityMl, reason]
+      description: >-
+        Lý do là bắt buộc (FR-INV-16); thiếu trả ADJUSTMENT_REASON_REQUIRED. Thao tác nhạy cảm,
+        cần xác thực lại (FR-AUTH-09).
+      properties:
+        bottleId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        afterQuantityMl: { type: number, minimum: 0 }
+        reason: { type: string, minLength: 1 }
+    RefillRequest:
+      type: object
+      required: [id, brandId, slotRentalId, slotId, reason, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        slotRentalId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        reason: { $ref: '#/components/schemas/RefillRequestReason' }
+        status: { $ref: '#/components/schemas/RefillRequestStatus' }
+        requestedBy: { type: string, format: uuid }
+        reviewedBy: { type: [string, 'null'], format: uuid }
+        rejectionReason: { type: [string, 'null'] }
+        scheduledAt: { type: [string, 'null'], format: date-time }
+        refillSessionId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+    RefillRequestCreate:
+      type: object
+      required: [slotRentalId, reason]
+      description: >-
+        Slot đã có yêu cầu chưa hoàn tất thì bị từ chối với REFILL_REQUEST_PENDING (FR-RFQ-12).
+      properties:
+        slotRentalId: { type: string, format: uuid }
+        reason: { $ref: '#/components/schemas/RefillRequestReason' }
+        note: { type: string }
+
+    # ---------------------------------------------------------------------------------
+    # ORD, DSP
+    # ---------------------------------------------------------------------------------
+    KioskCatalogItem:
+      type: object
+      required: [slotId, slotNumber, available, brandName, product, pricePerSpray, currency]
+      description: >-
+        Một mục trên màn hình kiosk. Slot không khả dụng (kể cả của thương hiệu khác) hiển thị
+        available=false và KHÔNG kèm brandName/product (FR-RPT-12, BR-012).
+      properties:
+        slotId: { type: string, format: uuid }
+        slotNumber: { type: integer }
+        available: { type: boolean }
+        brandName: { type: [string, 'null'] }
+        product:
+          oneOf: [{ $ref: '#/components/schemas/KioskProduct' }, { type: 'null' }]
+        pricePerSpray: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+        currency: { $ref: '#/components/schemas/Currency' }
+    KioskProduct:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: [string, 'null'] }
+        imageUrl: { type: [string, 'null'] }
+        fragranceNotes: { type: [object, 'null'], additionalProperties: true }
+    KioskCatalog:
+      type: object
+      required: [machineSerial, machineStatus, operatingMode, items]
+      properties:
+        machineSerial: { type: string }
+        machineStatus: { $ref: '#/components/schemas/MachineConnectionStatus' }
+        operatingMode: { $ref: '#/components/schemas/MachineOperatingMode' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/KioskCatalogItem' }
+    Order:
+      type: object
+      required:
+        [id, brandId, slotRentalId, revenueOwner, machineId, slotId, amount, currency, status,
+         paymentReference, expiresAt, createdAt]
+      description: >-
+        brandId luôn có giá trị, kể cả với đơn sau thanh lý (khi đó revenueOwner = PLATFORM).
+        Quyền sở hữu tiền nằm ở revenueOwner, không phải brandId (FR-REV-01/02/03).
+        brandId, slotRentalId, revenueOwner, amount là ảnh chụp bất biến, không có đường cập nhật
+        (NFR-DAT-06).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        slotRentalId: { type: string, format: uuid }
+        revenueOwner: { $ref: '#/components/schemas/RevenueOwner' }
+        machineId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        productNameSnapshot: { type: string }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        paymentReference:
+          type: string
+          description: Mã tham chiếu duy nhất toàn hệ thống (FR-ORD-07).
+        expiresAt:
+          type: string
+          format: date-time
+          description: createdAt + ORDER_PAYMENT_TTL_SEC (FR-ORD-09).
+        paidAt: { type: [string, 'null'], format: date-time }
+        dispensedAt: { type: [string, 'null'], format: date-time }
+        failureCode: { type: [string, 'null'] }
+        needsManualReview: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    OrderCreate:
+      type: object
+      required: [machineSerial, slotId]
+      properties:
+        machineSerial: { type: string }
+        slotId: { type: string, format: uuid }
+        kioskSessionId:
+          type: string
+          format: uuid
+          description: Phiên kiosk ẩn danh, xoay vòng — không chứa định danh khách hàng.
+    OrderCreated:
+      type: object
+      required: [order, qrPayload]
+      properties:
+        order: { $ref: '#/components/schemas/Order' }
+        qrPayload:
+          type: string
+          description: Nội dung mã QR thanh toán ứng với paymentReference (FR-ORD-08).
+        qrImageUrl: { type: [string, 'null'] }
+    OrderStatusView:
+      type: object
+      required: [orderId, status, revenueOwner]
+      description: >-
+        Endpoint kiosk poll trạng thái. Phải phản ánh thay đổi trong ORDER_STATUS_POLL_MAX_SEC
+        (FR-ORD-11).
+      properties:
+        orderId: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        revenueOwner: { $ref: '#/components/schemas/RevenueOwner' }
+        dispenseStatus:
+          oneOf: [{ $ref: '#/components/schemas/CommandStatus' }, { type: 'null' }]
+        failureCode: { type: [string, 'null'] }
+        supportReference:
+          type: [string, 'null']
+          description: >-
+            Mã tham chiếu sự cố hiển thị cho khách khi đã thanh toán nhưng lượt xịt thất bại
+            (FR-ORD-21).
+    OrderStatusHistoryEntry:
+      type: object
+      required: [id, toStatus, actorType, occurredAt]
+      properties:
+        id: { type: string, format: uuid }
+        fromStatus: { oneOf: [{ $ref: '#/components/schemas/OrderStatus' }, { type: 'null' }] }
+        toStatus: { $ref: '#/components/schemas/OrderStatus' }
+        reason: { type: [string, 'null'] }
+        actorType: { type: string, enum: [SYSTEM, USER, DEVICE, PAYMENT_PROVIDER] }
+        actorId: { type: [string, 'null'], format: uuid }
+        occurredAt: { type: string, format: date-time }
+    Payment:
+      type: object
+      required: [id, orderId, provider, amount, currency, status]
+      description: Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04).
+      properties:
+        id: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        provider: { type: string }
+        providerTransactionId: { type: [string, 'null'] }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        paidAt: { type: [string, 'null'], format: date-time }
+    WebhookAck:
+      type: object
+      required: [result]
+      properties:
+        result:
+          type: string
+          enum: [PROCESSED, WEBHOOK_ALREADY_PROCESSED]
+          description: >-
+            WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi
+            (spec/errors.md, FR-ORD-15).
+    RefundRequest:
+      type: object
+      required: [reason]
+      description: Chỉ áp dụng cho đơn cần kiểm tra thủ công (FR-ORD-19, FR-ORD-20).
+      properties:
+        reason: { type: string, minLength: 1 }
+    KioskInteractionCreate:
+      type: object
+      required: [events]
+      properties:
+        events:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/KioskInteractionEvent' }
+    KioskInteractionEvent:
+      type: object
+      required: [eventId, eventType, slotId, kioskSessionId, occurredAt]
+      properties:
+        eventId:
+          type: string
+          maxLength: 150
+          description: Khóa idempotency do kiosk sinh; gửi lại cùng eventId không tạo bản ghi mới.
+        eventType: { $ref: '#/components/schemas/KioskInteractionType' }
+        slotId: { type: string, format: uuid }
+        kioskSessionId: { type: string, format: uuid }
+        occurredAt: { type: string, format: date-time }
+    DispenseCommand:
+      type: object
+      required: [id, machineId, slotId, commandType, commandToken, status, expiresAt, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        orderId:
+          type: [string, 'null']
+          format: uuid
+          description: Null với lệnh DIAGNOSTIC.
+        brandId: { type: [string, 'null'], format: uuid }
+        machineId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        commandType: { $ref: '#/components/schemas/DispenseType' }
+        commandToken: { type: string, description: Mã lệnh duy nhất toàn hệ thống (FR-DSP-02). }
+        status: { $ref: '#/components/schemas/CommandStatus' }
+        expiresAt:
+          type: string
+          format: date-time
+          description: createdAt + DISPENSE_CMD_TTL_SEC (FR-DSP-06).
+        sentAt: { type: [string, 'null'], format: date-time }
+        acknowledgedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        retryCount: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        result: { oneOf: [{ $ref: '#/components/schemas/DispenseResult' }, { type: 'null' }] }
+    DispenseResult:
+      type: object
+      required: [commandId, success, receivedAt]
+      properties:
+        commandId: { type: string, format: uuid }
+        success: { type: boolean }
+        resultCode: { type: [string, 'null'] }
+        failureCode:
+          type: [string, 'null']
+          description: Chỉ dùng mã trong spec/errors.md mục "Lệnh xịt".
+        executedAt: { type: [string, 'null'], format: date-time }
+        measuredQuantityMl: { type: [number, 'null'] }
+        receivedAt: { type: string, format: date-time }
+    DiagnosticDispenseCreate:
+      type: object
+      required: [slotId]
+      description: >-
+        Lượt xịt chẩn đoán, ghi nhận riêng, không tính vào doanh thu và không tính vào thống kê
+        lượt xịt khách hàng (FR-DSP-20). Thao tác nhạy cảm, cần xác thực lại (FR-AUTH-09, FR-MNT-09).
+      properties:
+        slotId: { type: string, format: uuid }
+        note: { type: string }
+
+    # ---------------------------------------------------------------------------------
+    # IOT, ALR, MNT
+    # ---------------------------------------------------------------------------------
+    DeviceEvent:
+      type: object
+      required: [id, machineId, deviceEventId, eventType, occurredAt, receivedAt]
+      properties:
+        id: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        deviceEventId:
+          type: string
+          description: >-
+            Mã do thiết bị sinh, không đổi qua các lần gửi lại — nền tảng dùng để loại bản trùng
+            sau khi thiết bị kết nối lại (FR-IOT-11).
+        eventType: { type: string }
+        payload: { type: [object, 'null'], additionalProperties: true }
+        occurredAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
+    SensorReading:
+      type: object
+      required: [id, machineId, readingType, measuredAt]
+      properties:
+        id: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        slotId: { type: [string, 'null'], format: uuid }
+        readingType: { type: string }
+        numericValue: { type: [number, 'null'] }
+        unit: { type: [string, 'null'] }
+        measuredAt: { type: string, format: date-time }
+    Alert:
+      type: object
+      required:
+        [id, machineId, type, severity, status, title, firstOccurredAt, lastOccurredAt,
+         occurrenceCount]
+      description: >-
+        brandId chỉ có giá trị với cảnh báo mức slot. Cảnh báo mức máy (FR-ALR-01/03/05) để null vì
+        có thể ảnh hưởng nhiều thương hiệu; danh sách thương hiệu bị ảnh hưởng nằm ở affectedBrandIds,
+        suy ra lúc đọc bằng join slot_rentals đang hiệu lực (FR-ALR-09).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        machineId: { type: string, format: uuid }
+        slotId: { type: [string, 'null'], format: uuid }
+        locationId: { type: string, format: uuid }
+        type: { type: string }
+        severity: { $ref: '#/components/schemas/AlertSeverity' }
+        status: { $ref: '#/components/schemas/AlertStatus' }
+        title: { type: string }
+        description: { type: [string, 'null'] }
+        firstOccurredAt: { type: string, format: date-time }
+        lastOccurredAt: { type: string, format: date-time }
+        occurrenceCount: { type: integer, minimum: 1 }
+        acknowledgedBy: { type: [string, 'null'], format: uuid }
+        acknowledgedAt: { type: [string, 'null'], format: date-time }
+        assignedTo: { type: [string, 'null'], format: uuid }
+        resolvedBy: { type: [string, 'null'], format: uuid }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        resolution: { type: [string, 'null'] }
+        affectedBrandIds:
+          type: array
+          description: >-
+            CHỈ trả cho Platform Super Admin và Operations Staff. Brand Admin không bao giờ nhận
+            trường này — biết ai khác cùng máy là vi phạm BR-012 (FR-ALR-10).
+          items: { type: string, format: uuid }
+    AlertAssign:
+      type: object
+      required: [assignedTo]
+      properties:
+        assignedTo: { type: string, format: uuid }
+    AlertResolve:
+      type: object
+      required: [resolution]
+      properties:
+        resolution: { type: string, minLength: 1 }
+    MaintenanceTicket:
+      type: object
+      required: [id, machineId, ticketNumber, category, severity, priority, status, createdAt]
+      description: >-
+        Phiếu bảo trì là tài nguyên của nền tảng/máy, không thuộc thương hiệu nào — ticketNumber
+        duy nhất toàn cục. FR-MNT-07 thông báo cho mọi Brand Admin có slot trên máy, suy ra bằng
+        join slot_rentals.
+      properties:
+        id: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        sourceAlertId: { type: [string, 'null'], format: uuid }
+        ticketNumber: { type: string }
+        category: { type: string }
+        severity: { $ref: '#/components/schemas/AlertSeverity' }
+        priority: { $ref: '#/components/schemas/TicketPriority' }
+        status: { $ref: '#/components/schemas/TicketStatus' }
+        assignedTo: { type: [string, 'null'], format: uuid }
+        dueAt: { type: [string, 'null'], format: date-time }
+        diagnosis: { type: [string, 'null'] }
+        correctiveAction: { type: [string, 'null'] }
+        replacementParts: { type: [array, 'null'], items: { type: string } }
+        postTestResult: { type: [string, 'null'], enum: [PASS, FAIL, null] }
+        postTestedAt: { type: [string, 'null'], format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    MaintenanceTicketCreate:
+      type: object
+      required: [machineId, category, severity, priority]
+      properties:
+        machineId: { type: string, format: uuid }
+        category: { type: string }
+        severity: { $ref: '#/components/schemas/AlertSeverity' }
+        priority: { $ref: '#/components/schemas/TicketPriority' }
+        dueAt: { type: string, format: date-time }
+        description: { type: string }
+    MaintenanceTicketResolve:
+      type: object
+      required: [diagnosis, correctiveAction]
+      description: >-
+        Không đóng được phiếu khi chưa ghi nhận kết quả xử lý (FR-MNT-13). Máy chỉ trở lại NORMAL
+        sau khi checklist kiểm tra sau bảo trì hoàn tất (FR-MNT-11, FR-MNT-12).
+      properties:
+        diagnosis: { type: string, minLength: 1 }
+        correctiveAction: { type: string, minLength: 1 }
+        replacementParts: { type: array, items: { type: string } }
+        cost: { $ref: '#/components/schemas/Money' }
+    PostTestSubmit:
+      type: object
+      required: [checklistCompleted, result]
+      description: Checklist kiểm tra sau bảo trì (FR-MNT-11, FR-MNT-12).
+      properties:
+        checklistCompleted: { type: boolean, const: true }
+        result: { type: string, enum: [PASS, FAIL] }
+        notes: { type: string }
+    MaintenanceActivity:
+      type: object
+      required: [id, ticketId, actorId, activityType, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        ticketId: { type: string, format: uuid }
+        actorId: { type: string, format: uuid }
+        activityType: { type: string }
+        fromStatus: { oneOf: [{ $ref: '#/components/schemas/TicketStatus' }, { type: 'null' }] }
+        toStatus: { oneOf: [{ $ref: '#/components/schemas/TicketStatus' }, { type: 'null' }] }
+        notes: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+
+    # ---------------------------------------------------------------------------------
+    # RPT, AUD
+    # ---------------------------------------------------------------------------------
+    PlatformDashboard:
+      type: object
+      required: [machinesByConnectionStatus, machinesByOperatingMode, orders, dispense]
+      description: Chỉ Platform Super Admin xem được (FR-RPT-01, FR-RPT-15).
+      properties:
+        machinesByConnectionStatus:
+          type: object
+          additionalProperties: { type: integer }
+        machinesByOperatingMode:
+          type: object
+          additionalProperties: { type: integer }
+        orders: { $ref: '#/components/schemas/OrderStats' }
+        dispense: { $ref: '#/components/schemas/DispenseStats' }
+        openAlerts: { type: integer }
+        openTickets: { type: integer }
+    OrderStats:
+      type: object
+      required: [total, byStatus, revenue]
+      properties:
+        total: { type: integer }
+        byStatus:
+          type: object
+          description: Số giao dịch theo từng trạng thái đơn hàng (FR-RPT-03).
+          additionalProperties: { type: integer }
+        revenue: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+    DispenseStats:
+      type: object
+      required: [successCount, failureCount, successRate]
+      description: Tỷ lệ lượt xịt thành công và thất bại (FR-RPT-04).
+      properties:
+        successCount: { type: integer }
+        failureCount: { type: integer }
+        unknownCount: { type: integer }
+        successRate: { type: number, minimum: 0, maximum: 1 }
+    TimeSeriesPoint:
+      type: object
+      required: [bucket, orderCount, revenue]
+      properties:
+        bucket: { type: string, format: date-time }
+        orderCount: { type: integer }
+        revenue: { $ref: '#/components/schemas/Money' }
+    ProductRankingItem:
+      type: object
+      required: [fragranceProductId, productName, selectionCount]
+      description: >-
+        Xếp hạng theo số lượt được chọn trên kiosk (FR-RPT-06, BR-007). Nguồn là
+        kiosk_interaction_events, không phải orders.
+      properties:
+        fragranceProductId: { type: string, format: uuid }
+        productName: { type: string }
+        impressionCount: { type: integer }
+        selectionCount: { type: integer }
+        orderCount: { type: integer }
+    BrandSlotReportItem:
+      type: object
+      required: [slotRentalId, slotId, machineId, orderCount, revenue]
+      description: Báo cáo theo từng slot thương hiệu thuê (FR-RPT-08). Chỉ đơn revenueOwner = BRAND.
+      properties:
+        slotRentalId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        machineId: { type: string, format: uuid }
+        locationName: { type: string }
+        productName: { type: string }
+        orderCount: { type: integer }
+        revenue: { $ref: '#/components/schemas/Money' }
+    InventoryReportItem:
+      type: object
+      required: [brandId, fragranceProductId, slotId, estimatedRemainingMl, lowStock]
+      properties:
+        brandId: { type: string, format: uuid }
+        fragranceProductId: { type: string, format: uuid }
+        productName: { type: string }
+        batchId: { type: [string, 'null'], format: uuid }
+        machineId: { type: [string, 'null'], format: uuid }
+        slotId: { type: [string, 'null'], format: uuid }
+        estimatedRemainingMl: { type: number }
+        estimatedRemainingSprays: { type: integer }
+        lowStock: { type: boolean }
+    MachineMapSlot:
+      type: object
+      required: [slotNumber, available, mine]
+      description: >-
+        Sơ đồ máy cho Brand Admin. Slot không thuộc thương hiệu mình có mine=false, available=false
+        và KHÔNG kèm bất kỳ thông tin nào khác (FR-RPT-12, BR-012).
+      properties:
+        slotNumber: { type: integer }
+        mine: { type: boolean }
+        available: { type: boolean }
+        slotId: { type: [string, 'null'], format: uuid }
+        productName: { type: [string, 'null'] }
+        estimatedRemainingSprays: { type: [integer, 'null'] }
+    AuditLogEntry:
+      type: object
+      required: [id, actorType, action, targetType, occurredAt]
+      description: Chỉ thêm mới; không có endpoint sửa hay xóa (FR-AUD-09, NFR-SEC-08).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        actorType: { type: string, enum: [SYSTEM, USER, DEVICE, PAYMENT_PROVIDER] }
+        actorId: { type: [string, 'null'], format: uuid }
+        action: { type: string }
+        targetType: { type: string }
+        targetId: { type: [string, 'null'], format: uuid }
+        sourceIp: { type: [string, 'null'] }
+        severity: { type: string }
+        beforeData: { type: [object, 'null'], additionalProperties: true }
+        afterData: { type: [object, 'null'], additionalProperties: true }
+        occurredAt: { type: string, format: date-time }
+    OrderTrace:
+      type: object
+      required: [order, statusHistory, payments, dispenseCommands]
+      description: >-
+        Truy vết đầu-cuối từ một đơn hàng: thanh toán, lệnh xịt, kết quả thiết bị, thay đổi tồn kho,
+        hợp đồng thuê và hoàn tiền liên quan (FR-AUD-11, BR-008).
+      properties:
+        order: { $ref: '#/components/schemas/Order' }
+        slotRental: { $ref: '#/components/schemas/SlotRental' }
+        statusHistory:
+          type: array
+          items: { $ref: '#/components/schemas/OrderStatusHistoryEntry' }
+        payments:
+          type: array
+          items: { $ref: '#/components/schemas/Payment' }
+        dispenseCommands:
+          type: array
+          items: { $ref: '#/components/schemas/DispenseCommand' }
+        inventoryAdjustments:
+          type: array
+          items: { $ref: '#/components/schemas/InventoryAdjustment' }
+        auditLogs:
+          type: array
+          items: { $ref: '#/components/schemas/AuditLogEntry' }
+    Notification:
+      type: object
+      required: [id, recipientUserId, type, channel, content, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        recipientUserId: { type: string, format: uuid }
+        type: { type: string }
+        channel: { type: string, enum: [IN_APP, EMAIL] }
+        subject: { type: [string, 'null'] }
+        content: { type: string }
+        status: { $ref: '#/components/schemas/NotificationStatus' }
+        createdAt: { type: string, format: date-time }
+
+# =====================================================================================
+# PATHS
+# =====================================================================================
+
+paths:
+  # -----------------------------------------------------------------------------------
+  # AUTH — Xác thực và phân quyền
+  # -----------------------------------------------------------------------------------
+  /auth/login:
+    post:
+      tags: [AUTH]
+      summary: Đăng nhập
+      operationId: login
+      security: []
+      description: >-
+        FR-AUTH-01, FR-AUTH-02, FR-AUTH-03: đăng nhập bằng email và mật khẩu, cấp access token
+        (ACCESS_TOKEN_TTL_MIN) và refresh token (REFRESH_TOKEN_TTL_DAYS). Sau
+        LOGIN_LOCKOUT_ATTEMPTS lần sai liên tiếp, tài khoản bị khóa LOGIN_LOCKOUT_MIN phút và trả
+        ACCOUNT_LOCKED. Mọi lần đăng nhập thành công hay thất bại đều ghi nhật ký (FR-AUD-01).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Đăng nhập thành công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '423': { $ref: '#/components/responses/Locked' }
+
+  /auth/refresh:
+    post:
+      tags: [AUTH]
+      summary: Làm mới access token
+      operationId: refreshToken
+      security: []
+      description: 'FR-AUTH-02: đổi refresh token còn hiệu lực lấy cặp token mới.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200':
+          description: Cặp token mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/logout:
+    post:
+      tags: [AUTH]
+      summary: Đăng xuất
+      operationId: logout
+      description: 'FR-AUTH-04: vô hiệu hóa refresh token của phiên hiện tại. Ghi nhật ký (FR-AUD-01).'
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/reauth:
+    post:
+      tags: [AUTH]
+      summary: Xác thực lại mật khẩu cho thao tác nhạy cảm
+      operationId: reauthenticate
+      description: >-
+        FR-AUTH-09: cấp token ngắn hạn để thực hiện hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán,
+        thanh lý hàng tồn hoặc thay đổi cấu hình máy. Truyền qua header X-Reauth-Token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReauthRequest' }
+      responses:
+        '200':
+          description: Token xác thực lại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReauthResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me:
+    get:
+      tags: [AUTH]
+      summary: Thông tin tài khoản đang đăng nhập
+      operationId: getCurrentUser
+      description: 'FR-AUTH-05, FR-AUTH-06: vai trò, quyền và thương hiệu gắn với tài khoản.'
+      responses:
+        '200':
+          description: Tài khoản hiện tại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CurrentUser' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -----------------------------------------------------------------------------------
+  # BND — Thương hiệu
+  # -----------------------------------------------------------------------------------
+  /brands:
+    get:
+      tags: [BND]
+      summary: Danh sách thương hiệu
+      operationId: listBrands
+      description: >-
+        FR-BND-07: chỉ Platform Super Admin. Brand Admin gọi endpoint này luôn nhận FORBIDDEN_SCOPE
+        — thấy được thương hiệu khác là vi phạm BR-012 (FR-BND-08).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/BrandStatus' }
+      responses:
+        '200':
+          description: Danh sách thương hiệu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Brand' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [BND]
+      summary: Tạo thương hiệu
+      operationId: createBrand
+      description: 'FR-BND-01: chỉ Platform Super Admin.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brands/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [BND]
+      summary: Chi tiết thương hiệu
+      operationId: getBrand
+      description: 'FR-BND-07: chỉ Platform Super Admin.'
+      responses:
+        '200':
+          description: Thương hiệu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [BND]
+      summary: Cập nhật thương hiệu
+      operationId: updateBrand
+      description: 'FR-BND-02: chỉ Platform Super Admin.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandCreate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /brands/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [BND]
+      summary: Đổi trạng thái thương hiệu
+      operationId: setBrandStatus
+      description: >-
+        FR-BND-03: chuyển ACTIVE hoặc SUSPENDED. Thương hiệu SUSPENDED thì slot của họ không nhận
+        đơn mới (FR-BND-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/BrandStatus' }
+      responses:
+        '200':
+          description: Đã đổi trạng thái
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /brands/me:
+    get:
+      tags: [BND]
+      summary: Thương hiệu của tôi
+      operationId: getMyBrand
+      description: 'FR-BND-06: Brand Admin xem thông tin thương hiệu mình.'
+      responses:
+        '200':
+          description: Thương hiệu của người dùng hiện tại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      tags: [BND]
+      summary: Cập nhật thương hiệu của tôi
+      operationId: updateMyBrand
+      description: >-
+        FR-BND-06: Brand Admin sửa tên hiển thị, logo, mô tả và thông tin liên hệ. Không sửa được
+        mã định danh hay trạng thái — hai trường đó thuộc Platform Super Admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandSelfUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # USR — Người dùng
+  # -----------------------------------------------------------------------------------
+  /users:
+    get:
+      tags: [USR]
+      summary: Danh sách tài khoản
+      operationId: listUsers
+      description: >-
+        FR-USR-05: chỉ Platform Super Admin. Mọi tài khoản trên nền tảng đều do Platform Super
+        Admin tạo và quản lý — thương hiệu không tự tạo tài khoản.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: brandId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: role
+          in: query
+          schema: { $ref: '#/components/schemas/RoleCode' }
+      responses:
+        '200':
+          description: Danh sách tài khoản
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [USR]
+      summary: Tạo tài khoản
+      operationId: createUser
+      description: >-
+        FR-USR-01, FR-USR-02: tạo Brand Admin gắn với một thương hiệu, hoặc Operations Staff /
+        Inventory Staff của nền tảng. Ghi nhật ký (FR-AUD-02).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [USR]
+      summary: Chi tiết tài khoản
+      operationId: getUser
+      description: 'FR-USR-05: chỉ Platform Super Admin.'
+      responses:
+        '200':
+          description: Tài khoản
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/User' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{id}/disable:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [USR]
+      summary: Vô hiệu hóa tài khoản
+      operationId: disableUser
+      description: >-
+        FR-USR-03, FR-AUTH-10, FR-AUTH-11: vô hiệu hóa tài khoản và thu hồi toàn bộ phiên đang hoạt
+        động trong SESSION_REVOKE_MAX_SEC. Ghi nhật ký (FR-AUD-02).
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /users/{id}/reset-password:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [USR]
+      summary: Đặt lại mật khẩu
+      operationId: resetUserPassword
+      description: >-
+        FR-USR-04: chỉ Platform Super Admin. Mật khẩu lưu dưới dạng băm bcrypt hoặc argon2
+        (NFR-SEC-03). Ghi nhật ký (FR-AUD-02).
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -----------------------------------------------------------------------------------
+  # PRD — Danh mục sản phẩm
+  # -----------------------------------------------------------------------------------
+  /products:
+    get:
+      tags: [PRD]
+      summary: Danh sách sản phẩm
+      operationId: listProducts
+      description: >-
+        FR-PRD-03: Brand Admin chỉ thấy sản phẩm của thương hiệu mình; Platform Super Admin thấy
+        tất cả. Lọc theo brandId của người gọi, không theo tham số truyền vào.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { type: string, enum: [ACTIVE, DISCONTINUED] }
+      responses:
+        '200':
+          description: Danh sách sản phẩm
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Product' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [PRD]
+      summary: Tạo sản phẩm
+      operationId: createProduct
+      description: >-
+        FR-PRD-01, FR-PRD-03, FR-PRD-05: Brand Admin tạo sản phẩm cho thương hiệu mình. Giá bán lẻ
+        và dung tích chai đầy phục vụ tính phí lưu kho khi ân hạn (FR-EXP-10).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /products/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [PRD]
+      summary: Chi tiết sản phẩm
+      operationId: getProduct
+      description: 'FR-PRD-03: ngoài phạm vi thương hiệu trả FORBIDDEN_SCOPE.'
+      responses:
+        '200':
+          description: Sản phẩm
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [PRD]
+      summary: Cập nhật sản phẩm
+      operationId: updateProduct
+      description: 'FR-PRD-02: Brand Admin cập nhật sản phẩm của thương hiệu mình.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProductCreate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /products/{id}/discontinue:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [PRD]
+      summary: Ngừng kinh doanh sản phẩm
+      operationId: discontinueProduct
+      description: >-
+        FR-PRD-02: sản phẩm đã ngừng kinh doanh không gán được vào slot mới (FR-SLT-27). Hợp đồng
+        đang chạy không bị ảnh hưởng.
+      responses:
+        '200':
+          description: Đã ngừng kinh doanh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -----------------------------------------------------------------------------------
+  # MCH — Máy và slot
+  # -----------------------------------------------------------------------------------
+  /locations:
+    get:
+      tags: [MCH]
+      summary: Danh sách địa điểm
+      operationId: listLocations
+      description: 'FR-MCH-03: địa điểm thuộc nền tảng.'
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Danh sách địa điểm
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Location' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MCH]
+      summary: Tạo địa điểm
+      operationId: createLocation
+      description: 'FR-MCH-03: chỉ Platform Super Admin.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines:
+    get:
+      tags: [MCH]
+      summary: Danh sách máy
+      operationId: listMachines
+      description: >-
+        FR-MCH-08, FR-MCH-09, FR-MCH-10: trạng thái kết nối, chế độ hoạt động, phiên bản firmware
+        và thời điểm liên lạc gần nhất. Chỉ vai trò nền tảng — Brand Admin không có danh sách máy,
+        chỉ thấy slot mình thuê (FR-RPT-12, BR-012).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: locationId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/MachineConnectionStatus' }
+        - name: operatingMode
+          in: query
+          schema: { $ref: '#/components/schemas/MachineOperatingMode' }
+      responses:
+        '200':
+          description: Danh sách máy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Machine' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MCH]
+      summary: Đăng ký máy mới
+      operationId: createMachine
+      description: >-
+        FR-MCH-01, FR-MCH-04, FR-MCH-05: đăng ký máy với số sê-ri duy nhất, gán địa điểm và tạo
+        số slot yêu cầu. Số slot cấu hình được, không cố định trong mã nguồn (NFR-SCA-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineCreate' }
+      responses:
+        '201':
+          description: Đã đăng ký
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /machines/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [MCH]
+      summary: Chi tiết máy
+      operationId: getMachine
+      description: 'FR-MCH-08, FR-MCH-09, FR-MCH-10.'
+      responses:
+        '200':
+          description: Máy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/mode:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    put:
+      tags: [MCH]
+      summary: Đổi chế độ hoạt động của máy
+      operationId: setMachineMode
+      description: >-
+        FR-MCH-11, FR-MNT-05, FR-MNT-12: Operations Staff bật/tắt máy hoặc chuyển sang MAINTENANCE.
+        KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12).
+        Chuyển sang MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07) và
+        máy không nhận đơn mới (FR-MNT-06, MACHINE_IN_MAINTENANCE). Thao tác nhạy cảm — cần xác
+        thực lại (FR-AUTH-09). Ghi lịch sử (FR-MCH-13).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MachineModeUpdate' }
+      responses:
+        '200':
+          description: Đã đổi chế độ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /machines/{id}/slots:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [MCH]
+      summary: Danh sách slot của máy
+      operationId: listMachineSlots
+      description: >-
+        FR-MCH-15, FR-MCH-16, FR-MCH-17: trạng thái khả dụng của từng slot. Dành cho vai trò nền
+        tảng — Brand Admin dùng GET /reports/machine-map/{machineId} để chỉ thấy slot của mình.
+      responses:
+        '200':
+          description: Danh sách slot
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MachineSlot' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /slots/{id}/config:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    put:
+      tags: [MCH]
+      summary: Hiệu chuẩn liều lượng và ngưỡng cảnh báo của slot
+      operationId: updateSlotConfig
+      description: >-
+        FR-MCH-06: cấu hình liều lượng xịt và ngưỡng sắp hết cho từng slot. Thao tác nhạy cảm
+        (thay đổi cấu hình máy) — cần xác thực lại (FR-AUTH-09). Ghi lịch sử (FR-MCH-13) và đẩy
+        cấu hình xuống thiết bị qua topic config (spec/contracts/mqtt.md).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotConfigUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineSlot' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /slots/{id}/enabled:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [MCH]
+      summary: Bật hoặc tắt slot từ xa
+      operationId: setSlotEnabled
+      description: >-
+        FR-MCH-12: Operations Staff bật/tắt từng slot. Tắt thủ công làm slot chuyển UNAVAILABLE
+        (FR-MCH-17).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+                reason: { type: string }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineSlot' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/status-history:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/page'
+      - $ref: '#/components/parameters/pageSize'
+    get:
+      tags: [MCH]
+      summary: Lịch sử thay đổi trạng thái và cấu hình máy
+      operationId: listMachineStatusHistory
+      description: 'FR-MCH-13: lịch sử chuyển trạng thái kết nối và chế độ hoạt động.'
+      responses:
+        '200':
+          description: Lịch sử
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MachineStatusHistoryEntry' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines/{id}/credentials:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [MCH]
+      summary: Thông tin xác thực MQTT của máy
+      operationId: getDeviceCredential
+      description: 'FR-MCH-02: không bao giờ trả về bí mật gốc, chỉ trả metadata (NFR-SEC-05).'
+      responses:
+        '200':
+          description: Thông tin xác thực
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceCredential' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [MCH]
+      summary: Cấp lại thông tin xác thực MQTT
+      operationId: issueDeviceCredential
+      description: >-
+        FR-MCH-02, NFR-SEC-07: cấp bộ credential riêng cho máy và thu hồi bộ cũ. Bí mật gốc chỉ
+        xuất hiện trong phản hồi này, không truy xuất lại được.
+      parameters:
+        - $ref: '#/components/parameters/reauthToken'
+      responses:
+        '201':
+          description: Đã cấp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeviceCredentialIssued' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/credentials/revoke:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [MCH]
+      summary: Thu hồi quyền truy cập của thiết bị
+      operationId: revokeDeviceCredential
+      description: >-
+        FR-AUTH-11, FR-IOT-08: thu hồi credential; broker từ chối kết nối từ thiết bị này ngay sau
+        đó.
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -----------------------------------------------------------------------------------
+  # SLT — Hợp đồng thuê slot
+  # -----------------------------------------------------------------------------------
+  /slot-rentals:
+    get:
+      tags: [SLT]
+      summary: Danh sách hợp đồng thuê slot
+      operationId: listSlotRentals
+      description: >-
+        FR-SLT-15: Brand Admin chỉ thấy hợp đồng của thương hiệu mình; Platform Super Admin thấy
+        tất cả. Lọc theo brandId của người gọi, không theo tham số truyền vào (FR-BND-05).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/SlotRentalStatus' }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách hợp đồng
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SlotRental' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [SLT]
+      summary: Tạo hợp đồng thuê slot
+      operationId: createSlotRental
+      description: >-
+        FR-SLT-01, FR-SLT-02, FR-SLT-03, FR-SLT-04, FR-SLT-05: một hợp đồng cho đúng một slot. Slot
+        đã có hợp đồng ACTIVE/EXPIRING/GRACE/LIQUIDATED trả SLOT_OCCUPIED; kỳ hạn chồng lấn hợp
+        đồng khác trên cùng slot trả RENTAL_OVERLAP; ngày kết thúc trước ngày bắt đầu trả
+        INVALID_RENTAL_PERIOD. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentalCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [SLT]
+      summary: Chi tiết hợp đồng
+      operationId: getSlotRental
+      description: 'FR-SLT-15: ngoài phạm vi thương hiệu trả FORBIDDEN_SCOPE.'
+      responses:
+        '200':
+          description: Hợp đồng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /slot-rentals/{id}/price:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [SLT]
+      summary: Đặt giá mỗi lượt xịt
+      operationId: setSlotRentalPrice
+      description: >-
+        FR-SLT-08, FR-SLT-09: Brand Admin tự do đặt giá, không có giá sàn hay giá trần. Giá mới chỉ
+        áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ giá đã chụp (FR-ORD-06).
+        Hợp đồng đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Ghi nhật
+        ký (FR-AUD-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotPriceUpdate' }
+      responses:
+        '200':
+          description: Đã đổi giá
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/product:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [SLT]
+      summary: Gán hoặc đổi sản phẩm cho slot
+      operationId: assignSlotRentalProduct
+      description: >-
+        FR-SLT-07, FR-SLT-27, FR-SLT-28: gán đúng một sản phẩm đang kinh doanh của thương hiệu vào
+        slot đang có hợp đồng hiệu lực, ghi nhận thời điểm đổi. Sản phẩm không thuộc thương hiệu
+        thuê slot trả PRODUCT_NOT_OWNED. Hợp đồng chưa gán sản phẩm thì slot không nhận đơn
+        (FR-SLT-29). Ghi nhật ký (FR-AUD-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotProductAssign' }
+      responses:
+        '200':
+          description: Đã gán
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/renew:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Gia hạn hợp đồng
+      operationId: renewSlotRental
+      description: >-
+        FR-SLT-12, FR-EXP-13: tạo hợp đồng kế tiếp liên kết với hợp đồng cũ; hợp đồng cũ chuyển
+        RENEWED và dừng tính phí ân hạn. Ghi nhật ký (FR-AUD-03, FR-EXP-21).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentalRenew' }
+      responses:
+        '201':
+          description: Hợp đồng mới
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/terminate:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Chấm dứt hợp đồng trước hạn
+      operationId: terminateSlotRental
+      description: >-
+        FR-SLT-13, FR-SLT-11: lý do bắt buộc. Slot chuyển UNAVAILABLE. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TerminateRequest' }
+      responses:
+        '200':
+          description: Đã chấm dứt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Đóng hợp đồng đã thanh lý
+      operationId: closeSlotRental
+      description: >-
+        FR-SLT-14, FR-SLT-11: đóng hợp đồng LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được
+        tháo khỏi slot, giải phóng slot cho hợp đồng mới. Hợp đồng không ở LIQUIDATED trả
+        RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-EXP-21).
+      responses:
+        '200':
+          description: Đã đóng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slots/available:
+    get:
+      tags: [SLT]
+      summary: Danh sách slot trống
+      operationId: listAvailableSlots
+      description: >-
+        FR-SLT-19: slot không có hợp đồng ACTIVE/EXPIRING/GRACE/LIQUIDATED, lọc theo máy và địa
+        điểm. KHÔNG kèm thông tin thương hiệu đã từng thuê trước đó (BR-012).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: locationId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách slot trống
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AvailableSlot' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /slot-rental-requests:
+    get:
+      tags: [SLT]
+      summary: Danh sách yêu cầu thuê slot
+      operationId: listSlotRentalRequests
+      description: >-
+        FR-SLT-21, FR-SLT-25: Brand Admin xem trạng thái và lịch sử yêu cầu của thương hiệu mình;
+        Platform Super Admin xem tất cả.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/SlotRentalRequestStatus' }
+      responses:
+        '200':
+          description: Danh sách yêu cầu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SlotRentalRequest' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [SLT]
+      summary: Gửi yêu cầu thuê slot trống
+      operationId: createSlotRentalRequest
+      description: >-
+        FR-SLT-20, FR-SLT-26: Brand Admin gửi yêu cầu cho một hoặc nhiều slot trống kèm kỳ hạn mong
+        muốn. Mỗi slot sinh một yêu cầu riêng. Slot đã có yêu cầu REQUESTED/APPROVED chưa xử lý
+        xong trả SLOT_OCCUPIED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentalRequestCreate' }
+      responses:
+        '201':
+          description: Đã gửi
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/SlotRentalRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rental-requests/{id}/approve:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Duyệt yêu cầu thuê slot
+      operationId: approveSlotRentalRequest
+      description: >-
+        FR-SLT-22, FR-SLT-23: duyệt kèm điều khoản phí và tỷ lệ ăn chia, hệ thống tự tạo hợp đồng
+        DRAFT liên kết ngược về yêu cầu. Hợp đồng tự chuyển ACTIVE đúng ngày bắt đầu (FR-SLT-24).
+        Hợp đồng DRAFT chưa có sản phẩm cho tới khi Brand Admin gán (FR-SLT-27).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentalRequestApprove' }
+      responses:
+        '200':
+          description: Đã duyệt, kèm hợp đồng DRAFT vừa tạo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request, rental]
+                properties:
+                  request: { $ref: '#/components/schemas/SlotRentalRequest' }
+                  rental: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rental-requests/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Từ chối yêu cầu thuê slot
+      operationId: rejectSlotRentalRequest
+      description: 'FR-SLT-22: lý do bắt buộc khi từ chối.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectRequest' }
+      responses:
+        '200':
+          description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRentalRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /settlements:
+    get:
+      tags: [SLT]
+      summary: Bảng quyết toán kỳ
+      operationId: getSettlement
+      description: >-
+        FR-SLT-17, FR-SLT-18, FR-REV-05: gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi
+        tiết theo từng slot. Chỉ tính đơn có revenueOwner = BRAND. Brand Admin chỉ lấy được bảng
+        của thương hiệu mình.
+      parameters:
+        - name: brandId
+          in: query
+          description: Chỉ Platform Super Admin dùng được; Brand Admin luôn lấy thương hiệu của mình.
+          schema: { type: string, format: uuid }
+        - name: periodStart
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: periodEnd
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Bảng quyết toán
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Settlement' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # EXP — Ân hạn và thanh lý
+  # -----------------------------------------------------------------------------------
+  /slot-rentals/{id}/grace-period:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [EXP]
+      summary: Ấn định ngày kết thúc ân hạn
+      operationId: setGracePeriod
+      description: >-
+        FR-EXP-06, FR-EXP-07: hợp đồng chuyển GRACE khi đến hạn mà chưa gia hạn; Platform Super
+        Admin ấn định độ dài ân hạn cho từng hợp đồng. Trong ân hạn slot vẫn nhận đơn và doanh thu
+        vẫn thuộc thương hiệu (FR-EXP-08, FR-EXP-09). Ghi nhật ký (FR-EXP-21).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GracePeriodUpdate' }
+      responses:
+        '200':
+          description: Đã ấn định
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/liquidate:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [EXP]
+      summary: Thanh lý hàng tồn của hợp đồng
+      operationId: liquidateSlotRental
+      description: >-
+        FR-EXP-14, FR-EXP-15, FR-EXP-16: hết ân hạn mà chưa gia hạn thì hợp đồng chuyển LIQUIDATED
+        và toàn bộ chai còn tồn của thương hiệu tại slot chuyển quyền sở hữu sang nền tảng, ghi
+        nhận thời điểm thanh lý và hợp đồng nguồn cho từng chai. Slot tiếp tục bán, doanh thu từ
+        đó thuộc nền tảng (FR-EXP-17, FR-REV-02). Thương hiệu mất quyền truy cập dữ liệu giao dịch
+        phát sinh sau thời điểm này (FR-EXP-20) và được thông báo kèm danh sách chai (FR-EXP-19).
+        Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-EXP-21, FR-AUD-07).
+      responses:
+        '200':
+          description: Kết quả thanh lý
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LiquidationResult' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -----------------------------------------------------------------------------------
+  # REV — Phân tách doanh thu
+  # -----------------------------------------------------------------------------------
+  /revenue/split:
+    get:
+      tags: [REV]
+      summary: Doanh thu tách theo thương hiệu và nền tảng
+      operationId: getRevenueSplit
+      description: >-
+        FR-REV-04: chỉ Platform Super Admin. Brand Admin gọi luôn nhận FORBIDDEN_SCOPE — thấy doanh
+        thu nền tảng từ hàng thanh lý của mình là ngoài phạm vi (FR-REV-06, FR-EXP-20).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Doanh thu tách hai nguồn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RevenueSplit' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # INV — Tồn kho và nạp nước hoa
+  # -----------------------------------------------------------------------------------
+  /shipment-declarations:
+    get:
+      tags: [INV]
+      summary: Danh sách khai báo gửi hàng
+      operationId: listShipmentDeclarations
+      description: >-
+        FR-INV-27: Brand Admin xem trạng thái và lịch sử các lần gửi hàng của thương hiệu mình;
+        Inventory Staff xem tất cả.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/ShipmentDeclarationStatus' }
+      responses:
+        '200':
+          description: Danh sách khai báo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ShipmentDeclaration' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [INV]
+      summary: Khai báo lô hàng gửi đến kho nền tảng
+      operationId: createShipmentDeclaration
+      description: >-
+        FR-INV-22, FR-INV-23: Brand Admin khai báo sản phẩm, số lượng chai, dung tích mỗi chai và
+        ngày dự kiến gửi. Thông báo cho Inventory Staff (FR-INV-28).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentDeclarationCreate' }
+      responses:
+        '201':
+          description: Đã khai báo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentDeclaration' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /shipment-declarations/{id}/receive:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Đối chiếu và tiếp nhận lô hàng
+      operationId: receiveShipmentDeclaration
+      description: >-
+        FR-INV-24, FR-INV-25, FR-INV-26: Inventory Staff đối chiếu số thực nhận với khai báo. Lệch
+        số lượng thì khai báo chuyển DISCREPANCY và ghi chú là bắt buộc. Xác nhận tiếp nhận thì hệ
+        thống tự tạo lô nước hoa liên kết ngược về khai báo. Ghi nhật ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ShipmentReceive' }
+      responses:
+        '200':
+          description: Đã tiếp nhận, kèm lô vừa tạo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [declaration, batch]
+                properties:
+                  declaration: { $ref: '#/components/schemas/ShipmentDeclaration' }
+                  batch: { $ref: '#/components/schemas/InventoryBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inventory-batches:
+    get:
+      tags: [INV]
+      summary: Danh sách lô nước hoa
+      operationId: listInventoryBatches
+      description: 'FR-INV-01, FR-INV-21: Brand Admin chỉ thấy lô của thương hiệu mình.'
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: fragranceProductId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách lô
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/InventoryBatch' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [INV]
+      summary: Tạo lô nước hoa
+      operationId: createInventoryBatch
+      description: >-
+        FR-INV-01: Inventory Staff tạo lô với thương hiệu sở hữu, sản phẩm, số lô, số lượng, ngày
+        nhập và hạn sử dụng. Lô nhận từ khai báo gửi hàng được tạo tự động qua
+        POST /shipment-declarations/{id}/receive (FR-INV-26), không qua endpoint này.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InventoryBatchCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bottles:
+    get:
+      tags: [INV]
+      summary: Danh sách chai
+      operationId: listBottles
+      description: >-
+        FR-INV-04, FR-INV-21: Brand Admin chỉ thấy chai của thương hiệu mình. Chai đã thanh lý
+        (owner = PLATFORM) không còn thuộc phạm vi thương hiệu (FR-EXP-20).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/BottleStatus' }
+        - name: batchId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách chai
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Bottle' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [INV]
+      summary: Đăng ký chai
+      operationId: createBottle
+      description: >-
+        FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở
+        hữu và khối lượng ban đầu.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleCreate' }
+      responses:
+        '201':
+          description: Đã đăng ký
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bottle' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bottles/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/page'
+      - $ref: '#/components/parameters/pageSize'
+    get:
+      tags: [INV]
+      summary: Lịch sử của một chai
+      operationId: getBottleHistory
+      description: >-
+        FR-INV-17: lịch sử lắp, nạp, tháo, điều chỉnh, thanh lý và hủy bỏ của chai (BR-008).
+      responses:
+        '200':
+          description: Lịch sử chai
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLogEntry' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refill-sessions:
+    get:
+      tags: [INV]
+      summary: Danh sách phiếu nạp
+      operationId: listRefillSessions
+      description: 'FR-INV-13: lịch sử phiên nạp. Brand Admin chỉ thấy phiên trên slot mình thuê.'
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/RefillStatus' }
+      responses:
+        '200':
+          description: Danh sách phiếu nạp
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RefillSession' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [INV]
+      summary: Mở phiếu nạp
+      operationId: openRefillSession
+      description: >-
+        FR-INV-29, FR-INV-30: Inventory Staff mở phiếu trước khi thao tác, ghi nhận máy, slot,
+        người thực hiện và thời điểm. Trong lúc phiếu mở, cảnh báo cửa mở quá DOOR_OPEN_ALERT_MIN
+        bị tạm ngưng cho máy/slot này (FR-ALR-03). Brand Admin KHÔNG gọi được endpoint này
+        (FR-RFQ-11).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillSessionOpen' }
+      responses:
+        '201':
+          description: Đã mở phiếu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /refill-sessions/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Đóng phiếu nạp
+      operationId: closeRefillSession
+      description: >-
+        FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và
+        sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa
+        mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06);
+        chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả
+        PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE
+        (FR-MCH-07). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillSessionClose' }
+      responses:
+        '200':
+          description: Đã đóng phiếu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slots/{id}/bottle:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    delete:
+      tags: [INV]
+      summary: Tháo chai khỏi slot và trả về kho
+      operationId: removeBottleFromSlot
+      description: >-
+        FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật
+        ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleRemoval' }
+      responses:
+        '200':
+          description: Đã tháo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Bottle' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inventory-adjustments:
+    post:
+      tags: [INV]
+      summary: Ghi nhận điều chỉnh tồn kho
+      operationId: createInventoryAdjustment
+      description: >-
+        FR-INV-16: lý do bắt buộc, thiếu trả ADJUSTMENT_REASON_REQUIRED. Thao tác nhạy cảm — cần
+        xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-07).
+      parameters:
+        - $ref: '#/components/parameters/reauthToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/InventoryAdjustmentCreate' }
+      responses:
+        '201':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryAdjustment' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # RFQ — Yêu cầu bổ sung nước hoa
+  # -----------------------------------------------------------------------------------
+  /refill-requests:
+    get:
+      tags: [RFQ]
+      summary: Danh sách yêu cầu bổ sung
+      operationId: listRefillRequests
+      description: >-
+        FR-RFQ-04, FR-RFQ-10: Brand Admin xem trạng thái và lịch sử yêu cầu của thương hiệu mình.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/RefillRequestStatus' }
+      responses:
+        '200':
+          description: Danh sách yêu cầu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RefillRequest' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [RFQ]
+      summary: Tạo yêu cầu bổ sung nước hoa
+      operationId: createRefillRequest
+      description: >-
+        FR-RFQ-01, FR-RFQ-02, FR-RFQ-12: Brand Admin tạo yêu cầu cho slot mình đang thuê, bắt buộc
+        chọn lý do. Slot đã có yêu cầu chưa hoàn tất trả REFILL_REQUEST_PENDING. Thông báo cho
+        Platform Super Admin và Inventory Staff (FR-RFQ-05).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillRequestCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /refill-requests/{id}/accept:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Chấp nhận yêu cầu bổ sung
+      operationId: acceptRefillRequest
+      description: 'FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu.'
+      responses:
+        '200':
+          description: Đã chấp nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /refill-requests/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Từ chối yêu cầu bổ sung
+      operationId: rejectRefillRequest
+      description: 'FR-RFQ-06: lý do bắt buộc khi từ chối.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RejectRequest' }
+      responses:
+        '200':
+          description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # ORD — Kiosk, đơn hàng và thanh toán
+  # -----------------------------------------------------------------------------------
+  /kiosk/machines/{serialNumber}/catalog:
+    parameters:
+      - name: serialNumber
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [ORD]
+      summary: Danh mục sản phẩm trên kiosk
+      operationId: getKioskCatalog
+      security: []
+      description: >-
+        FR-ORD-01, FR-ORD-02: hiển thị sản phẩm của tất cả slot đang khả dụng trên máy, kèm tên
+        thương hiệu để khách phân biệt (NFR-USA-05). Slot không khả dụng hiển thị available=false,
+        không kèm thông tin gì thêm. Phải phản hồi trong KIOSK_SELECT_RESPONSE_MAX_MS (NFR-PER-01).
+      responses:
+        '200':
+          description: Danh mục kiosk
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KioskCatalog' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /kiosk/orders:
+    post:
+      tags: [ORD]
+      summary: Tạo đơn hàng từ kiosk
+      operationId: createOrder
+      security: []
+      description: >-
+        FR-ORD-04, FR-ORD-05, FR-ORD-07, FR-ORD-08, FR-ORD-09: chỉ tạo được khi máy ONLINE và slot
+        AVAILABLE. Lưu ảnh chụp máy, slot, hợp đồng, thương hiệu, sản phẩm, giá, loại tiền và chủ
+        sở hữu doanh thu tại thời điểm tạo đơn (FR-REV-01, FR-REV-02); các trường này bất biến sau
+        đó (NFR-DAT-06). Sinh mã tham chiếu duy nhất và mã QR thanh toán, hạn thanh toán
+        ORDER_PAYMENT_TTL_SEC.
+
+        Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06),
+        SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04).
+
+        Giới hạn ORDER_RATE_LIMIT_PER_MIN yêu cầu mỗi phút cho mỗi máy (NFR-SEC-06).
+      parameters:
+        - $ref: '#/components/parameters/idempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderCreate' }
+      responses:
+        '201':
+          description: Đã tạo đơn, kèm mã QR thanh toán
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderCreated' }
+        '200':
+          description: >-
+            Trả lại đơn đã tạo trước đó với cùng Idempotency-Key, không tạo đơn mới.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderCreated' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /kiosk/orders/{id}/status:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [ORD]
+      summary: Trạng thái đơn hàng cho kiosk
+      operationId: getKioskOrderStatus
+      security: []
+      description: >-
+        FR-ORD-11: kiosk poll trạng thái thanh toán, cập nhật trong ORDER_STATUS_POLL_MAX_SEC. Khi
+        đã thanh toán nhưng lượt xịt thất bại, trả supportReference để kiosk hiển thị hướng dẫn xử
+        lý cho khách (FR-ORD-21). Thông báo lỗi phải viết bằng ngôn ngữ thông thường (NFR-USA-03).
+      responses:
+        '200':
+          description: Trạng thái đơn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderStatusView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /kiosk/interactions:
+    post:
+      tags: [ORD]
+      summary: Ghi nhận tương tác trên kiosk
+      operationId: recordKioskInteractions
+      security: []
+      description: >-
+        FR-RPT-06: ghi lượt xem và lượt chọn sản phẩm phục vụ xếp hạng mức độ quan tâm (BR-007).
+        eventId là khóa idempotency do kiosk sinh — gửi lại cùng eventId không tạo bản ghi mới.
+        kioskSessionId là phiên ẩn danh, không chứa định danh khách hàng.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KioskInteractionCreate' }
+      responses:
+        '202':
+          description: Đã tiếp nhận
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /webhooks/payments/{provider}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [ORD]
+      summary: Webhook kết quả thanh toán
+      operationId: handlePaymentWebhook
+      security: []
+      description: >-
+        FR-ORD-12, FR-ORD-13, FR-ORD-14, FR-ORD-15: tiếp nhận thông báo kết quả thanh toán. Xác
+        minh chữ ký trước khi xử lý; chữ ký sai trả INVALID_WEBHOOK_SIGNATURE (401) và vẫn ghi lại
+        để rà soát bảo mật. Xác minh mã tham chiếu, số tiền và loại tiền khớp đơn; lệch trả
+        AMOUNT_MISMATCH (400).
+
+        Mỗi webhook chỉ xử lý đúng một lần. Webhook trùng trả **HTTP 200** kèm result
+        WEBHOOK_ALREADY_PROCESSED — đây KHÔNG phải lỗi (spec/errors.md); trả 4xx sẽ khiến nhà cung
+        cấp gửi lại vô hạn.
+
+        Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01). Từ webhook
+        đến lúc thiết bị kích hoạt cơ cấu tối đa WEBHOOK_TO_ACTUATION_MAX_SEC (NFR-PER-03).
+        Ghi nhật ký (FR-AUD-06).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Cấu trúc do nhà cung cấp thanh toán quy định, khác nhau theo provider.
+      responses:
+        '200':
+          description: Đã xử lý, hoặc đã xử lý trước đó
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebhookAck' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /orders:
+    get:
+      tags: [ORD]
+      summary: Tìm kiếm giao dịch
+      operationId: searchOrders
+      description: >-
+        FR-ORD-22: tìm theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng
+        thái.
+
+        Brand Admin chỉ thấy đơn có revenueOwner = BRAND thuộc slot mình đang hoặc đã từng thuê,
+        trong đúng kỳ hạn hợp đồng. Đơn revenueOwner = PLATFORM (sau thanh lý) không hiển thị
+        (FR-REV-06, FR-EXP-20). Lọc qua orders/slot_rentals, không qua machines.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: slotId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: locationId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: fragranceProductId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: paymentReference
+          in: query
+          schema: { type: string }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/OrderStatus' }
+      responses:
+        '200':
+          description: Danh sách đơn
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /orders/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [ORD]
+      summary: Chi tiết đơn hàng
+      operationId: getOrder
+      description: 'FR-ORD-22: ngoài phạm vi trả FORBIDDEN_SCOPE.'
+      responses:
+        '200':
+          description: Đơn hàng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/{id}/history:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [ORD]
+      summary: Lịch sử chuyển trạng thái của đơn
+      operationId: getOrderStatusHistory
+      description: 'FR-ORD-18: toàn bộ lịch sử chuyển trạng thái kèm thời điểm và nguyên nhân.'
+      responses:
+        '200':
+          description: Lịch sử
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/OrderStatusHistoryEntry' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /orders/manual-review:
+    get:
+      tags: [ORD]
+      summary: Danh sách đơn cần kiểm tra thủ công
+      operationId: listOrdersNeedingReview
+      description: >-
+        FR-ORD-19, FR-RPT-05: đơn đã thanh toán nhưng lượt xịt thất bại hoặc không xác định. Mục
+        tiêu BR-002 là 100% số này được xử lý trong 24 giờ.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Danh sách đơn cần xử lý
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Order' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /orders/{id}/refund:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [ORD]
+      summary: Khởi tạo hoàn tiền
+      operationId: refundOrder
+      description: >-
+        FR-ORD-20: Operations Staff khởi tạo hoàn tiền cho đơn cần kiểm tra thủ công. Đơn không ở
+        trạng thái cho hoàn tiền trả ORDER_NOT_REFUNDABLE. Thao tác nhạy cảm — cần xác thực lại
+        (FR-AUTH-09). Ghi nhật ký (FR-AUD-06).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundRequest' }
+      responses:
+        '200':
+          description: Đã khởi tạo hoàn tiền
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -----------------------------------------------------------------------------------
+  # DSP — Điều khiển lượt xịt
+  # -----------------------------------------------------------------------------------
+  /orders/{id}/dispense-command:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [DSP]
+      summary: Lệnh xịt của đơn hàng
+      operationId: getOrderDispenseCommand
+      description: >-
+        FR-IOT-07, FR-DSP-16: lệnh xịt hiện tại của đơn kèm xác nhận tiếp nhận và kết quả thực hiện
+        tương ứng.
+
+        Hệ thống chỉ chuyển đơn sang DISPENSED sau khi nhận kết quả thành công từ thiết bị
+        (FR-DSP-17), và KHÔNG tự tạo lệnh mới cho đơn có lệnh đang ở UNKNOWN (FR-DSP-19) — trường
+        hợp đó đi qua luồng kiểm tra thủ công và hoàn tiền.
+      responses:
+        '200':
+          description: Lệnh xịt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DispenseCommand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /dispense-commands:
+    get:
+      tags: [DSP]
+      summary: Danh sách lệnh xịt
+      operationId: listDispenseCommands
+      description: >-
+        FR-DSP-20: lệnh chẩn đoán ghi nhận riêng, không tính vào doanh thu và không tính vào thống
+        kê lượt xịt khách hàng — lọc bằng commandType.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: commandType
+          in: query
+          schema: { $ref: '#/components/schemas/DispenseType' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/CommandStatus' }
+      responses:
+        '200':
+          description: Danh sách lệnh
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DispenseCommand' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines/{id}/diagnostic-dispense:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [DSP]
+      summary: Thực hiện lượt xịt chẩn đoán
+      operationId: createDiagnosticDispense
+      description: >-
+        FR-MNT-09, FR-DSP-20: Operations Staff xịt chẩn đoán trên slot được chọn sau khi xác thực
+        lại (FR-AUTH-09). Lệnh vẫn được ký và có TTL như lệnh khách hàng (FR-DSP-02 đến FR-DSP-06),
+        nhưng không gắn đơn hàng và không tính vào doanh thu. Lượng còn lại của slot vẫn được trừ
+        sau lượt xịt chẩn đoán thành công (FR-INV-10). Ghi nhật ký (FR-AUD-05, FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DiagnosticDispenseCreate' }
+      responses:
+        '202':
+          description: Đã gửi lệnh, chờ kết quả từ thiết bị
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DispenseCommand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -----------------------------------------------------------------------------------
+  # IOT — Giám sát thiết bị
+  # -----------------------------------------------------------------------------------
+  /machines/{id}/device-events:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/page'
+      - $ref: '#/components/parameters/pageSize'
+      - $ref: '#/components/parameters/from'
+      - $ref: '#/components/parameters/to'
+    get:
+      tags: [IOT]
+      summary: Sự kiện thiết bị gần đây
+      operationId: listDeviceEvents
+      description: >-
+        FR-IOT-05, FR-MNT-08: Operations Staff xem mã lỗi và sự kiện thiết bị của máy được phân
+        công. Sự kiện đi vào hệ thống qua MQTT (spec/contracts/mqtt.md), không qua REST.
+      responses:
+        '200':
+          description: Danh sách sự kiện
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/DeviceEvent' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines/{id}/sensor-readings:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/page'
+      - $ref: '#/components/parameters/pageSize'
+      - $ref: '#/components/parameters/from'
+      - $ref: '#/components/parameters/to'
+      - name: slotId
+        in: query
+        schema: { type: string, format: uuid }
+      - name: readingType
+        in: query
+        schema: { type: string }
+    get:
+      tags: [IOT]
+      summary: Dữ liệu telemetry
+      operationId: listSensorReadings
+      description: >-
+        FR-IOT-04, FR-IOT-14, FR-MNT-08: lịch sử số đo cảm biến phục vụ chẩn đoán và báo cáo.
+      responses:
+        '200':
+          description: Danh sách số đo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SensorReading' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /machines/{id}/config/push:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [IOT]
+      summary: Đẩy lại cấu hình xuống thiết bị
+      operationId: pushMachineConfig
+      description: >-
+        FR-IOT-06: gửi cấu hình hiện tại xuống topic config của máy, tăng configurationVersion.
+        Thiết bị chỉ áp cấu hình có version lớn hơn version đang giữ (spec/contracts/mqtt.md).
+        Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09).
+      responses:
+        '202':
+          description: Đã đẩy cấu hình
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # -----------------------------------------------------------------------------------
+  # ALR — Cảnh báo
+  # -----------------------------------------------------------------------------------
+  /alerts:
+    get:
+      tags: [ALR]
+      summary: Danh sách cảnh báo
+      operationId: listAlerts
+      description: >-
+        FR-ALR-06, FR-ALR-08, FR-ALR-10: phân loại theo loại, mức độ nghiêm trọng, máy, slot, địa
+        điểm và thời điểm phát sinh.
+
+        Brand Admin chỉ nhận cảnh báo ảnh hưởng đến slot của thương hiệu mình, và KHÔNG nhận trường
+        affectedBrandIds — biết ai khác cùng máy là vi phạm BR-012.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: severity
+          in: query
+          schema: { $ref: '#/components/schemas/AlertSeverity' }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/AlertStatus' }
+      responses:
+        '200':
+          description: Danh sách cảnh báo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Alert' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /alerts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [ALR]
+      summary: Chi tiết cảnh báo
+      operationId: getAlert
+      description: 'FR-ALR-12: người xử lý, thời điểm tiếp nhận, nội dung xử lý và thời điểm hoàn thành.'
+      responses:
+        '200':
+          description: Cảnh báo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /alerts/{id}/acknowledge:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ALR]
+      summary: Tiếp nhận cảnh báo
+      operationId: acknowledgeAlert
+      description: >-
+        FR-ALR-11, FR-ALR-12: Operations Staff tiếp nhận. BR-006 đặt mục tiêu thời gian từ khi phát
+        sinh cảnh báo nghiêm trọng đến khi tiếp nhận không quá 4 giờ.
+      responses:
+        '200':
+          description: Đã tiếp nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /alerts/{id}/assign:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ALR]
+      summary: Phân công cảnh báo
+      operationId: assignAlert
+      description: 'FR-ALR-11: phân công cho một tài khoản Operations Staff cụ thể.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertAssign' }
+      responses:
+        '200':
+          description: Đã phân công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /alerts/{id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ALR]
+      summary: Xử lý xong cảnh báo
+      operationId: resolveAlert
+      description: 'FR-ALR-11, FR-ALR-12: ghi nội dung xử lý và thời điểm hoàn thành.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertResolve' }
+      responses:
+        '200':
+          description: Đã xử lý
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /alerts/{id}/close:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ALR]
+      summary: Đóng cảnh báo
+      operationId: closeAlert
+      description: >-
+        FR-ALR-08, FR-ALR-11: chuyển sang CLOSED. Chỉ khi cảnh báo đã đóng thì cảnh báo mới cùng
+        loại trên cùng đối tượng mới được sinh lại (FR-ALR-07).
+      responses:
+        '200':
+          description: Đã đóng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Alert' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  # -----------------------------------------------------------------------------------
+  # MNT — Bảo trì
+  # -----------------------------------------------------------------------------------
+  /maintenance-tickets:
+    get:
+      tags: [MNT]
+      summary: Danh sách phiếu bảo trì
+      operationId: listMaintenanceTickets
+      description: >-
+        FR-MNT-03, FR-MNT-04, FR-MNT-14: lịch sử bảo trì theo máy. Phiếu là tài nguyên nền tảng,
+        Brand Admin không truy cập.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TicketStatus' }
+        - name: assignedTo
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách phiếu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MaintenanceTicket' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [MNT]
+      summary: Tạo phiếu bảo trì
+      operationId: createMaintenanceTicket
+      description: >-
+        FR-MNT-01, FR-MNT-03: Operations Staff tạo phiếu thủ công cho một máy, phân loại theo nhóm
+        sự cố, mức độ nghiêm trọng, độ ưu tiên và hạn xử lý.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceTicketCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /maintenance-tickets/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [MNT]
+      summary: Chi tiết phiếu bảo trì
+      operationId: getMaintenanceTicket
+      description: 'FR-MNT-14: lịch sử bảo trì của máy.'
+      responses:
+        '200':
+          description: Phiếu bảo trì
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /maintenance-tickets/{id}/assign:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [MNT]
+      summary: Phân công phiếu bảo trì
+      operationId: assignMaintenanceTicket
+      description: >-
+        FR-MNT-02: phân công cho một tài khoản Operations Staff cụ thể của nền tảng. Nền tảng có
+        thể có nhiều Operations Staff phụ trách máy/địa điểm khác nhau (FR-AUTH-12).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AlertAssign' }
+      responses:
+        '200':
+          description: Đã phân công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /maintenance-tickets/{id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [MNT]
+      summary: Ghi kết quả xử lý phiếu bảo trì
+      operationId: resolveMaintenanceTicket
+      description: >-
+        FR-MNT-10, FR-MNT-13: ghi kết quả chẩn đoán, nguyên nhân, biện pháp xử lý và linh kiện đã
+        thay. Không đóng được phiếu khi chưa ghi nhận kết quả xử lý.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MaintenanceTicketResolve' }
+      responses:
+        '200':
+          description: Đã ghi kết quả
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /maintenance-tickets/{id}/post-test:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [MNT]
+      summary: Hoàn thành checklist kiểm tra sau bảo trì
+      operationId: submitPostTest
+      description: >-
+        FR-MNT-11, FR-MNT-12: máy chỉ trở lại chế độ NORMAL sau khi checklist này hoàn tất. Gọi
+        PUT /machines/{id}/mode với NORMAL trước khi có PASS ở đây sẽ bị từ chối.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostTestSubmit' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /maintenance-tickets/{id}/activities:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [MNT]
+      summary: Nhật ký hoạt động của phiếu
+      operationId: listMaintenanceActivities
+      description: 'FR-MNT-14: lịch sử thao tác trên phiếu.'
+      responses:
+        '200':
+          description: Danh sách hoạt động
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MaintenanceActivity' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  # -----------------------------------------------------------------------------------
+  # RPT — Dashboard và báo cáo
+  # -----------------------------------------------------------------------------------
+  /reports/platform-dashboard:
+    get:
+      tags: [RPT]
+      summary: Dashboard nền tảng
+      operationId: getPlatformDashboard
+      description: >-
+        FR-RPT-01, FR-RPT-03, FR-RPT-04, FR-RPT-15: chỉ Platform Super Admin. Brand Admin gọi luôn
+        nhận FORBIDDEN_SCOPE — chỉ số tổng hợp mức máy cho phép suy ra số liệu của thương hiệu khác
+        (FR-RPT-11, BR-012).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PlatformDashboard' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/orders-timeseries:
+    get:
+      tags: [RPT]
+      summary: Số giao dịch và doanh thu theo thời gian
+      operationId: getOrdersTimeseries
+      description: >-
+        FR-RPT-02, FR-RPT-10: theo ngày, tuần, tháng hoặc khoảng tùy chọn. Brand Admin chỉ thấy dữ
+        liệu trong phạm vi hợp đồng của thương hiệu mình, và chỉ đơn revenueOwner = BRAND.
+        Khoảng 30 ngày phải trả kết quả trong tối đa 3 giây (NFR-PER-05).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: granularity
+          in: query
+          schema: { type: string, enum: [DAY, WEEK, MONTH], default: DAY }
+      responses:
+        '200':
+          description: Chuỗi thời gian
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TimeSeriesPoint' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/product-ranking:
+    get:
+      tags: [RPT]
+      summary: Xếp hạng sản phẩm theo mức độ quan tâm
+      operationId: getProductRanking
+      description: >-
+        FR-RPT-06, FR-RPT-10: xếp hạng theo số lượt được chọn, lọc theo slot, máy, địa điểm và
+        khoảng thời gian. Brand Admin chỉ thấy sản phẩm của thương hiệu mình (BR-007, BR-012).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: slotId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: locationId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Xếp hạng sản phẩm
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProductRankingItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/brand-slots:
+    get:
+      tags: [RPT]
+      summary: Báo cáo doanh thu và lượt xịt theo slot
+      operationId: getBrandSlotReport
+      description: >-
+        FR-RPT-08, FR-RPT-10: Brand Admin xem báo cáo theo từng slot mình thuê. Chỉ tính đơn
+        revenueOwner = BRAND — đơn sau thanh lý không hiển thị (FR-REV-06, FR-EXP-20).
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+      responses:
+        '200':
+          description: Báo cáo theo slot
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BrandSlotReportItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/inventory:
+    get:
+      tags: [RPT]
+      summary: Báo cáo tồn kho
+      operationId: getInventoryReport
+      description: >-
+        FR-INV-21, FR-RPT-07: tồn kho ước tính và danh sách slot sắp hết, lọc theo thương hiệu,
+        sản phẩm, lô, máy, slot và khoảng thời gian.
+      parameters:
+        - name: lowStockOnly
+          in: query
+          schema: { type: boolean, default: false }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: fragranceProductId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Báo cáo tồn kho
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/InventoryReportItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/machine-map/{machineId}:
+    parameters:
+      - name: machineId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [RPT]
+      summary: Sơ đồ slot của một máy
+      operationId: getMachineMap
+      description: >-
+        FR-RPT-12: Brand Admin chỉ thấy slot thuộc hợp đồng của thương hiệu mình; slot còn lại hiển
+        thị mine=false, available=false và KHÔNG kèm thông tin nào khác — không tên thương hiệu,
+        không tên sản phẩm, không số liệu (BR-012, FR-BND-08).
+      responses:
+        '200':
+          description: Sơ đồ máy
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/MachineMapSlot' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notifications:
+    get:
+      tags: [RPT]
+      summary: Thông báo của tôi
+      operationId: listNotifications
+      description: >-
+        Hòm thông báo của người dùng hiện tại: sắp hết hạn hợp đồng (FR-EXP-01/02/03), thanh lý
+        hàng tồn (FR-EXP-19), máy chuyển bảo trì (FR-MNT-07), cảnh báo ảnh hưởng slot (FR-ALR-10),
+        yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/NotificationStatus' }
+      responses:
+        '200':
+          description: Danh sách thông báo
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # -----------------------------------------------------------------------------------
+  # AUD — Nhật ký kiểm toán
+  # -----------------------------------------------------------------------------------
+  /audit-logs:
+    get:
+      tags: [AUD]
+      summary: Tra cứu nhật ký kiểm toán
+      operationId: searchAuditLogs
+      description: >-
+        FR-AUD-08, FR-AUD-10: chỉ Platform Super Admin. Tìm theo thời gian, người dùng, máy, slot,
+        hành động và đối tượng.
+
+        KHÔNG có endpoint sửa hoặc xóa bản ghi nhật ký (FR-AUD-09); ràng buộc này được cưỡng chế ở
+        tầng CSDL bằng quyền và trigger, không chỉ ở tầng ứng dụng (NFR-SEC-08).
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: actorId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: action
+          in: query
+          schema: { type: string }
+        - name: targetType
+          in: query
+          schema: { type: string }
+        - name: targetId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách bản ghi
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/AuditLogEntry' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /audit-logs/order-trace/{orderId}:
+    parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [AUD]
+      summary: Truy vết đầu-cuối một đơn hàng
+      operationId: getOrderTrace
+      description: >-
+        FR-AUD-11, BR-008: truy từ đơn hàng đến thanh toán, lệnh xịt, kết quả thiết bị, thay đổi
+        tồn kho, hợp đồng thuê và hoàn tiền liên quan. Đây là endpoint phục vụ khiếu nại của khách
+        và tranh chấp với thương hiệu.
+      responses:
+        '200':
+          description: Chuỗi truy vết
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderTrace' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
