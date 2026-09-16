@@ -9,8 +9,8 @@ on:
 env:
   NODE_VERSION: '22'
   # Lịch bật cổng chặn merge. Đổi 'false' -> 'true' đúng tuần ghi trong comment.
-  ENFORCE_COVERAGE: 'false'       # bật tuần 6
-  ENFORCE_TRACEABILITY: 'false'   # bật tuần 8
+  ENFORCE_COVERAGE: 'false' # bật tuần 6
+  ENFORCE_TRACEABILITY: 'false' # bật tuần 8
 
 jobs:
   # ============ 5.1 Lint và typecheck ============
