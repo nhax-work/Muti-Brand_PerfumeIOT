@@ -1,0 +1,15 @@
+# Cấu hình cho @redocly/cli. CI gọi:
+#   npx @redocly/cli lint spec/contracts/openapi.yaml   (.github/workflows/ci.yml, job `contract`)
+#
+# Không có file này thì redocly dùng bộ `recommended` mặc định và cảnh báo về server localhost —
+# trong khi localhost là server dev có chủ đích, khai báo ở đó để người mới chạy thử được ngay.
+
+extends:
+  - recommended
+
+rules:
+  # Server dev chạy trên localhost là cố ý, không phải sót placeholder.
+  no-server-example.com: off
+  # Đồ án môn học, không phát hành nên không có giấy phép SPDX.
+  info-license-strict: off
+  info-license: off
