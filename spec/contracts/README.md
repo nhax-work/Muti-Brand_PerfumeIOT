@@ -21,21 +21,24 @@ Bốn file trong thư mục này đóng băng cuối tuần 1. Agent **không đ
 
 ## Index bắt buộc phải có trong schema.sql
 
+> Cập nhật theo `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`: tên bảng số nhiều,
+> `command_status` dùng `ACKNOWLEDGED`, và quan hệ chai-đang-lắp nằm ở `machine_slots.active_bottle_id`.
+
 ```sql
 -- Một hợp đồng hiệu lực trên mỗi slot (FR-SLT-02)
-CREATE UNIQUE INDEX uq_slot_active_rental ON slot_rental (slot_id)
+CREATE UNIQUE INDEX uq_slot_active_rental ON slot_rentals (slot_id)
   WHERE status IN ('ACTIVE','EXPIRING','GRACE','LIQUIDATED');
 
 -- Chống xử lý webhook trùng (FR-ORD-15)
-CREATE UNIQUE INDEX uq_payment_event ON payment_event (provider, provider_event_id);
+CREATE UNIQUE INDEX uq_payment_event ON payment_events (provider, provider_event_id);
 
 -- Một lệnh xịt hiệu lực trên mỗi đơn (FR-DSP-05)
-CREATE UNIQUE INDEX uq_order_active_command ON dispense_command (order_id)
-  WHERE status IN ('CREATED','SENT','ACKED');
+CREATE UNIQUE INDEX uq_order_active_command ON dispense_commands (order_id)
+  WHERE status IN ('CREATED','SENT','ACKNOWLEDGED');
 
 -- Một chai hoạt động trên mỗi slot (FR-MCH-07)
-CREATE UNIQUE INDEX uq_slot_active_bottle ON bottle (installed_slot_id)
-  WHERE status IN ('INSTALLED','LOW');
+CREATE UNIQUE INDEX uq_slot_active_bottle ON machine_slots (active_bottle_id)
+  WHERE active_bottle_id IS NOT NULL;
 ```
 
 ## Cột không được NULL và không được sửa sau khi tạo

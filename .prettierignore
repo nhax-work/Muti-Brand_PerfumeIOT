@@ -1,0 +1,20 @@
+# Prettier chỉ format mã nguồn. Tài liệu đặc tả được viết tay và căn chỉnh thủ công —
+# để prettier reflow bảng Markdown sẽ tạo diff khổng lồ che mất thay đổi nội dung thật.
+*.md
+docs/
+spec/
+seed_document/
+
+# Contract đóng băng: prettier không được chạm vào (spec/contracts/README.md)
+spec/contracts/
+
+# Sinh tự động hoặc không thuộc quyền kiểm soát
+.agents/
+.claude/
+node_modules/
+dist/
+coverage/
+package-lock.json
+migrations/
+infra/
+*.drawio
