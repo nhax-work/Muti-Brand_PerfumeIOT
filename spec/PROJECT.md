@@ -40,9 +40,14 @@ Rental model, from the platform's baseline business decisions:
 | 7 | `spec/modules/*.md` | Per-module FR with acceptance criteria | You need Given/When/Then AC for a module |
 | 8 | `spec/decisions/` | ADR log for contract changes | You are proposing or reviewing a contract change |
 
-> TODO: `spec/contracts/` currently holds only `README.md` and `.gitkeep` — `erd.md`,
-> `data-dictionary.md`, `schema.sql`, `openapi.yaml`, and `mqtt.md` have not been authored yet.
-> Do not describe them as existing; check before citing.
+> All five contract files now exist and are frozen: `erd.md`, `data-dictionary.md`, `schema.sql`,
+> `openapi.yaml`, `mqtt.md`. Naming and enum conventions are fixed by
+> `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`.
+>
+> Two of them are **generated, not hand-written**: `migrations/1789516800000_initial-schema.sql` is
+> a verbatim copy of `schema.sql`, and `data-dictionary.md` is produced by
+> `scripts/gen-data-dictionary.ts` from a migrated database. Editing either by hand puts them out of
+> sync with the schema they claim to describe.
 
 > TODO: of the 16 files in `spec/modules/`, only `SLT.md` has real FR text and acceptance
 > criteria (FR-SLT-02, FR-SLT-05, FR-SLT-08). The other 15 (`AUTH`, `BND`, `USR`, `PRD`, `MCH`,
@@ -65,6 +70,15 @@ Rental model, from the platform's baseline business decisions:
 - **Test naming:** `test_FR_<MODULE>_<số>_<mô_tả_ngắn>` (e.g. `test_FR_SLT_02_reject_occupied_slot`).
   `scripts/check_traceability.py` scans by this exact pattern; a misnamed test makes CI treat the
   FR as untested.
+- **Migrations are additive only.** Never hand-edit a table created by an earlier migration and
+  never regenerate/squash/delete existing migration files. To change the schema: add a new
+  migration file on top of the latest one, then run `make migrate` against a fresh local DB
+  (`make reset && make migrate`) to verify it applies cleanly before committing. If the change
+  alters anything documented in `spec/contracts/schema.sql` or `erd.md`, the frozen-contract rule
+  above still applies — write the ADR first, get it approved, *then* write the migration and
+  update the contract files to match. Agents must not choose or switch the migration/ORM tool
+  itself (see Section 4) — that decision is closed: **node-pg-migrate with plain SQL migrations**
+  (`spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`).
 - **Data-scoping rule (BR-003, BR-012, FR-BND-05, FR-AUTH-07):** a brand user's queries must
   filter through `Order`/`SlotRental` brand ownership, never through `Machine` — `Machine` has no
   `brand_id`, because one machine hosts slots from multiple brands.
@@ -87,6 +101,7 @@ Rental model, from the platform's baseline business decisions:
 |---|---|
 | Writing any of the 7 human-owned tests (webhook idempotency, slot-level isolation, `revenue_owner` attribution, slot unique constraint, dispense-command TTL, firmware hard timeout, rental-status scheduler job) | Reserved for human authors, not agents (`spec/testing.md`) |
 | Editing a frozen contract file under `spec/contracts/` | Requires an ADR in `spec/decisions/` and TV1 approval first (`spec/contracts/README.md`) |
+| Switching or squashing the migration tool | Affects every developer's local `make migrate` and CI. Already decided — node-pg-migrate with plain SQL (`spec/decisions/0002-*.md`); changing it needs a new ADR |
 | Introducing a new error code | `spec/errors.md` is the sole source; agents may not invent codes |
 | Changing or adding a numeric threshold | `spec/constraints.md` is the sole source of values |
 | Cutting scope under time pressure | A fixed cut order already exists (drop W, then S in RPT/MNT, then FR-EXP-10..12, then S in INV); DSP FRs and FR-REV-01..03 must never be cut (`docs/FR_NFR_SCENTSTATION.md`, Part D) |
@@ -111,6 +126,7 @@ Personas below match the `agents` block in `harness.config.json` (also listed in
 - Use only error codes already in `spec/errors.md`; if a new one is truly needed, add it there in a separate reviewed step before using it.
 - Treat `order.brand_id`, `order.slot_rental_id`, `order.revenue_owner`, `order.price` as write-once at creation (`spec/contracts/README.md`, NFR-DAT-06) — no update path for these columns.
 - Never edit files under `spec/contracts/` from a code change; that requires the ADR process in Section 3.
+- When a task needs a schema change, add one new migration file — never edit or delete a prior migration — and verify it with `make reset && make migrate` on a clean local DB before marking the task done.
 
 ### 🔍 Review Agent
 - Verify state transitions against `spec/glossary.md` exactly — e.g. `Order` only reaches `DISPENSED` after a device success result (FR-DSP-17), and a command in `UNKNOWN` must not trigger a new command (FR-DSP-19).
@@ -140,10 +156,30 @@ Personas below match the `agents` block in `harness.config.json` (also listed in
 
 ## 6. Commands
 
-> TODO: no `package.json` exists anywhere in this repository. `AGENTS.md` and `CLAUDE.md` list
-> `npm test`, `npx eslint .`, `npx prettier --write .`, and `npx tsc --noEmit`, but these are
-> harness-generated boilerplate, not backed by an actual `scripts` block in a `package.json`.
-> Do not treat them as real until a `package.json` is added and this section is updated from it.
+`Makefile` is the canonical entry point — CI and agents both go through it. Every target now maps
+to a real command backed by `package.json`.
+
+| Command | Does |
+|---|---|
+| `make up` / `make down` / `make reset` | Infrastructure (Postgres, Redis, Mosquitto, Adminer) |
+| `make migrate` | `node-pg-migrate up` — see `docs/MIGRATIONS.md` |
+| `make seed` | `scripts/seed.ts` — 1 machine, 4 slots, 2 brands with 2 slots each |
+| `make lint` | `eslint . && tsc --noEmit` |
+| `make fmt` | `prettier --write .` |
+| `make test` | unit + integration + contract |
+| `make test-contract` | `redocly lint openapi.yaml` + `tests/contract/` |
+| `make check-traceability` | `scripts/check_traceability.py` |
+
+Migration tooling is **node-pg-migrate with plain SQL migrations** — chosen because the project
+needs four partial unique indexes, a gist exclusion constraint, `citext`, and an append-only trigger,
+none of which an ORM declares directly. That decision is recorded in `spec/decisions/0002-*.md`; do
+not switch tools without a new ADR (see Section 4).
+
+Requires `DATABASE_URL` in `.env` (copy from `.env.example`). `scripts/seed.ts` also needs
+`SEED_DEFAULT_PASSWORD` — it refuses to run rather than hardcode a password (NFR-SEC-05).
+
+`tests/unit/` and `tests/integration/` currently pass with `--passWithNoTests` because no tests
+exist yet. Remove that flag once the first real test lands, otherwise the CI gate is decorative.
 
 ## 7. Do not touch
 

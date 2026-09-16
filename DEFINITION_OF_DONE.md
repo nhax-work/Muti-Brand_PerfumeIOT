@@ -66,15 +66,25 @@ Bật hết từ tuần 1 thì CI đỏ suốt 7 tuần và cả nhóm sẽ quen
 
 ---
 
-## Quyết định còn lại của tuần 2
+## Quyết định tuần 2 — ĐÃ CHỐT
 
-`npm run db:migrate` đang để TODO vì chưa chốt ORM. Ba lựa chọn:
+Công cụ migration: **node-pg-migrate**, migration viết bằng **SQL thuần**.
 
-| ORM | Ưu | Nhược với đồ án này |
-|---|---|---|
-| **Prisma** | Migration và type tốt nhất | Partial unique index phải viết SQL thô trong migration |
-| **Drizzle** | SQL-first, khai báo được partial index trực tiếp | Hệ sinh thái nhỏ hơn |
-| **TypeORM** | Quen thuộc | Migration hay lệch |
+Ghi trong `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`. Ba lựa chọn ORM cân nhắc
+trước đó (Prisma, Drizzle, TypeORM) đều phải viết SQL thô cho phần quan trọng nhất, nên lợi thế
+type-safety không bù được việc file schema của ORM không phản ánh đúng schema thật.
 
-Dự án cần **4 partial unique index** (xem `spec/contracts/README.md`) — đó là cơ chế bảo đảm
-idempotency và ràng buộc slot. Chọn ORM nào cũng phải kiểm tra viết được chúng trước khi chốt.
+Dự án cần những thứ sau, tất cả đều nằm trong `spec/contracts/schema.sql` §10–11 và đã được kiểm
+là thực sự chặn (không chỉ tồn tại):
+
+| Ràng buộc | FR |
+|---|---|
+| `uq_slot_active_rental` | FR-SLT-02, NFR-DAT-07 |
+| `uq_payment_event` | FR-ORD-15 |
+| `uq_order_active_command` | FR-DSP-05 |
+| `uq_slot_active_bottle` | FR-MCH-07 |
+| `excl_slot_rental_overlap` (EXCLUDE USING gist) | FR-SLT-05 |
+| Trigger append-only cho `audit_logs` | FR-AUD-09, NFR-SEC-08 |
+
+Lưu ý khi chạy `make migrate` lần đầu: cần `DATABASE_URL` trong `.env`; `make seed` cần thêm
+`SEED_DEFAULT_PASSWORD`. Cả hai đã có trong `.env.example`.
