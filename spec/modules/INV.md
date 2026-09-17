@@ -1,7 +1,7 @@
 # FR-INV — Tồn kho và nạp nước hoa
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 21 FR  
-> Trạng thái AC: **đã viết**  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 31 FR  
+> Trạng thái AC: **đã viết** (FR-INV-01÷21 viết tuần 1; FR-INV-22÷31 bổ sung sau)  
 > Phụ trách: Hoàng (TV4)  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
@@ -279,3 +279,145 @@
 - AC2: Cho người dùng không có quyền truy cập dữ liệu của thương hiệu/slot, Khi yêu cầu báo cáo chứa dữ liệu ngoài phạm vi, Thì hệ thống không trả về dữ liệu ngoài phạm vi được phép.
 
 **Kiểm tra:** `test_FR_INV_21_inventory_report`
+
+## FR-INV-22 — Khai báo lô hàng gửi đến kho nền tảng
+
+**Tuyên bố:** Hệ thống phải cho phép Brand Admin khai báo lô hàng gửi đến kho nền tảng, gồm sản phẩm, số lượng chai, dung tích mỗi chai và ngày dự kiến gửi.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M · **API:** `POST /shipment-declarations`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho Brand Admin của thương hiệu `B` và sản phẩm `P` thuộc `B`, Khi khai báo lô hàng với số lượng > 0 và dung tích > 0, Thì hệ thống tạo bản ghi khai báo ở trạng thái `DECLARED` gắn với `B`.
+- AC2: Cho sản phẩm `P2` thuộc thương hiệu khác, Khi Brand Admin của `B` khai báo lô hàng cho `P2`, Thì hệ thống từ chối với `PRODUCT_NOT_OWNED`.
+- AC3 (Ca biên): Cho số lượng khai báo bằng 0 hoặc âm, Khi gửi khai báo, Thì hệ thống từ chối — ràng buộc `chk_declared_quantity_positive` ở tầng CSDL cũng chặn.
+
+**Kiểm tra:** `test_FR_INV_22_declare_shipment`
+
+## FR-INV-23 — Trạng thái khai báo gửi hàng
+
+**Tuyên bố:** Hệ thống phải quản lý trạng thái khai báo gửi hàng theo tập: DECLARED, RECEIVED, DISCREPANCY, CANCELLED.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho khai báo vừa tạo, Khi hệ thống lưu bản ghi, Thì trạng thái là `DECLARED`.
+- AC2: Cho giá trị trạng thái ngoài tập quy định, Khi yêu cầu cập nhật, Thì hệ thống từ chối giá trị đó (enum `shipment_declaration_status`).
+
+**Kiểm tra:** `test_FR_INV_23_declaration_status_set`
+
+## FR-INV-24 — Đối chiếu số thực nhận với khai báo
+
+**Tuyên bố:** Hệ thống phải cho phép Inventory Staff đối chiếu số lượng thực nhận với khai báo của Brand Admin khi tiếp nhận lô hàng.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M · **API:** `POST /shipment-declarations/{id}/receive`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho khai báo `D` ở trạng thái `DECLARED` và Inventory Staff nhập số thực nhận bằng số khai báo, Khi xác nhận tiếp nhận, Thì khai báo chuyển `RECEIVED` và hệ thống ghi `received_by`, `received_at`.
+- AC2: Cho người dùng không phải Inventory Staff, Khi xác nhận tiếp nhận, Thì hệ thống từ chối với `FORBIDDEN_SCOPE`.
+- AC3: Cho khai báo đã ở trạng thái `RECEIVED` hoặc `CANCELLED`, Khi xác nhận tiếp nhận lần nữa, Thì hệ thống từ chối thao tác.
+
+**Kiểm tra:** `test_FR_INV_24_reconcile_shipment`
+
+## FR-INV-25 — Ghi chú bắt buộc khi lệch số lượng
+
+**Tuyên bố:** Hệ thống phải chuyển khai báo sang trạng thái DISCREPANCY và yêu cầu ghi chú bắt buộc khi số lượng thực nhận khác số lượng khai báo.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho số thực nhận khác số khai báo và có ghi chú lệch, Khi xác nhận tiếp nhận, Thì khai báo chuyển `DISCREPANCY` (không phải `RECEIVED`) và lưu `discrepancy_notes`.
+- AC2: Cho số thực nhận khác số khai báo nhưng thiếu ghi chú, Khi xác nhận tiếp nhận, Thì hệ thống từ chối thao tác và không đổi trạng thái khai báo.
+- AC3 (Ca biên - Nhận thiếu hoàn toàn): Cho số thực nhận bằng 0 kèm ghi chú, Khi xác nhận, Thì khai báo chuyển `DISCREPANCY` và hệ thống không tạo lô nước hoa nào.
+
+**Kiểm tra:** `test_FR_INV_25_shipment_discrepancy`
+
+## FR-INV-26 — Tự động tạo lô khi tiếp nhận
+
+**Tuyên bố:** Hệ thống phải tự động tạo lô nước hoa theo FR-INV-01, liên kết với khai báo gửi hàng, khi Inventory Staff xác nhận đã tiếp nhận.
+
+**Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho khai báo `D` được xác nhận tiếp nhận, Khi hệ thống xử lý, Thì trong cùng một transaction hệ thống tạo `InventoryBatch` với `source_declaration_id = D.id`, `brand_id` và `fragrance_product_id` lấy từ khai báo, `quantity_received` bằng số thực nhận.
+- AC2: Cho lô được tạo tự động, Khi kiểm tra bản ghi, Thì `source_declaration_id` khác NULL — phân biệt được với lô nhập thủ công.
+- AC3 (Ràng buộc cùng thương hiệu): Cho nỗ lực tạo lô với `fragrance_product_id` thuộc thương hiệu khác `brand_id`, Khi ghi vào CSDL, Thì composite foreign key `fk_batch_product_same_brand` từ chối thao tác.
+
+**Kiểm tra:** `test_FR_INV_26_auto_create_batch_on_receive`
+
+## FR-INV-27 — Brand Admin xem lịch sử gửi hàng
+
+**Tuyên bố:** Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các lần gửi hàng của thương hiệu mình.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M · **API:** `GET /shipment-declarations`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho thương hiệu `B` có nhiều khai báo ở các trạng thái khác nhau, Khi Brand Admin của `B` truy vấn, Thì hệ thống trả về đầy đủ khai báo của `B` kèm trạng thái, số thực nhận và ghi chú lệch nếu có.
+- AC2 (Cô lập dữ liệu): Cho thương hiệu `B2` cũng có khai báo, Khi Brand Admin của `B1` truy vấn, Thì kết quả không chứa khai báo nào của `B2`.
+
+**Kiểm tra:** `test_FR_INV_27_list_own_shipments`
+
+## FR-INV-28 — Thông báo khai báo gửi hàng mới
+
+**Tuyên bố:** Hệ thống phải thông báo cho Inventory Staff khi có khai báo gửi hàng mới.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** S
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho Brand Admin tạo khai báo gửi hàng mới, Khi khai báo được lưu, Thì hệ thống sinh thông báo cho các tài khoản Inventory Staff.
+- AC2: Cho khai báo chỉ được cập nhật chứ không phải tạo mới, Khi lưu thay đổi, Thì hệ thống không sinh thông báo "khai báo mới" lần nữa.
+
+**Kiểm tra:** `test_FR_INV_28_notify_new_shipment`
+
+## FR-INV-29 — Mở phiếu nạp trước khi thao tác
+
+**Tuyên bố:** Hệ thống phải cho phép Inventory Staff mở phiếu nạp cho một slot trước khi thao tác, ghi nhận máy, slot, người thực hiện và thời điểm mở phiếu.
+
+**Dấu vết:** BR-005 · **Ưu tiên:** M · **API:** `POST /refill-sessions`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho Inventory Staff và slot `S` trên máy `M`, Khi mở phiếu nạp, Thì hệ thống tạo `RefillSession` trạng thái `STARTED` ghi `machine_id`, `slot_id`, `performed_by` và `started_at`.
+- AC2: Cho phiếu vừa mở, Khi kiểm tra bản ghi, Thì `new_bottle_id` được phép là NULL — chai thay thế chọn sau, tại thời điểm đóng phiếu.
+- AC3: Cho Brand Admin, Khi gọi endpoint mở phiếu nạp, Thì hệ thống từ chối với `FORBIDDEN_SCOPE` (FR-RFQ-11 — thương hiệu không trực tiếp thực hiện phiên nạp).
+
+**Kiểm tra:** `test_FR_INV_29_open_refill_session`
+
+## FR-INV-30 — Tạm ngưng cảnh báo cửa mở khi phiếu nạp đang mở
+
+**Tuyên bố:** Hệ thống phải tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03 cho máy có slot đang trong phiếu nạp còn mở.
+
+**Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho tồn tại `RefillSession` trạng thái `STARTED` trên máy `M`, Khi thiết bị báo cửa mở liên tục quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống không sinh cảnh báo FR-ALR-03 — kể cả khi máy đang ở chế độ NORMAL.
+- AC2: Cho máy `M` không có phiếu nạp nào đang mở và không ở chế độ MAINTENANCE, Khi cửa mở quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống sinh cảnh báo bình thường.
+
+> Đây là ngoại lệ **thứ hai** của FR-ALR-03, bổ sung cho ngoại lệ chế độ MAINTENANCE vốn có.
+> Inventory Staff nạp hàng không chuyển máy sang MAINTENANCE, nên thiếu ngoại lệ này thì mỗi lần
+> nạp quá `DOOR_OPEN_ALERT_MIN` sẽ sinh báo động giả. Cùng ghi ở `spec/contracts/schema.sql` §13
+> mục 5 và `spec/contracts/mqtt.md` §3.
+
+**Kiểm tra:** `test_FR_INV_30_suppress_door_alert_during_refill`
+
+## FR-INV-31 — Đóng phiếu nạp và khôi phục giám sát
+
+**Tuyên bố:** Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở bình thường cho slot đó.
+
+**Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M · **API:** `POST /refill-sessions/{id}/close`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho phiếu nạp `F` trạng thái `STARTED`, checklist đã hoàn thành và đã chọn chai mới hợp lệ, Khi đóng phiếu, Thì `F` chuyển `COMPLETED`, ghi `completed_at`, và `new_bottle_id` khác NULL.
+- AC2 (Cổng checklist): Cho checklist chưa hoàn thành, Khi yêu cầu đóng phiếu, Thì hệ thống từ chối (FR-INV-14).
+- AC3 (Chai chưa chọn): Cho `new_bottle_id` chưa được cung cấp, Khi yêu cầu đóng phiếu, Thì hệ thống từ chối — cột nullable ở CSDL chỉ phục vụ giai đoạn phiếu còn mở, ràng buộc này nằm ở domain service (`spec/contracts/schema.sql` §13 mục 2).
+- AC4 (Khôi phục giám sát): Cho phiếu `F` vừa chuyển `COMPLETED`, Khi cửa tiếp tục mở quá `DOOR_OPEN_ALERT_MIN` sau thời điểm đóng phiếu, Thì hệ thống sinh cảnh báo FR-ALR-03 trở lại.
+
+**Kiểm tra:** `test_FR_INV_31_close_refill_session`
