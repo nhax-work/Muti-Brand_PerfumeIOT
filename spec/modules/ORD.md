@@ -273,7 +273,7 @@
 * **Acceptance criteria:**
   * **AC1:** Given đơn hàng `O` đã thanh toán (`PAID`), lệnh xịt được gửi đi nhưng thiết bị báo lỗi (`FAILED`) hoặc quá `DISPENSE_RESULT_TIMEOUT_SEC = 60` không có phản hồi (`UNKNOWN`),  
     When hệ thống xử lý kết quả,  
-    Then đơn hàng `O` chuyển sang trạng thái `FAILED`, được đánh dấu cờ `manual_review_required = TRUE` (hoặc chuyển `REFUND_PENDING`), và sinh cảnh báo Alert gửi đến Operations Manager.
+    Then đơn hàng `O` chuyển sang trạng thái `FAILED`, được đánh dấu cờ `needs_manual_review = TRUE` (hoặc chuyển `REFUND_PENDING`), và sinh cảnh báo Alert gửi đến Operations Staff.
   * **AC2 (Không tự xịt lại):** Given đơn hàng rơi vào trạng thái xịt thất bại hoặc không xác định,  
     When hệ thống xử lý,  
     Then tuyệt đối không tự động sinh lệnh xịt thứ hai (bảo đảm an toàn theo BR-002).
@@ -282,10 +282,10 @@
 ---
 
 ## FR-ORD-20 — Khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra
-* **Statement:** Hệ thống phải cho phép Operations Manager khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công.
+* **Statement:** Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công.
 * **Traces:** BR-002 · **Priority:** S
 * **Acceptance criteria:**
-  * **AC1:** Given người dùng là Operations Manager đã xác thực lại mật khẩu (`REAUTH_REQUIRED`), đơn hàng `O` đang ở trạng thái `REFUND_PENDING` hoặc có cờ `manual_review_required = TRUE`,  
+  * **AC1:** Given người dùng là Operations Staff đã xác thực lại mật khẩu (`REAUTH_REQUIRED`), đơn hàng `O` đang ở trạng thái `REFUND_PENDING` hoặc có cờ `needs_manual_review = TRUE`,  
     When bấm nút xác nhận hoàn tiền kèm lý do bắt buộc,  
     Then trạng thái đơn hàng chuyển sang `REFUNDED`, hệ thống gửi yêu cầu hoàn tiền đến cổng thanh toán, lưu lịch sử và ghi AuditLog.
   * **AC2 (Đơn đã xịt thành công):** Given đơn hàng `O` đang ở trạng thái `DISPENSED` (đã xịt thành công bình thường),  
@@ -336,7 +336,7 @@
 * **Statement:** Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch.
 * **Traces:** BR-008, BR-009 · **Priority:** S
 * **Acceptance criteria:**
-  * **AC1:** Given Operations Manager tải file sao kê đối soát từ cổng thanh toán cho ngày `D`,  
+  * **AC1:** Given Operations Staff tải file sao kê đối soát từ cổng thanh toán cho ngày `D`,  
     When hệ thống chạy tiến trình đối soát tự động,  
     Then hệ thống so khớp từng giao dịch theo `transaction_id`, `order_code`, số tiền và trạng thái giữa dữ liệu đối tác và dữ liệu bảng `Order` nội bộ.
   * **AC2:** Given phát hiện trường hợp lệch (tiền đã trừ bên cổng thanh toán nhưng đơn hàng nội bộ là `EXPIRED`, hoặc số tiền không khớp),  

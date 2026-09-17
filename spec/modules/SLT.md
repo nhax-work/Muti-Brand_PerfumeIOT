@@ -15,7 +15,7 @@
   * **AC1:** Given người dùng là Platform Super Admin, slot `S` tồn tại, thương hiệu `B` ở trạng thái ACTIVE, ngày bắt đầu `start_date <= end_date`, `fixed_fee >= 0`, `revenue_share_rate` nằm trong khoảng `[0, 100]`,  
     When gửi yêu cầu tạo hợp đồng thuê slot,  
     Then hệ thống tạo hợp đồng mới với trạng thái `ACTIVE` (nếu `start_date <= Today <= end_date`) hoặc `DRAFT` (nếu `start_date > Today`), lưu đầy đủ các trường và ghi AuditLog.
-  * **AC2:** Given người dùng không có vai trò Platform Super Admin (vd: Brand Admin, Operations Manager),  
+  * **AC2:** Given người dùng không có vai trò Platform Super Admin (vd: Brand Admin, Operations Staff),  
     When gửi yêu cầu tạo hợp đồng thuê slot,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
   * **AC3 (Ca biên - Ngày không hợp lệ):** Given ngày kết thúc nhỏ hơn ngày bắt đầu (`start_date > end_date`),  
@@ -46,7 +46,7 @@
 * **Ràng buộc CSDL bắt buộc:**
   ```sql
   CREATE UNIQUE INDEX uq_slot_active_rental
-    ON slot_rental (slot_id)
+    ON slot_rentals (slot_id)
     WHERE status IN ('ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED');
   ```
   AC4 phải được bảo đảm bằng index này, **không** bằng kiểm tra ở tầng ứng dụng.

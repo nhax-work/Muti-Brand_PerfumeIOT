@@ -139,14 +139,14 @@
 
 ## FR-ALR-11 — Tiếp nhận, phân công và đóng cảnh báo
 
-**Tuyên bố:** Hệ thống phải cho phép Operations Manager tiếp nhận, phân công và đóng cảnh báo.
+**Tuyên bố:** Hệ thống phải cho phép Operations Staff tiếp nhận, phân công và đóng cảnh báo.
 
 **Dấu vết:** BR-006 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho Operations Manager có quyền xử lý cảnh báo, Khi thực hiện tiếp nhận hoặc phân công cảnh báo, Thì hệ thống cập nhật cảnh báo tương ứng.
-- AC2: Cho cảnh báo chưa hoàn tất xử lý, Khi Operations Manager yêu cầu đóng cảnh báo, Thì hệ thống chỉ cho phép đóng khi điều kiện nghiệp vụ đóng được đáp ứng.
+- AC1: Cho Operations Staff có quyền xử lý cảnh báo, Khi thực hiện tiếp nhận hoặc phân công cảnh báo, Thì hệ thống cập nhật cảnh báo tương ứng.
+- AC2: Cho cảnh báo chưa hoàn tất xử lý, Khi Operations Staff yêu cầu đóng cảnh báo, Thì hệ thống chỉ cho phép đóng khi điều kiện nghiệp vụ đóng được đáp ứng.
 
 **Kiểm tra:** `test_FR_ALR_11_manage_alert`
 

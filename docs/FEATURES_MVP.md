@@ -16,8 +16,7 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 | Dùng chung (mọi tài khoản) | 3 | 1 |
 | Brand Admin | 14 | 6 |
 | Platform Super Admin | 36 | 13 |
-| Operations Manager | 9 | 3 |
-| Technician | 7 | 1 |
+| Operations Staff | 16 | 4 |
 | Inventory Staff | 9 | 2 |
 | Thiết bị (Firmware) | 16 | 2 |
 | Hệ thống (engine nền) | 115 | 16 |
@@ -54,7 +53,7 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 |---|---|---|---|---|
 | F-PSA-01 | Quản lý vai trò & thu hồi quyền truy cập | FR-AUTH-06, 11 | 2 | Gán vai trò cho tài khoản; thu hồi quyền truy cập của bất kỳ người dùng hoặc thiết bị nào. |
 | F-PSA-02 | Quản lý thương hiệu | FR-BND-01, 02, 03, 07 | 4 | Tạo/cập nhật thương hiệu, chuyển trạng thái ACTIVE/SUSPENDED, xem dữ liệu tổng hợp toàn bộ thương hiệu. |
-| F-PSA-03 | Quản lý tài khoản người dùng nội bộ | FR-USR-01…05 | 5 | Tạo tài khoản Brand Admin và nhân sự nền tảng (Operations Manager, Technician, Inventory Staff), vô hiệu hóa tài khoản, đặt lại mật khẩu. |
+| F-PSA-03 | Quản lý tài khoản người dùng nội bộ | FR-USR-01…05 | 5 | Tạo tài khoản Brand Admin và nhân sự nền tảng (Operations Staff, Inventory Staff), vô hiệu hóa tài khoản, đặt lại mật khẩu. |
 | F-PSA-04 | Đăng ký máy & quản lý địa điểm | FR-MCH-01…04 | 4 | Đăng ký máy mới (serial, định danh thiết bị, credential MQTT), tạo/quản lý địa điểm, gán máy cho địa điểm. |
 | F-PSA-05 | Cấu hình slot | FR-MCH-05, 06 | 2 | Cấu hình số lượng slot, mã slot, liều lượng xịt và ngưỡng cảnh báo sắp hết cho từng slot. |
 | F-PSA-06 | Quản lý hợp đồng thuê slot | FR-SLT-01, 12, 14 | 3 | Tạo hợp đồng thuê slot mới, gia hạn (tạo hợp đồng kế tiếp), đóng hợp đồng LIQUIDATED sau khi xử lý xong hàng thanh lý. |
@@ -66,35 +65,34 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 | F-PSA-12 | Dashboard vận hành nền tảng | FR-RPT-01…05, 07, 09, 15 | 8 | Số máy theo trạng thái, doanh thu/giao dịch theo thời gian, tỷ lệ xịt thành công/thất bại, đơn hàng cần kiểm tra, tồn kho ước tính, doanh thu theo máy/địa điểm/slot/thương hiệu, báo cáo tổng hợp toàn nền tảng. |
 | F-PSA-13 | Tra cứu & truy vết nhật ký kiểm toán | FR-AUD-10, 11 | 2 | Tìm kiếm nhật ký theo thời gian/người dùng/máy/slot/hành động; truy vết từ một đơn hàng đến toàn bộ chuỗi liên quan. |
 
-## 5. Operations Manager
+## 5. Operations Staff
+
+> Gộp từ hai vai trò cũ Operations Manager và Technician (`docs/FR_NFR_SCENTSTATION.md` Phần D).
+> Một vai trò duy nhất quản lý trọn vòng đời vận hành và sự cố của máy — từ bật/tắt máy, tiếp nhận
+> cảnh báo, tạo và tự phân công phiếu bảo trì, đến chẩn đoán và đóng phiếu.
 
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
-| F-OM-01 | Điều khiển máy/slot từ xa | FR-MCH-11, 12 | 2 | Bật/tắt toàn bộ máy hoặc từng slot riêng lẻ từ xa. |
-| F-OM-02 | Xử lý cảnh báo | FR-ALR-11, 12 | 2 | Tiếp nhận, phân công, đóng cảnh báo; lưu người xử lý, thời điểm, nội dung xử lý. |
-| F-OM-03 | Tạo & phân công phiếu bảo trì | FR-MNT-01, 02, 03, 04, 07 | 5 | Tạo phiếu bảo trì thủ công, phân công Technician, phân loại theo mức độ/độ ưu tiên/hạn xử lý, thông báo cho Brand Admin liên quan khi máy vào chế độ MAINTENANCE. |
+| F-OPS-01 | Điều khiển máy/slot từ xa | FR-MCH-11, 12 | 2 | Bật/tắt toàn bộ máy hoặc từng slot riêng lẻ từ xa. |
+| F-OPS-02 | Xử lý cảnh báo | FR-ALR-11, 12 | 2 | Tiếp nhận, phân công, đóng cảnh báo; lưu người xử lý, thời điểm, nội dung xử lý. |
+| F-OPS-03 | Tạo & phân công phiếu bảo trì | FR-MNT-01, 02, 03, 04, 07 | 5 | Tạo phiếu bảo trì thủ công, phân công cho một tài khoản Operations Staff cụ thể, phân loại theo mức độ/độ ưu tiên/hạn xử lý, thông báo cho Brand Admin liên quan khi máy vào chế độ MAINTENANCE. |
+| F-OPS-04 | Thực hiện bảo trì & chẩn đoán thiết bị | FR-MNT-05, 08, 09, 10, 11, 12, 13 | 7 | Chuyển máy sang MAINTENANCE, xem dữ liệu cảm biến/lỗi/sự kiện, thực hiện lượt xịt chẩn đoán (sau xác thực lại), ghi kết quả/nguyên nhân/linh kiện thay thế, hoàn thành checklist trước khi đưa máy về NORMAL, đóng phiếu bảo trì. |
 
-## 6. Technician
-
-| Mã | Feature | FR nguồn | Số FR | Mô tả |
-|---|---|---|---|---|
-| F-TECH-01 | Thực hiện bảo trì & chẩn đoán thiết bị | FR-MNT-05, 08, 09, 10, 11, 12, 13 | 7 | Chuyển máy sang MAINTENANCE, xem dữ liệu cảm biến/lỗi/sự kiện, thực hiện lượt xịt chẩn đoán (sau xác thực lại), ghi kết quả/nguyên nhân/linh kiện thay thế, hoàn thành checklist trước khi đưa máy về NORMAL, đóng phiếu bảo trì. |
-
-## 7. Inventory Staff
+## 6. Inventory Staff
 
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
 | F-INVS-01 | Nạp/tháo/điều chỉnh nước hoa tại máy | FR-INV-01, 02, 05, 13, 14, 15, 16 | 7 | Tạo lô nước hoa, đăng ký chai, ghi khối lượng ban đầu khi lắp, hoàn thành checklist nạp, quy trình tháo chai trả kho, điều chỉnh tồn kho kèm lý do bắt buộc. |
 | F-INVS-02 | Xử lý & hoàn tất yêu cầu bổ sung | FR-RFQ-08, 09 | 2 | Liên kết yêu cầu bổ sung với phiên nạp thực tế; yêu cầu tự chuyển COMPLETED khi phiên nạp kết thúc thành công. |
 
-## 8. Thiết bị (Firmware)
+## 7. Thiết bị (Firmware)
 
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
 | F-DEV-01 | Thực thi lệnh xịt an toàn | FR-DSP-07…16 | 10 | Xác minh chữ ký lệnh, từ chối lệnh hết hạn/sai máy/trùng mã, từ chối khi cửa mở/đang MAINTENANCE/slot rỗng, kích hoạt đúng cơ cấu slot đích, gửi xác nhận tiếp nhận và kết quả thực hiện. |
 | F-DEV-02 | Giao tiếp & báo cáo trạng thái thiết bị | FR-IOT-01, 04, 05, 10, 11, 13 | 6 | Gửi heartbeat định kỳ, telemetry (khối lượng, cửa, cơ cấu, nguồn điện), sự kiện vận hành, lưu tạm & gửi lại khi mất kết nối, hiển thị trạng thái tạm ngưng trên kiosk khi mất liên lạc. |
 
-## 9. Hệ thống (engine nghiệp vụ chạy nền)
+## 8. Hệ thống (engine nghiệp vụ chạy nền)
 
 Nhóm này không có màn hình thao tác riêng — là logic backend bắt buộc để các feature actor-facing ở trên hoạt động đúng.
 
