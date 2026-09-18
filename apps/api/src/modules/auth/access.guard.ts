@@ -2,7 +2,8 @@
  * Guard toàn cục duy nhất, chạy trước mọi controller. Ba bước theo đúng thứ tự:
  *
  *   1. Xác thực   — Bearer token hợp lệ, tài khoản còn ACTIVE, phiên chưa thu hồi
- *                   (FR-AUTH-02, FR-AUTH-04, FR-AUTH-10)
+ *                   (FR-AUTH-02, FR-AUTH-04, FR-AUTH-10). Tài khoản INVITED chỉ qua được các
+ *                   endpoint gắn @AllowPendingPasswordChange (ADR-0004).
  *   2. Phân quyền — có đủ quyền mà @RequirePermissions đòi (FR-AUTH-06, FR-AUTH-08)
  *   3. Xác thực lại — có X-Reauth-Token hợp lệ nếu endpoint gắn @RequireReauth (FR-AUTH-09)
  *
@@ -18,7 +19,12 @@ import { Reflector } from '@nestjs/core';
 import { AppError } from '../../shared/errors/index.js';
 import { hasPermission } from '../../shared/scoping/index.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
-import { IS_PUBLIC, REQUIRED_PERMISSIONS, REQUIRES_REAUTH } from './decorators.js';
+import {
+  ALLOWS_PENDING_PASSWORD,
+  IS_PUBLIC,
+  REQUIRED_PERMISSIONS,
+  REQUIRES_REAUTH,
+} from './decorators.js';
 import { PrincipalLoader, type AuthenticatedUser } from './principal.loader.js';
 import type { TokenService } from './tokens.js';
 
@@ -48,6 +54,13 @@ export class AccessGuard implements CanActivate {
     if (!token) throw new AppError('UNAUTHENTICATED', 'Thiếu access token');
     const user = await this.loader.load(this.tokens.verifyAccess(token));
     request.user = user;
+
+    if (
+      user.mustChangePassword &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOWS_PENDING_PASSWORD, targets)
+    ) {
+      throw new AppError('FORBIDDEN_SCOPE', 'Phải đổi mật khẩu tạm trước khi dùng hệ thống');
+    }
 
     // 2. Phân quyền
     const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets);

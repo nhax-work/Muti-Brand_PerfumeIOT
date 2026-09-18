@@ -84,6 +84,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/change-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đổi mật khẩu
+         * @description ADR-0004: người dùng tự đổi mật khẩu. Tài khoản INVITED chuyển sang ACTIVE. Đổi xong thì MỌI phiên của tài khoản bị thu hồi, kể cả phiên hiện tại — người dùng đăng nhập lại bằng mật khẩu mới. Mật khẩu hiện tại sai trả INVALID_CREDENTIALS. Ghi nhật ký (FR-AUD-02).
+         */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/me": {
         parameters: {
             query?: never;
@@ -281,7 +301,7 @@ export interface paths {
         put?: never;
         /**
          * Đặt lại mật khẩu
-         * @description FR-USR-04: chỉ Platform Super Admin. Mật khẩu lưu dưới dạng băm bcrypt hoặc argon2 (NFR-SEC-03). Ghi nhật ký (FR-AUD-02).
+         * @description FR-USR-04, FR-AUTH-10: chỉ Platform Super Admin. Sinh mật khẩu tạm mới, đưa tài khoản về INVITED và thu hồi mọi phiên đang hoạt động. Mật khẩu lưu dưới dạng băm argon2 (NFR-SEC-03). Ghi nhật ký (FR-AUD-02) nhưng KHÔNG ghi mật khẩu tạm (ADR-0004).
          */
         post: operations["resetUserPassword"];
         delete?: never;
@@ -2188,6 +2208,17 @@ export interface components {
             brandId?: string | null;
             roles: components["schemas"]["RoleCode"][];
             permissions: string[];
+            /** @description true khi tài khoản đang ở INVITED — vừa được tạo hoặc vừa bị đặt lại mật khẩu. Giao diện phải chuyển thẳng sang màn hình đổi mật khẩu; mọi endpoint ngoài /auth/me, /auth/logout và /auth/change-password đều trả FORBIDDEN_SCOPE cho tới khi đổi xong (ADR-0004). */
+            mustChangePassword: boolean;
+        };
+        ChangePasswordRequest: {
+            /** Format: password */
+            currentPassword: string;
+            /**
+             * Format: password
+             * @description Phải khác mật khẩu hiện tại.
+             */
+            newPassword: string;
         };
         ReauthRequest: {
             /** Format: password */
@@ -2390,6 +2421,11 @@ export interface components {
             /** @description Bí mật gốc. Chỉ xuất hiện trong phản hồi này, không truy xuất lại được. */
             secret: string;
         };
+        /** @description Mật khẩu tạm, cùng mẫu với DeviceCredentialIssued: CHỈ xuất hiện trong đúng phản hồi này, không truy xuất lại được, không lưu dạng gốc. Tài khoản ở INVITED cho tới khi người dùng tự đổi qua POST /auth/change-password (ADR-0004). */
+        TemporaryPassword: {
+            temporaryPassword: string;
+        };
+        UserCreated: components["schemas"]["User"] & components["schemas"]["TemporaryPassword"];
         SlotRental: {
             /** Format: uuid */
             id: string;
@@ -3437,6 +3473,24 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            204: components["responses"]["NoContent"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     getCurrentUser: {
         parameters: {
             query?: never;
@@ -3687,13 +3741,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Đã tạo */
+            /** @description Đã tạo, tài khoản ở INVITED. Mật khẩu tạm chỉ trả về trong phản hồi này (ADR-0004). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"];
+                    "application/json": components["schemas"]["UserCreated"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -3752,7 +3806,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            204: components["responses"]["NoContent"];
+            /** @description Mật khẩu tạm mới, chỉ trả về một lần */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporaryPassword"];
+                };
+            };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };

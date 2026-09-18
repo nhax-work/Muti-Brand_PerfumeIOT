@@ -248,6 +248,15 @@ export class AuthQueries {
       .execute();
   }
 
+  /** Ghi băm mật khẩu mới kèm trạng thái đi cùng (INVITED khi cấp tạm, ACTIVE khi tự đổi). */
+  async setPassword(userId: string, passwordHash: string, status: UserStatus): Promise<void> {
+    await this.db
+      .updateTable('users')
+      .set({ password_hash: passwordHash, status })
+      .where('id', '=', userId)
+      .execute();
+  }
+
   async touchLastLogin(userId: string, now: Date): Promise<void> {
     await this.db
       .updateTable('users')

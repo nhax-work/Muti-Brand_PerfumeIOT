@@ -20,8 +20,14 @@ import {
   LOGIN_SUCCEEDED,
   type PrincipalRow,
 } from './auth.queries.js';
-import { burnPasswordCheck, verifyPassword } from './password.js';
 import {
+  burnPasswordCheck,
+  generateTemporaryPassword,
+  hashPassword,
+  verifyPassword,
+} from './password.js';
+import {
+  canHoldSession,
   PrincipalLoader,
   toAuthenticatedUser,
   type AuthenticatedUser,
@@ -45,6 +51,7 @@ type Queries = Pick<
   | 'revokeAllSessions'
   | 'bumpPermissionVersion'
   | 'touchLastLogin'
+  | 'setPassword'
 >;
 
 type Loader = Pick<PrincipalLoader, 'invalidateUser' | 'invalidateSession'>;
@@ -72,6 +79,9 @@ export class AuthService {
    *   3. Kiểm mật khẩu.
    *   4. Kiểm trạng thái sau cùng, và trả cùng INVALID_CREDENTIALS như sai mật khẩu, để không lộ
    *      tài khoản nào bị vô hiệu hóa.
+   *
+   * Tài khoản INVITED đăng nhập được — mật khẩu tạm là cách duy nhất để vào đổi mật khẩu — nhưng
+   * CurrentUser trả về có mustChangePassword = true và AccessGuard chặn mọi thao tác khác (ADR-0004).
    */
   async login(email: string, password: string, origin: RequestOrigin): Promise<TokenPair> {
     const user = await this.queries.findUserForLogin(email);
@@ -112,7 +122,7 @@ export class AuthService {
       throw new AppError('INVALID_CREDENTIALS', 'Sai email hoặc mật khẩu');
     }
 
-    if (user.status !== 'ACTIVE') {
+    if (!canHoldSession(user.status)) {
       await this.audit.log({
         ...base,
         action: LOGIN_FAILED,
@@ -149,7 +159,7 @@ export class AuthService {
     // Kiểm trạng thái tài khoản TRƯỚC khi xoay vòng: yêu cầu bị từ chối thì không được làm thay
     // đổi gì trên phiên.
     const row = await this.queries.loadPrincipal(session.userId);
-    if (!row || row.status !== 'ACTIVE') {
+    if (!row || !canHoldSession(row.status)) {
       throw new AppError('UNAUTHENTICATED', 'Refresh token không hợp lệ hoặc đã hết hạn');
     }
 
@@ -201,6 +211,67 @@ export class AuthService {
   }
 
   /**
+   * ADR-0004: người dùng tự đổi mật khẩu. INVITED chuyển thành ACTIVE.
+   *
+   * Đổi xong thì thu hồi MỌI phiên, kể cả phiên đang gọi: ai đó biết mật khẩu cũ và đang giữ một
+   * phiên khác thì phải bị đẩy ra. Người dùng đăng nhập lại bằng mật khẩu mới.
+   */
+  async changePassword(
+    user: AuthenticatedUser,
+    currentPassword: string,
+    newPassword: string,
+    origin: RequestOrigin,
+  ): Promise<void> {
+    const passwordHash = await this.queries.findPasswordHash(user.userId);
+    const ok = passwordHash !== undefined && (await verifyPassword(passwordHash, currentPassword));
+    if (!ok) {
+      await this.audit.log({
+        actorType: 'USER',
+        actorId: user.userId,
+        brandId: user.brandId,
+        action: 'auth.password.change_failed',
+        targetType: 'user',
+        targetId: user.userId,
+        sourceIp: origin.ip,
+        userAgent: origin.userAgent,
+        severity: 'WARNING',
+      });
+      throw new AppError('INVALID_CREDENTIALS', 'Mật khẩu hiện tại không đúng');
+    }
+    if (currentPassword === newPassword) {
+      throw new AppError('VALIDATION_ERROR', 'Mật khẩu mới phải khác mật khẩu hiện tại', {
+        fields: [{ path: 'newPassword', message: 'Trùng mật khẩu hiện tại' }],
+      });
+    }
+
+    await this.queries.setPassword(user.userId, await hashPassword(newPassword), 'ACTIVE');
+    await this.revokeAllAccess(user.userId);
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: user.userId,
+      brandId: user.brandId,
+      action: 'auth.password.changed',
+      targetType: 'user',
+      targetId: user.userId,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+    });
+  }
+
+  /**
+   * FR-USR-04 + ADR-0004: cấp mật khẩu tạm mới, đưa tài khoản về INVITED, thu hồi mọi phiên.
+   *
+   * Trả mật khẩu tạm dạng gốc để gọi viên trả về cho Super Admin ĐÚNG MỘT LẦN. Hàm này không ghi
+   * audit — người gọi ghi, và KHÔNG được đưa mật khẩu tạm vào bản ghi audit.
+   */
+  async resetToTemporaryPassword(userId: string): Promise<string> {
+    const temporaryPassword = generateTemporaryPassword();
+    await this.queries.setPassword(userId, await hashPassword(temporaryPassword), 'INVITED');
+    await this.revokeAllAccess(userId);
+    return temporaryPassword;
+  }
+
+  /**
    * FR-AUTH-10, FR-AUTH-11: cắt mọi quyền truy cập đang có của một người dùng.
    *
    * Hai việc, đều cần: thu hồi mọi refresh session (không làm mới được nữa) VÀ tăng
@@ -221,6 +292,7 @@ export class AuthService {
       brandId: user.brandId,
       roles: [...user.roles],
       permissions: [...user.permissions].sort(),
+      mustChangePassword: user.mustChangePassword,
     };
   }
 

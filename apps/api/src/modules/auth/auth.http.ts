@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { originOf } from '../../shared/http/request-origin.js';
 import { parseBody } from '../../shared/http/validation.js';
 import { AuthService } from './auth.service.js';
-import { CurrentUser, Public } from './decorators.js';
+import { AllowPendingPasswordChange, CurrentUser, Public } from './decorators.js';
 import type { AuthenticatedUser } from './principal.loader.js';
 
 /** openapi.yaml: LoginRequest — password có minLength 8. */
@@ -25,6 +25,12 @@ const LoginBody = z.object({
 });
 
 const RefreshBody = z.object({ refreshToken: z.string().min(1) });
+
+/** openapi.yaml: ChangePasswordRequest — newPassword có minLength 8. */
+const ChangePasswordBody = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
 
 /** openapi.yaml: ReauthRequest. */
 const ReauthBody = z.object({ password: z.string().min(1) });
@@ -54,6 +60,7 @@ export class AuthController {
   }
 
   /** FR-AUTH-04 */
+  @AllowPendingPasswordChange()
   @Post('logout')
   @HttpCode(204)
   async logout(@CurrentUser() user: AuthenticatedUser, @Req() request: HttpRequest): Promise<void> {
@@ -72,7 +79,21 @@ export class AuthController {
     return this.auth.reauthenticate(user, password, originOf(request));
   }
 
+  /** ADR-0004 */
+  @AllowPendingPasswordChange()
+  @Post('change-password')
+  @HttpCode(204)
+  async changePassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+  ): Promise<void> {
+    const { currentPassword, newPassword } = parseBody(ChangePasswordBody, body);
+    await this.auth.changePassword(user, currentPassword, newPassword, originOf(request));
+  }
+
   /** FR-AUTH-05, FR-AUTH-06 */
+  @AllowPendingPasswordChange()
   @Get('me')
   me(@CurrentUser() user: AuthenticatedUser): CurrentUserDto {
     return this.auth.toCurrentUser(user);

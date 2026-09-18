@@ -132,6 +132,13 @@ class FakeQueries {
     if (u) u.permissionVersion += 1;
   }
   async touchLastLogin() {}
+  async setPassword(userId: string, passwordHash: string, status: UserStatus) {
+    const u = this.users.get(userId);
+    if (u) {
+      u.passwordHash = passwordHash;
+      u.status = status;
+    }
+  }
 }
 
 /** Audit giả: ghi lại mục và nuôi nhật ký đăng nhập mà FakeQueries dùng để tính khóa. */
@@ -475,5 +482,76 @@ describe('FR-AUTH-10 — thu hồi phiên khi vô hiệu hóa tài khoản', () 
     clock.advanceMinutes(revokeMaxMinutes + 0.1);
 
     await expectAppError(loader.load(claims), 'UNAUTHENTICATED');
+  });
+});
+
+describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
+  it('test_FR_AUTH_01_invited_account_can_login_but_must_change_password', async () => {
+    addUser({ email: 'new@scentstation.local', status: 'INVITED' });
+    const pair = await auth.login('new@scentstation.local', PASSWORD, origin);
+    // AC3 (đã sửa theo ADR-0004): INVITED đăng nhập được nhưng bị đánh dấu phải đổi mật khẩu.
+    expect(pair.user.mustChangePassword).toBe(true);
+  });
+
+  it('test_FR_AUTH_01_active_account_does_not_need_password_change', async () => {
+    addUser({ email: 'ops@scentstation.local' });
+    const pair = await auth.login('ops@scentstation.local', PASSWORD, origin);
+    expect(pair.user.mustChangePassword).toBe(false);
+  });
+
+  it('test_FR_USR_04_change_password_activates_and_revokes_every_session', async () => {
+    const user = addUser({ email: 'new@scentstation.local', status: 'INVITED' });
+    const a = await auth.login('new@scentstation.local', PASSWORD, origin);
+    const b = await auth.login('new@scentstation.local', PASSWORD, origin);
+    const current = await loader.load(tokens.verifyAccess(a.accessToken));
+
+    await auth.changePassword(current, PASSWORD, 'brand-new-password', origin);
+
+    expect(user.status).toBe('ACTIVE');
+    // Mọi phiên chết, kể cả phiên vừa gọi đổi mật khẩu.
+    for (const pair of [a, b]) {
+      await expectAppError(auth.refresh(pair.refreshToken), 'UNAUTHENTICATED');
+    }
+    await expectAppError(
+      auth.login('new@scentstation.local', PASSWORD, origin),
+      'INVALID_CREDENTIALS',
+    );
+    await expect(
+      auth.login('new@scentstation.local', 'brand-new-password', origin),
+    ).resolves.toBeTruthy();
+  });
+
+  it('test_FR_USR_04_change_password_rejects_wrong_current_password', async () => {
+    addUser({ email: 'new@scentstation.local', status: 'INVITED' });
+    const pair = await auth.login('new@scentstation.local', PASSWORD, origin);
+    const current = await loader.load(tokens.verifyAccess(pair.accessToken));
+    await expectAppError(
+      auth.changePassword(current, 'not-the-password', 'brand-new-password', origin),
+      'INVALID_CREDENTIALS',
+    );
+  });
+
+  it('test_FR_USR_04_change_password_rejects_reusing_same_password', async () => {
+    addUser({ email: 'new@scentstation.local', status: 'INVITED' });
+    const pair = await auth.login('new@scentstation.local', PASSWORD, origin);
+    const current = await loader.load(tokens.verifyAccess(pair.accessToken));
+    await expectAppError(
+      auth.changePassword(current, PASSWORD, PASSWORD, origin),
+      'VALIDATION_ERROR',
+    );
+  });
+
+  it('test_FR_USR_04_reset_to_temporary_password_revokes_access', async () => {
+    const user = addUser({ email: 'ops@scentstation.local' });
+    const pair = await auth.login('ops@scentstation.local', PASSWORD, origin);
+
+    const temporary = await auth.resetToTemporaryPassword(user.id);
+
+    expect(user.status).toBe('INVITED');
+    expect(temporary.length).toBeGreaterThanOrEqual(12);
+    await expectAppError(loader.load(tokens.verifyAccess(pair.accessToken)), 'UNAUTHENTICATED');
+    await expect(auth.login('ops@scentstation.local', temporary, origin)).resolves.toMatchObject({
+      user: { mustChangePassword: true },
+    });
   });
 });

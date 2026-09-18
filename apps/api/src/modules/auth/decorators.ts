@@ -22,6 +22,7 @@ import type { AuthenticatedUser } from './principal.loader.js';
 export const IS_PUBLIC = 'scentstation:isPublic';
 export const REQUIRED_PERMISSIONS = 'scentstation:requiredPermissions';
 export const REQUIRES_REAUTH = 'scentstation:requiresReauth';
+export const ALLOWS_PENDING_PASSWORD = 'scentstation:allowsPendingPassword';
 
 /** Endpoint không cần đăng nhập: kiosk, webhook thanh toán, đăng nhập, làm mới token. */
 export const Public = () => SetMetadata(IS_PUBLIC, true);
@@ -38,6 +39,13 @@ export const RequirePermissions = (...codes: string[]) => SetMetadata(REQUIRED_P
  * Thiếu, sai hoặc hết hạn trả 403 REAUTH_REQUIRED.
  */
 export const RequireReauth = () => SetMetadata(REQUIRES_REAUTH, true);
+
+/**
+ * Endpoint mà tài khoản INVITED (đang phải đổi mật khẩu tạm) vẫn được gọi.
+ * CHỈ dùng cho /auth/me, /auth/logout, /auth/change-password (ADR-0004). Module nghiệp vụ không
+ * bao giờ cần decorator này.
+ */
+export const AllowPendingPasswordChange = () => SetMetadata(ALLOWS_PENDING_PASSWORD, true);
 
 /** Người dùng đã xác thực của yêu cầu hiện tại. */
 export const CurrentUser = createParamDecorator(

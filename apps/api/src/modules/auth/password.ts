@@ -2,6 +2,7 @@
  * Băm và kiểm mật khẩu bằng argon2 (NFR-SEC-03).
  */
 
+import { randomBytes } from 'node:crypto';
 import { hash, verify } from 'argon2';
 
 export function hashPassword(plain: string): Promise<string> {
@@ -15,6 +16,14 @@ export async function verifyPassword(passwordHash: string, plain: string): Promi
     // Băm hỏng định dạng: coi như sai mật khẩu, không để lọt lỗi thư viện ra ngoài.
     return false;
   }
+}
+
+/**
+ * Mật khẩu tạm cấp khi tạo tài khoản hoặc đặt lại (ADR-0004). 12 byte ngẫu nhiên -> 16 ký tự
+ * base64url, đủ dài để không đoán được trong khoảng thời gian trước khi người dùng đổi.
+ */
+export function generateTemporaryPassword(): string {
+  return randomBytes(12).toString('base64url');
 }
 
 let dummyHash: Promise<string> | undefined;

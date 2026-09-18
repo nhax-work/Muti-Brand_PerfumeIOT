@@ -11,4 +11,4 @@ export {
   CurrentUser,
   CurrentBrandScope,
 } from './decorators.js';
-export { hashPassword } from './password.js';
+export { hashPassword, generateTemporaryPassword } from './password.js';

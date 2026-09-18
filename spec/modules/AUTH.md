@@ -38,16 +38,19 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC2:** Given email không tồn tại **hoặc** mật khẩu sai,  
     When gửi yêu cầu đăng nhập,  
     Then hệ thống trả HTTP 401 `INVALID_CREDENTIALS` với **cùng một thông báo** cho cả hai trường hợp — không tiết lộ email nào có tồn tại trong hệ thống.
-  * **AC3:** Given tài khoản `U` có `status` là `DISABLED` hoặc `INVITED`,  
+  * **AC3:** Given tài khoản `U` có `status` là `DISABLED`,  
     When đăng nhập với mật khẩu đúng,  
-    Then hệ thống từ chối và **không** cấp token.
+    Then hệ thống từ chối với `INVALID_CREDENTIALS` và **không** cấp token.
+  * **AC3b (ADR-0004):** Given tài khoản `U` ở `INVITED` — vừa được tạo hoặc vừa bị đặt lại mật khẩu,  
+    When đăng nhập bằng mật khẩu tạm,  
+    Then hệ thống cấp token kèm `mustChangePassword = true`, và mọi endpoint ngoài `GET /auth/me`, `POST /auth/logout`, `POST /auth/change-password` trả `403 FORBIDDEN_SCOPE` cho tới khi đổi mật khẩu xong.
   * **AC4 (Lưu trữ mật khẩu):** Given bất kỳ tài khoản nào trong CSDL,  
     When đọc cột `users.password_hash`,  
     Then giá trị là băm bcrypt hoặc argon2, không phải mật khẩu gốc và không phải băm không salt (NFR-SEC-03).
   * **AC5 (Ghi nhật ký thất bại):** Given một lần đăng nhập sai,  
     When hệ thống từ chối,  
     Then hệ thống vẫn ghi AuditLog sự kiện đăng nhập thất bại kèm email đã thử và `source_ip` (FR-AUD-01).
-* **Test:** `test_FR_AUTH_01_login_with_email_password`
+* **Test:** `tests/unit/auth.test.ts` — các test `test_FR_AUTH_01_*`
 
 ---
 
@@ -71,7 +74,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC5 (Lưu trữ):** Given một phiên đăng nhập bất kỳ,  
     When đọc `refresh_sessions.token_hash`,  
     Then chỉ có **băm** của refresh token được lưu, không lưu token gốc (NFR-SEC-05).
-* **Test:** `test_FR_AUTH_02_issue_token_pair`
+* **Test:** `tests/unit/auth.test.ts`, `tests/unit/access-guard.test.ts` — các test `test_FR_AUTH_02_*`
 
 ---
 
@@ -91,7 +94,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC4 (Ca biên - Khóa theo tài khoản, không theo IP):** Given hai lần thử sai đến từ hai địa chỉ IP khác nhau trên cùng tài khoản,  
     When đếm số lần sai,  
     Then cả hai đều tính vào cùng bộ đếm của tài khoản đó.
-* **Test:** `test_FR_AUTH_03_lock_account_after_failed_attempts`
+* **Test:** `tests/unit/auth.test.ts` — các test `test_FR_AUTH_03_*`
 
 ---
 
@@ -109,7 +112,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC3:** Given refresh token vừa bị thu hồi do đăng xuất,  
     When dùng chính token đó để gọi `POST /auth/refresh`,  
     Then hệ thống từ chối với HTTP 401.
-* **Test:** `test_FR_AUTH_04_logout_revokes_refresh_token`
+* **Test:** `tests/unit/auth.test.ts` — `test_FR_AUTH_04_logout_revokes_only_current_session`
 
 ---
 
@@ -132,7 +135,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC5 (Đúng một, không nhiều):** Given tài khoản Brand Admin đang gắn thương hiệu `B1`,  
     When cố gắn thêm thương hiệu `B2` cho cùng tài khoản,  
     Then hệ thống từ chối — một tài khoản Brand Admin phục vụ đúng một thương hiệu.
-* **Test:** `test_FR_AUTH_05_brand_admin_bound_to_single_brand`
+* **Test:** `tests/unit/auth.test.ts`, `tests/unit/usr.test.ts` — các test `test_FR_AUTH_05_*`
 
 ---
 
@@ -152,7 +155,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC4 (Ghi nhật ký):** Given một thay đổi vai trò bất kỳ,  
     When lưu thay đổi,  
     Then hệ thống ghi AuditLog kèm dữ liệu trước và sau (FR-AUD-02, FR-AUD-08).
-* **Test:** `test_FR_AUTH_06_assign_roles_to_user`
+* **Test:** `tests/unit/auth.test.ts`, `tests/unit/access-guard.test.ts` — các test `test_FR_AUTH_06_*`
 
 > **Vai trò là dữ liệu, không phải enum.** `roles` và `permissions` là bảng, nên thêm/bớt vai trò
 > chỉ cần sửa dữ liệu seed, không cần migration (`spec/contracts/schema.sql`, DB_DIAGRAM note #15).
@@ -242,7 +245,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC5 (Ca biên - Reauth token hết hạn):** Given reauth token đã quá thời hạn ngắn của nó,  
     When gọi endpoint nhạy cảm,  
     Then hệ thống trả `REAUTH_REQUIRED` — không chấp nhận token cũ.
-* **Test:** `test_FR_AUTH_09_reauth_required_for_sensitive_ops`
+* **Test:** `tests/unit/auth.test.ts`, `tests/unit/access-guard.test.ts` — các test `test_FR_AUTH_09_*`
 
 ---
 
@@ -259,7 +262,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC3 (Ca biên - Đang thao tác dở):** Given `U` đang gọi một endpoint tại thời điểm bị vô hiệu hóa,  
     When yêu cầu tiếp theo được gửi,  
     Then yêu cầu đó bị từ chối, không có đường "dùng nốt phiên".
-* **Test:** `test_FR_AUTH_10_revoke_sessions_on_disable`
+* **Test:** `tests/unit/auth.test.ts` — các test `test_FR_AUTH_10_*`
 
 ---
 
@@ -280,7 +283,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC4 (Ghi nhật ký):** Given một thao tác thu hồi bất kỳ,  
     When hoàn tất,  
     Then hệ thống ghi AuditLog kèm chủ thể thực hiện và đối tượng bị thu hồi (FR-AUD-02).
-* **Test:** `test_FR_AUTH_11_revoke_user_or_device_access`
+* **Test:** `tests/unit/usr.test.ts` — `test_FR_AUTH_11_super_admin_can_disable_any_brand_user`. Nửa thu hồi thiết bị (AC2) thuộc module MCH, chưa hiện thực
 
 ---
 
@@ -300,7 +303,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC4 (Ràng buộc dữ liệu):** Given `scope_type` là `LOCATION` hoặc `MACHINE`,  
     When lưu bản ghi `user_roles`,  
     Then `scope_id` bắt buộc khác NULL; với `PLATFORM` và `BRAND` thì `scope_id` là NULL.
-* **Test:** `test_FR_AUTH_12_scope_operations_staff_by_location`
+* **Test:** chưa có — ưu tiên S. Cơ chế suy phạm vi LOCATION/MACHINE đã có trong `principal.loader.ts`, chưa module nào áp dụng
 
 > **Ưu tiên S** — hiện thực sau tuần 9 nếu còn thời gian (`docs/FR_NFR_SCENTSTATION.md` Phần D).
 > Cột `user_roles.scope_type` và `scope_id` đã có sẵn trong lược đồ nên không cần migration khi làm.

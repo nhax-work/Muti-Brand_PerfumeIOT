@@ -3,7 +3,7 @@
  *
  * Đây là nơi FR-AUTH-10 được thực thi. Access token là JWT tự chứa, không thu hồi trực tiếp được;
  * nên mỗi yêu cầu đối chiếu token với trạng thái hiện tại trong CSDL:
- *   - tài khoản còn ACTIVE,
+ *   - tài khoản còn ACTIVE hoặc INVITED (INVITED bị AccessGuard giới hạn — ADR-0004),
  *   - `pv` trong token bằng `users.permission_version` hiện tại,
  *   - phiên `sid` chưa bị thu hồi (đăng xuất — FR-AUTH-04).
  *
@@ -31,6 +31,13 @@ export interface AuthenticatedUser extends Principal {
   readonly fullName: string;
   /** Id phiên hiện tại — cần để đăng xuất đúng phiên (FR-AUTH-04 AC2). */
   readonly sessionId: string;
+  /** Tài khoản ở INVITED: chỉ được đổi mật khẩu, mọi thao tác khác bị chặn (ADR-0004). */
+  readonly mustChangePassword: boolean;
+}
+
+/** Trạng thái được phép giữ phiên đăng nhập. DISABLED và LOCKED thì không. */
+export function canHoldSession(status: string): boolean {
+  return status === 'ACTIVE' || status === 'INVITED';
 }
 
 type PrincipalQueries = Pick<AuthQueries, 'loadPrincipal' | 'isSessionActive'>;
@@ -58,7 +65,7 @@ export class PrincipalLoader {
     }
 
     const row = await this.queries.loadPrincipal(claims.sub);
-    if (!row || row.status !== 'ACTIVE' || row.permissionVersion !== claims.pv) {
+    if (!row || !canHoldSession(row.status) || row.permissionVersion !== claims.pv) {
       throw new AppError('UNAUTHENTICATED', 'Phiên đăng nhập không còn hiệu lực');
     }
     if (!(await this.queries.isSessionActive(claims.sid, this.clock.now()))) {
@@ -99,6 +106,7 @@ export function toAuthenticatedUser(row: PrincipalRow, sessionId: string): Authe
     email: row.email,
     fullName: row.fullName,
     sessionId,
+    mustChangePassword: row.status === 'INVITED',
   };
 }
 
