@@ -4,11 +4,14 @@
  */
 
 import 'reflect-metadata';
-import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../app.module.js';
 import { APP_CONFIG, type AppConfig } from '../shared/config/index.js';
+import { loadEnvFile } from '../shared/config/env-file.js';
+
+// Phải chạy TRƯỚC khi Nest dựng CoreModule, vì loadConfig() đọc process.env lúc khởi tạo.
+loadEnvFile();
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
