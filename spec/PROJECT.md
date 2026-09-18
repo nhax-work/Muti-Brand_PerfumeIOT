@@ -39,6 +39,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 6 | `spec/testing.md` | Quy ước đặt tên test, phân tầng test, cổng CI, test người tự viết | Trước khi viết hoặc đặt tên bất kỳ test nào |
 | 7 | `spec/modules/*.md` | FR theo module kèm acceptance criteria | Cần AC dạng Given/When/Then của một module |
 | 8 | `spec/decisions/` | Nhật ký ADR cho các thay đổi contract | Đang đề xuất hoặc rà soát một thay đổi contract |
+| 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
 
 > Cả năm file contract đã tồn tại và **đã đóng băng**: `erd.md`, `data-dictionary.md`, `schema.sql`,
 > `openapi.yaml`, `mqtt.md`. Chuẩn đặt tên và giá trị enum chốt ở
@@ -181,6 +182,10 @@ lưng bởi `package.json`.
 | `make test` | unit + integration + contract |
 | `make test-contract` | `redocly lint openapi.yaml` + `tests/contract/` |
 | `make check-traceability` | `scripts/check-traceability.mjs` |
+| `npm run api:dev` | Chạy API ở `http://localhost:3000/api/v1`, tự nạp lại khi sửa code |
+| `npm run spec:generate` | Sinh hằng ngưỡng và mã lỗi từ `spec/constraints.md`, `spec/errors.md` — chạy sau khi sửa hai file đó |
+| `npm run db:types` | Sinh kiểu Kysely từ CSDL đã migrate — chạy sau mỗi migration mới |
+| `npm run contracts:generate` | Sinh kiểu TypeScript từ `openapi.yaml` — tự chạy khi `npm install` |
 
 Công cụ migration là **node-pg-migrate với migration SQL thuần** — chọn vậy vì dự án cần 4 partial
 unique index, một exclusion constraint dùng gist, `citext` và trigger append-only, không ORM nào
