@@ -49,11 +49,15 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng lệch khỏi chính lược đồ mà chúng
 > mô tả.
 
-> Trong 17 file ở `spec/modules/`, **7 file đã có AC thật**: `SLT`, `ORD`, `EXP`, `INV`, `MNT`,
-> `ALR`, `REV`. **10 file còn lại vẫn là mẫu rỗng** trỏ ngược về `docs/FR_NFR_SCENTSTATION.md`:
-> `AUTH`, `BND`, `USR`, `PRD`, `MCH`, `RFQ`, `DSP`, `IOT`, `RPT`, `AUD`. Đừng bịa acceptance
-> criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở `spec/modules/SLT.md`,
-> hoặc nêu rõ là còn thiếu.
+> Trạng thái acceptance criteria trong `spec/modules/` (166/264 FR, đếm lại ngày 2026-09-18):
+>
+> - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
+> - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17)
+> - **Còn rỗng:** `DSP`, `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
+>
+> Đừng bịa acceptance criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở
+> `spec/modules/SLT.md`, hoặc nêu rõ là còn thiếu. Header của mỗi file ghi số FR và trạng thái; đếm
+> lại bằng cách so mục `## FR-XXX-NN` trong file với bảng FR ở `docs/FR_NFR_SCENTSTATION.md`.
 
 ## 3. Quy tắc bắt buộc
 
