@@ -12,7 +12,12 @@ SPEC_DOC = ROOT / "docs" / "FR_NFR_SCENTSTATION.md"
 TESTS = ROOT / "tests"
 
 FR_ROW = re.compile(r"^\|\s*(FR-[A-Z]+-\d+[a-z]?)\s*\|.*\|\s*([MSW])\s*\|")
-TEST_FN = re.compile(r"def\s+(test_FR_[A-Z]+_\d+[a-z]?_\w+)")
+# Khop ca hai phong cach:
+#   Python : def test_FR_ORD_15_webhook_idempotent(...)
+#   Vitest : it("test_FR_ORD_15_webhook_idempotent", ...)  /  test('...')  /  it(`...`)
+# Bat buoc ten nam sau "def " hoac ngay sau dau nhay, de mot ten duoc nhac trong loi giai
+# thich khong bi tinh nham la da co test.
+TEST_FN = re.compile(r"""(?:def\s+|['"`])(test_FR_[A-Z]+_\d+[a-z]?_\w+)""")
 
 def collect_required():
     if not SPEC_DOC.exists():
@@ -28,7 +33,11 @@ def collect_covered():
     covered = set()
     if not TESTS.exists():
         return covered
-    for f in TESTS.rglob("*.py"):
+    # Stack cua du an la TypeScript + vitest (ADR-0002, ADR-0003); van quet .py vi
+    # spec/testing.md con liet ke mot so test nguoi tu viet duoi duoi .py.
+    for f in sorted(TESTS.rglob("*")):
+        if f.suffix not in (".ts", ".py"):
+            continue
         for name in TEST_FN.findall(f.read_text(encoding="utf-8", errors="ignore")):
             parts = name.split("_")           # test FR ORD 15 ...
             covered.add(f"FR-{parts[2]}-{parts[3]}")

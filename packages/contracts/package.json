@@ -1,0 +1,16 @@
+{
+  "name": "@scentstation/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Kiểu sinh từ spec/contracts/openapi.yaml — dùng chung api, admin-web, kiosk (ADR-0003)",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "generate": "openapi-typescript ../../spec/contracts/openapi.yaml -o src/openapi.ts",
+    "prepare": "npm run generate"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.4"
+  }
+}

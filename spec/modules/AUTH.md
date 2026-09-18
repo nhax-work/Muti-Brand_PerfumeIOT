@@ -182,7 +182,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC6 (Đường truy vấn):** Given bất kỳ truy vấn nào trả dữ liệu thuộc thương hiệu,  
     When rà soát câu lệnh,  
     Then điều kiện lọc đi qua `orders.brand_id` hoặc `slot_rentals.brand_id`, **không bao giờ** qua `machines` — cột `machines.brand_id` không tồn tại.
-* **Test:** `tests/integration/test_slot_isolation.py`
+* **Test:** `tests/integration/test_slot_isolation.ts`
 
 > **Test người tự viết — agent KHÔNG sinh test cho FR này** (`spec/testing.md`, `spec/PROJECT.md`
 > Mục 4). NFR-SEC-04 yêu cầu 100% endpoint có dữ liệu thương hiệu vượt được bộ test truy cập chéo,
@@ -211,7 +211,7 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
   * **AC4 (Áp cho mọi động từ):** Given một tài nguyên ngoài phạm vi,  
     When truy cập bằng GET, PATCH, PUT, POST hoặc DELETE,  
     Then mọi động từ đều bị từ chối như nhau — không chỉ chặn ở luồng đọc.
-* **Test:** `tests/integration/test_slot_isolation.py`
+* **Test:** `tests/integration/test_slot_isolation.ts`
 
 > Cùng thuộc nhóm test người tự viết với FR-AUTH-07.
 

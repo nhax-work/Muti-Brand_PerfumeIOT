@@ -24,13 +24,13 @@ chưa có test và CI fail.
 
 | Nhóm | File |
 |---|---|
-| Idempotency webhook | `tests/integration/test_webhook_idempotency.py` |
-| Cô lập mức slot | `tests/integration/test_slot_isolation.py` |
-| `revenue_owner` | `tests/integration/test_revenue_attribution.py` |
-| Unique constraint slot | `tests/integration/test_slot_constraint.py` |
-| TTL lệnh xịt | `tests/e2e/test_command_ttl.py` |
+| Idempotency webhook | `tests/integration/test_webhook_idempotency.ts` |
+| Cô lập mức slot | `tests/integration/test_slot_isolation.ts` |
+| `revenue_owner` | `tests/integration/test_revenue_attribution.ts` |
+| Unique constraint slot | `tests/integration/test_slot_constraint.ts` |
+| TTL lệnh xịt | `tests/e2e/test_command_ttl.ts` |
 | Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report |
-| Job chuyển trạng thái | `tests/integration/test_rental_scheduler.py` |
+| Job chuyển trạng thái | `tests/integration/test_rental_scheduler.ts` |
 
 ## Cổng CI
 

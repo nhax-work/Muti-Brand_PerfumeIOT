@@ -18,3 +18,6 @@ package-lock.json
 migrations/
 infra/
 *.drawio
+
+# Sinh tự động từ spec/contracts/openapi.yaml — không format, không sửa tay
+packages/contracts/src/openapi.ts

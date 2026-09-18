@@ -8,7 +8,6 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "tsx watch src/main.ts",
     "build": "tsc",
     "db:migrate": "node-pg-migrate up -m migrations -t pgmigrations",
     "db:migrate:down": "node-pg-migrate down -m migrations -t pgmigrations",
@@ -25,10 +24,12 @@
     "check:traceability": "python3 scripts/check_traceability.py",
     "check:openapi": "redocly lint spec/contracts/openapi.yaml",
     "check": "npm run lint && npm run test && npm run check:traceability",
-    "lint": "eslint . && tsc --noEmit",
+    "lint": "eslint . && tsc --noEmit && npm run typecheck -w @scentstation/api",
     "fmt": "prettier --write .",
     "sim": "tsx scripts/device-simulator.ts",
-    "sim:many": "tsx scripts/device-simulator.ts --machines=50"
+    "sim:many": "tsx scripts/device-simulator.ts --machines=50",
+    "api:dev": "npm run dev -w @scentstation/api",
+    "contracts:generate": "npm run generate -w @scentstation/contracts"
   },
   "dependencies": {
     "argon2": "^0.41.1",
@@ -50,5 +51,9 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vitest": "5.0.1"
-  }
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
 }

@@ -412,7 +412,7 @@
     Then `H` giữ nguyên `DRAFT`.
 * **Test:** `test_FR_SLT_24_activate_draft_on_start_date`
 
-> Thuộc 7 nhóm test người tự viết (`tests/integration/test_rental_scheduler.py`,
+> Thuộc 7 nhóm test người tự viết (`tests/integration/test_rental_scheduler.ts`,
 > `spec/testing.md`) — agent không sinh test cho FR này.
 
 ---
