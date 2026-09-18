@@ -16,6 +16,7 @@ export default tseslint.config(
       '.claude/**',
       // Sinh tự động từ openapi.yaml
       'packages/contracts/src/openapi.ts',
+      '**/*.generated.ts',
     ],
   },
   eslint.configs.recommended,

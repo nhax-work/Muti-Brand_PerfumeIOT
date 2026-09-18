@@ -29,7 +29,9 @@
     "sim": "tsx scripts/device-simulator.ts",
     "sim:many": "tsx scripts/device-simulator.ts --machines=50",
     "api:dev": "npm run dev -w @scentstation/api",
-    "contracts:generate": "npm run generate -w @scentstation/contracts"
+    "contracts:generate": "npm run generate -w @scentstation/contracts",
+    "spec:generate": "tsx scripts/gen-spec-constants.ts && prettier --write apps/api/src/shared/config/constraints.generated.ts apps/api/src/shared/errors/codes.generated.ts",
+    "db:types": "kysely-codegen --dialect postgres --out-file apps/api/src/shared/db/types.generated.ts --exclude-pattern pgmigrations"
   },
   "dependencies": {
     "argon2": "^0.41.1",
@@ -45,6 +47,8 @@
     "dotenv": "^16.4.7",
     "eslint": "^9.16.0",
     "js-yaml": "^5.4.2",
+    "kysely": "^0.27.6",
+    "kysely-codegen": "^0.17.0",
     "node-pg-migrate": "^9.0.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",
