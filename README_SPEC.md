@@ -37,7 +37,7 @@ spec/
 tests/
   contract/  unit/  integration/  e2e/
 scripts/
-  check_traceability.py
+  check-traceability.mjs
 ```
 
 ## Ba nguyên tắc

@@ -14,6 +14,9 @@ export default tseslint.config(
       // (spec/PROJECT.md §7 "Do not touch")
       '.agents/**',
       '.claude/**',
+      // Sinh tự động từ openapi.yaml
+      'packages/contracts/src/openapi.ts',
+      '**/*.generated.ts',
     ],
   },
   eslint.configs.recommended,

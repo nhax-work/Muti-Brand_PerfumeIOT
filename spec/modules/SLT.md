@@ -1,7 +1,7 @@
 # FR-SLT — Hợp đồng thuê slot
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A6 · 18 FR  
-> Trạng thái AC: **hoàn thành**  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A6 · 29 FR  
+> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau)  
 > Phụ trách: TV3 / Tài  
 
 Đọc kèm: `spec/glossary.md` (state machine SlotRental), `spec/errors.md`, `spec/constraints.md`
@@ -15,7 +15,7 @@
   * **AC1:** Given người dùng là Platform Super Admin, slot `S` tồn tại, thương hiệu `B` ở trạng thái ACTIVE, ngày bắt đầu `start_date <= end_date`, `fixed_fee >= 0`, `revenue_share_rate` nằm trong khoảng `[0, 100]`,  
     When gửi yêu cầu tạo hợp đồng thuê slot,  
     Then hệ thống tạo hợp đồng mới với trạng thái `ACTIVE` (nếu `start_date <= Today <= end_date`) hoặc `DRAFT` (nếu `start_date > Today`), lưu đầy đủ các trường và ghi AuditLog.
-  * **AC2:** Given người dùng không có vai trò Platform Super Admin (vd: Brand Admin, Operations Manager),  
+  * **AC2:** Given người dùng không có vai trò Platform Super Admin (vd: Brand Admin, Operations Staff),  
     When gửi yêu cầu tạo hợp đồng thuê slot,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
   * **AC3 (Ca biên - Ngày không hợp lệ):** Given ngày kết thúc nhỏ hơn ngày bắt đầu (`start_date > end_date`),  
@@ -46,7 +46,7 @@
 * **Ràng buộc CSDL bắt buộc:**
   ```sql
   CREATE UNIQUE INDEX uq_slot_active_rental
-    ON slot_rental (slot_id)
+    ON slot_rentals (slot_id)
     WHERE status IN ('ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED');
   ```
   AC4 phải được bảo đảm bằng index này, **không** bằng kiểm tra ở tầng ứng dụng.
@@ -310,3 +310,193 @@
     When tính toán số tiền thực nhận,  
     Then hệ thống ghi nhận số tiền âm (công nợ thương hiệu cần thanh toán cho nền tảng).
 * **Test:** `test_FR_SLT_18_settlement_calculation_formula`
+---
+
+## FR-SLT-19 — Danh sách slot trống cho Brand Admin
+* **Statement:** Hệ thống phải cho phép Brand Admin xem danh sách slot đang trống (không có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED) theo máy và địa điểm, không kèm thông tin thương hiệu đã từng thuê trước đó.
+* **Traces:** BR-011, BR-012 · **Priority:** M
+* **API:** `GET /slots/available`
+* **Acceptance criteria:**
+  * **AC1:** Given slot `S` không có hợp đồng nào ở trạng thái `ACTIVE`, `EXPIRING`, `GRACE` hoặc `LIQUIDATED`,  
+    When Brand Admin truy vấn danh sách slot trống,  
+    Then slot `S` xuất hiện trong kết quả kèm máy, số slot và địa điểm.
+  * **AC2:** Given slot `S` đang có hợp đồng ở một trong bốn trạng thái chiếm dụng,  
+    When Brand Admin truy vấn danh sách slot trống,  
+    Then slot `S` không xuất hiện trong kết quả.
+  * **AC3 (Cô lập dữ liệu):** Given slot `S` từng được thương hiệu `B2` thuê và hợp đồng đó nay đã `CLOSED`,  
+    When Brand Admin của thương hiệu `B1` xem slot `S` trong danh sách slot trống,  
+    Then kết quả không chứa bất kỳ trường nào tiết lộ `B2` — không tên thương hiệu, không tên sản phẩm cũ, không lịch sử hợp đồng.
+* **Test:** `test_FR_SLT_19_list_available_slots`
+
+---
+
+## FR-SLT-20 — Gửi yêu cầu thuê slot trống
+* **Statement:** Hệ thống phải cho phép Brand Admin gửi yêu cầu thuê một hoặc nhiều slot trống, kèm kỳ hạn mong muốn.
+* **Traces:** BR-011 · **Priority:** M
+* **API:** `POST /slot-rental-requests`
+* **Acceptance criteria:**
+  * **AC1:** Given Brand Admin của thương hiệu `B` và danh sách slot trống `[S1, S2]`, `desired_starts_at < desired_ends_at`,  
+    When gửi yêu cầu thuê,  
+    Then hệ thống tạo **hai** bản ghi `SlotRentalRequest` riêng biệt (một slot một yêu cầu), cùng ở trạng thái `REQUESTED`, gắn với thương hiệu `B`.
+  * **AC2 (Ca biên - Kỳ hạn không hợp lệ):** Given `desired_ends_at <= desired_starts_at`,  
+    When gửi yêu cầu,  
+    Then hệ thống từ chối với HTTP 400 `INVALID_RENTAL_PERIOD`.
+  * **AC3:** Given một trong các slot được chọn đang có hợp đồng ở trạng thái chiếm dụng,  
+    When gửi yêu cầu,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_OCCUPIED` và không tạo yêu cầu nào trong lô đó.
+* **Test:** `test_FR_SLT_20_submit_rental_request`
+
+---
+
+## FR-SLT-21 — Trạng thái yêu cầu thuê
+* **Statement:** Hệ thống phải quản lý trạng thái yêu cầu thuê theo tập: REQUESTED, APPROVED, REJECTED, CONVERTED, CANCELLED.
+* **Traces:** BR-011 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given một yêu cầu thuê vừa được tạo,  
+    When hệ thống lưu bản ghi,  
+    Then trạng thái là `REQUESTED` và chỉ nhận giá trị thuộc enum `slot_rental_request_status`.
+  * **AC2:** Given giá trị trạng thái nằm ngoài tập quy định,  
+    When yêu cầu cập nhật,  
+    Then hệ thống từ chối giá trị đó.
+* **Test:** `test_FR_SLT_21_request_status_set`
+
+---
+
+## FR-SLT-22 — Duyệt hoặc từ chối yêu cầu thuê
+* **Statement:** Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối yêu cầu thuê, kèm lý do bắt buộc khi từ chối.
+* **Traces:** BR-009, BR-011 · **Priority:** M
+* **API:** `POST /slot-rental-requests/{id}/approve`, `POST /slot-rental-requests/{id}/reject`
+* **Acceptance criteria:**
+  * **AC1:** Given yêu cầu `R` ở trạng thái `REQUESTED` và người dùng là Platform Super Admin,  
+    When duyệt kèm điều khoản `price_per_spray`, `fixed_fee`, `revenue_share_percent`,  
+    Then yêu cầu chuyển `APPROVED` và hệ thống ghi `reviewed_by`, `reviewed_at`.
+  * **AC2 (Lý do bắt buộc):** Given yêu cầu `R` ở trạng thái `REQUESTED`,  
+    When từ chối mà không kèm lý do,  
+    Then hệ thống từ chối thao tác với HTTP 400 và không đổi trạng thái yêu cầu.
+  * **AC3:** Given người dùng không có vai trò Platform Super Admin,  
+    When duyệt hoặc từ chối yêu cầu,  
+    Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
+* **Test:** `test_FR_SLT_22_review_rental_request`
+
+---
+
+## FR-SLT-23 — Tự động tạo hợp đồng DRAFT khi duyệt
+* **Statement:** Hệ thống phải tự động tạo hợp đồng ở trạng thái DRAFT khi yêu cầu thuê được duyệt, liên kết với yêu cầu gốc, điền theo điều khoản phí và tỷ lệ ăn chia do Platform Super Admin xác nhận.
+* **Traces:** BR-009 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given yêu cầu `R` trên slot `S` được duyệt kèm điều khoản,  
+    When hệ thống xử lý việc duyệt,  
+    Then trong **cùng một transaction** hệ thống tạo `SlotRental` trạng thái `DRAFT` với `slot_id = S`, kỳ hạn lấy từ yêu cầu, các điều khoản phí đã xác nhận, `request_id = R.id`, và đặt `R.resulting_rental_id` trỏ ngược về hợp đồng vừa tạo.
+  * **AC2 (Chưa có sản phẩm):** Given hợp đồng DRAFT vừa được tạo tự động,  
+    When kiểm tra bản ghi,  
+    Then `fragrance_product_id` là NULL — sản phẩm do Brand Admin gán sau (FR-SLT-27).
+  * **AC3 (Ca biên - Kỳ hạn chồng lấn):** Given slot `S` đã có một hợp đồng khác (kể cả DRAFT) phủ kỳ hạn chồng lấn,  
+    When duyệt yêu cầu,  
+    Then hệ thống từ chối với HTTP 409 `RENTAL_OVERLAP` và yêu cầu `R` giữ nguyên trạng thái `REQUESTED`.
+* **Test:** `test_FR_SLT_23_auto_create_draft_rental`
+
+---
+
+## FR-SLT-24 — Tự động kích hoạt hợp đồng DRAFT đúng ngày bắt đầu
+* **Statement:** Hệ thống phải tự động chuyển hợp đồng từ DRAFT sang ACTIVE đúng ngày bắt đầu đã cấu hình, kể cả khi hệ thống có thời gian ngừng qua mốc chuyển trạng thái.
+* **Traces:** BR-009 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given hợp đồng `H` ở trạng thái `DRAFT` có `starts_at` là hôm nay,  
+    When job chuyển trạng thái chạy,  
+    Then `H` chuyển sang `ACTIVE` và ghi AuditLog.
+  * **AC2 (Bù sau downtime):** Given hệ thống ngừng hoạt động qua mốc `starts_at` của hợp đồng `H` và chỉ khởi động lại sau đó 2 ngày,  
+    When job chạy lần đầu sau khi khởi động lại,  
+    Then `H` vẫn được chuyển sang `ACTIVE` (cơ chế bù, NFR-REL-07), không bị bỏ sót.
+  * **AC3:** Given hợp đồng `H` ở `DRAFT` có `starts_at` trong tương lai,  
+    When job chạy,  
+    Then `H` giữ nguyên `DRAFT`.
+* **Test:** `test_FR_SLT_24_activate_draft_on_start_date`
+
+> Thuộc 7 nhóm test người tự viết (`tests/integration/test_rental_scheduler.ts`,
+> `spec/testing.md`) — agent không sinh test cho FR này.
+
+---
+
+## FR-SLT-25 — Brand Admin xem trạng thái và lịch sử yêu cầu
+* **Statement:** Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các yêu cầu thuê của thương hiệu mình.
+* **Traces:** BR-011 · **Priority:** M
+* **API:** `GET /slot-rental-requests`
+* **Acceptance criteria:**
+  * **AC1:** Given thương hiệu `B` có các yêu cầu ở nhiều trạng thái khác nhau,  
+    When Brand Admin của `B` truy vấn danh sách,  
+    Then hệ thống trả về đầy đủ yêu cầu của `B` kèm trạng thái, thời điểm duyệt và lý do từ chối nếu có.
+  * **AC2 (Cô lập dữ liệu):** Given thương hiệu `B2` cũng có yêu cầu trong hệ thống,  
+    When Brand Admin của `B1` truy vấn,  
+    Then kết quả không chứa yêu cầu nào của `B2`.
+* **Test:** `test_FR_SLT_25_list_own_rental_requests`
+
+---
+
+## FR-SLT-26 — Chặn yêu cầu trùng trên cùng slot
+* **Statement:** Hệ thống phải ngăn Brand Admin gửi yêu cầu thuê mới trên cùng slot khi đã tồn tại yêu cầu ở trạng thái REQUESTED hoặc APPROVED chưa xử lý xong.
+* **Traces:** BR-011 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given slot `S` đã có một yêu cầu ở trạng thái `REQUESTED`,  
+    When bất kỳ thương hiệu nào gửi yêu cầu mới trên slot `S`,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_OCCUPIED`.
+  * **AC2:** Given slot `S` có yêu cầu ở trạng thái `REJECTED` hoặc `CANCELLED`,  
+    When gửi yêu cầu mới trên slot `S`,  
+    Then hệ thống chấp nhận — trạng thái kết thúc không chặn yêu cầu mới.
+  * **AC3 (Ràng buộc ở tầng CSDL):** Given hai yêu cầu trên cùng slot `S` được gửi đồng thời,  
+    When cả hai cùng ghi vào CSDL,  
+    Then partial unique index `uq_slot_rental_request_open` bảo đảm chỉ một bản ghi thành công, bản còn lại lỗi — không phụ thuộc kiểm tra ở tầng ứng dụng.
+* **Test:** `test_FR_SLT_26_reject_duplicate_open_request`
+
+---
+
+## FR-SLT-27 — Gán sản phẩm vào slot
+* **Statement:** Hệ thống phải cho phép Brand Admin gán đúng một sản phẩm đang kinh doanh của thương hiệu mình vào slot đang có hợp đồng hiệu lực.
+* **Traces:** BR-011 · **Priority:** M
+* **API:** `PUT /slot-rentals/{id}/product`
+* **Acceptance criteria:**
+  * **AC1:** Given hợp đồng `H` của thương hiệu `B` và sản phẩm `P` thuộc `B` ở trạng thái ACTIVE,  
+    When Brand Admin gán `P` vào `H`,  
+    Then hệ thống ghi `fragrance_product_id = P` và `product_assigned_at = now()`, đồng thời ghi AuditLog (FR-AUD-04).
+  * **AC2 (Sản phẩm của thương hiệu khác):** Given sản phẩm `P2` thuộc thương hiệu `B2`,  
+    When Brand Admin của `B1` gán `P2` vào hợp đồng của mình,  
+    Then hệ thống từ chối với HTTP 403 `PRODUCT_NOT_OWNED`.
+  * **AC3 (Ràng buộc ở tầng CSDL):** Given nỗ lực ghi thẳng vào CSDL một `fragrance_product_id` thuộc thương hiệu khác,  
+    When thực hiện UPDATE,  
+    Then composite foreign key `fk_rental_product_same_brand` từ chối thao tác (`spec/contracts/schema.sql` §10b).
+  * **AC4 (Ca biên - Sản phẩm ngừng kinh doanh):** Given sản phẩm `P` ở trạng thái `DISCONTINUED`,  
+    When gán `P` vào slot,  
+    Then hệ thống từ chối thao tác.
+* **Test:** `test_FR_SLT_27_assign_product_to_slot`
+
+---
+
+## FR-SLT-28 — Đổi sản phẩm gán cho slot
+* **Statement:** Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot, ghi nhận thời điểm đổi.
+* **Traces:** BR-011 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given hợp đồng `H` đang gán sản phẩm `P1`,  
+    When Brand Admin đổi sang sản phẩm `P2` cùng thương hiệu,  
+    Then hệ thống cập nhật `fragrance_product_id = P2` và `product_assigned_at` về thời điểm đổi, ghi AuditLog.
+  * **AC2 (Đơn đang chờ không bị ảnh hưởng):** Given có đơn hàng của `H` đang ở trạng thái `PENDING_PAYMENT` với sản phẩm `P1` đã chụp,  
+    When đổi sản phẩm sang `P2`,  
+    Then đơn đang chờ giữ nguyên `fragrance_product_id` và `product_name_snapshot` của `P1` (FR-ORD-06).
+* **Test:** `test_FR_SLT_28_change_slot_product`
+
+---
+
+## FR-SLT-29 — Từ chối tạo đơn khi slot chưa gán sản phẩm
+* **Statement:** Hệ thống phải từ chối tạo đơn hàng tại slot chưa được gán sản phẩm.
+* **Traces:** BR-002, BR-011 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given hợp đồng `H` trên slot `S` có `fragrance_product_id` là NULL,  
+    When kiosk yêu cầu tạo đơn trên slot `S`,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_UNAVAILABLE`.
+  * **AC2:** Given hợp đồng `H` chưa gán sản phẩm,  
+    When tính trạng thái khả dụng của slot `S`,  
+    Then slot ở trạng thái `UNAVAILABLE` (FR-MCH-16) và không hiển thị sản phẩm trên kiosk.
+* **Test:** `test_FR_SLT_29_reject_order_without_product`
+
+> **Vì sao `slot_rentals.fragrance_product_id` nullable ở tầng CSDL.** Cột để nullable *chỉ* nhằm
+> phục vụ cửa sổ DRAFT giữa FR-SLT-23 (tạo hợp đồng tự động) và FR-SLT-27 (Brand Admin gán sản
+> phẩm). Ràng buộc "phải có sản phẩm trước khi nhận đơn" nằm ở domain service, không ở CSDL —
+> xem `spec/contracts/schema.sql` §13 mục 3.

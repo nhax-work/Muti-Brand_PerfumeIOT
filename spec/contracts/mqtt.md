@@ -466,5 +466,5 @@ docker exec scent-mqtt mosquitto_pub -t 'scentstation/M001/heartbeat' \
 ```
 
 Test tự động nằm ở `tests/contract/` (khớp đặc tả này) và `tests/e2e/` (luồng đầy đủ với Device
-Simulator). **`tests/e2e/test_command_ttl.py` là test người tự viết**, agent không sinh
+Simulator). **`tests/e2e/test_command_ttl.ts` là test người tự viết**, agent không sinh
 (`spec/testing.md`).

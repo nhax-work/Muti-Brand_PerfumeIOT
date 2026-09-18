@@ -35,14 +35,22 @@
 
 ## FR-ALR-03 — Cửa mở quá 5 phút
 
-**Tuyên bố:** Hệ thống phải sinh cảnh báo khi thiết bị báo cửa mở quá 5 phút ngoài phiên bảo trì.
+**Tuyên bố:** Hệ thống phải sinh cảnh báo khi thiết bị báo cửa mở quá `DOOR_OPEN_ALERT_MIN` ngoài phiên bảo trì **và ngoài phiên nạp đang mở** (FR-INV-29, FR-INV-30).
 
 **Dấu vết:** BR-006, BR-010 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho máy không ở trong phiên bảo trì, Khi cửa mở liên tục quá 5 phút, Thì hệ thống sinh cảnh báo.
-- AC2: Cho máy đang trong phiên bảo trì, Khi cửa mở quá 5 phút, Thì điều kiện này không sinh cảnh báo ngoài phiên bảo trì.
+- AC1: Cho máy không ở chế độ MAINTENANCE và không có phiếu nạp nào đang mở trên máy/slot đó, Khi cửa mở liên tục quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống sinh cảnh báo.
+- AC2: Cho máy đang ở chế độ MAINTENANCE, Khi cửa mở quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống không sinh cảnh báo theo điều kiện này.
+- AC3: Cho tồn tại một `RefillSession` trạng thái `STARTED` trên cùng máy/slot (phiếu nạp đang mở, FR-INV-29), Khi cửa mở quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống không sinh cảnh báo theo điều kiện này — kể cả khi máy đang ở chế độ NORMAL (FR-INV-30).
+- AC4: Cho phiếu nạp vừa được đóng (`RefillSession` chuyển `COMPLETED`), Khi cửa tiếp tục mở quá `DOOR_OPEN_ALERT_MIN` sau thời điểm đóng phiếu, Thì hệ thống sinh cảnh báo trở lại (FR-INV-31).
+
+> **Hai ngoại lệ, không phải một.** Inventory Staff nạp/tháo chai **không** chuyển máy sang
+> MAINTENANCE, nên nếu chỉ loại trừ chế độ MAINTENANCE thì mỗi lần nạp hàng quá
+> `DOOR_OPEN_ALERT_MIN` sẽ sinh báo động giả — đó chính là lỗ hổng mà FR-INV-29÷31 được thêm để
+> đóng (`docs/FR_NFR_SCENTSTATION.md` Phần D). Ràng buộc này cũng ghi ở `spec/contracts/schema.sql`
+> §13 mục 5 và `spec/contracts/mqtt.md` §3.
 
 **Kiểm tra:** `test_FR_ALR_03_door_open_alert`
 
@@ -139,14 +147,14 @@
 
 ## FR-ALR-11 — Tiếp nhận, phân công và đóng cảnh báo
 
-**Tuyên bố:** Hệ thống phải cho phép Operations Manager tiếp nhận, phân công và đóng cảnh báo.
+**Tuyên bố:** Hệ thống phải cho phép Operations Staff tiếp nhận, phân công và đóng cảnh báo.
 
 **Dấu vết:** BR-006 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho Operations Manager có quyền xử lý cảnh báo, Khi thực hiện tiếp nhận hoặc phân công cảnh báo, Thì hệ thống cập nhật cảnh báo tương ứng.
-- AC2: Cho cảnh báo chưa hoàn tất xử lý, Khi Operations Manager yêu cầu đóng cảnh báo, Thì hệ thống chỉ cho phép đóng khi điều kiện nghiệp vụ đóng được đáp ứng.
+- AC1: Cho Operations Staff có quyền xử lý cảnh báo, Khi thực hiện tiếp nhận hoặc phân công cảnh báo, Thì hệ thống cập nhật cảnh báo tương ứng.
+- AC2: Cho cảnh báo chưa hoàn tất xử lý, Khi Operations Staff yêu cầu đóng cảnh báo, Thì hệ thống chỉ cho phép đóng khi điều kiện nghiệp vụ đóng được đáp ứng.
 
 **Kiểm tra:** `test_FR_ALR_11_manage_alert`
 

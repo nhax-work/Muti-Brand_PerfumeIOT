@@ -378,7 +378,7 @@ components:
         user: { $ref: '#/components/schemas/CurrentUser' }
     CurrentUser:
       type: object
-      required: [id, email, fullName, roles, permissions]
+      required: [id, email, fullName, roles, permissions, mustChangePassword]
       properties:
         id: { type: string, format: uuid }
         email: { type: string, format: email }
@@ -395,6 +395,22 @@ components:
         permissions:
           type: array
           items: { type: string }
+        mustChangePassword:
+          type: boolean
+          description: >-
+            true khi tài khoản đang ở INVITED — vừa được tạo hoặc vừa bị đặt lại mật khẩu. Giao diện
+            phải chuyển thẳng sang màn hình đổi mật khẩu; mọi endpoint ngoài /auth/me, /auth/logout và
+            /auth/change-password đều trả FORBIDDEN_SCOPE cho tới khi đổi xong (ADR-0004).
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, format: password }
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          description: Phải khác mật khẩu hiện tại.
     ReauthRequest:
       type: object
       required: [password]
@@ -617,6 +633,19 @@ components:
             secret:
               type: string
               description: Bí mật gốc. Chỉ xuất hiện trong phản hồi này, không truy xuất lại được.
+    TemporaryPassword:
+      type: object
+      required: [temporaryPassword]
+      description: >-
+        Mật khẩu tạm, cùng mẫu với DeviceCredentialIssued: CHỈ xuất hiện trong đúng phản hồi này,
+        không truy xuất lại được, không lưu dạng gốc. Tài khoản ở INVITED cho tới khi người dùng tự
+        đổi qua POST /auth/change-password (ADR-0004).
+      properties:
+        temporaryPassword: { type: string, minLength: 12 }
+    UserCreated:
+      allOf:
+        - $ref: '#/components/schemas/User'
+        - $ref: '#/components/schemas/TemporaryPassword'
 
     # ---------------------------------------------------------------------------------
     # SLT, EXP, REV
@@ -1619,6 +1648,25 @@ paths:
               schema: { $ref: '#/components/schemas/ReauthResponse' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /auth/change-password:
+    post:
+      tags: [AUTH]
+      summary: Đổi mật khẩu
+      operationId: changePassword
+      description: >-
+        ADR-0004: người dùng tự đổi mật khẩu. Tài khoản INVITED chuyển sang ACTIVE. Đổi xong thì MỌI
+        phiên của tài khoản bị thu hồi, kể cả phiên hiện tại — người dùng đăng nhập lại bằng mật
+        khẩu mới. Mật khẩu hiện tại sai trả INVALID_CREDENTIALS. Ghi nhật ký (FR-AUD-02).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChangePasswordRequest' }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
   /auth/me:
     get:
       tags: [AUTH]
@@ -1828,10 +1876,11 @@ paths:
             schema: { $ref: '#/components/schemas/UserCreate' }
       responses:
         '201':
-          description: Đã tạo
+          description: >-
+            Đã tạo, tài khoản ở INVITED. Mật khẩu tạm chỉ trả về trong phản hồi này (ADR-0004).
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/User' }
+              schema: { $ref: '#/components/schemas/UserCreated' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -1876,10 +1925,15 @@ paths:
       summary: Đặt lại mật khẩu
       operationId: resetUserPassword
       description: >-
-        FR-USR-04: chỉ Platform Super Admin. Mật khẩu lưu dưới dạng băm bcrypt hoặc argon2
-        (NFR-SEC-03). Ghi nhật ký (FR-AUD-02).
+        FR-USR-04, FR-AUTH-10: chỉ Platform Super Admin. Sinh mật khẩu tạm mới, đưa tài khoản về
+        INVITED và thu hồi mọi phiên đang hoạt động. Mật khẩu lưu dưới dạng băm argon2 (NFR-SEC-03).
+        Ghi nhật ký (FR-AUD-02) nhưng KHÔNG ghi mật khẩu tạm (ADR-0004).
       responses:
-        '204': { $ref: '#/components/responses/NoContent' }
+        '200':
+          description: Mật khẩu tạm mới, chỉ trả về một lần
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TemporaryPassword' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 

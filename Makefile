@@ -56,7 +56,7 @@ test-e2e:              ## Test đầu-cuối với Device Simulator
 	@echo "TODO tuần 5: cần scripts/device-simulator.ts"
 
 check-traceability:    ## FR ưu tiên M nào chưa có test
-	python3 scripts/check_traceability.py
+	npm run check:traceability
 
 lint:                  ## Kiểm tra style
 	npm run lint
