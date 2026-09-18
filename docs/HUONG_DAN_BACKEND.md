@@ -31,6 +31,11 @@ Tài khoản mẫu do `make seed` tạo, mật khẩu là `SEED_DEFAULT_PASSWORD
 Tài khoản bị khóa vì thử sai 5 lần sẽ tự mở sau `LOGIN_LOCKOUT_MIN` phút; muốn mở ngay thì
 `make reset && make migrate && make seed`.
 
+**Kiểm nhanh nền Auth · RBAC · cô lập dữ liệu còn chạy đúng:** `npm run smoke:auth`. Lệnh này dựng
+lại CSDL **test** (cổng 5433), bật API riêng ở cổng 3100 và chạy 45 ca đầu-cuối. Nó không đụng CSDL
+dev hay `.env` của bạn. Nên chạy trước khi mở PR có sửa `modules/auth`, `modules/usr` hoặc
+`shared/scoping`.
+
 ---
 
 ## 2. Thêm một module

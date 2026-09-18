@@ -26,6 +26,7 @@
     "check": "npm run lint && npm run test && npm run check:traceability",
     "lint": "eslint . && tsc --noEmit && npm run typecheck -w @scentstation/api",
     "fmt": "prettier --write .",
+    "smoke:auth": "tsx scripts/smoke-auth.ts",
     "sim": "tsx scripts/device-simulator.ts",
     "sim:many": "tsx scripts/device-simulator.ts --machines=50",
     "api:dev": "npm run dev -w @scentstation/api",
