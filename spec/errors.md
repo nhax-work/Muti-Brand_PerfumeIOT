@@ -4,6 +4,18 @@
 
 Quy ước: `SCREAMING_SNAKE_CASE`, không kèm tiền tố module.
 
+## Chung
+
+Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực — exception filter phải trả
+`{ code, message }` cho mọi lỗi, kể cả lỗi không thuộc nghiệp vụ nào.
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `UNAUTHENTICATED` | 401 | Thiếu access token, sai chữ ký, hoặc refresh token không hợp lệ/đã thu hồi. Token **hết hạn** thì dùng `TOKEN_EXPIRED` |
+| `VALIDATION_ERROR` | 400 | Dữ liệu vào thiếu trường hoặc sai định dạng, khi không có mã nghiệp vụ cụ thể hơn |
+| `NOT_FOUND` | 404 | Không tìm thấy tài nguyên. Người dùng thuộc thương hiệu **không** nhận mã này cho tài nguyên của thương hiệu khác — xem FR-AUTH-08 AC2 |
+| `INTERNAL_ERROR` | 500 | Lỗi không lường trước. Không bao giờ kèm chi tiết nội bộ trong `message` |
+
 ## Xác thực và phân quyền
 
 | Mã | HTTP | Khi nào |
