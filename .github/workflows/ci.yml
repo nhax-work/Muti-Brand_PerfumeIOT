@@ -135,9 +135,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: '3.12'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Cảnh báo nếu PR sửa contract
         if: github.event_name == 'pull_request'
@@ -156,9 +156,9 @@ jobs:
       - name: Ma trận truy vết
         run: |
           if [ "$ENFORCE_TRACEABILITY" = "true" ]; then
-            python3 scripts/check_traceability.py
+            node scripts/check-traceability.mjs
           else
-            python3 scripts/check_traceability.py || \
+            node scripts/check-traceability.mjs || \
               echo "::warning::Còn FR ưu tiên M chưa có test (chưa chặn merge)"
           fi
 

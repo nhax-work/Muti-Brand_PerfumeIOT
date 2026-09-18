@@ -67,7 +67,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - **Mã lỗi chỉ lấy từ `spec/errors.md`.** Agent không được tự nghĩ mã mới. Trường hợp thật sự mới
   thì thêm vào `errors.md` trước (`SCREAMING_SNAKE_CASE`, không kèm tiền tố module), rồi mới dùng.
 - **Đặt tên test:** `test_FR_<MODULE>_<số>_<mô_tả_ngắn>` (ví dụ `test_FR_SLT_02_reject_occupied_slot`).
-  `scripts/check_traceability.py` quét theo đúng mẫu này; đặt sai tên thì CI coi như FR đó chưa có test.
+  `scripts/check-traceability.mjs` quét theo đúng mẫu này; đặt sai tên thì CI coi như FR đó chưa có test.
 - **Migration chỉ được thêm, không được sửa.** Không bao giờ sửa tay một bảng do migration trước tạo
   ra, và không bao giờ sinh lại / gộp / xóa file migration đã có. Muốn đổi lược đồ: thêm một file
   migration mới chồng lên file mới nhất, rồi chạy `make reset && make migrate` trên CSDL sạch để
@@ -134,7 +134,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 
 ### 🧪 Test Agent
 
-- Đặt tên mọi test sinh ra đúng dạng `test_FR_<MODULE>_<số>_<mô_tả_ngắn>`; `scripts/check_traceability.py` dựa vào đó để tính một FR là đã có test.
+- Đặt tên mọi test sinh ra đúng dạng `test_FR_<MODULE>_<số>_<mô_tả_ngắn>`; `scripts/check-traceability.mjs` dựa vào đó để tính một FR là đã có test.
 - Không sinh 7 nhóm test người tự viết liệt kê ở Mục 4 — để dành cho người và nói rõ điều đó.
 - Đặt test đúng tầng: `tests/unit/` (logic thuần), `tests/integration/` (CSDL thật, ràng buộc, tranh chấp đồng thời), `tests/contract/` (khớp `openapi.yaml`/`mqtt.md`), `tests/e2e/` (luồng đầy đủ với Device Simulator).
 - Nhắm độ phủ ≥60% cho `ORD`, `DSP`, `SLT`, `EXP`, `REV`, `INV` — cổng coverage của CI (`spec/testing.md`, NFR-MTN-01).
@@ -156,6 +156,14 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 
 ## 6. Lệnh
 
+**Ngôn ngữ của toàn dự án là Node.js** (TypeScript), cho cả backend lẫn hai ứng dụng React và
+toàn bộ script công cụ. Không dùng ngôn ngữ thứ hai: `scripts/check-traceability.mjs` trước đây
+viết bằng Python nên CI phải cài thêm Python chỉ để chạy đúng một script — nay đã chuyển sang
+Node. Thêm một runtime nữa vào repo là quyết định thuộc nhóm "không tự quyết" ở Mục 4.
+
+NestJS là *framework* chạy trên Node, không phải ngôn ngữ — lựa chọn framework ghi ở
+`spec/decisions/0003-to-chuc-ma-nguon.md`.
+
 `Makefile` là cửa vào chuẩn — CI lẫn agent đều đi qua đó. Mọi target đều đã trỏ vào lệnh thật, chống
 lưng bởi `package.json`.
 
@@ -168,7 +176,7 @@ lưng bởi `package.json`.
 | `make fmt` | `prettier --write .` |
 | `make test` | unit + integration + contract |
 | `make test-contract` | `redocly lint openapi.yaml` + `tests/contract/` |
-| `make check-traceability` | `scripts/check_traceability.py` |
+| `make check-traceability` | `scripts/check-traceability.mjs` |
 
 Công cụ migration là **node-pg-migrate với migration SQL thuần** — chọn vậy vì dự án cần 4 partial
 unique index, một exclusion constraint dùng gist, `citext` và trigger append-only, không ORM nào

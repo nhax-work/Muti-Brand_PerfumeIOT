@@ -8,7 +8,7 @@ test_FR_<MODULE>_<số>_<mô_tả_ngắn>
 
 Ví dụ: `test_FR_ORD_15_webhook_idempotent`, `test_FR_SLT_02_reject_occupied_slot`
 
-Script `scripts/check_traceability.py` quét theo đúng quy ước này. Sai tên thì FR bị coi là
+Script `scripts/check-traceability.mjs` quét theo đúng quy ước này. Sai tên thì FR bị coi là
 chưa có test và CI fail.
 
 ## Phân tầng
