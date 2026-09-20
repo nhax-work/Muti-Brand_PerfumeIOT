@@ -60,3 +60,14 @@ CLAUDE.md
 Thumbs.db
 .vscode/
 .idea/
+
+# dev-harness (local per-developer AI config, do not commit)
+.agents/
+.codex/
+.claude/
+.cursor/
+.gemini/
+harness.config.json
+AGENTS.md
+CLAUDE.md
+.cursorrules
