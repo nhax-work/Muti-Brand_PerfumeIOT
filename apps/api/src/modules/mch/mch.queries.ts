@@ -68,6 +68,25 @@ export interface MachineSlotRecord {
   readonly updatedAt: Date;
 }
 
+export interface AvailableSlotFilter {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly machineId?: string | undefined;
+  readonly locationId?: string | undefined;
+}
+
+export interface AvailableSlotRecord {
+  readonly slotId: string;
+  readonly slotNumber: number;
+  readonly machineId: string;
+  readonly machineDisplayName: string;
+  readonly locationId: string;
+  readonly locationName: string;
+}
+
+/** Hợp đồng đang giữ slot (spec/errors.md: SLOT_OCCUPIED). */
+const ACTIVE_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
+
 @Injectable()
 export class MchQueries {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -407,26 +426,26 @@ export class MchQueries {
     reason?: string,
     actorId?: string,
   ): Promise<MachineRecord | null> {
-    return this.db.transaction().execute(async (trx) => {
+    const changed = await this.db.transaction().execute(async (trx) => {
       const current = await trx
         .selectFrom('machines')
-        .selectAll()
+        .select('operating_mode')
         .where('id', '=', id)
+        .forUpdate()
         .executeTakeFirst();
 
-      if (!current) return null;
+      if (!current) return false;
 
-      const updated = await trx
+      await trx
         .updateTable('machines')
         .set({
           operating_mode: mode,
           updated_at: new Date(),
         })
         .where('id', '=', id)
-        .returningAll()
-        .executeTakeFirstOrThrow();
+        .execute();
 
-      // Ghi lịch sử trạng thái
+      // Ghi lịch sử trạng thái (FR-MCH-13)
       await trx
         .insertInto('machine_status_histories')
         .values({
@@ -439,22 +458,11 @@ export class MchQueries {
         })
         .execute();
 
-      return {
-        id: updated.id,
-        locationId: updated.location_id,
-        serialNumber: updated.serial_number,
-        displayName: updated.display_name,
-        status: updated.status,
-        operatingMode: updated.operating_mode,
-        lastSeenAt: updated.last_seen_at,
-        firmwareVersion: updated.firmware_version,
-        configurationVersion: updated.configuration_version,
-        simulatorEnabled: updated.simulator_enabled,
-        slotCount: 0,
-        createdAt: updated.created_at,
-        updatedAt: updated.updated_at,
-      };
+      return true;
     });
+
+    // Đọc lại sau transaction để có slotCount thật thay vì tự dựng record.
+    return changed ? this.findMachineById(id) : null;
   }
 
   // =========================================================================
@@ -469,7 +477,7 @@ export class MchQueries {
         eb
           .selectFrom('slot_rentals as r')
           .whereRef('r.slot_id', '=', 's.id')
-          .where('r.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'])
+          .where('r.status', 'in', ACTIVE_RENTAL_STATUSES)
           .select('r.id')
           .limit(1)
           .as('current_rental_id'),
@@ -489,7 +497,7 @@ export class MchQueries {
         eb
           .selectFrom('slot_rentals as r')
           .whereRef('r.slot_id', '=', 's.id')
-          .where('r.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'])
+          .where('r.status', 'in', ACTIVE_RENTAL_STATUSES)
           .select('r.id')
           .limit(1)
           .as('current_rental_id'),
@@ -501,34 +509,66 @@ export class MchQueries {
     return this.mapSlotRecord(row);
   }
 
-  async listAvailableSlots(): Promise<MachineSlotRecord[]> {
-    const rows = await this.db
+  /**
+   * Slot thuê được (FR-SLT-19): slot AVAILABLE, không có hợp đồng đang chạy, trên máy chưa bị
+   * DISABLED và ở địa điểm còn ACTIVE. Chỉ trả thông tin vị trí — KHÔNG kèm dữ liệu thương hiệu
+   * từng thuê (BR-012).
+   */
+  async listAvailableSlots(
+    filter: AvailableSlotFilter,
+  ): Promise<{ items: AvailableSlotRecord[]; total: number }> {
+    let base = this.db
       .selectFrom('machine_slots as s')
-      .selectAll('s')
-      .select((eb) =>
-        eb
-          .selectFrom('slot_rentals as r')
-          .whereRef('r.slot_id', '=', 's.id')
-          .where('r.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'])
-          .select('r.id')
-          .limit(1)
-          .as('current_rental_id'),
-      )
+      .innerJoin('machines as m', 'm.id', 's.machine_id')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
       .where('s.status', '=', 'AVAILABLE')
+      .where('m.operating_mode', '<>', 'DISABLED')
+      .where('l.status', '=', 'ACTIVE')
       .where((eb) =>
         eb.not(
           eb.exists(
             eb
               .selectFrom('slot_rentals as r')
+              .select('r.id')
               .whereRef('r.slot_id', '=', 's.id')
-              .where('r.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED']),
+              .where('r.status', 'in', ACTIVE_RENTAL_STATUSES),
           ),
         ),
-      )
+      );
+    if (filter.machineId) base = base.where('m.id', '=', filter.machineId);
+    if (filter.locationId) base = base.where('l.id', '=', filter.locationId);
+
+    const countRow = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    const rows = await base
+      .select([
+        's.id as slot_id',
+        's.slot_number',
+        'm.id as machine_id',
+        'm.display_name as machine_display_name',
+        'l.id as location_id',
+        'l.name as location_name',
+      ])
+      .orderBy('l.name', 'asc')
+      .orderBy('m.display_name', 'asc')
       .orderBy('s.slot_number', 'asc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
       .execute();
 
-    return rows.map((r) => this.mapSlotRecord(r));
+    return {
+      items: rows.map((r) => ({
+        slotId: r.slot_id,
+        slotNumber: r.slot_number,
+        machineId: r.machine_id,
+        machineDisplayName: r.machine_display_name,
+        locationId: r.location_id,
+        locationName: r.location_name,
+      })),
+      total: Number(countRow.total),
+    };
   }
 
   async updateSlotConfig(
@@ -563,14 +603,24 @@ export class MchQueries {
     return this.findSlotById(id);
   }
 
-  async updateSlotStatus(id: string, status: SlotStatus): Promise<MachineSlotRecord | null> {
+  /**
+   * Đổi trạng thái slot với khóa lạc quan: chỉ ghi khi `version` còn đúng giá trị đã đọc, để hai
+   * thao tác đồng thời không ghi đè nhau. Trả null khi slot không còn hoặc đã bị đổi trước đó.
+   */
+  async updateSlotStatus(
+    id: string,
+    status: SlotStatus,
+    expectedVersion: number,
+  ): Promise<MachineSlotRecord | null> {
     const row = await this.db
       .updateTable('machine_slots')
-      .set({
+      .set((eb) => ({
         status,
+        version: eb('version', '+', 1),
         updated_at: new Date(),
-      })
+      }))
       .where('id', '=', id)
+      .where('version', '=', expectedVersion)
       .returningAll()
       .executeTakeFirst();
 

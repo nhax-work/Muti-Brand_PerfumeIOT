@@ -10,8 +10,19 @@ import type {
   MachineOperatingMode,
   SlotStatus,
 } from '../../apps/api/src/shared/db/types.generated.js';
+import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
+import {
+  REQUIRED_PERMISSIONS,
+  REQUIRES_REAUTH,
+} from '../../apps/api/src/modules/auth/decorators.js';
+import {
+  AvailableSlotsController,
+  MachinesController,
+  SlotsController,
+} from '../../apps/api/src/modules/mch/mch.http.js';
 import {
   MchQueries,
+  type AvailableSlotFilter,
   type LocationFilter,
   type LocationRecord,
   type MachineFilter,
@@ -184,8 +195,23 @@ class FakeMchQueries {
     return this.slots.get(id) ?? null;
   }
 
-  async listAvailableSlots() {
-    return [...this.slots.values()].filter((s) => s.status === 'AVAILABLE');
+  async listAvailableSlots(filter: AvailableSlotFilter) {
+    const items = [...this.slots.values()]
+      .filter((s) => s.status === 'AVAILABLE' && s.currentRentalId === null)
+      .map((s) => ({ slot: s, machine: this.machines.get(s.machineId)! }))
+      .filter(({ machine }) => machine.operatingMode !== 'DISABLED')
+      .filter(({ machine }) => this.locations.get(machine.locationId)?.status === 'ACTIVE')
+      .filter(({ machine }) => !filter.machineId || machine.id === filter.machineId)
+      .filter(({ machine }) => !filter.locationId || machine.locationId === filter.locationId)
+      .map(({ slot, machine }) => ({
+        slotId: slot.id,
+        slotNumber: slot.slotNumber,
+        machineId: machine.id,
+        machineDisplayName: machine.displayName,
+        locationId: machine.locationId,
+        locationName: this.locations.get(machine.locationId)!.name,
+      }));
+    return { items, total: items.length };
   }
 
   async updateSlotConfig(
@@ -208,17 +234,29 @@ class FakeMchQueries {
     return updated;
   }
 
-  async updateSlotStatus(id: string, status: SlotStatus) {
+  async updateSlotStatus(id: string, status: SlotStatus, expectedVersion: number) {
     const slot = this.slots.get(id);
-    if (!slot) return null;
+    if (!slot || slot.version !== expectedVersion) return null;
     const updated: MachineSlotRecord = {
       ...slot,
       status,
+      version: slot.version + 1,
       updatedAt: new Date(),
     };
     this.slots.set(id, updated);
     return updated;
   }
+}
+
+class FakeAudit {
+  entries: AuditEntry[] = [];
+  async log(entry: AuditEntry) {
+    this.entries.push(entry);
+  }
+}
+
+async function rejectsWith(promise: Promise<unknown>, code: string): Promise<void> {
+  await expect(promise).rejects.toMatchObject({ code });
 }
 
 const SUPER_ADMIN: AuthenticatedUser = {
@@ -236,11 +274,13 @@ const SUPER_ADMIN: AuthenticatedUser = {
 
 describe('MchService (Machine, Slot, Location)', () => {
   let queries: FakeMchQueries;
+  let audit: FakeAudit;
   let service: MchService;
 
   beforeEach(() => {
     queries = new FakeMchQueries();
-    service = new MchService(queries as unknown as MchQueries);
+    audit = new FakeAudit();
+    service = new MchService(queries as unknown as MchQueries, audit);
   });
 
   describe('Location CRUD & Soft Delete', () => {
@@ -367,6 +407,15 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(queries.statusHistories).toHaveLength(1);
       expect(queries.statusHistories[0]!.mode).toBe('MAINTENANCE');
       expect(queries.statusHistories[0]!.actorId).toBe(SUPER_ADMIN.userId);
+      expect(updated.slotCount).toBe(4);
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'mch.machine.mode_changed',
+        actorId: SUPER_ADMIN.userId,
+        severity: 'WARNING',
+        before: { operatingMode: 'NORMAL' },
+        after: { operatingMode: 'MAINTENANCE' },
+        metadata: { reason: 'Bảo trì định kỳ máy' },
+      });
     });
 
     it('xóa mềm máy: chuyển operatingMode sang DISABLED', async () => {
@@ -442,9 +491,151 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(reloaded.status).toBe('DISABLED');
     });
 
-    it('lấy danh sách slot khả dụng', async () => {
-      const available = await service.listAvailableSlots();
-      expect(available.length).toBeGreaterThanOrEqual(4);
+    it('hiệu chuẩn slot ghi audit với giá trị trước/sau', async () => {
+      await service.updateSlotConfig(SUPER_ADMIN, slotId, { calibratedDosageMl: 0.12 });
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'mch.slot.config_updated',
+        targetId: slotId,
+        before: { calibratedDosageMl: null },
+        after: { calibratedDosageMl: 0.12 },
+      });
+    });
+
+    it('tắt slot ghi audit kèm lý do', async () => {
+      await service.setSlotEnabled(SUPER_ADMIN, slotId, false, 'Rò rỉ vòi xịt');
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'mch.slot.disabled',
+        severity: 'INFO',
+        before: { status: 'AVAILABLE' },
+        after: { status: 'UNAVAILABLE' },
+        metadata: { reason: 'Rò rỉ vòi xịt' },
+      });
+    });
+
+    it('tắt slot đang có hợp đồng vẫn cho phép nhưng ghi WARNING', async () => {
+      queries.slots.set(slotId, { ...queries.slots.get(slotId)!, currentRentalId: 'rental-1' });
+      const disabled = await service.setSlotEnabled(SUPER_ADMIN, slotId, false);
+      expect(disabled.status).toBe('UNAVAILABLE');
+      expect(audit.entries.at(-1)).toMatchObject({
+        severity: 'WARNING',
+        metadata: { currentRentalId: 'rental-1' },
+      });
+    });
+
+    it('bật/tắt lặp lại cùng trạng thái thì trả về như cũ, không ghi audit', async () => {
+      const same = await service.setSlotEnabled(SUPER_ADMIN, slotId, true);
+      expect(same.status).toBe('AVAILABLE');
+      expect(audit.entries).toHaveLength(0);
+    });
+
+    it('không bật trực tiếp slot đang MAINTENANCE hoặc DISABLED', async () => {
+      for (const status of ['MAINTENANCE', 'DISABLED'] as const) {
+        queries.slots.set(slotId, { ...queries.slots.get(slotId)!, status });
+        await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, true), 'VALIDATION_ERROR');
+        expect(queries.slots.get(slotId)!.status).toBe(status);
+      }
+    });
+
+    it('không bật slot khi máy chứa nó đã DISABLED', async () => {
+      await service.setSlotEnabled(SUPER_ADMIN, slotId, false);
+      await service.setMachineMode(SUPER_ADMIN, machineId, { operatingMode: 'DISABLED' });
+      await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, true), 'VALIDATION_ERROR');
+    });
+
+    it('từ chối ghi khi slot đã bị thao tác khác đổi (khóa lạc quan theo version)', async () => {
+      const original = queries.findSlotById.bind(queries);
+      // Giả lập: đọc được version cũ, nhưng trong DB slot đã bị ghi đè sang version mới.
+      queries.findSlotById = async (id: string) => {
+        const slot = await original(id);
+        return slot ? { ...slot, version: slot.version - 1 } : null;
+      };
+      await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, false), 'VALIDATION_ERROR');
+      expect(queries.slots.get(slotId)!.status).toBe('AVAILABLE');
+    });
+
+    it('không xóa mềm slot đang có hợp đồng thuê', async () => {
+      queries.slots.set(slotId, { ...queries.slots.get(slotId)!, currentRentalId: 'rental-1' });
+      await rejectsWith(service.softDeleteSlot(SUPER_ADMIN, slotId), 'SLOT_OCCUPIED');
+      expect(queries.slots.get(slotId)!.status).toBe('AVAILABLE');
+    });
+  });
+
+  describe('FR-SLT-19 — slot trống cho Brand Admin', () => {
+    const page = { page: 1, pageSize: 20 };
+    let machineA: string;
+    let machineB: string;
+    let locA: string;
+
+    beforeEach(async () => {
+      locA = (await service.createLocation({ code: 'LOC_A', name: 'Địa điểm A' })).id;
+      const locB = (await service.createLocation({ code: 'LOC_B', name: 'Địa điểm B' })).id;
+      machineA = (
+        await service.createMachine(SUPER_ADMIN, {
+          locationId: locA,
+          serialNumber: 'MA',
+          displayName: 'Máy A',
+          slotCount: 2,
+        })
+      ).id;
+      machineB = (
+        await service.createMachine(SUPER_ADMIN, {
+          locationId: locB,
+          serialNumber: 'MB',
+          displayName: 'Máy B',
+          slotCount: 2,
+        })
+      ).id;
+    });
+
+    it('trả đúng hình dạng AvailableSlot, không lộ thông tin hợp đồng (BR-012)', async () => {
+      const { items, total } = await service.listAvailableSlots(page);
+      expect(total).toBe(4);
+      expect(Object.keys(items[0]!).sort()).toEqual(
+        [
+          'locationId',
+          'locationName',
+          'machineDisplayName',
+          'machineId',
+          'slotId',
+          'slotNumber',
+        ].sort(),
+      );
+    });
+
+    it('lọc theo máy và địa điểm', async () => {
+      const byMachine = await service.listAvailableSlots({ ...page, machineId: machineB });
+      expect(byMachine.items.every((s) => s.machineId === machineB)).toBe(true);
+      expect(byMachine.total).toBe(2);
+
+      const byLocation = await service.listAvailableSlots({ ...page, locationId: locA });
+      expect(byLocation.items.every((s) => s.locationId === locA)).toBe(true);
+    });
+
+    it('loại slot đang thuê, slot của máy DISABLED và địa điểm INACTIVE', async () => {
+      const [first] = await service.listSlotsByMachine(machineA);
+      queries.slots.set(first!.id, { ...queries.slots.get(first!.id)!, currentRentalId: 'r-1' });
+      expect((await service.listAvailableSlots(page)).total).toBe(3);
+
+      await service.setMachineMode(SUPER_ADMIN, machineB, { operatingMode: 'DISABLED' });
+      expect((await service.listAvailableSlots(page)).total).toBe(1);
+
+      await service.softDeleteLocation(locA);
+      expect((await service.listAvailableSlots(page)).total).toBe(0);
+    });
+  });
+
+  describe('Phân quyền và xác thực lại ở tầng controller', () => {
+    it('slot trống dùng quyền rental.request của Brand Admin, không phải machine.manage', () => {
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, AvailableSlotsController)).toEqual([
+        'rental.request',
+      ]);
+    });
+
+    it('đổi chế độ máy và hiệu chuẩn slot cần X-Reauth-Token (FR-AUTH-09)', () => {
+      expect(Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.setMode)).toBe(true);
+      expect(Reflect.getMetadata(REQUIRES_REAUTH, SlotsController.prototype.updateConfig)).toBe(
+        true,
+      );
     });
   });
 });

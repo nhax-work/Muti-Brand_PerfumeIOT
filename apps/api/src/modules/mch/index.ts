@@ -7,6 +7,7 @@ export type {
   MachineDto,
   MachineCreateInput,
   MachineSlotDto,
+  AvailableSlotDto,
   SlotConfigUpdateInput,
   MachineModeUpdateInput,
 } from './mch.service.js';

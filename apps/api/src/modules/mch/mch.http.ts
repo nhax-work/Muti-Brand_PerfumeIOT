@@ -17,11 +17,17 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
-import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
+import {
+  CurrentUser,
+  RequirePermissions,
+  RequireReauth,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { MchService } from './mch.service.js';
 
 const MACHINE_MANAGE = 'machine.manage';
 const MACHINE_OPERATE = 'machine.operate';
+const RENTAL_REQUEST = 'rental.request';
 
 const IdParam = z.string().uuid();
 
@@ -157,9 +163,10 @@ export class MachinesController {
     return this.mch.updateMachine(validatedId, input);
   }
 
-  /** FR-MCH-11, FR-MNT-05: Đổi chế độ hoạt động máy */
+  /** FR-MCH-11, FR-MNT-05: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */
   @Put(':id/mode')
   @RequirePermissions(MACHINE_OPERATE)
+  @RequireReauth()
   setMode(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(MachineModeBody, body);
@@ -194,16 +201,33 @@ const SlotEnabledBody = z.object({
   reason: z.string().optional(),
 });
 
+const AvailableSlotQuery = PageQuery.extend({
+  machineId: z.string().uuid().optional(),
+  locationId: z.string().uuid().optional(),
+});
+
+/**
+ * Slot trống cho Brand Admin chọn thuê (FR-SLT-19, tag SLT trong openapi.yaml). Tách khỏi
+ * SlotsController vì dùng quyền khác; nên chuyển sang module SLT khi module đó được viết.
+ * Phải đăng ký TRƯỚC SlotsController để `/slots/available` không bị khớp vào `/slots/:id`.
+ */
+@Controller('slots')
+@RequirePermissions(RENTAL_REQUEST)
+export class AvailableSlotsController {
+  constructor(@Inject(MchService) private readonly mch: MchService) {}
+
+  @Get('available')
+  async list(@Query() query: unknown) {
+    const filter = parseBody(AvailableSlotQuery, query);
+    const { items, total } = await this.mch.listAvailableSlots(filter);
+    return { items, meta: { page: filter.page, pageSize: filter.pageSize, total } };
+  }
+}
+
 @Controller('slots')
 @RequirePermissions(MACHINE_MANAGE)
 export class SlotsController {
   constructor(@Inject(MchService) private readonly mch: MchService) {}
-
-  /** FR-SLT-20: Danh sách slot khả dụng sẵn sàng cho thuê */
-  @Get('available')
-  listAvailable() {
-    return this.mch.listAvailableSlots();
-  }
 
   /** Chi tiết một slot */
   @Get(':id')
@@ -211,8 +235,9 @@ export class SlotsController {
     return this.mch.getSlot(parseBody(IdParam, id));
   }
 
-  /** FR-MCH-06: Hiệu chuẩn liều lượng và ngưỡng cảnh báo slot */
+  /** FR-MCH-06: Hiệu chuẩn liều lượng và ngưỡng cảnh báo slot. Thao tác nhạy cảm (FR-AUTH-09). */
   @Put(':id/config')
+  @RequireReauth()
   updateConfig(
     @CurrentUser() actor: AuthenticatedUser,
     @Param('id') id: string,

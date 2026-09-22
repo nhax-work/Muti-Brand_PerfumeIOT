@@ -5,10 +5,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { AuditService } from '../../shared/audit/index.js';
 import { AppError } from '../../shared/errors/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   MchQueries,
+  type AvailableSlotFilter,
+  type AvailableSlotRecord,
   type LocationFilter,
   type LocationRecord,
   type MachineFilter,
@@ -17,12 +20,18 @@ import {
 } from './mch.queries.js';
 
 export type LocationDto = Schema<'Location'>;
-export type LocationCreateInput = Schema<'LocationCreate'>;
+// openapi có `default` cho timezone nên kiểu sinh ra đánh dấu bắt buộc; service tự điền mặc định.
+export type LocationCreateInput = Omit<Schema<'LocationCreate'>, 'timezone'> & {
+  timezone?: string | undefined;
+};
 export type MachineDto = Schema<'Machine'>;
 export type MachineCreateInput = Schema<'MachineCreate'>;
 export type MachineSlotDto = Schema<'MachineSlot'>;
+export type AvailableSlotDto = Schema<'AvailableSlot'>;
 export type SlotConfigUpdateInput = Schema<'SlotConfigUpdate'>;
 export type MachineModeUpdateInput = Schema<'MachineModeUpdate'>;
+
+type Audit = Pick<AuditService, 'log'>;
 
 function toLocationDto(r: LocationRecord): LocationDto {
   return {
@@ -65,9 +74,23 @@ function toSlotDto(r: MachineSlotRecord): MachineSlotDto {
   };
 }
 
+function toAvailableSlotDto(r: AvailableSlotRecord): AvailableSlotDto {
+  return {
+    slotId: r.slotId,
+    machineId: r.machineId,
+    machineDisplayName: r.machineDisplayName,
+    slotNumber: r.slotNumber,
+    locationId: r.locationId,
+    locationName: r.locationName,
+  };
+}
+
 @Injectable()
 export class MchService {
-  constructor(@Inject(MchQueries) private readonly queries: MchQueries) {}
+  constructor(
+    @Inject(MchQueries) private readonly queries: MchQueries,
+    @Inject(AuditService) private readonly audit: Audit,
+  ) {}
 
   // =========================================================================
   // LOCATIONS
@@ -232,6 +255,19 @@ export class MchService {
     if (!updated) {
       throw new AppError('NOT_FOUND', 'Không tìm thấy máy');
     }
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mch.machine.mode_changed',
+      targetType: 'machine',
+      targetId: id,
+      // Tắt máy hoặc đưa vào bảo trì ảnh hưởng mọi thương hiệu có slot trên máy.
+      severity: input.operatingMode === 'NORMAL' ? 'INFO' : 'WARNING',
+      before: { operatingMode: machine.operatingMode },
+      after: { operatingMode: updated.operatingMode },
+      metadata: { reason: input.reason ?? null },
+    });
     return toMachineDto(updated);
   }
 
@@ -272,6 +308,7 @@ export class MchService {
 
   /**
    * Cấu hình liều lượng và ngưỡng cảnh báo sắp hết (FR-MCH-06).
+   * TODO: đẩy cấu hình xuống thiết bị qua topic config khi có cửa vào MQTT (spec/contracts/mqtt.md).
    */
   async updateSlotConfig(
     actor: AuthenticatedUser,
@@ -294,52 +331,125 @@ export class MchService {
     if (!updated) {
       throw new AppError('NOT_FOUND', 'Không tìm thấy slot');
     }
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mch.slot.config_updated',
+      targetType: 'machine_slot',
+      targetId: id,
+      before: {
+        calibratedDosageMl: slot.calibratedDosageMl,
+        lowStockThresholdMl: slot.lowStockThresholdMl,
+      },
+      after: {
+        calibratedDosageMl: updated.calibratedDosageMl,
+        lowStockThresholdMl: updated.lowStockThresholdMl,
+      },
+    });
     return toSlotDto(updated);
   }
 
   /**
-   * Bật hoặc tắt slot từ xa (FR-MCH-12).
+   * Bật hoặc tắt slot từ xa (FR-MCH-12, FR-MCH-17).
+   *
+   * Chỉ chuyển giữa AVAILABLE ↔ UNAVAILABLE. Slot đang MAINTENANCE/DISABLED không bật được bằng
+   * endpoint này — bật lại sẽ âm thầm bỏ qua quy trình bảo trì. Gọi lặp lại cùng trạng thái thì trả
+   * về như cũ. Tắt slot đang có hợp đồng vẫn cho phép (ops cần xử lý sự cố) nhưng ghi WARNING.
    */
   async setSlotEnabled(
     actor: AuthenticatedUser,
     id: string,
     enabled: boolean,
-    _reason?: string,
+    reason?: string,
   ): Promise<MachineSlotDto> {
     const slot = await this.queries.findSlotById(id);
     if (!slot) {
       throw new AppError('NOT_FOUND', 'Không tìm thấy slot');
     }
 
-    const newStatus = enabled ? 'AVAILABLE' : 'UNAVAILABLE';
-    const updated = await this.queries.updateSlotStatus(id, newStatus);
-    if (!updated) {
-      throw new AppError('NOT_FOUND', 'Không tìm thấy slot');
+    if (enabled) {
+      if (slot.status === 'AVAILABLE') return toSlotDto(slot);
+      if (slot.status !== 'UNAVAILABLE') {
+        throw invalidField('enabled', `Slot đang ${slot.status}, không bật trực tiếp được`);
+      }
+      const machine = await this.queries.findMachineById(slot.machineId);
+      if (!machine || machine.operatingMode === 'DISABLED') {
+        throw invalidField('enabled', 'Máy chứa slot đã bị vô hiệu hóa, không bật slot được');
+      }
+    } else if (slot.status !== 'AVAILABLE') {
+      return toSlotDto(slot);
     }
+
+    const newStatus = enabled ? 'AVAILABLE' : 'UNAVAILABLE';
+    const updated = await this.changeSlotStatus(slot, newStatus);
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: enabled ? 'mch.slot.enabled' : 'mch.slot.disabled',
+      targetType: 'machine_slot',
+      targetId: id,
+      severity: !enabled && slot.currentRentalId ? 'WARNING' : 'INFO',
+      before: { status: slot.status },
+      after: { status: updated.status },
+      metadata: { reason: reason ?? null, currentRentalId: slot.currentRentalId },
+    });
     return toSlotDto(updated);
   }
 
   /**
    * Xóa mềm slot: chuyển trạng thái sang DISABLED.
+   * Không cho xóa slot đang có hợp đồng thuê (SLOT_OCCUPIED).
    */
   async softDeleteSlot(actor: AuthenticatedUser, id: string): Promise<MachineSlotDto> {
     const slot = await this.queries.findSlotById(id);
     if (!slot) {
       throw new AppError('NOT_FOUND', 'Không tìm thấy slot');
     }
-
-    const updated = await this.queries.updateSlotStatus(id, 'DISABLED');
-    if (!updated) {
-      throw new AppError('NOT_FOUND', 'Không tìm thấy slot');
+    if (slot.currentRentalId) {
+      throw new AppError('SLOT_OCCUPIED', 'Slot đang có hợp đồng thuê, không xóa được');
     }
+    if (slot.status === 'DISABLED') return toSlotDto(slot);
+
+    const updated = await this.changeSlotStatus(slot, 'DISABLED');
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mch.slot.deleted',
+      targetType: 'machine_slot',
+      targetId: id,
+      severity: 'WARNING',
+      before: { status: slot.status },
+      after: { status: updated.status },
+    });
     return toSlotDto(updated);
   }
 
   /**
-   * Danh sách các slot còn trống trên toàn hệ thống (FR-SLT-20).
+   * Danh sách slot thuê được trên toàn hệ thống, lọc theo máy/địa điểm (FR-SLT-19).
    */
-  async listAvailableSlots(): Promise<MachineSlotDto[]> {
-    const slots = await this.queries.listAvailableSlots();
-    return slots.map(toSlotDto);
+  async listAvailableSlots(
+    filter: AvailableSlotFilter,
+  ): Promise<{ items: AvailableSlotDto[]; total: number }> {
+    const { items, total } = await this.queries.listAvailableSlots(filter);
+    return { items: items.map(toAvailableSlotDto), total };
   }
+
+  private async changeSlotStatus(
+    slot: MachineSlotRecord,
+    status: 'AVAILABLE' | 'UNAVAILABLE' | 'DISABLED',
+  ): Promise<MachineSlotRecord> {
+    const updated = await this.queries.updateSlotStatus(slot.id, status, slot.version);
+    if (!updated) {
+      // Slot đã bị một thao tác khác đổi giữa lúc đọc và lúc ghi (khóa lạc quan theo version).
+      throw invalidField('id', 'Slot vừa được thay đổi bởi thao tác khác, vui lòng tải lại và thử lại');
+    }
+    return updated;
+  }
+}
+
+function invalidField(path: string, message: string): AppError {
+  return new AppError('VALIDATION_ERROR', message, { fields: [{ path, message }] });
 }
