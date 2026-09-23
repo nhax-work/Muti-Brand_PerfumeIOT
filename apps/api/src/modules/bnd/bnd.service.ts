@@ -9,12 +9,7 @@ import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import {
-  BndQueries,
-  type BrandFilter,
-  type BrandRecord,
-  type BrandStatus,
-} from './bnd.queries.js';
+import { BndQueries, type BrandFilter, type BrandRecord, type BrandStatus } from './bnd.queries.js';
 
 type Brand = Schema<'Brand'>;
 

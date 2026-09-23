@@ -71,8 +71,7 @@ export class AccessGuard implements CanActivate {
     // 3. Xác thực lại
     if (this.reflector.getAllAndOverride<boolean>(REQUIRES_REAUTH, targets)) {
       const reauthToken = header(request, 'x-reauth-token');
-      if (!reauthToken)
-        throw new AppError('REAUTH_REQUIRED', 'auth.reauthRequired');
+      if (!reauthToken) throw new AppError('REAUTH_REQUIRED', 'auth.reauthRequired');
       this.tokens.verifyReauth(reauthToken, user.userId);
     }
 

@@ -10,12 +10,7 @@ import { AuditService } from '../../shared/audit/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import {
-  PrdQueries,
-  type ProductFilter,
-  type ProductRecord,
-  type ProductStatus,
-} from './prd.queries.js';
+import { PrdQueries, type ProductFilter, type ProductRecord } from './prd.queries.js';
 
 type Product = Schema<'Product'>;
 
@@ -55,7 +50,10 @@ export class PrdService {
     @Inject(AuditService) private readonly audit: Audit,
   ) {}
 
-  async list(scope: BrandScope, filter: ProductFilter): Promise<{ items: Product[]; total: number }> {
+  async list(
+    scope: BrandScope,
+    filter: ProductFilter,
+  ): Promise<{ items: Product[]; total: number }> {
     const { items, total } = await this.queries.list(scope, filter);
     return { items: items.map(toDto), total };
   }

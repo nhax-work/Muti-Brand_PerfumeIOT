@@ -238,7 +238,9 @@ export class MchService {
 
     const existingSerial = await this.queries.findMachineBySerialNumber(input.serialNumber);
     if (existingSerial) {
-      throw new AppError('VALIDATION_ERROR', 'mch.serialTaken', { serialNumber: input.serialNumber });
+      throw new AppError('VALIDATION_ERROR', 'mch.serialTaken', {
+        serialNumber: input.serialNumber,
+      });
     }
 
     if (input.slotCount <= 0) {
@@ -393,7 +395,9 @@ export class MchService {
       targetId: machineId,
       // Xoay khóa làm thiết bị đang chạy mất kết nối cho tới khi nạp bí mật mới.
       severity: 'WARNING',
-      before: previous ? { status: previous.status, issuedAt: previous.issuedAt.toISOString() } : null,
+      before: previous
+        ? { status: previous.status, issuedAt: previous.issuedAt.toISOString() }
+        : null,
       after: { status: issued.status, issuedAt: issued.issuedAt.toISOString() },
     });
 
@@ -596,4 +600,3 @@ export class MchService {
     return updated;
   }
 }
-

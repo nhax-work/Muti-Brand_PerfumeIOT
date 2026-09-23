@@ -669,9 +669,7 @@ export class MchQueries {
     machineId: string,
     filter: MachineStatusHistoryFilter,
   ): Promise<{ items: MachineStatusHistoryRecord[]; total: number }> {
-    const base = this.db
-      .selectFrom('machine_status_histories')
-      .where('machine_id', '=', machineId);
+    const base = this.db.selectFrom('machine_status_histories').where('machine_id', '=', machineId);
 
     const countRow = await base
       .select((eb) => eb.fn.countAll<string>().as('total'))

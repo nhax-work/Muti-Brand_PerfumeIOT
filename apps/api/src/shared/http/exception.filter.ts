@@ -15,11 +15,7 @@ import {
   type ArgumentsHost,
   type ExceptionFilter,
 } from '@nestjs/common';
-import {
-  DEFAULT_LOCALE,
-  translate,
-  type MessageKey,
-} from '@scentstation/i18n';
+import { DEFAULT_LOCALE, translate, type MessageKey } from '@scentstation/i18n';
 import { AppError, type ErrorCode } from '../errors/index.js';
 
 interface ReplyLike {

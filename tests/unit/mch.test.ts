@@ -173,7 +173,12 @@ class FakeMchQueries {
     return updated;
   }
 
-  async updateMachineMode(id: string, mode: MachineOperatingMode, reason?: string, actorId?: string) {
+  async updateMachineMode(
+    id: string,
+    mode: MachineOperatingMode,
+    reason?: string,
+    actorId?: string,
+  ) {
     const mch = this.machines.get(id);
     if (!mch) return null;
     const updated: MachineRecord = {

@@ -13,12 +13,7 @@
  * của mình — xem `ApiExceptionFilter`.
  */
 
-import {
-  DEFAULT_LOCALE,
-  translate,
-  type MessageKey,
-  type MessageParams,
-} from '@scentstation/i18n';
+import { DEFAULT_LOCALE, translate, type MessageKey, type MessageParams } from '@scentstation/i18n';
 import { ERROR_CODES, type ErrorCode } from './codes.generated.js';
 
 export class AppError extends Error {

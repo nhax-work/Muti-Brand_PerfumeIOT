@@ -14,4 +14,3 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })
 export class AppModule {}
-

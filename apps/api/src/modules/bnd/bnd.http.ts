@@ -3,7 +3,18 @@
  * Đường dẫn và dữ liệu theo spec/contracts/openapi.yaml, nhóm tag BND.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
@@ -91,11 +102,7 @@ export class BndController {
   /** FR-BND-02: Platform Super Admin cập nhật thương hiệu. */
   @Patch(':id')
   @RequirePermissions(BRAND_MANAGE)
-  update(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ) {
+  update(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     return this.brands.update(actor, parseBody(IdParam, id), parseBody(UpdateBody, body));
   }
 

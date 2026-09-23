@@ -173,4 +173,3 @@ function toDto(record: UserRecord): User {
     createdAt: record.createdAt.toISOString(),
   };
 }
-
