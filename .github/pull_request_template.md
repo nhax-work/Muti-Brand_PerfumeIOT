@@ -11,6 +11,7 @@
 - [ ] Test mang đúng mã FR (`test_FR_XXX_NN_...`)
 - [ ] Không hardcode ngưỡng số — lấy từ `constraints.md`
 - [ ] Không dùng mã lỗi ngoài `errors.md`
+- [ ] Không viết chuỗi hướng người dùng thẳng vào mã — thêm khóa vào `packages/i18n`, cả `vi` lẫn `en`
 - [ ] Lọc dữ liệu theo `slot_rental`, không theo `machine.brand_id`
 - [ ] Không sửa `spec/contracts/` (nếu có sửa: đã kèm ADR)
 - [ ] Dưới 400 dòng thay đổi

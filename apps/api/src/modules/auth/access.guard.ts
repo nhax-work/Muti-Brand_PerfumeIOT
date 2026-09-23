@@ -51,7 +51,7 @@ export class AccessGuard implements CanActivate {
 
     // 1. Xác thực
     const token = BEARER.exec(header(request, 'authorization') ?? '')?.[1];
-    if (!token) throw new AppError('UNAUTHENTICATED', 'Thiếu access token');
+    if (!token) throw new AppError('UNAUTHENTICATED', 'auth.missingAccessToken');
     const user = await this.loader.load(this.tokens.verifyAccess(token));
     request.user = user;
 
@@ -59,20 +59,20 @@ export class AccessGuard implements CanActivate {
       user.mustChangePassword &&
       !this.reflector.getAllAndOverride<boolean>(ALLOWS_PENDING_PASSWORD, targets)
     ) {
-      throw new AppError('FORBIDDEN_SCOPE', 'Phải đổi mật khẩu tạm trước khi dùng hệ thống');
+      throw new AppError('FORBIDDEN_SCOPE', 'auth.mustChangePassword');
     }
 
     // 2. Phân quyền
     const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets);
     if (required?.some((code) => !hasPermission(user, code))) {
-      throw new AppError('FORBIDDEN_SCOPE', 'Tài khoản không có quyền thực hiện thao tác này');
+      throw new AppError('FORBIDDEN_SCOPE', 'auth.missingPermission');
     }
 
     // 3. Xác thực lại
     if (this.reflector.getAllAndOverride<boolean>(REQUIRES_REAUTH, targets)) {
       const reauthToken = header(request, 'x-reauth-token');
       if (!reauthToken)
-        throw new AppError('REAUTH_REQUIRED', 'Thao tác này cần xác thực lại mật khẩu');
+        throw new AppError('REAUTH_REQUIRED', 'auth.reauthRequired');
       this.tokens.verifyReauth(reauthToken, user.userId);
     }
 

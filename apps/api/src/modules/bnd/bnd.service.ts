@@ -7,7 +7,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
-import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   BndQueries,
@@ -68,9 +68,7 @@ export class BndService {
    */
   async create(actor: AuthenticatedUser, input: CreateBrandInput): Promise<Brand> {
     if (await this.queries.codeExists(input.code)) {
-      throw new AppError('VALIDATION_ERROR', 'Mã thương hiệu đã tồn tại', {
-        fields: [{ path: 'code', message: 'Mã thương hiệu đã tồn tại' }],
-      });
+      throw invalidField('code', 'bnd.codeTaken');
     }
 
     const id = await this.queries.create({
@@ -156,7 +154,7 @@ export class BndService {
    */
   async getMyBrand(actor: AuthenticatedUser): Promise<Brand> {
     if (!actor.brandId) {
-      throw new AppError('FORBIDDEN_SCOPE', 'Chỉ tài khoản thuộc thương hiệu mới có thương hiệu riêng');
+      throw new AppError('FORBIDDEN_SCOPE', 'bnd.brandAccountOnly');
     }
     const record = await this.queries.findById(actor.brandId);
     if (!record) throw notFoundFor(actor);
@@ -168,7 +166,7 @@ export class BndService {
    */
   async updateMyBrand(actor: AuthenticatedUser, input: SelfUpdateBrandInput): Promise<Brand> {
     if (!actor.brandId) {
-      throw new AppError('FORBIDDEN_SCOPE', 'Chỉ tài khoản thuộc thương hiệu mới có thương hiệu riêng');
+      throw new AppError('FORBIDDEN_SCOPE', 'bnd.brandAccountOnly');
     }
     const before = await this.queries.findById(actor.brandId);
     if (!before) throw notFoundFor(actor);

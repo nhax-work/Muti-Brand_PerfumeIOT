@@ -82,6 +82,7 @@ apps/
   kiosk/src/screens/<màn hình>/
 packages/
   contracts/                       # kiểu sinh từ openapi.yaml, dùng chung 3 app
+  i18n/                            # chuỗi song ngữ Việt - Anh, dùng chung 3 app
 spec/  migrations/  tests/  scripts/   # giữ nguyên ở gốc repo
 ```
 
@@ -122,6 +123,17 @@ khả dụng là bốn điều kiện đồng thời (FR-MCH-16); client tự su
 Kiosk và web quản trị là **hai ứng dụng riêng**, không phải hai route của cùng một SPA: kiosk có
 ràng buộc khác hẳn (NFR-PER-01 phản hồi ≤500ms, NFR-USA-02 idle 60s, NFR-USA-04 cỡ chữ ≥18px,
 FR-IOT-13 hiển thị tạm ngưng khi mất kết nối).
+
+### Ràng buộc khi khởi tạo hai app client
+
+Cả hai phụ thuộc `@scentstation/i18n` **ngay commit đầu tiên**, không có chuỗi viết thẳng trong
+component (NFR-USA-07). Nối i18n sau nghĩa là đi sửa lại từng màn hình; nối ngay thì gần như miễn phí.
+
+Lỗi từ API tra theo `details.messageKey` → catalog của ngôn ngữ đang chọn → không có khóa thì rơi về
+`message` của máy chủ. Đổi ngôn ngữ là đổi catalog tại chỗ, **không gọi lại API**.
+
+Riêng kiosk: nhãn giao diện đổi theo ngôn ngữ, nhưng **tên và mô tả sản phẩm giữ nguyên** như thương
+hiệu đã nhập — nội dung động không thuộc phạm vi song ngữ ở bước này.
 
 ### Ba chỗ có seam, và chỉ ba
 

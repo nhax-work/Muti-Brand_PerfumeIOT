@@ -10,4 +10,7 @@ export type {
   AvailableSlotDto,
   SlotConfigUpdateInput,
   MachineModeUpdateInput,
+  MachineStatusHistoryEntryDto,
+  DeviceCredentialDto,
+  DeviceCredentialIssuedDto,
 } from './mch.service.js';

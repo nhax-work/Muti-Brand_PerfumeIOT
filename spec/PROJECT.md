@@ -97,6 +97,23 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
   máy dùng chung (BR-012); slot không khả dụng của bên khác hiển thị là không khả dụng, không kèm
   bất kỳ chi tiết nào (FR-RPT-12).
 
+- **Chuỗi hướng người dùng chỉ lấy từ `packages/i18n` (NFR-USA-07).** Không viết chuỗi thẳng vào
+  service, controller hay component. Thêm khóa vào **cả `vi` và `en`** trong cùng commit với code
+  dùng nó — bỏ bản tiếng Anh là làm đỏ `tsc`, không phải việc để sau.
+
+  ```ts
+  // ĐÚNG — khóa, kèm tham số nếu câu có chỗ giữ
+  throw new AppError('NOT_FOUND', 'mch.machineNotFound');
+  throw new AppError('VALIDATION_ERROR', 'mch.serialTaken', { serialNumber: input.serialNumber });
+
+  // SAI: chuỗi viết tay thì chỉ có một ngôn ngữ, và đây là lỗi biên dịch
+  throw new AppError('NOT_FOUND', 'Không tìm thấy máy');
+  ```
+
+  Ngoại lệ duy nhất là `new Error(...)` cho lỗi hướng **lập trình viên và vận hành** — thiếu biến
+  môi trường lúc khởi động, vi phạm bất biến nội bộ. Những lỗi đó không bao giờ tới tay người dùng
+  nên vẫn viết tiếng Việt thẳng trong mã.
+
 ## 4. Không bao giờ tự quyết
 
 | Trường hợp | Lý do |
@@ -124,6 +141,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 
 - Áp quy tắc giới hạn phạm vi dữ liệu (Mục 3) cho mọi truy vấn động tới dữ liệu thuộc thương hiệu — lọc qua `Order`/`SlotRental`, không bao giờ qua `Machine`.
 - Không hardcode giá trị nào đã có trong `spec/constraints.md`; đọc hằng có tên từ cấu hình.
+- Không viết chuỗi hướng người dùng thẳng vào mã — thêm khóa vào `packages/i18n`, cả `vi` lẫn `en`, trong cùng commit (Mục 3, NFR-USA-07).
 - Chỉ dùng mã lỗi đã có trong `spec/errors.md`; nếu thật sự cần mã mới, thêm vào đó ở một bước riêng có review trước khi dùng.
 - Coi `orders.brand_id`, `orders.slot_rental_id`, `orders.revenue_owner`, `orders.amount` là chỉ ghi một lần lúc tạo (`spec/contracts/README.md`, NFR-DAT-06) — không có đường cập nhật cho các cột này.
 - Không bao giờ sửa file trong `spec/contracts/` từ một thay đổi code; việc đó cần quy trình ADR ở Mục 3.
@@ -134,6 +152,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 - Đối chiếu chuyển trạng thái với `spec/glossary.md` thật chính xác — ví dụ `Order` chỉ tới `DISPENSED` sau khi thiết bị trả kết quả thành công (FR-DSP-17), và lệnh ở `UNKNOWN` không được kích hoạt lệnh mới (FR-DSP-19).
 - Xác nhận bất biến "một hợp đồng hiệu lực mỗi slot" và "một lệnh hiệu lực mỗi đơn" được cưỡng chế bằng partial unique index ở CSDL, không chỉ bằng code ứng dụng (FR-SLT-02, FR-DSP-05, NFR-DAT-07).
 - Từ chối mọi PR có truy vấn hướng thương hiệu lọc qua `Machine` thay vì qua quyền sở hữu ở `Order`/`SlotRental`.
+- Từ chối PR có chuỗi hướng người dùng viết thẳng tại chỗ dùng, hoặc thêm khóa vào `vi` mà quên `en`.
 - Nêu cờ đỏ với mọi PR sửa file trong `spec/contracts/` mà không kèm ADR trong `spec/decisions/`.
 - Yêu cầu kiểm tra xác thực lại ở các endpoint hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý và đổi cấu hình máy (FR-AUTH-09).
 
@@ -228,6 +247,7 @@ for status IN (ACTIVE, EXPIRING, GRACE, LIQUIDATED), per spec/contracts/README.m
 |---|---|---|
 | Đặc tả, tài liệu nghiệp vụ, ADR, acceptance criteria, comment trong code, commit message | **Tiếng Việt** | Nhóm và hội đồng chấm đọc tiếng Việt. Đây cũng là `language: vi` trong `harness.config.json` |
 | Mã FR/BR/NFR, mã lỗi, tên hằng ngưỡng, tên bảng và cột, giá trị enum, `operationId`, tên test, tên nhánh | **Tiếng Anh**, không dấu | Là thứ code và script truy vết bám vào; phải là ASCII và ổn định |
+| Nhãn giao diện và thông báo hệ thống người dùng đọc được | **Cả hai**, ở `packages/i18n` | NFR-USA-07. Khóa viết tiếng Anh không dấu theo hàng trên; giá trị viết theo từng ngôn ngữ |
 
 Đừng dịch hàng loạt tài liệu đặc tả sang tiếng Anh. Chúng là tài liệu **yêu cầu** đã được nhóm rà
 soát và là sản phẩm được chấm điểm; dịch máy móc mấy nghìn dòng có rủi ro sai lệch ngữ nghĩa ở đúng

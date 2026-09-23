@@ -12,7 +12,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { RoleCode, Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
-import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { invalidField, notFoundFor } from '../../shared/errors/index.js';
 import { AuthService, generateTemporaryPassword, hashPassword } from '../auth/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { UsrQueries, type UserFilter, type UserRecord } from './usr.queries.js';
@@ -62,17 +62,17 @@ export class UsrService {
   async create(actor: AuthenticatedUser, input: CreateUserInput): Promise<UserCreated> {
     const isBrandRole = input.role === 'BRAND_ADMIN';
     if (isBrandRole && !input.brandId) {
-      throw invalidField('brandId', 'Brand Admin phải gắn với một thương hiệu');
+      throw invalidField('brandId', 'usr.brandAdminNeedsBrand');
     }
     if (!isBrandRole && input.brandId) {
-      throw invalidField('brandId', 'Vai trò nền tảng không được gắn với thương hiệu');
+      throw invalidField('brandId', 'usr.platformRoleNoBrand');
     }
     if (input.brandId && !(await this.queries.brandExists(input.brandId))) {
-      throw invalidField('brandId', 'Thương hiệu không tồn tại');
+      throw invalidField('brandId', 'usr.brandNotFound');
     }
     if (await this.queries.emailExists(input.email)) {
       // ADR-0004: dùng VALIDATION_ERROR vì spec/errors.md không có mã xung đột chung.
-      throw invalidField('email', 'Email đã được dùng cho một tài khoản khác');
+      throw invalidField('email', 'usr.emailTaken');
     }
 
     const temporaryPassword = generateTemporaryPassword();
@@ -108,7 +108,7 @@ export class UsrService {
    */
   async disable(actor: AuthenticatedUser, id: string): Promise<void> {
     if (id === actor.userId) {
-      throw invalidField('id', 'Không thể tự vô hiệu hóa tài khoản của chính mình');
+      throw invalidField('id', 'usr.cannotDisableSelf');
     }
     const before = await this.queries.findById(id);
     if (!before) throw notFoundFor(actor);
@@ -142,7 +142,7 @@ export class UsrService {
     const before = await this.queries.findById(id);
     if (!before) throw notFoundFor(actor);
     if (before.status === 'DISABLED') {
-      throw invalidField('id', 'Tài khoản đã bị vô hiệu hóa, không đặt lại mật khẩu được');
+      throw invalidField('id', 'usr.cannotResetDisabledAccount');
     }
 
     const temporaryPassword = await this.auth.resetToTemporaryPassword(id);
@@ -174,6 +174,3 @@ function toDto(record: UserRecord): User {
   };
 }
 
-function invalidField(path: string, message: string): AppError {
-  return new AppError('VALIDATION_ERROR', message, { fields: [{ path, message }] });
-}

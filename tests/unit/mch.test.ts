@@ -369,7 +369,7 @@ describe('MchService (Machine, Slot, Location)', () => {
           displayName: 'Máy Thử Nghiệm #2',
           slotCount: 4,
         }),
-      ).rejects.toThrowError('Địa điểm không tồn tại hoặc không còn hoạt động');
+      ).rejects.toMatchObject({ messageKey: 'mch.locationInactive' });
     });
 
     it('chặn đăng ký máy khi trùng serialNumber', async () => {
@@ -387,7 +387,7 @@ describe('MchService (Machine, Slot, Location)', () => {
           displayName: 'Máy 2',
           slotCount: 4,
         }),
-      ).rejects.toThrowError('đã tồn tại');
+      ).rejects.toMatchObject({ messageKey: 'mch.serialTaken' });
     });
 
     it('đổi chế độ hoạt động máy và ghi nhận lịch sử', async () => {
@@ -470,7 +470,7 @@ describe('MchService (Machine, Slot, Location)', () => {
         service.updateSlotConfig(SUPER_ADMIN, slotId, {
           calibratedDosageMl: -1,
         }),
-      ).rejects.toThrowError('Định lượng xịt phải lớn hơn 0');
+      ).rejects.toMatchObject({ messageKey: 'mch.dosagePositive' });
     });
 
     it('bật và tắt slot từ xa', async () => {

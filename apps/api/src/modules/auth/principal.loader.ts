@@ -60,16 +60,16 @@ export class PrincipalLoader {
     if (cached && cached.expiresAt > nowMs) {
       // So pv cả với mục đã nhớ đệm: token cũ không được dùng ké kết quả của token mới.
       if (cached.value.permissionVersion !== claims.pv)
-        throw new AppError('UNAUTHENTICATED', 'Phiên đăng nhập không còn hiệu lực');
+        throw new AppError('UNAUTHENTICATED', 'auth.sessionExpired');
       return cached.value;
     }
 
     const row = await this.queries.loadPrincipal(claims.sub);
     if (!row || !canHoldSession(row.status) || row.permissionVersion !== claims.pv) {
-      throw new AppError('UNAUTHENTICATED', 'Phiên đăng nhập không còn hiệu lực');
+      throw new AppError('UNAUTHENTICATED', 'auth.sessionExpired');
     }
     if (!(await this.queries.isSessionActive(claims.sid, this.clock.now()))) {
-      throw new AppError('UNAUTHENTICATED', 'Phiên đăng nhập không còn hiệu lực');
+      throw new AppError('UNAUTHENTICATED', 'auth.sessionExpired');
     }
 
     const value = toAuthenticatedUser(row, claims.sid);
