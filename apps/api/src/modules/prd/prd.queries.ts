@@ -3,7 +3,6 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { Schema } from '@scentstation/contracts';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
@@ -60,7 +59,10 @@ export interface UpdateProductData {
 export class PrdQueries {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async list(scope: BrandScope, filter: ProductFilter): Promise<{ items: ProductRecord[]; total: number }> {
+  async list(
+    scope: BrandScope,
+    filter: ProductFilter,
+  ): Promise<{ items: ProductRecord[]; total: number }> {
     let base = this.db
       .selectFrom('fragrance_products')
       .where(brandScopedByColumn(scope, 'fragrance_products.brand_id'))
@@ -125,7 +127,8 @@ export class PrdQueries {
         default_price: input.defaultPrice,
         currency: input.currency ?? 'VND',
         full_bottle_retail_price: input.fullBottleRetailPrice ?? null,
-        full_bottle_volume_ml: input.fullBottleVolumeMl !== undefined ? String(input.fullBottleVolumeMl) : null,
+        full_bottle_volume_ml:
+          input.fullBottleVolumeMl !== undefined ? String(input.fullBottleVolumeMl) : null,
         status: 'ACTIVE',
       })
       .returning('id')
@@ -141,7 +144,9 @@ export class PrdQueries {
     if (input.name !== undefined) values['name'] = input.name;
     if (input.description !== undefined) values['description'] = input.description;
     if (input.fragranceNotes !== undefined) {
-      values['fragrance_notes'] = input.fragranceNotes ? JSON.stringify(input.fragranceNotes) : null;
+      values['fragrance_notes'] = input.fragranceNotes
+        ? JSON.stringify(input.fragranceNotes)
+        : null;
     }
     if (input.imageUrl !== undefined) values['image_url'] = input.imageUrl;
     if (input.defaultPrice !== undefined) values['default_price'] = input.defaultPrice;
@@ -150,14 +155,11 @@ export class PrdQueries {
       values['full_bottle_retail_price'] = input.fullBottleRetailPrice;
     }
     if (input.fullBottleVolumeMl !== undefined) {
-      values['full_bottle_volume_ml'] = input.fullBottleVolumeMl !== null ? String(input.fullBottleVolumeMl) : null;
+      values['full_bottle_volume_ml'] =
+        input.fullBottleVolumeMl !== null ? String(input.fullBottleVolumeMl) : null;
     }
 
-    await this.db
-      .updateTable('fragrance_products')
-      .set(values)
-      .where('id', '=', id)
-      .execute();
+    await this.db.updateTable('fragrance_products').set(values).where('id', '=', id).execute();
   }
 
   async setStatus(id: string, status: ProductStatus): Promise<void> {
@@ -195,8 +197,10 @@ function toRecord(row: {
     imageUrl: row.image_url,
     defaultPrice: String(row.default_price),
     currency: row.currency,
-    fullBottleRetailPrice: row.full_bottle_retail_price !== null ? String(row.full_bottle_retail_price) : null,
-    fullBottleVolumeMl: row.full_bottle_volume_ml !== null ? Number(row.full_bottle_volume_ml) : null,
+    fullBottleRetailPrice:
+      row.full_bottle_retail_price !== null ? String(row.full_bottle_retail_price) : null,
+    fullBottleVolumeMl:
+      row.full_bottle_volume_ml !== null ? Number(row.full_bottle_volume_ml) : null,
     status: row.status as ProductStatus,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),

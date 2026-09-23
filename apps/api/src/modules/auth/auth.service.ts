@@ -10,6 +10,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { CurrentUser, TokenPair } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { AppError } from '../../shared/errors/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import type { RequestOrigin } from '../../shared/http/request-origin.js';
@@ -96,7 +97,7 @@ export class AuthService {
         userAgent: origin.userAgent,
         metadata: { email, reason: 'unknown_email' },
       });
-      throw new AppError('INVALID_CREDENTIALS', 'Sai email hoặc mật khẩu');
+      throw new AppError('INVALID_CREDENTIALS', 'auth.invalidCredentials');
     }
 
     const base = {
@@ -110,7 +111,7 @@ export class AuthService {
 
     if (user.status === 'LOCKED' || (await this.isTemporarilyLocked(user.id))) {
       await this.audit.log({ ...base, action: LOGIN_REJECTED_LOCKED, severity: 'WARNING' });
-      throw new AppError('ACCOUNT_LOCKED', 'Tài khoản đang bị khóa tạm thời');
+      throw new AppError('ACCOUNT_LOCKED', 'auth.accountLocked');
     }
 
     if (!(await verifyPassword(user.passwordHash, password))) {
@@ -119,7 +120,7 @@ export class AuthService {
         action: LOGIN_FAILED,
         metadata: { reason: 'wrong_password' },
       });
-      throw new AppError('INVALID_CREDENTIALS', 'Sai email hoặc mật khẩu');
+      throw new AppError('INVALID_CREDENTIALS', 'auth.invalidCredentials');
     }
 
     if (!canHoldSession(user.status)) {
@@ -128,7 +129,7 @@ export class AuthService {
         action: LOGIN_FAILED,
         metadata: { reason: `status_${user.status.toLowerCase()}` },
       });
-      throw new AppError('INVALID_CREDENTIALS', 'Sai email hoặc mật khẩu');
+      throw new AppError('INVALID_CREDENTIALS', 'auth.invalidCredentials');
     }
 
     const now = this.clock.now();
@@ -144,7 +145,7 @@ export class AuthService {
     await this.audit.log({ ...base, actorType: 'USER', actorId: user.id, action: LOGIN_SUCCEEDED });
 
     const row = await this.queries.loadPrincipal(user.id);
-    if (!row) throw new AppError('UNAUTHENTICATED');
+    if (!row) throw new AppError('UNAUTHENTICATED', 'auth.sessionExpired');
     return this.tokenPair(row, sessionId, refreshToken);
   }
 
@@ -153,14 +154,14 @@ export class AuthService {
     const now = this.clock.now();
     const session = await this.queries.findSessionByTokenHash(hashRefreshToken(refreshToken));
     if (!session || session.revokedAt !== null || session.expiresAt <= now) {
-      throw new AppError('UNAUTHENTICATED', 'Refresh token không hợp lệ hoặc đã hết hạn');
+      throw new AppError('UNAUTHENTICATED', 'auth.invalidRefreshToken');
     }
 
     // Kiểm trạng thái tài khoản TRƯỚC khi xoay vòng: yêu cầu bị từ chối thì không được làm thay
     // đổi gì trên phiên.
     const row = await this.queries.loadPrincipal(session.userId);
     if (!row || !canHoldSession(row.status)) {
-      throw new AppError('UNAUTHENTICATED', 'Refresh token không hợp lệ hoặc đã hết hạn');
+      throw new AppError('UNAUTHENTICATED', 'auth.invalidRefreshToken');
     }
 
     const nextToken = newRefreshToken();
@@ -203,7 +204,7 @@ export class AuthService {
       userAgent: origin.userAgent,
       severity: ok ? 'INFO' : 'WARNING',
     });
-    if (!ok) throw new AppError('INVALID_CREDENTIALS', 'Mật khẩu không đúng');
+    if (!ok) throw new AppError('INVALID_CREDENTIALS', 'auth.wrongPassword');
     return {
       reauthToken: this.tokens.signReauth(user.userId),
       expiresIn: this.tokens.reauthTokenTtlSec,
@@ -236,11 +237,18 @@ export class AuthService {
         userAgent: origin.userAgent,
         severity: 'WARNING',
       });
-      throw new AppError('INVALID_CREDENTIALS', 'Mật khẩu hiện tại không đúng');
+      throw new AppError('INVALID_CREDENTIALS', 'auth.wrongCurrentPassword');
     }
     if (currentPassword === newPassword) {
-      throw new AppError('VALIDATION_ERROR', 'Mật khẩu mới phải khác mật khẩu hiện tại', {
-        fields: [{ path: 'newPassword', message: 'Trùng mật khẩu hiện tại' }],
+      throw new AppError('VALIDATION_ERROR', 'auth.newPasswordMustDiffer', undefined, {
+        fields: [
+          {
+            path: 'newPassword',
+            rule: 'custom',
+            messageKey: 'auth.newPasswordSameAsCurrent',
+            message: translate(DEFAULT_LOCALE, 'auth.newPasswordSameAsCurrent'),
+          },
+        ],
       });
     }
 

@@ -10,5 +10,7 @@ export {
   brandScopedOrders,
   brandScopedBySlotAndTime,
   brandOccupiesSlotNow,
+  brandHoldsSlotNow,
   OCCUPYING_RENTAL_STATUSES,
+  HOLDING_RENTAL_STATUSES,
 } from './brand-scope.js';

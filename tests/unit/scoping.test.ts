@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  brandHoldsSlotNow,
   brandOccupiesSlotNow,
   brandScopedByColumn,
   brandScopedBySlotAndTime,
@@ -105,6 +106,7 @@ describe('điều kiện lọc cho tài khoản thuộc thương hiệu', () => 
       brandScopedOrders(scoped),
       brandScopedBySlotAndTime(scoped, 'sr.slot_id', 'sr.measured_at'),
       brandOccupiesSlotNow(scoped, 'ms.id'),
+      brandHoldsSlotNow(scoped, 'ms.id'),
     ]) {
       expect(sqlOf(expression)).not.toContain('machines');
     }
@@ -117,5 +119,20 @@ describe('điều kiện lọc cho tài khoản thuộc thương hiệu', () => 
     }
     // DRAFT/RENEWED/CLOSED/TERMINATED không chiếm dụng slot (spec/glossary.md)
     expect(raw).not.toContain('TERMINATED');
+  });
+
+  it('brandHoldsSlotNow loại hợp đồng đã thanh lý', () => {
+    // Khác brandOccupiesSlotNow đúng một điểm. Sau thanh lý, hàng và doanh thu thuộc nền tảng
+    // (FR-EXP-17, FR-REV-02) nên slot không còn là "của thương hiệu" trên sơ đồ máy (FR-EXP-20).
+    const raw = sqlOf(brandHoldsSlotNow(scoped, 'ms.id'));
+    for (const status of ['ACTIVE', 'EXPIRING', 'GRACE']) {
+      expect(raw).toContain(status);
+    }
+    expect(raw).not.toContain('LIQUIDATED');
+  });
+
+  it('brandHoldsSlotNow không giới hạn gì với tài khoản mức nền tảng', () => {
+    // FR-BND-07: sơ đồ máy của Platform Super Admin hiện đủ mọi slot.
+    expect(sqlOf(brandHoldsSlotNow({ kind: 'UNRESTRICTED' }, 'ms.id'))).not.toContain(BRAND_A);
   });
 });

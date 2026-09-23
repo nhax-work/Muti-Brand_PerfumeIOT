@@ -185,6 +185,40 @@ export class MachinesController {
   listSlots(@Param('id') id: string) {
     return this.mch.listSlotsByMachine(parseBody(IdParam, id));
   }
+
+  /** FR-MCH-13: Lịch sử chuyển trạng thái kết nối và chế độ hoạt động của máy. */
+  @Get(':id/status-history')
+  async listStatusHistory(@Param('id') id: string, @Query() query: unknown) {
+    const validatedId = parseBody(IdParam, id);
+    const filter = parseBody(PageQuery, query);
+    const { items, total } = await this.mch.listStatusHistory(validatedId, filter);
+    return { items, meta: { page: filter.page, pageSize: filter.pageSize, total } };
+  }
+
+  /** FR-MCH-02: Metadata credential MQTT. Không bao giờ trả bí mật gốc (NFR-SEC-05). */
+  @Get(':id/credentials')
+  getCredential(@Param('id') id: string) {
+    return this.mch.getDeviceCredential(parseBody(IdParam, id));
+  }
+
+  /**
+   * FR-MCH-02, NFR-SEC-07: Cấp lại credential MQTT. Thao tác nhạy cảm (FR-AUTH-09) — xoay khóa
+   * làm thiết bị đang chạy mất kết nối.
+   */
+  @Post(':id/credentials')
+  @HttpCode(201)
+  @RequireReauth()
+  issueCredential(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+    return this.mch.issueDeviceCredential(actor, parseBody(IdParam, id));
+  }
+
+  /** FR-AUTH-11, FR-IOT-08: Thu hồi quyền truy cập của thiết bị. Thao tác nhạy cảm (FR-AUTH-09). */
+  @Post(':id/credentials/revoke')
+  @HttpCode(204)
+  @RequireReauth()
+  revokeCredential(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+    return this.mch.revokeDeviceCredential(actor, parseBody(IdParam, id));
+  }
 }
 
 // =============================================================================

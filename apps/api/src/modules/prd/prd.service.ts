@@ -7,15 +7,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
-import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import {
-  PrdQueries,
-  type ProductFilter,
-  type ProductRecord,
-  type ProductStatus,
-} from './prd.queries.js';
+import { PrdQueries, type ProductFilter, type ProductRecord } from './prd.queries.js';
 
 type Product = Schema<'Product'>;
 
@@ -55,7 +50,10 @@ export class PrdService {
     @Inject(AuditService) private readonly audit: Audit,
   ) {}
 
-  async list(scope: BrandScope, filter: ProductFilter): Promise<{ items: Product[]; total: number }> {
+  async list(
+    scope: BrandScope,
+    filter: ProductFilter,
+  ): Promise<{ items: Product[]; total: number }> {
     const { items, total } = await this.queries.list(scope, filter);
     return { items: items.map(toDto), total };
   }
@@ -71,13 +69,11 @@ export class PrdService {
    */
   async create(actor: AuthenticatedUser, input: CreateProductInput): Promise<Product> {
     if (!actor.brandId) {
-      throw new AppError('FORBIDDEN_SCOPE', 'Chỉ tài khoản thuộc thương hiệu mới có thể tạo sản phẩm');
+      throw new AppError('FORBIDDEN_SCOPE', 'prd.brandAccountOnly');
     }
 
     if (await this.queries.skuExists(actor.brandId, input.sku)) {
-      throw new AppError('VALIDATION_ERROR', 'Mã SKU đã tồn tại trong thương hiệu', {
-        fields: [{ path: 'sku', message: 'Mã SKU đã tồn tại trong thương hiệu' }],
-      });
+      throw invalidField('sku', 'prd.skuTaken');
     }
 
     const id = await this.queries.create({

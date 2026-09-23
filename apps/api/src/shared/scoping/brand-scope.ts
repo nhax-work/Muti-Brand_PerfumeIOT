@@ -131,10 +131,12 @@ export function brandScopedBySlotAndTime(
 }
 
 /**
- * Tập slot mà thương hiệu ĐANG có hợp đồng chiếm dụng — dùng cho màn hình sơ đồ máy (FR-RPT-12)
- * và để suy danh sách thương hiệu bị ảnh hưởng bởi cảnh báo mức máy (FR-ALR-09).
+ * Tập slot mà thương hiệu ĐANG có hợp đồng chiếm dụng, KỂ CẢ hợp đồng đã thanh lý — dùng để suy
+ * danh sách thương hiệu bị ảnh hưởng bởi cảnh báo mức máy (FR-ALR-09).
  *
  * Khác `brandScopedBySlotAndTime` ở chỗ chỉ xét hiện tại, không xét lịch sử.
+ *
+ * KHÔNG dùng cho sơ đồ máy — xem `brandHoldsSlotNow` bên dưới.
  */
 export function brandOccupiesSlotNow(scope: BrandScope, slotColumn: string): Expression<SqlBool> {
   if (scope.kind === 'UNRESTRICTED') {
@@ -146,5 +148,35 @@ export function brandOccupiesSlotNow(scope: BrandScope, slotColumn: string): Exp
      where sr_now.slot_id = ${sql.ref(slotColumn)}
        and sr_now.brand_id = ${scope.brandId}
        and sr_now.status = any(${sql.val(OCCUPYING_RENTAL_STATUSES)}::slot_rental_status[])
+  )`;
+}
+
+/** Trạng thái hợp đồng mà thương hiệu còn quyền khai thác thương mại trên slot. */
+export const HOLDING_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE'] as const;
+
+/**
+ * Tập slot mà thương hiệu còn KHAI THÁC — dùng cho màn hình sơ đồ máy (FR-RPT-12).
+ *
+ * Khác `brandOccupiesSlotNow` đúng một điểm: **loại `LIQUIDATED`**.
+ *
+ * Hợp đồng bị thanh lý vẫn chiếm slot về mặt vận hành — slot tiếp tục bán hàng tồn — nhưng hàng và
+ * doanh thu đã thuộc nền tảng (FR-EXP-17, FR-REV-02). Để sơ đồ máy hiện `mine = true` cho slot đó là
+ * đưa tên sản phẩm và lượng tồn của **nền tảng** cho thương hiệu cũ xem, đúng thứ FR-EXP-20 chặn.
+ *
+ * Lưu ý cho người review: đây là một **diễn giải đặc tả**. FR-RPT-12 chỉ nói "slot thuộc hợp đồng
+ * của thương hiệu mình" mà không nói rõ hợp đồng đã thanh lý có tính hay không; chọn loại nó ra là
+ * bám FR-EXP-20 chặt hơn. Nếu hội đồng chốt ngược lại thì đổi đúng hàm này, không rải điều kiện ra
+ * ngoài.
+ */
+export function brandHoldsSlotNow(scope: BrandScope, slotColumn: string): Expression<SqlBool> {
+  if (scope.kind === 'UNRESTRICTED') {
+    return sql<SqlBool>`true`;
+  }
+  return sql<SqlBool>`exists (
+    select 1
+      from slot_rentals sr_hold
+     where sr_hold.slot_id = ${sql.ref(slotColumn)}
+       and sr_hold.brand_id = ${scope.brandId}
+       and sr_hold.status = any(${sql.val(HOLDING_RENTAL_STATUSES)}::slot_rental_status[])
   )`;
 }

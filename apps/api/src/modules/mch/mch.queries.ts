@@ -6,6 +6,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import type {
+  CredentialStatus,
   MachineConnectionStatus,
   MachineOperatingMode,
   SlotStatus,
@@ -82,6 +83,38 @@ export interface AvailableSlotRecord {
   readonly machineDisplayName: string;
   readonly locationId: string;
   readonly locationName: string;
+}
+
+export interface MachineStatusHistoryFilter {
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+export interface MachineStatusHistoryRecord {
+  readonly id: string;
+  readonly fromConnectionStatus: MachineConnectionStatus | null;
+  readonly toConnectionStatus: MachineConnectionStatus | null;
+  readonly fromOperatingMode: MachineOperatingMode | null;
+  readonly toOperatingMode: MachineOperatingMode | null;
+  readonly reason: string | null;
+  readonly source: string;
+  readonly changedBy: string | null;
+  readonly occurredAt: Date;
+}
+
+/**
+ * Metadata credential của máy. KHÔNG có trường bí mật: `public_key_or_secret_hash` không bao giờ
+ * rời khỏi lớp truy vấn (NFR-SEC-05).
+ */
+export interface DeviceCredentialRecord {
+  readonly id: string;
+  readonly machineId: string;
+  readonly credentialIdentifier: string;
+  readonly status: CredentialStatus;
+  readonly issuedAt: Date;
+  readonly expiresAt: Date | null;
+  readonly revokedAt: Date | null;
+  readonly lastAuthenticatedAt: Date | null;
 }
 
 /** Hợp đồng đang giữ slot (spec/errors.md: SLOT_OCCUPIED). */
@@ -453,7 +486,7 @@ export class MchQueries {
           from_operating_mode: current.operating_mode,
           to_operating_mode: mode,
           reason: reason ?? null,
-          source: 'API',
+          source: 'OPERATOR',
           changed_by: actorId ?? null,
         })
         .execute();
@@ -628,6 +661,136 @@ export class MchQueries {
     return this.findSlotById(id);
   }
 
+  // =========================================================================
+  // 4. LỊCH SỬ TRẠNG THÁI MÁY (FR-MCH-13)
+  // =========================================================================
+
+  async listStatusHistory(
+    machineId: string,
+    filter: MachineStatusHistoryFilter,
+  ): Promise<{ items: MachineStatusHistoryRecord[]; total: number }> {
+    const base = this.db.selectFrom('machine_status_histories').where('machine_id', '=', machineId);
+
+    const countRow = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    // Thứ tự phụ theo id để phân trang ổn định khi nhiều hàng trùng occurred_at.
+    const rows = await base
+      .selectAll()
+      .orderBy('occurred_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        fromConnectionStatus: r.from_connection_status,
+        toConnectionStatus: r.to_connection_status,
+        fromOperatingMode: r.from_operating_mode,
+        toOperatingMode: r.to_operating_mode,
+        reason: r.reason,
+        source: r.source,
+        changedBy: r.changed_by,
+        occurredAt: r.occurred_at,
+      })),
+      total: Number(countRow.total),
+    };
+  }
+
+  // =========================================================================
+  // 5. CREDENTIAL THIẾT BỊ (FR-MCH-02, NFR-SEC-05, NFR-SEC-07)
+  // =========================================================================
+
+  async findCredentialByMachineId(machineId: string): Promise<DeviceCredentialRecord | null> {
+    const row = await this.db
+      .selectFrom('device_credentials')
+      .select([
+        'id',
+        'machine_id',
+        'credential_identifier',
+        'status',
+        'issued_at',
+        'expires_at',
+        'revoked_at',
+        'last_authenticated_at',
+      ])
+      .where('machine_id', '=', machineId)
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return toCredentialRecord(row);
+  }
+
+  /**
+   * Cấp hoặc cấp lại credential.
+   *
+   * `device_credentials.machine_id` là UNIQUE (schema.sql §9), nên cấp lại KHÔNG chèn hàng thứ hai:
+   * bộ cũ bị ghi đè tại chỗ, tức thu hồi và cấp mới là một thao tác nguyên tử (FR-MCH-02).
+   * Chỉ nhận vào bản băm — bí mật gốc không đi qua lớp này.
+   */
+  async upsertCredential(data: {
+    machineId: string;
+    credentialIdentifier: string;
+    secretHash: string;
+  }): Promise<DeviceCredentialRecord> {
+    const row = await this.db
+      .insertInto('device_credentials')
+      .values({
+        machine_id: data.machineId,
+        credential_identifier: data.credentialIdentifier,
+        public_key_or_secret_hash: data.secretHash,
+        status: 'ACTIVE',
+        issued_at: new Date(),
+      })
+      .onConflict((oc) =>
+        oc.column('machine_id').doUpdateSet({
+          credential_identifier: data.credentialIdentifier,
+          public_key_or_secret_hash: data.secretHash,
+          status: 'ACTIVE',
+          issued_at: new Date(),
+          revoked_at: null,
+          last_authenticated_at: null,
+        }),
+      )
+      .returning([
+        'id',
+        'machine_id',
+        'credential_identifier',
+        'status',
+        'issued_at',
+        'expires_at',
+        'revoked_at',
+        'last_authenticated_at',
+      ])
+      .executeTakeFirstOrThrow();
+
+    return toCredentialRecord(row);
+  }
+
+  async revokeCredential(machineId: string): Promise<DeviceCredentialRecord | null> {
+    const row = await this.db
+      .updateTable('device_credentials')
+      .set({ status: 'REVOKED', revoked_at: new Date() })
+      .where('machine_id', '=', machineId)
+      .returning([
+        'id',
+        'machine_id',
+        'credential_identifier',
+        'status',
+        'issued_at',
+        'expires_at',
+        'revoked_at',
+        'last_authenticated_at',
+      ])
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return toCredentialRecord(row);
+  }
+
   private mapSlotRecord(r: {
     id: string;
     machine_id: string;
@@ -660,4 +823,26 @@ export class MchQueries {
       updatedAt: r.updated_at,
     };
   }
+}
+
+function toCredentialRecord(row: {
+  id: string;
+  machine_id: string;
+  credential_identifier: string;
+  status: CredentialStatus;
+  issued_at: Date;
+  expires_at: Date | null;
+  revoked_at: Date | null;
+  last_authenticated_at: Date | null;
+}): DeviceCredentialRecord {
+  return {
+    id: row.id,
+    machineId: row.machine_id,
+    credentialIdentifier: row.credential_identifier,
+    status: row.status,
+    issuedAt: row.issued_at,
+    expiresAt: row.expires_at,
+    revokedAt: row.revoked_at,
+    lastAuthenticatedAt: row.last_authenticated_at,
+  };
 }

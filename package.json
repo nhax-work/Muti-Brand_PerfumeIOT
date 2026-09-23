@@ -16,7 +16,7 @@
     "db:seed": "tsx scripts/seed.ts",
     "test": "npm run test:unit && npm run test:integration && npm run test:contract",
     "test:unit": "vitest run tests/unit --passWithNoTests",
-    "test:integration": "vitest run tests/integration --passWithNoTests",
+    "test:integration": "vitest run tests/integration",
     "test:contract": "vitest run tests/contract",
     "test:e2e": "vitest run tests/e2e --passWithNoTests",
     "test:watch": "vitest",

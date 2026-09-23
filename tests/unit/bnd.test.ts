@@ -6,9 +6,14 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
-import { AppError } from '../../apps/api/src/shared/errors/index.js';
-import { BndService, type CreateBrandInput, type UpdateBrandInput, type SelfUpdateBrandInput } from '../../apps/api/src/modules/bnd/bnd.service.js';
-import type { BrandFilter, BrandRecord, BrandStatus, CreateBrandData, UpdateBrandData } from '../../apps/api/src/modules/bnd/bnd.queries.js';
+import { BndService, type CreateBrandInput } from '../../apps/api/src/modules/bnd/bnd.service.js';
+import type {
+  BrandFilter,
+  BrandRecord,
+  BrandStatus,
+  CreateBrandData,
+  UpdateBrandData,
+} from '../../apps/api/src/modules/bnd/bnd.queries.js';
 
 class FakeBndQueries {
   brands = new Map<string, BrandRecord>();
@@ -145,9 +150,7 @@ describe('BndService — FR-BND-01: Tạo thương hiệu', () => {
   it('test_FR_BND_01_duplicate_code_rejected', async () => {
     await service.create(admin, { code: 'DIOR', name: 'Dior 1' });
 
-    await expect(
-      service.create(admin, { code: 'dior', name: 'Dior 2' }),
-    ).rejects.toMatchObject({
+    await expect(service.create(admin, { code: 'dior', name: 'Dior 2' })).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
     });
   });

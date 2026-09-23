@@ -54,7 +54,7 @@ apps/api/src/modules/slt/
 
 Rồi thêm `SltModule` vào `imports` của `apps/api/src/app.module.ts`.
 
-### Ba quy tắc không được phá
+### Bốn quy tắc không được phá
 
 **Service không biết gì về HTTP.** Không nhận `req`, không trả `res`. Controller trích dữ liệu ra
 rồi truyền xuống như tham số thường. Lý do: cùng một nghiệp vụ còn được gọi từ MQTT và scheduler, và
@@ -81,6 +81,10 @@ export class SltService {
 ```
 
 `DATABASE`, `APP_CONFIG`, `CLOCK`, `AuditService` đã được cung cấp toàn cục — inject là dùng được.
+
+**Không viết chuỗi hướng người dùng thẳng vào mã.** Mọi câu mà người dùng đọc được nằm ở
+`packages/i18n`, thêm vào **cả `vi` lẫn `en`** trong cùng commit (NFR-USA-07). `AppError` nhận khóa chứ
+không nhận chuỗi, nên đây là lỗi biên dịch chứ không phải lỗi review — xem Mục 5.
 
 ---
 
@@ -178,16 +182,33 @@ phản hồi cho "tài nguyên của thương hiệu khác" và "không tồn t�
 
 ---
 
-## 5. Lỗi, ngưỡng số, lược đồ — ba thứ sinh từ đặc tả
+## 5. Lỗi, chuỗi, ngưỡng số, lược đồ — bốn thứ không tự viết tay
 
-**Lỗi.** Chỉ ném `AppError` với mã có trong `spec/errors.md`:
+**Lỗi và chuỗi.** Chỉ ném `AppError`, với mã có trong `spec/errors.md` và **khóa** có trong
+`packages/i18n` — không bao giờ là một câu viết tay:
 
 ```ts
-throw new AppError('SLOT_OCCUPIED', 'Slot đang có hợp đồng hiệu lực');
+throw new AppError('SLOT_OCCUPIED', 'mch.slotOccupied');
+
+// Câu có chỗ giữ thì truyền tham số, ĐừNG nối chuỗi
+throw new AppError('VALIDATION_ERROR', 'mch.serialTaken', { serialNumber: input.serialNumber });
+
+// Lỗi gắn vào đúng một trường
+throw invalidField('email', 'usr.emailTaken');
 ```
 
-Gõ một mã không có trong `errors.md` là **lỗi biên dịch** — HTTP status cũng lấy từ đó. Cần mã mới:
-thêm vào `spec/errors.md` (việc cần duyệt, `spec/PROJECT.md` Mục 4), chạy `npm run spec:generate`.
+Gõ một mã không có trong `errors.md`, hoặc một khóa không có trong catalog, đều là **lỗi biên dịch**
+— HTTP status cũng lấy từ `errors.md`. Cần mã mới: thêm vào `spec/errors.md` (việc cần duyệt,
+`spec/PROJECT.md` Mục 4), chạy `npm run spec:generate`.
+
+Cần một câu mới: thêm khóa vào `packages/i18n/src/vi/<module>.ts` **và** `packages/i18n/src/en/index.ts`.
+Quên bản tiếng Anh thì `npm run lint` đỏ ngay, nên không có chuyện để dịch sau.
+
+`message` API trả về luôn là tiếng Việt; kiosk và web quản trị đọc `details.messageKey` để tự dịch sang
+ngôn ngữ đang chọn.
+
+> Chuỗi cho **lập trình viên và vận hành** thì khác: thiếu biến môi trường, vi phạm bất biến nội bộ…
+> dùng `new Error('...')` thường và viết tiếng Việt thẳng trong mã. Chúng không bao giờ tới tay người dùng.
 
 **Ngưỡng số.** Không hardcode timeout, TTL, giới hạn:
 

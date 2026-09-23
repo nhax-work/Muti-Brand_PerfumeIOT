@@ -93,12 +93,7 @@ export class PrdController {
     @Param('id') id: string,
     @Body() body: unknown,
   ) {
-    return this.products.update(
-      actor,
-      scope,
-      parseBody(IdParam, id),
-      parseBody(UpdateBody, body),
-    );
+    return this.products.update(actor, scope, parseBody(IdParam, id), parseBody(UpdateBody, body));
   }
 
   /** FR-PRD-02: Ngừng kinh doanh sản phẩm. */

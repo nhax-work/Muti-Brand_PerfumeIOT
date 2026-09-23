@@ -519,6 +519,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | NFR-USA-04 | Giao diện kiosk phải đọc được ở khoảng cách 60cm với cỡ chữ tối thiểu 18px | Kiểm tra thiết kế |
 | NFR-USA-05 | Kiosk phải hiển thị rõ thương hiệu của mỗi sản phẩm để khách phân biệt được sản phẩm của các thương hiệu khác nhau trên cùng máy | Kiểm thử với người dùng |
 | NFR-USA-06 | Web quản trị phải hoạt động đúng trên Chrome, Edge và Firefox phiên bản mới nhất | Kiểm thử tương thích |
+| NFR-USA-07 | Kiosk và web quản trị phải hiển thị được nhãn giao diện và thông báo hệ thống bằng cả tiếng Việt lẫn tiếng Anh, đổi ngôn ngữ ngay không cần tải lại. Nội dung do thương hiệu nhập (tên, mô tả, tầng hương sản phẩm) giữ nguyên ngôn ngữ gốc | `tests/contract/i18n-parity.test.ts` và rà soát giao diện |
 
 ## B7. NFR-MTN — Khả năng bảo trì và vận hành
 

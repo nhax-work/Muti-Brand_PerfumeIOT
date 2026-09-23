@@ -7,11 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
 import type { BrandScope } from '../../apps/api/src/shared/scoping/index.js';
-import {
-  PrdService,
-  type CreateProductInput,
-  type UpdateProductInput,
-} from '../../apps/api/src/modules/prd/prd.service.js';
+import { PrdService, type CreateProductInput } from '../../apps/api/src/modules/prd/prd.service.js';
 import type {
   CreateProductData,
   ProductFilter,
@@ -89,7 +85,9 @@ class FakePrdQueries {
       defaultPrice: input.defaultPrice ?? p.defaultPrice,
       currency: input.currency ?? p.currency,
       fullBottleRetailPrice:
-        input.fullBottleRetailPrice !== undefined ? input.fullBottleRetailPrice : p.fullBottleRetailPrice,
+        input.fullBottleRetailPrice !== undefined
+          ? input.fullBottleRetailPrice
+          : p.fullBottleRetailPrice,
       fullBottleVolumeMl:
         input.fullBottleVolumeMl !== undefined ? input.fullBottleVolumeMl : p.fullBottleVolumeMl,
       updatedAt: new Date('2026-09-20T11:00:00Z'),
@@ -320,9 +318,21 @@ describe('PrdService — FR-PRD-03, FR-BND-08: Cô lập dữ liệu giữa các
   });
 
   it('test_FR_PRD_03_co_tenant_isolation_list', async () => {
-    await service.create(brandAdminA, { sku: 'A1', name: 'Product A1', defaultPrice: '10000.0000' });
-    await service.create(brandAdminA, { sku: 'A2', name: 'Product A2', defaultPrice: '20000.0000' });
-    await service.create(brandAdminB, { sku: 'B1', name: 'Product B1', defaultPrice: '30000.0000' });
+    await service.create(brandAdminA, {
+      sku: 'A1',
+      name: 'Product A1',
+      defaultPrice: '10000.0000',
+    });
+    await service.create(brandAdminA, {
+      sku: 'A2',
+      name: 'Product A2',
+      defaultPrice: '20000.0000',
+    });
+    await service.create(brandAdminB, {
+      sku: 'B1',
+      name: 'Product B1',
+      defaultPrice: '30000.0000',
+    });
 
     const listA = await service.list(scopeA, { page: 1, pageSize: 10 });
     expect(listA.total).toBe(2);

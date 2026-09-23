@@ -58,7 +58,7 @@ export class TokenService {
     const payload = this.verify<AccessPayload>(token, 'UNAUTHENTICATED');
     if (payload.typ !== 'access') {
       // Chặn dùng reauth token thay access token và ngược lại.
-      throw new AppError('UNAUTHENTICATED', 'Access token không hợp lệ');
+      throw new AppError('UNAUTHENTICATED', 'auth.invalidAccessToken');
     }
     return { sub: payload.sub, sid: payload.sid, pv: payload.pv };
   }
@@ -72,7 +72,7 @@ export class TokenService {
   verifyReauth(token: string, expectedUserId: string): void {
     const payload = this.verify<ReauthPayload>(token, 'REAUTH_REQUIRED');
     if (payload.typ !== 'reauth' || payload.sub !== expectedUserId) {
-      throw new AppError('REAUTH_REQUIRED', 'Thao tác này cần xác thực lại mật khẩu');
+      throw new AppError('REAUTH_REQUIRED', 'auth.reauthRequired');
     }
   }
 
@@ -84,11 +84,11 @@ export class TokenService {
       return this.jwt.verify<T>(token);
     } catch (error) {
       if (fallback === 'UNAUTHENTICATED' && (error as Error).name === 'TokenExpiredError') {
-        throw new AppError('TOKEN_EXPIRED', 'Access token đã hết hạn');
+        throw new AppError('TOKEN_EXPIRED', 'auth.accessTokenExpired');
       }
       throw fallback === 'UNAUTHENTICATED'
-        ? new AppError('UNAUTHENTICATED', 'Access token không hợp lệ')
-        : new AppError('REAUTH_REQUIRED', 'Thao tác này cần xác thực lại mật khẩu');
+        ? new AppError('UNAUTHENTICATED', 'auth.invalidAccessToken')
+        : new AppError('REAUTH_REQUIRED', 'auth.reauthRequired');
     }
   }
 }
