@@ -142,3 +142,10 @@ biến này, vì không được hardcode mật khẩu trong mã nguồn.
 **Docker Desktop chưa mở:** phải mở app Docker Desktop trước, để nó chạy nền, rồi mới chạy được `make up`.
 
 **Muốn xoá hết làm lại từ đầu vì DB bị rối:** `make reset`. Lưu ý lệnh này xoá sạch dữ liệu trong DB của bạn (không ảnh hưởng người khác).
+
+```bash
+docker compose down -v
+docker compose up -d
+npm run db:migrate
+npm run db:seed
+```
