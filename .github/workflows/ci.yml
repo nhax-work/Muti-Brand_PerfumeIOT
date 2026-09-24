@@ -25,8 +25,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx tsc --noEmit
+      # tsconfig gốc loại trừ apps/** — mỗi app tự typecheck bằng tsconfig riêng
+      - run: npm run typecheck -w @scentstation/api -w @scentstation/admin-web -w @scentstation/kiosk
       - run: npx eslint .
       - run: npx prettier --check .
+      - name: Test web quản trị và kiosk
+        run: npm run test:web
 
   # ============ 5.2 + 5.3 Unit và integration ============
   test:

@@ -9,9 +9,22 @@
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import { common } from './common.js';
+import { kiosk } from './kiosk.js';
 import { mch, slotStatus } from './mch.js';
 import { prd } from './prd.js';
+import { ui } from './ui.js';
 import { usr } from './usr.js';
 import { validation } from './validation.js';
 
-export const vi = { common, validation, auth, mch, slotStatus, bnd, prd, usr } as const;
+export const vi = {
+  common,
+  validation,
+  auth,
+  mch,
+  slotStatus,
+  bnd,
+  prd,
+  usr,
+  ui,
+  kiosk,
+} as const;

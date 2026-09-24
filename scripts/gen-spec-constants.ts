@@ -19,15 +19,26 @@ const HEADER = (source: string) =>
   `// SINH TỰ ĐỘNG từ ${source} bằng \`npm run spec:generate\`. KHÔNG SỬA TAY.\n` +
   `// Muốn đổi: sửa ${source} rồi chạy lại lệnh trên.\n\n`;
 
-const constraints = readConstraints();
-writeFileSync(
+/**
+ * Mỗi ứng dụng một bản, cùng nội dung. Không đặt vào `packages/contracts` vì gói đó chỉ chứa kiểu
+ * ("hằng số thuộc về ứng dụng, không thuộc về contract"); không để kiosk import từ `apps/api` vì
+ * client không được chạm ruột server. `tests/contract/spec-constants.test.ts` kiểm mọi bản.
+ */
+const CONSTRAINT_TARGETS = [
   'apps/api/src/shared/config/constraints.generated.ts',
+  'apps/kiosk/src/shared/config/constraints.generated.ts',
+] as const;
+
+const constraints = readConstraints();
+const constraintsSource =
   HEADER('spec/constraints.md') +
-    'export const SPEC_CONSTRAINTS = {\n' +
-    constraints.map((c) => `  ${c.name}: ${JSON.stringify(c.value)},\n`).join('') +
-    '} as const;\n\n' +
-    'export type ConstraintName = keyof typeof SPEC_CONSTRAINTS;\n',
-);
+  'export const SPEC_CONSTRAINTS = {\n' +
+  constraints.map((c) => `  ${c.name}: ${JSON.stringify(c.value)},\n`).join('') +
+  '} as const;\n\n' +
+  'export type ConstraintName = keyof typeof SPEC_CONSTRAINTS;\n';
+for (const target of CONSTRAINT_TARGETS) {
+  writeFileSync(target, constraintsSource);
+}
 
 const codes = readErrorCodes();
 writeFileSync(

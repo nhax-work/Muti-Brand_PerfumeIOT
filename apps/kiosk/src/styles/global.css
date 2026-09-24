@@ -1,0 +1,45 @@
+/*
+ * Token giao diện kiosk. Mọi cỡ chữ tính từ --kiosk-min-font (main.tsx gán từ KIOSK_MIN_FONT_PX,
+ * NFR-USA-04) nên không chữ nào nhỏ hơn mức đọc được ở 60cm.
+ */
+:root {
+  --font-body: calc(var(--kiosk-min-font) * 1.25);
+  --font-title: calc(var(--kiosk-min-font) * 2.5);
+
+  --color-bg: #faf7f2;
+  --color-text: #1f1a17;
+  --color-muted: #5c534d;
+  --color-border: #d6cec6;
+  --color-primary: #7a3e5c;
+  --color-on-primary: #ffffff;
+
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-6: 48px;
+  --radius: 16px;
+  /* Vùng chạm đủ lớn cho ngón tay trên màn hình đứng. */
+  --touch-target: 64px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, sans-serif;
+  font-size: var(--font-body);
+  /* Kiosk cảm ứng: không chọn chữ, không menu chuột phải. */
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
