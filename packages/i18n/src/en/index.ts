@@ -109,4 +109,33 @@ export const en: SameKeysAs<typeof vi> = {
     cannotDisableSelf: 'You cannot disable your own account',
     cannotResetDisabledAccount: 'The account is disabled, its password cannot be reset',
   },
+
+  ui: {
+    localeName: 'English',
+    language: 'Language',
+    appName: 'ScentStation Admin',
+    email: 'Email',
+    password: 'Password',
+    login: 'Sign in',
+    loginTitle: 'Sign in to the admin console',
+    logout: 'Sign out',
+    dashboard: 'Overview',
+    dashboardWelcome: 'Hello, {fullName}',
+    dashboardHint: 'Pick a feature from the left menu to get started.',
+    notFound: 'The page you requested was not found',
+    backHome: 'Back to home',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+    reauthTitle: 'Confirm your password',
+    reauthDescription: 'Re-enter your password to continue with this action.',
+    networkError: 'Cannot reach the server. Check your connection and try again.',
+    loading: 'Loading...',
+  },
+
+  kiosk: {
+    welcome: 'Welcome to ScentStation',
+    tapToStart: 'Tap to choose a scent',
+    outOfServiceTitle: 'This machine is temporarily out of service',
+    outOfServiceHint: 'Please come back in a few minutes or ask the staff at this location.',
+  },
 };

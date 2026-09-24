@@ -1,11 +1,18 @@
 // @ts-check
 import eslint from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 import tseslint from 'typescript-eslint';
+
+/** Hai ứng dụng React (ADR-0003). */
+const WEB_APPS = ['apps/admin-web/**/*.{ts,tsx}', 'apps/kiosk/**/*.{ts,tsx}'];
 
 export default tseslint.config(
   {
     ignores: [
       'dist/**',
+      'apps/*/dist/**',
       'node_modules/**',
       'coverage/**',
       'migrations/**',
@@ -22,7 +29,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ['**/*.ts'],
+    files: ['**/*.{ts,tsx}'],
     rules: {
       // Ngưỡng số phải đọc từ cấu hình theo spec/constraints.md, không hardcode.
       // Rule này không kiểm được điều đó — CI có bước grep riêng (ci.yml §"Không hardcode ngưỡng số").
@@ -32,6 +39,20 @@ export default tseslint.config(
       ],
       '@typescript-eslint/no-explicit-any': 'warn',
     },
+  },
+  {
+    files: WEB_APPS,
+    ...reactHooks.configs.flat['recommended-latest'],
+    languageOptions: { globals: globals.browser },
+  },
+  {
+    files: WEB_APPS,
+    ...reactRefresh.configs.vite,
+  },
+  {
+    // Test và cấu hình Vite không phải module component, fast refresh không áp dụng.
+    files: ['apps/*/src/**/*.test.{ts,tsx}', 'apps/*/vite.config.ts'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
   {
     files: ['scripts/**/*.mjs'],

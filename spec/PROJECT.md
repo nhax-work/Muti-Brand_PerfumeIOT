@@ -40,6 +40,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 7 | `spec/modules/*.md` | FR theo module kèm acceptance criteria | Cần AC dạng Given/When/Then của một module |
 | 8 | `spec/decisions/` | Nhật ký ADR cho các thay đổi contract | Đang đề xuất hoặc rà soát một thay đổi contract |
 | 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
+| 10 | `docs/HUONG_DAN_FRONTEND.md` | Cấu trúc `apps/admin-web` và `apps/kiosk`, năm quy tắc FE, gọi API, i18n, xác thực lại | **Trước khi viết màn hình đầu tiên** |
 
 > Cả năm file contract đã tồn tại và **đã đóng băng**: `erd.md`, `data-dictionary.md`, `schema.sql`,
 > `openapi.yaml`, `mqtt.md`. Chuẩn đặt tên và giá trị enum chốt ở

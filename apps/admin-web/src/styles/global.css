@@ -1,0 +1,40 @@
+body {
+  margin: 0;
+}
+
+.admin-layout {
+  min-height: 100vh;
+}
+
+.admin-brand.ant-typography {
+  color: #fff;
+  padding: 16px;
+  margin: 0;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background: #fff;
+  padding: 0 24px;
+}
+
+.admin-content {
+  margin: 24px;
+}
+
+.auth-layout {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: #f5f5f5;
+}
+
+.login-card {
+  width: min(400px, calc(100vw - 32px));
+}
+
+.login-error {
+  margin-bottom: 16px;
+}
