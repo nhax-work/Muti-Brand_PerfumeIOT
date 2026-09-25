@@ -4,6 +4,9 @@
 .env
 .env.*
 !.env.example
+arduino/**/config.h
+arduino/**/libraries/
+.docker-cli-temp/
 
 # ==============================================================================
 # IoT & Infrastructure (Mosquitto MQTT)

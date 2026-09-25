@@ -30,6 +30,7 @@
     "smoke:auth": "tsx scripts/smoke-auth.ts",
     "sim": "tsx scripts/device-simulator.ts",
     "sim:many": "tsx scripts/device-simulator.ts --machines=50",
+    "device:activate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/activate-device-button.ps1",
     "api:dev": "npm run dev -w @scentstation/api",
     "admin:dev": "npm run dev -w @scentstation/admin-web",
     "kiosk:dev": "npm run dev -w @scentstation/kiosk",
