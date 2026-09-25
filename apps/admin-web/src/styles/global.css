@@ -1,40 +1,349 @@
+:root {
+  --font-family:
+    'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --bg-main: #f8fafc;
+  --color-primary: #0284c7;
+  --color-online: #10b981;
+  --color-unstable: #f59e0b;
+  --color-offline: #94a3b8;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+}
+
 body {
   margin: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-main);
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
 }
 
 .admin-layout {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--bg-main);
+  display: flex;
+}
+
+.admin-layout .ant-layout-sider,
+.admin-sider {
+  background: #0f172a;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.06);
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
+  z-index: 100;
+  flex-shrink: 0;
+}
+
+.admin-main-layout {
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-main);
+  scroll-behavior: smooth;
 }
 
 .admin-brand.ant-typography {
   color: #fff;
-  padding: 16px;
+  padding: 20px 24px;
   margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .admin-header {
+  position: sticky;
+  top: 0;
+  z-index: 99;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  background: #fff;
-  padding: 0 24px;
+  background: #ffffff;
+  padding: 0 28px;
+  height: 64px;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.03);
+  flex-shrink: 0;
+}
+
+.admin-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.admin-header-right {
+  display: flex;
+  align-items: center;
 }
 
 .admin-content {
-  margin: 24px;
+  flex: 1;
+  margin: 24px 28px;
+  min-height: 0;
 }
 
+/* Auth Layout */
 .auth-layout {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  background: #f5f5f5;
+  background: radial-gradient(circle at 50% 50%, #f1f5f9 0%, #e2e8f0 100%);
 }
 
 .login-card {
-  width: min(400px, calc(100vw - 32px));
+  width: min(420px, calc(100vw - 32px));
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid #e2e8f0;
 }
 
 .login-error {
   margin-bottom: 16px;
+}
+
+/* =========================================================================
+   PREMIUM UI COMPONENTS & MICRO-INTERACTIONS
+   ========================================================================= */
+
+/* Pulse animation for live IoT connection status */
+@keyframes pulseGlow {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}
+
+@keyframes pulseGlowAmber {
+  0% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+  }
+}
+
+.iot-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.iot-status-dot.online {
+  background-color: var(--color-online);
+  animation: pulseGlow 2s infinite;
+}
+
+.iot-status-dot.unstable {
+  background-color: var(--color-unstable);
+  animation: pulseGlowAmber 2s infinite;
+}
+
+.iot-status-dot.offline {
+  background-color: var(--color-offline);
+}
+
+/* Premium Card with subtle lift */
+.premium-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--shadow-sm);
+  background: #ffffff;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.premium-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: #cbd5e1;
+}
+
+/* KPI / Metric stat cards */
+.kpi-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  padding: 18px 20px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #0ea5e9, #6366f1);
+}
+
+.kpi-card.emerald::before {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.kpi-card.amber::before {
+  background: linear-gradient(90deg, #f59e0b, #d97706);
+}
+
+.kpi-card.indigo::before {
+  background: linear-gradient(90deg, #8b5cf6, #ec4899);
+}
+
+/* Cartridge Slot Card styling */
+.slot-bay-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid #e2e8f0;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.25s ease;
+  overflow: hidden;
+}
+
+.slot-bay-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px -4px rgba(0, 0, 0, 0.08);
+  border-color: #93c5fd;
+}
+
+.slot-bay-card .ant-card-head {
+  padding: 0 16px;
+  min-height: 52px;
+}
+
+.slot-bay-card .ant-card-head-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.slot-bay-card .ant-card-head-title {
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+  padding: 12px 0 !important;
+}
+
+.slot-bay-card .ant-card-extra {
+  margin-left: auto !important;
+  flex-shrink: 0 !important;
+  padding: 12px 0 !important;
+}
+
+.slot-liquid-chamber {
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  margin: 12px 0;
+}
+
+.slot-bay-card.slot-unavailable {
+  background: #fafaf9;
+  border-color: #e2e8f0;
+}
+
+.btn-slot-enable {
+  background-color: #ecfdf5 !important;
+  border-color: #10b981 !important;
+  color: #047857 !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-slot-enable:hover {
+  background-color: #d1fae5 !important;
+  border-color: #059669 !important;
+  color: #065f46 !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35) !important;
+}
+
+.btn-slot-disable {
+  border-color: #fca5a5 !important;
+  color: #dc2626 !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.btn-slot-disable:hover {
+  background-color: #fef2f2 !important;
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.25) !important;
+}
+
+.slot-modal-icon-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px auto;
+}
+
+.slot-modal-icon-badge.danger {
+  background: #fee2e2;
+  border: 2px solid #fecdd3;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+}
+
+.slot-modal-icon-badge.success {
+  background: #d1fae5;
+  border: 2px solid #a7f3d0;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+}
+
+/* Slots Grid Container: mỗi thẻ rộng tối thiểu 440px để hiển thị thông thoáng 100%, không bị ép chữ */
+.slots-grid-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* Với 5 slot trên màn hình desktop (>= 1280px): chia thành 3 cột hàng trên và 2 cột hàng dưới cực kỳ cân đối */
+@media (min-width: 1280px) {
+  .slots-grid-container.five-slots {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1279px) and (min-width: 900px) {
+  .slots-grid-container.five-slots {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.slot-bay-card .ant-tag {
+  flex-shrink: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
 }

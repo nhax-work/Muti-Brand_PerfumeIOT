@@ -27,3 +27,29 @@ export const slotStatus = {
   MAINTENANCE: 'bảo trì',
   DISABLED: 'đã vô hiệu hóa',
 } as const;
+
+/** Nhãn hiển thị của `machine_connection_status`. */
+export const machineStatus = {
+  ONLINE: 'trực tuyến',
+  UNSTABLE: 'chập chờn',
+  OFFLINE: 'ngoại tuyến',
+} as const;
+
+/** Nhãn hiển thị của `machine_operating_mode`. */
+export const machineOperatingMode = {
+  NORMAL: 'bình thường',
+  MAINTENANCE: 'bảo trì',
+  DISABLED: 'vô hiệu hóa',
+} as const;
+
+/** Nhãn hiển thị của `slot_rental_status`. */
+export const slotRentalStatus = {
+  DRAFT: 'bản nháp',
+  ACTIVE: 'đang hoạt động',
+  EXPIRING: 'sắp hết hạn',
+  GRACE: 'ân hạn',
+  RENEWED: 'đã gia hạn',
+  TERMINATED: 'đã chấm dứt',
+  CLOSED: 'đã đóng',
+  LIQUIDATED: 'đã thanh lý',
+} as const;

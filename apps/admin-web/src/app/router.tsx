@@ -29,6 +29,16 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/dashboard/DashboardPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/machines',
+        lazy: () =>
+          import('@/routes/machines/MachinesPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/machines/:id',
+        lazy: () =>
+          import('@/routes/machines/MachineDetailPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
   {

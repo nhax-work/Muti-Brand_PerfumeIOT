@@ -35,3 +35,6 @@ export type RevenueOwner = Schemas['RevenueOwner'];
 export type SlotRentalStatus = Schemas['SlotRentalStatus'];
 export type OrderStatus = Schemas['OrderStatus'];
 export type CommandStatus = Schemas['CommandStatus'];
+export type MachineConnectionStatus = Schemas['MachineConnectionStatus'];
+export type MachineOperatingMode = Schemas['MachineOperatingMode'];
+export type SlotStatus = Schemas['SlotStatus'];
