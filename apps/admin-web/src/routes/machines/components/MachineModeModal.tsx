@@ -52,10 +52,9 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
   const modeOptions: ModeCardOption[] = [
     {
       value: 'NORMAL',
-      title: 'Bình thường',
-      badge: 'Sẵn sàng phục vụ',
-      description:
-        'Máy Kiosk mở đầy đủ tính năng xịt thử, nhận thanh toán và cấp hương tự động cho khách.',
+      title: t('ui.modeNormalTitle'),
+      badge: t('ui.modeNormalBadge'),
+      description: t('ui.modeNormalDesc'),
       icon: <CheckCircleFilled style={{ fontSize: 22, color: '#10b981' }} />,
       themeColor: '#10b981',
       activeBg: '#f0fdf4',
@@ -63,10 +62,9 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
     },
     {
       value: 'MAINTENANCE',
-      title: 'Bảo trì',
-      badge: 'Tạm ngưng nhận đơn',
-      description:
-        'Màn hình Kiosk chuyển sang giao diện bảo trì buồng chứa, kỹ thuật viên thao tác an toàn.',
+      title: t('ui.modeMaintTitle'),
+      badge: t('ui.modeMaintBadge'),
+      description: t('ui.modeMaintDesc'),
       icon: <ToolFilled style={{ fontSize: 22, color: '#f59e0b' }} />,
       themeColor: '#f59e0b',
       activeBg: '#fffbeb',
@@ -74,10 +72,9 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
     },
     {
       value: 'DISABLED',
-      title: 'Vô hiệu hóa',
-      badge: 'Tắt hệ thống',
-      description:
-        'Ngắt toàn bộ quyền vận hành máy từ xa do sự cố nghiêm trọng hoặc địa điểm tạm đóng cửa.',
+      title: t('ui.modeDisabledTitle'),
+      badge: t('ui.modeDisabledBadge'),
+      description: t('ui.modeDisabledDesc'),
       icon: <StopFilled style={{ fontSize: 22, color: '#ef4444' }} />,
       themeColor: '#ef4444',
       activeBg: '#fef2f2',
@@ -102,13 +99,15 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
       notification.open({
         message: (
           <span style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>
-            Đã chuyển chế độ máy thành công
+            {t('ui.modeChangeSuccess')}
           </span>
         ),
         description: (
           <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-            Máy <strong>{machine.displayName}</strong> hiện đang hoạt động ở chế độ{' '}
-            <strong>{currentOption.title}</strong>.
+            {t('ui.modeChangeSuccessDesc', {
+              displayName: machine.displayName,
+              modeTitle: currentOption.title,
+            })}
           </div>
         ),
         icon: currentOption.icon,
@@ -228,7 +227,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               letterSpacing: '0.05em',
             }}
           >
-            Chọn chế độ hoạt động mới
+            {t('ui.selectNewMode')}
           </span>
 
           <div
@@ -243,7 +242,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               fontSize: 12,
             }}
           >
-            <span style={{ color: '#64748b' }}>Hiện tại:</span>
+            <span style={{ color: '#64748b' }}>{t('ui.currentModeLabel')}:</span>
             <Tag
               color={
                 currentMode === 'NORMAL'
@@ -334,7 +333,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
                         </Tag>
                         {isCurrent && (
                           <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>
-                            (Chế độ hiện tại)
+                            {t('ui.currentModeBadge')}
                           </span>
                         )}
                       </div>
@@ -387,8 +386,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         >
           <SafetyCertificateOutlined style={{ fontSize: 18, color: '#0284c7', flexShrink: 0 }} />
           <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.45 }}>
-            Thao tác thay đổi chế độ IoT yêu cầu xác thực mật khẩu lại (Reauth) để đảm bảo an ninh
-            vận hành.
+            {t('ui.modeReauthNotice')}
           </Typography.Text>
         </div>
 
@@ -397,14 +395,14 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
           name="reason"
           label={
             <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
-              LÝ DO CHUYỂN ĐỔI CHẾ ĐỘ
+              {t('ui.reasonLabel')}
             </span>
           }
           style={{ marginBottom: 20 }}
         >
           <Input.TextArea
             rows={2}
-            placeholder="Nhập lý do chuyển đổi (ví dụ: Bảo trì định kỳ buồng chứa, xử lý sự cố kẹt vòi...)"
+            placeholder={t('ui.reasonPlaceholderFull')}
             maxLength={255}
             showCount
             style={{ borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
@@ -457,10 +455,10 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
             }}
           >
             {selectedMode === 'NORMAL'
-              ? 'Kích hoạt Bình thường'
+              ? t('ui.btnActivateNormal')
               : selectedMode === 'MAINTENANCE'
-                ? 'Chuyển sang Bảo trì'
-                : 'Xác nhận Vô hiệu hóa'}
+                ? t('ui.btnSwitchMaintenance')
+                : t('ui.btnConfirmDisabled')}
           </Button>
         </div>
       </Form>

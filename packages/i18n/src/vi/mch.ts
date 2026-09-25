@@ -23,7 +23,7 @@ export const mch = {
 /** Nhãn hiển thị của `slot_status`. Khóa trùng đúng giá trị enum trong CSDL. */
 export const slotStatus = {
   AVAILABLE: 'khả dụng',
-  UNAVAILABLE: 'không khả dụng',
+  UNAVAILABLE: 'tạm ngưng',
   MAINTENANCE: 'bảo trì',
   DISABLED: 'đã vô hiệu hóa',
 } as const;

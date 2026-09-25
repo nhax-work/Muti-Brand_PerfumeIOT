@@ -307,7 +307,7 @@ export default function MachineDetailPage() {
             <div className="kpi-card">
               <Space direction="vertical" size={2}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
-                  Tổng số slot
+                  {t('ui.totalSlots')}
                 </Typography.Text>
                 <Typography.Title level={3} style={{ margin: 0, fontWeight: 800 }}>
                   {machine.slotCount}
@@ -319,7 +319,7 @@ export default function MachineDetailPage() {
             <div className="kpi-card emerald">
               <Space direction="vertical" size={2}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
-                  Slot đã thuê
+                  {t('ui.rentedSlots')}
                 </Typography.Text>
                 <Typography.Title
                   level={3}
@@ -334,7 +334,7 @@ export default function MachineDetailPage() {
             <div className="kpi-card indigo">
               <Space direction="vertical" size={2}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
-                  Lượng nước hoa
+                  {t('ui.fragranceVolume')}
                 </Typography.Text>
                 <Typography.Title
                   level={3}
@@ -349,13 +349,13 @@ export default function MachineDetailPage() {
             <div className="kpi-card amber">
               <Space direction="vertical" size={2}>
                 <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
-                  Lượt xịt khả dụng
+                  {t('ui.availableSprays')}
                 </Typography.Text>
                 <Typography.Title
                   level={3}
                   style={{ margin: 0, fontWeight: 800, color: '#d97706' }}
                 >
-                  {machineSlotStats.totalSprays} lượt
+                  {machineSlotStats.totalSprays} {t('ui.sprays')}
                 </Typography.Title>
               </Space>
             </div>
@@ -412,7 +412,7 @@ export default function MachineDetailPage() {
               {t('ui.slots')}
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Sơ đồ buồng chứa nước hoa, trạng thái xịt và chi tiết thương hiệu đang thuê từng slot.
+              {t('ui.slotsSubtitle')}
             </Typography.Text>
           </div>
         </div>
@@ -423,7 +423,7 @@ export default function MachineDetailPage() {
           </div>
         ) : !slots || slots.length === 0 ? (
           <Card className="premium-card">
-            <Typography.Text type="secondary">Chưa có slot nào được thiết lập.</Typography.Text>
+            <Typography.Text type="secondary">{t('ui.noSlotsConfigured')}</Typography.Text>
           </Card>
         ) : (
           <div className="slots-grid-container five-slots">

@@ -144,13 +144,10 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
                 alignItems: 'center',
                 padding: '1px 8px',
                 borderRadius: 4,
+                textTransform: 'capitalize',
               }}
             >
-              {isUnavailable
-                ? 'Tạm ngưng'
-                : slot.status === 'AVAILABLE'
-                  ? 'Khả dụng'
-                  : t(`slotStatus.${slot.status}`)}
+              {t(`slotStatus.${slot.status}`)}
             </Tag>
           </div>
         }
@@ -179,7 +176,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
                 {t('ui.enableSlot')}
               </Button>
             ) : (
-              <Tooltip title="Slot đang trong trạng thái bảo trì hoặc vô hiệu hóa">
+              <Tooltip title={t('ui.slotDisabledTooltip')}>
                 <Button size="small" disabled icon={<PoweroffOutlined />}>
                   {t('ui.disableSlot')}
                 </Button>
@@ -482,7 +479,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
               }}
             >
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Buồng chứa:
+                {t('ui.slotChamber')}:
               </Typography.Text>
               <Typography.Text strong style={{ fontSize: 13 }}>
                 Slot {slot.slotNumber}
@@ -496,7 +493,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
               }}
             >
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Thương hiệu thuê:
+                {t('ui.rentedBrand')}:
               </Typography.Text>
               <Typography.Text strong style={{ fontSize: 13, color: '#0369a1' }}>
                 {brand?.name ?? t('ui.vacantSlot')}
@@ -520,7 +517,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
             )}
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                Dung tích còn lại:
+                {t('ui.remainingVolume')}:
               </Typography.Text>
               <Typography.Text strong style={{ fontSize: 13 }}>
                 {remainingMl.toFixed(2)} ml ({remainingSprays} {t('ui.sprays')})

@@ -123,16 +123,15 @@ export default function MachinesPage() {
               {t('ui.machineList')}
             </Typography.Title>
             <Typography.Text type="secondary" style={{ fontSize: 13 }}>
-              Giám sát tình trạng phần cứng, kết nối mạng và phân bổ vị trí các máy kiosk
-              ScentStation.
+              {t('ui.machineListSubtitle')}
             </Typography.Text>
           </div>
           <Segmented
             value={viewMode}
             onChange={(val) => setViewMode(val as 'table' | 'grid')}
             options={[
-              { value: 'table', icon: <UnorderedListOutlined />, label: 'Bảng' },
-              { value: 'grid', icon: <AppstoreOutlined />, label: 'Lưới thiết bị' },
+              { value: 'table', icon: <UnorderedListOutlined />, label: t('ui.tableView') },
+              { value: 'grid', icon: <AppstoreOutlined />, label: t('ui.gridView') },
             ]}
           />
         </div>
@@ -154,7 +153,7 @@ export default function MachinesPage() {
                   {stats.total}
                 </Typography.Title>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Thiết bị thuộc toàn hệ thống
+                  {t('ui.totalMachinesDesc')}
                 </Typography.Text>
               </Space>
             </div>
@@ -179,7 +178,7 @@ export default function MachinesPage() {
                 </Typography.Title>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {stats.total > 0
-                    ? `${Math.round((stats.online / stats.total) * 100)}% trực tuyến`
+                    ? t('ui.onlinePercent', { percent: Math.round((stats.online / stats.total) * 100) })
                     : '0%'}
                 </Typography.Text>
               </Space>
@@ -193,7 +192,7 @@ export default function MachinesPage() {
                   style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                 >
                   <Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 600 }}>
-                    Vận hành bình thường
+                    {t('ui.normalOperatingMode')}
                   </Typography.Text>
                   <CheckCircleOutlined style={{ fontSize: 18, color: '#d97706' }} />
                 </div>
@@ -204,7 +203,7 @@ export default function MachinesPage() {
                   {stats.normal}
                 </Typography.Title>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Chế độ hoạt động chuẩn
+                  {t('ui.normalOperatingModeDesc')}
                 </Typography.Text>
               </Space>
             </div>
@@ -228,7 +227,7 @@ export default function MachinesPage() {
                   {stats.totalSlots}
                 </Typography.Title>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Tổng số vị trí xịt khả dụng
+                  {t('ui.availableSlotsDesc')}
                 </Typography.Text>
               </Space>
             </div>

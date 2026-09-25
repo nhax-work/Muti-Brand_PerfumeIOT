@@ -171,7 +171,7 @@ describe('SlotCard Component', () => {
     );
 
     expect(screen.getByText('Bật slot')).toBeDefined();
-    expect(screen.getByText('Tạm ngưng')).toBeDefined();
+    expect(screen.getByText(/tạm ngưng/i)).toBeDefined();
   });
 
   it('hiển thị tên loại nước hoa và mã SKU thay vì chỉ hiển thị UUID của chai', () => {

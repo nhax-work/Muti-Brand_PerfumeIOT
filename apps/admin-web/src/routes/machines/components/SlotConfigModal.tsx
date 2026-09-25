@@ -59,13 +59,15 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
       notification.open({
         message: (
           <span style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>
-            Đã lưu cấu hình Slot {slot.slotNumber}
+            {t('ui.configSavedSuccess', { slotNumber: slot.slotNumber })}
           </span>
         ),
         description: (
           <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-            Định lượng mới: <strong>{values.calibratedDosageMl} ml/lượt</strong> • Ngưỡng cảnh báo:{' '}
-            <strong>{values.lowStockThresholdMl} ml</strong>.
+            {t('ui.configSavedDesc', {
+              dosage: values.calibratedDosageMl,
+              threshold: values.lowStockThresholdMl,
+            })}
           </div>
         ),
         icon: <ControlOutlined style={{ color: '#6366f1', fontSize: 24 }} />,
@@ -141,7 +143,7 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
             type="secondary"
             style={{ fontSize: 13, marginTop: 4, display: 'block' }}
           >
-            Hiệu chuẩn thể tích phun vòi xịt và ngưỡng cảnh báo cho buồng chứa.
+            {t('ui.configSlotSubtitle')}
           </Typography.Text>
         </div>
       </div>
@@ -162,7 +164,7 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
               <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
                 {t('ui.dosageMl')}
               </span>
-              <span style={{ fontSize: 11, color: '#64748b' }}>Đơn vị: ml / lượt xịt</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{t('ui.dosageUnit')}</span>
             </div>
           }
           rules={[
@@ -185,27 +187,27 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
 
         {/* CÁC MỨC GỢI Ý NHANH (PRESETS) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
-          <span style={{ fontSize: 12, color: '#64748b' }}>Gợi ý nhanh:</span>
+          <span style={{ fontSize: 12, color: '#64748b' }}>{t('ui.quickPresets')}:</span>
           <Tag
             color={dosage === 0.1 ? 'purple' : 'default'}
             onClick={() => form.setFieldValue('calibratedDosageMl', 0.1)}
             style={{ cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
           >
-            0.10 ml (Tiết kiệm)
+            {t('ui.presetEconomy')}
           </Tag>
           <Tag
             color={dosage === 0.12 ? 'purple' : 'default'}
             onClick={() => form.setFieldValue('calibratedDosageMl', 0.12)}
             style={{ cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
           >
-            0.12 ml (Khuyên dùng)
+            {t('ui.presetStandard')}
           </Tag>
           <Tag
             color={dosage === 0.15 ? 'purple' : 'default'}
             onClick={() => form.setFieldValue('calibratedDosageMl', 0.15)}
             style={{ cursor: 'pointer', borderRadius: 4, fontWeight: 600 }}
           >
-            0.15 ml (Hương đậm)
+            {t('ui.presetIntense')}
           </Tag>
         </div>
 
@@ -224,7 +226,7 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
               <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
                 {t('ui.thresholdMl')}
               </span>
-              <span style={{ fontSize: 11, color: '#64748b' }}>Đơn vị: ml</span>
+              <span style={{ fontSize: 11, color: '#64748b' }}>{t('ui.thresholdUnit')}</span>
             </div>
           }
           rules={[
@@ -258,7 +260,7 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 8 }}>
-            ƯỚC TÍNH DUNG TÍCH VẬN HÀNH (CHAI TIÊU CHUẨN 50 ML):
+            {t('ui.calcTitle')}
           </div>
           <Row gutter={12}>
             <Col span={12}>
@@ -271,10 +273,10 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
                 }}
               >
                 <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>
-                  Tổng lượt xịt / chai đầy
+                  {t('ui.calcTotalSprays')}
                 </span>
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#6366f1' }}>
-                  ~{estimatedSpraysPerBottle} lượt
+                  {t('ui.calcSpraysUnit', { count: estimatedSpraysPerBottle })}
                 </span>
               </div>
             </Col>
@@ -288,10 +290,10 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
                 }}
               >
                 <span style={{ fontSize: 11, color: '#64748b', display: 'block' }}>
-                  Báo động đỏ khi còn
+                  {t('ui.calcAlertSprays')}
                 </span>
                 <span style={{ fontSize: 15, fontWeight: 700, color: '#f59e0b' }}>
-                  ~{spraysAtThreshold} lượt ({threshold} ml)
+                  {t('ui.calcSpraysUnit', { count: spraysAtThreshold })} ({threshold} ml)
                 </span>
               </div>
             </Col>
@@ -313,8 +315,7 @@ export function SlotConfigModal({ slot, open, onClose }: SlotConfigModalProps) {
         >
           <SafetyCertificateOutlined style={{ fontSize: 18, color: '#6366f1', flexShrink: 0 }} />
           <Typography.Text type="secondary" style={{ fontSize: 12, lineHeight: 1.45 }}>
-            Thay đổi định lượng ảnh hưởng trực tiếp tới độ chính xác cấp hương. Thao tác yêu cầu xác
-            thực mật khẩu lại.
+            {t('ui.configReauthNotice')}
           </Typography.Text>
         </div>
 
