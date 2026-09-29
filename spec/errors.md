@@ -48,6 +48,7 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `WEBHOOK_ALREADY_PROCESSED` | 200 | Webhook trùng — **trả 200, không phải lỗi** |
 | `AMOUNT_MISMATCH` | 400 | Số tiền webhook lệch đơn hàng |
 | `ORDER_NOT_REFUNDABLE` | 409 | Đơn không ở trạng thái cho hoàn tiền |
+| `MACHINE_BUSY` | 409 | Máy đang có lệnh xịt chờ khách bấm nút — kiosk không nhận đơn mới (FR-ORD-24, ADR-0007) |
 
 ## Lệnh xịt
 
@@ -62,6 +63,7 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `ACTUATOR_FAULT` | Cơ cấu không phản hồi |
 | `HARD_TIMEOUT` | Vượt `ACTUATOR_MAX_MS`, đã cắt nguồn |
 | `NO_CURRENT` | Không phát hiện dòng qua cơ cấu |
+| `PRESS_TIMEOUT` | Thiết bị từ chối: khách không bấm nút trong `DISPENSE_PRESS_WINDOW_SEC`, đã tắt đèn — đơn chuyển `FORFEITED`, không hoàn tiền (FR-DSP-24, ADR-0007) |
 
 ## Tồn kho
 

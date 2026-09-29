@@ -191,6 +191,8 @@ components:
           examples:
             slotOccupied:
               value: { code: SLOT_OCCUPIED, message: Slot đang có hóa đơn hiệu lực }
+            machineBusy:
+              value: { code: MACHINE_BUSY, message: Máy đang chờ khách trước bấm nút }
     Locked:
       description: Tài khoản bị khóa
       content:
@@ -290,7 +292,12 @@ components:
           EXPIRED,
           REFUND_PENDING,
           REFUNDED,
+          FORFEITED,
         ]
+      description: |
+        `FORFEITED` (ADR-0007): khách đã thanh toán nhưng không bấm nút trong
+        DISPENSE_PRESS_WINDOW_SEC — mất lượt, không hoàn tiền, không cần kiểm tra thủ công (FR-ORD-27).
+        `PAID` kéo dài khi máy đang có lệnh khác chờ bấm — đơn "chờ lượt" (FR-DSP-26).
     PaymentStatus:
       type: string
       enum:
@@ -310,7 +317,8 @@ components:
       description: |
         `REJECTED` là thiết bị từ chối trước khi kích hoạt cơ cấu (khách chưa mất lượt xịt);
         `FAILED` là đã kích hoạt nhưng hỏng. Phân biệt này cần cho FR-ORD-19 và FR-ALR-04
-        (ADR-0002).
+        (ADR-0002). Với lệnh CUSTOMER, `ACKNOWLEDGED` nghĩa là đèn nút của slot đích đã sáng, đang
+        chờ khách bấm; `REJECTED` với PRESS_TIMEOUT là khách không bấm (ADR-0007).
     DispenseType:
       type: string
       enum: [CUSTOMER, DIAGNOSTIC]
@@ -1501,7 +1509,18 @@ components:
         revenueOwner: { $ref: '#/components/schemas/RevenueOwner' }
         dispenseStatus:
           oneOf: [{ $ref: '#/components/schemas/CommandStatus' }, { type: 'null' }]
-        failureCode: { type: [string, 'null'] }
+        failureCode:
+          type: [string, 'null']
+          description: PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED).
+        slotNumber:
+          type: integer
+          description: Số slot — kiosk hiện "Mời bấm nút số N" khi đèn đã sáng (FR-ORD-26).
+        pressDeadline:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            acknowledgedAt + DISPENSE_PRESS_WINDOW_SEC, để kiosk đếm ngược (FR-ORD-26). Null khi đèn chưa
+            sáng — kể cả đơn PAID đang chờ lượt vì máy còn lệnh khác (FR-DSP-26).
         supportReference:
           type: [string, 'null']
           description: >-
@@ -1588,9 +1607,14 @@ components:
         expiresAt:
           type: string
           format: date-time
-          description: createdAt + DISPENSE_CMD_TTL_SEC (FR-DSP-06).
+          description: >-
+            createdAt + DISPENSE_CMD_TTL_SEC (FR-DSP-06) — hạn để thiết bị nhận lệnh và sáng đèn nút.
+            Thời gian khách được bấm là DISPENSE_PRESS_WINDOW_SEC, tính từ acknowledgedAt (ADR-0007).
         sentAt: { type: [string, 'null'], format: date-time }
-        acknowledgedAt: { type: [string, 'null'], format: date-time }
+        acknowledgedAt:
+          type: [string, 'null']
+          format: date-time
+          description: Lệnh CUSTOMER — lúc đèn nút sáng, bắt đầu chờ khách bấm (FR-DSP-21).
         completedAt: { type: [string, 'null'], format: date-time }
         retryCount: { type: integer, minimum: 0 }
         createdAt: { type: string, format: date-time }
@@ -3926,7 +3950,11 @@ paths:
         ORDER_PAYMENT_TTL_SEC.
 
         Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06),
-        SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04).
+        SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có
+        lệnh xịt chờ khách trước bấm nút (FR-ORD-24, ADR-0007).
+
+        Trước khi hiện mã QR, kiosk phải hiện điều khoản bấm nút trong DISPENSE_PRESS_WINDOW_SEC, quá
+        thời gian mất lượt và không hoàn tiền (FR-ORD-25).
 
         Giới hạn ORDER_RATE_LIMIT_PER_MIN yêu cầu mỗi phút cho mỗi máy (NFR-SEC-06).
       parameters:
@@ -4018,8 +4046,11 @@ paths:
         WEBHOOK_ALREADY_PROCESSED — đây KHÔNG phải lỗi (spec/errors.md); trả 4xx sẽ khiến nhà cung
         cấp gửi lại vô hạn.
 
-        Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01). Từ webhook
-        đến lúc thiết bị kích hoạt cơ cấu tối đa WEBHOOK_TO_ACTUATION_MAX_SEC (NFR-PER-03).
+        Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01) — nếu máy
+        đang có lệnh khác chờ bấm thì đơn giữ PAID ("chờ lượt") tới khi lệnh đó kết thúc (FR-DSP-26).
+        Thiết bị sáng đèn nút rồi chờ khách bấm (ADR-0007). Từ webhook đến lúc đèn sáng tối đa
+        WEBHOOK_TO_ARMED_MAX_SEC (NFR-PER-03); từ lúc bấm tới lúc kích hoạt tối đa
+        PRESS_TO_ACTUATION_MAX_MS (NFR-PER-07).
 
         Với hóa đơn thuê slot: ghi paidAt và cấp invoiceNumber trong cùng transaction; hóa đơn vẫn
         DRAFT (chờ nạp hàng) cho tới khi lắp chai đầu tiên (FR-SLT-24). Tiền về sau khi hóa đơn đã

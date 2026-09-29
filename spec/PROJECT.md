@@ -27,12 +27,13 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - Giá tự do — không có giá sàn hay giá trần (FR-SLT-08).
 - Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009).
 - Khi hóa đơn hết hạn: ân hạn có tính phí trước, sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
+- Khách **bấm nút vật lý** để nhận lượt xịt (ADR-0007, đã duyệt 2026-09-29): mỗi slot một nút có đèn; thanh toán xong máy **không tự xịt** mà sáng đèn nút slot đích, khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì xịt. Không bấm → đơn `FORFEITED`, không hoàn tiền. Mỗi máy chỉ một lượt chờ bấm tại một thời điểm.
 
 ## 2. Đọc trước khi làm bất cứ việc gì
 
 | # | File | Chứa gì | Mở khi nào |
 |---|---|---|---|
-| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 275 FR + 50 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
+| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 286 FR + 52 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
 | 2 | `spec/glossary.md` | Thực thể và mọi state machine | Đụng tới vòng đời của một thực thể, hoặc viết truy vấn có phạm vi |
 | 3 | `spec/constraints.md` | Tên mọi hằng ngưỡng số | Cần một timeout, TTL, giới hạn hay tỷ lệ — không bao giờ hardcode |
 | 4 | `spec/errors.md` | Danh mục mã lỗi đầy đủ | Cần trả về hoặc kiểm tra một mã lỗi |
@@ -43,6 +44,13 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
 | 10 | `docs/HUONG_DAN_FRONTEND.md` | Cấu trúc `apps/admin-web` và `apps/kiosk`, năm quy tắc FE, gọi API, i18n, xác thực lại | **Trước khi viết màn hình đầu tiên** |
 
+> **Quyết định mới nhất phải đọc trước khi đụng SLT, EXP, INV, ORD, DSP hay firmware:**
+> `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (thuê slot theo gói trả trước, hóa
+> đơn, bảo hiểm hàng hóa) và `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (nút bấm vật
+> lý). Hai ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
+> và mọi ghi nhớ cũ về "hợp đồng thuê", "yêu cầu thuê", "phí cố định", "ăn chia", "xịt ngay sau
+> thanh toán" đều đã lỗi thời.
+
 > Cả năm file contract đã tồn tại và **đã đóng băng**: `erd.md`, `data-dictionary.md`, `schema.sql`,
 > `openapi.yaml`, `mqtt.md`. Chuẩn đặt tên và giá trị enum chốt ở
 > `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`.
@@ -51,15 +59,16 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > bản sao nguyên văn của `schema.sql` **lúc đóng băng**, còn `data-dictionary.md` do
 > `scripts/gen-data-dictionary.ts` sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng
 > lệch khỏi chính lược đồ mà chúng mô tả. Từ ADR-0006, `schema.sql` mô tả trạng thái sau **mọi**
-> migration (ban đầu + `1790665900000_*` + `1790665960000_*`); `pg_dump --schema-only` của DB nạp
+> migration (ban đầu + `1790665900000_*` + `1790665960000_*` + `1790752000000_*` + `1790752060000_*`); `pg_dump --schema-only` của DB nạp
 > `schema.sql` phải trùng với DB chạy hết migration.
 
-> Trạng thái acceptance criteria trong `spec/modules/` (177/275 FR hiệu lực, đếm lại ngày 2026-09-25
-> sau khi viết lại mục SLT theo ADR-0006 — đã duyệt; 7 FR mức X đã bãi bỏ không tính):
+> Trạng thái acceptance criteria trong `spec/modules/` (188/286 FR hiệu lực, đếm lại ngày 2026-09-29
+> sau ADR-0006 và ADR-0007 — đều đã duyệt; 7 FR mức X đã bãi bỏ không tính):
 >
 > - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
-> - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17)
-> - **Còn rỗng:** `DSP`, `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
+> - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17), `DSP` (chỉ
+>   FR-DSP-21..27 — nút bấm vật lý, ADR-0007)
+> - **Còn rỗng:** `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
 >
 > Đừng bịa acceptance criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở
 > `spec/modules/SLT.md`, hoặc nêu rõ là còn thiếu. Header của mỗi file ghi số FR và trạng thái; đếm
@@ -119,6 +128,14 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
   môi trường lúc khởi động, vi phạm bất biến nội bộ. Những lỗi đó không bao giờ tới tay người dùng
   nên vẫn viết tiếng Việt thẳng trong mã.
 
+- **Không viết code mới dùng phần DEPRECATED (ADR-0006).** Bảng `slot_rental_requests`, cột
+  `slot_rentals.fixed_fee`, `revenue_share_percent`, `request_id` và các endpoint `/slot-rental-requests*`,
+  `POST /slot-rentals` chỉ còn để không phá migration và test cũ. Hóa đơn chỉ sinh ra qua
+  `POST /slot-rentals/checkout`.
+- **Migration thêm giá trị enum** phải nằm ở file riêng, và file sau **không** được ép chuỗi thành giá
+  trị enum mới (so sánh qua `::text`): node-pg-migrate chạy mọi migration đang chờ trong **một**
+  transaction. Kiểm cả DB trống lẫn DB đã có lược đồ cũ (`docs/MIGRATIONS.md`).
+
 ## 4. Không bao giờ tự quyết
 
 | Trường hợp | Lý do |
@@ -138,7 +155,8 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 ### 🗺️ Plan Agent
 
 - Chia việc theo ranh giới `FR-<MODULE>-<số>` và trích dẫn BR mà mỗi FR truy về (`docs/FR_NFR_SCENTSTATION.md`).
-- Trước khi lập kế hoạch cho một module, kiểm tra `spec/modules/<MODULE>.md` đã có AC thật chưa — 10 trong 17 module vẫn rỗng; hãy lên kế hoạch viết AC thay vì bỏ qua.
+- Trước khi lập kế hoạch cho một module, kiểm tra `spec/modules/<MODULE>.md` đã có AC thật chưa — 5 trong 17 module vẫn rỗng và 3 module mới có một phần (danh sách ở Mục 2); hãy lên kế hoạch viết AC thay vì bỏ qua.
+- Việc SLT dựa trên luồng mua gói (ADR-0006); việc ORD, DSP, kiosk, firmware dựa trên luồng nút bấm (ADR-0007). Không lập task cho luồng "yêu cầu thuê → duyệt" đã bãi bỏ (FR mức X).
 - Không bao giờ xếp một task sửa thẳng `spec/contracts/*`; xếp bước viết ADR trước.
 - Khi lập kế hoạch test, đặt sẵn tên theo `test_FR_<MODULE>_<số>_<mô_tả_ngắn>` để truy vết không đứt.
 
@@ -151,11 +169,14 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 - Coi `orders.brand_id`, `orders.slot_rental_id`, `orders.revenue_owner`, `orders.amount` là chỉ ghi một lần lúc tạo (`spec/contracts/README.md`, NFR-DAT-06) — không có đường cập nhật cho các cột này.
 - Không bao giờ sửa file trong `spec/contracts/` từ một thay đổi code; việc đó cần quy trình ADR ở Mục 3.
 - Khi task cần đổi lược đồ, thêm đúng một file migration mới — không sửa, không xóa migration cũ — và kiểm bằng `make reset && make migrate` trên CSDL sạch trước khi coi là xong.
+- Webhook thanh toán đơn kiosk **không** kích hoạt xịt: tạo lệnh `CUSTOMER` chỉ khi máy không còn lệnh `CUSTOMER` hiệu lực (nếu còn, đơn giữ `PAID` — chờ lượt); `ACK` từ thiết bị nghĩa là đèn nút đã sáng; `REJECT` với `PRESS_TIMEOUT` → đơn `FORFEITED`, không đặt `needs_manual_review`; mọi mã từ chối khác sau `ACK` → `FAILED` + `needs_manual_review` (ADR-0007, `spec/contracts/mqtt.md` §5.2, §6).
+- Coi các cột ảnh chụp giá trên `slot_rentals` (`duration_months` … `total_amount`, `invoice_number`) là chỉ ghi một lần, như cột ảnh chụp trên `orders` (ADR-0006, FR-SLT-33).
 
 ### 🔍 Review Agent
 
 - Đối chiếu chuyển trạng thái với `spec/glossary.md` thật chính xác — ví dụ `Order` chỉ tới `DISPENSED` sau khi thiết bị trả kết quả thành công (FR-DSP-17), và lệnh ở `UNKNOWN` không được kích hoạt lệnh mới (FR-DSP-19).
-- Xác nhận bất biến "một hóa đơn hiệu lực mỗi slot" và "một lệnh hiệu lực mỗi đơn" được cưỡng chế bằng partial unique index ở CSDL, không chỉ bằng code ứng dụng (FR-SLT-02, FR-DSP-05, NFR-DAT-07).
+- Xác nhận bất biến "một hóa đơn hiệu lực mỗi slot", "một lệnh hiệu lực mỗi đơn" và "một lệnh khách hàng hiệu lực mỗi máy" được cưỡng chế bằng partial unique index ở CSDL, không chỉ bằng code ứng dụng (FR-SLT-02, FR-DSP-05, FR-DSP-26, NFR-DAT-07).
+- Từ chối PR cho máy xịt ngay khi nhận lệnh khách hàng (bỏ qua bước chờ bấm), PR đánh dấu kiểm tra thủ công cho đơn `FORFEITED`, hoặc PR có code mới dùng phần DEPRECATED của ADR-0006.
 - Từ chối mọi PR có truy vấn hướng thương hiệu lọc qua `Machine` thay vì qua quyền sở hữu ở `Order`/`SlotRental`.
 - Từ chối PR có chuỗi hướng người dùng viết thẳng tại chỗ dùng, hoặc thêm khóa vào `vi` mà quên `en`.
 - Nêu cờ đỏ với mọi PR sửa file trong `spec/contracts/` mà không kèm ADR trong `spec/decisions/`.
@@ -164,7 +185,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 ### 🧪 Test Agent
 
 - Đặt tên mọi test sinh ra đúng dạng `test_FR_<MODULE>_<số>_<mô_tả_ngắn>`; `scripts/check-traceability.mjs` dựa vào đó để tính một FR là đã có test.
-- Không sinh 7 nhóm test người tự viết liệt kê ở Mục 4 — để dành cho người và nói rõ điều đó.
+- Không sinh 7 nhóm test người tự viết liệt kê ở Mục 4 — để dành cho người và nói rõ điều đó. ADR-0006 và ADR-0007 thêm ca vào các nhóm này (giữ chỗ slot đồng thời, webhook trùng cho hóa đơn, job hủy giữ chỗ và tự kích hoạt, bấm sau khi hết thời gian chờ, reset khi đèn đang sáng) — các ca đó cũng là của người. `spec/modules/*.md` đánh dấu từng ca bằng ghi chú "agent không sinh test".
 - Đặt test đúng tầng: `tests/unit/` (logic thuần), `tests/integration/` (CSDL thật, ràng buộc, tranh chấp đồng thời), `tests/contract/` (khớp `openapi.yaml`/`mqtt.md`), `tests/e2e/` (luồng đầy đủ với Device Simulator).
 - Nhắm độ phủ ≥60% cho `ORD`, `DSP`, `SLT`, `EXP`, `REV`, `INV` — cổng coverage của CI (`spec/testing.md`, NFR-MTN-01).
 

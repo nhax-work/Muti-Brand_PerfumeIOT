@@ -25,7 +25,7 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | Mã | Mục tiêu nghiệp vụ | Tiêu chí thành công |
 |---|---|---|
 | **BR-001** | Cho phép khách tự trải nghiệm nước hoa mà không cần nhân viên hỗ trợ, giúp thương hiệu mở rộng điểm trải nghiệm mà không tăng chi phí nhân sự | 100% lượt trải nghiệm hoàn tất không cần người can thiệp |
-| **BR-002** | Bảo đảm mỗi giao dịch đã thanh toán nhận đúng một lượt xịt, để khách tin tưởng và thương hiệu không thất thoát | 0 trường hợp xịt trùng; ≤1% giao dịch chưa xác định kết quả, và 100% số đó được xử lý trong 24 giờ |
+| **BR-002** | Bảo đảm mỗi giao dịch đã thanh toán được quyền nhận đúng một lượt xịt (khách bấm nút trong thời gian chờ — ADR-0007), để khách tin tưởng và thương hiệu không thất thoát | 0 trường hợp xịt trùng; ≤1% giao dịch chưa xác định kết quả, và 100% số đó được xử lý trong 24 giờ |
 | **BR-003** | Cho phép nhiều thương hiệu cùng khai thác một máy vật lý với dữ liệu kinh doanh được cô lập ở mức slot, để nền tảng tối đa hóa tỷ lệ lấp đầy máy | Thương hiệu chỉ truy cập được dữ liệu của slot mình đang hoặc đã từng thuê; 0 trường hợp rò rỉ dữ liệu chéo trong kiểm thử |
 | **BR-004** | Giảm chi phí vận hành bằng cách nền tảng quản lý tập trung toàn bộ máy, địa điểm và nhân sự vận hành, giúp thương hiệu tham gia mà không cần bộ máy vận hành riêng | Thương hiệu không cần bất kỳ nhân sự kỹ thuật nào để duy trì hoạt động slot của mình |
 | **BR-005** | Kiểm soát lượng nước hoa trong máy để tránh thất thoát và tránh tình trạng slot hết hàng khi khách đến | Sai lệch giữa tồn ước tính và số đo thực ≤10%; tỷ lệ thời gian slot hết hàng ≤2% |
@@ -54,6 +54,7 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | 6 | Đơn vị thuê | Một hóa đơn cho một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập |
 | 7 | Cách thuê slot | Tự phục vụ, không ký hợp đồng, không cần duyệt: Brand Admin xem slot trống → chọn slot → chọn gói thuê (3/6/12 tháng) và gói bảo quản → thanh toán hết một lần qua cổng thanh toán → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc Inventory Staff lắp chai đầu tiên (`spec/decisions/0006-*.md`) |
 | 8 | Bảo hiểm hàng hóa | Mỗi lượt thuê bắt buộc chọn đúng một gói bảo quản. Chai hư hỏng khi đang do nền tảng giữ được bồi thường theo tỷ lệ và hạn mức của gói |
+| 9 | Khách kích hoạt lượt xịt thế nào | Mỗi slot có một nút vật lý có đèn. Thanh toán xong thì đèn nút của slot đã mua sáng; khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt. Quá thời gian không bấm thì mất lượt, **không hoàn tiền** — điều khoản hiện trên kiosk trước khi thanh toán. Mỗi máy chỉ phục vụ một lượt chờ bấm tại một thời điểm (`spec/decisions/0007-*.md`) |
 
 ### Quy trình hết hạn hóa đơn và thanh lý
 
@@ -336,20 +337,24 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-07 | Hệ thống phải sinh cho mỗi đơn hàng một mã tham chiếu duy nhất trên toàn hệ thống | BR-002, BR-008 | M |
 | FR-ORD-08 | Hệ thống phải sinh mã QR thanh toán tương ứng với mã tham chiếu của đơn hàng | BR-001 | M |
 | FR-ORD-09 | Hệ thống phải gán cho mỗi đơn hàng một thời hạn thanh toán mặc định 5 phút, có thể cấu hình | BR-002 | M |
-| FR-ORD-10 | Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED | BR-002, BR-008 | M |
+| FR-ORD-10 | Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED, FORFEITED | BR-002, BR-008 | M |
 | FR-ORD-11 | Hệ thống phải hiển thị trạng thái thanh toán trên kiosk và cập nhật trong vòng 3 giây kể từ khi trạng thái thay đổi | BR-001 | M |
 | FR-ORD-12 | Hệ thống phải tiếp nhận thông báo kết quả thanh toán từ nhà cung cấp qua webhook | BR-002 | M |
 | FR-ORD-13 | Hệ thống phải xác minh chữ ký của mỗi webhook trước khi xử lý và từ chối webhook có chữ ký không hợp lệ | BR-002 | M |
 | FR-ORD-14 | Hệ thống phải xác minh mã tham chiếu, số tiền và loại tiền trong webhook khớp với đơn hàng tương ứng | BR-002 | M |
 | FR-ORD-15 | Hệ thống phải bảo đảm mỗi webhook chỉ được xử lý đúng một lần, kể cả khi nhà cung cấp gửi lại nhiều lần | BR-002 | M |
 | FR-ORD-16 | Hệ thống phải chuyển đơn hàng sang trạng thái EXPIRED khi quá thời hạn thanh toán mà chưa nhận được xác nhận | BR-002 | M |
-| FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED hoặc REFUNDED | BR-002 | M |
+| FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED, REFUNDED hoặc FORFEITED | BR-002 | M |
 | FR-ORD-18 | Hệ thống phải lưu toàn bộ lịch sử chuyển trạng thái của đơn hàng kèm thời điểm và nguyên nhân | BR-008 | M |
-| FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định | BR-002, BR-006 | M |
+| FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định, trừ trường hợp khách không bấm nút trong thời gian chờ | BR-002, BR-006 | M |
 | FR-ORD-20 | Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công | BR-002 | S |
 | FR-ORD-21 | Hệ thống phải hiển thị hướng dẫn xử lý cho khách trên kiosk khi đã thanh toán nhưng lượt xịt thất bại, kèm mã tham chiếu sự cố | BR-002 | M |
 | FR-ORD-22 | Hệ thống phải cho phép tìm kiếm giao dịch theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng thái | BR-008 | M |
 | FR-ORD-23 | Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch | BR-008, BR-009 | S |
+| FR-ORD-24 | Hệ thống phải từ chối tạo đơn hàng mới trên máy đang có lệnh xịt khách hàng chờ bấm nút | BR-002 | M |
+| FR-ORD-25 | Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền | BR-001, BR-002 | M |
+| FR-ORD-26 | Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ | BR-001 | M |
+| FR-ORD-27 | Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn | BR-002, BR-009 | M |
 
 ## A12. FR-DSP — Điều khiển lượt xịt an toàn
 
@@ -360,21 +365,28 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-DSP-03 | Hệ thống phải gán cho mỗi lệnh xịt định danh máy đích, định danh slot đích, thời điểm tạo và thời hạn hiệu lực | BR-002 | M |
 | FR-DSP-04 | Hệ thống phải ký số mỗi lệnh xịt trước khi gửi tới thiết bị | BR-002 | M |
 | FR-DSP-05 | Hệ thống phải bảo đảm mỗi đơn hàng không có quá một lệnh xịt ở trạng thái đang hiệu lực tại bất kỳ thời điểm nào | BR-002 | M |
-| FR-DSP-06 | Hệ thống phải đặt thời hạn hiệu lực của lệnh xịt tối đa 60 giây kể từ thời điểm tạo | BR-002 | M |
+| FR-DSP-06 | Hệ thống phải đặt thời hạn để lệnh xịt tới thiết bị và được sáng đèn chờ bấm tối đa `DISPENSE_CMD_TTL_SEC` kể từ thời điểm tạo | BR-002 | M |
 | FR-DSP-07 | Thiết bị phải xác minh chữ ký của lệnh xịt và từ chối lệnh có chữ ký không hợp lệ | BR-002, BR-010 | M |
-| FR-DSP-08 | Thiết bị phải từ chối lệnh xịt đã quá thời hạn hiệu lực | BR-002, BR-010 | M |
+| FR-DSP-08 | Thiết bị phải từ chối lệnh xịt đã quá thời hạn hiệu lực tại thời điểm nhận lệnh | BR-002, BR-010 | M |
 | FR-DSP-09 | Thiết bị phải từ chối lệnh xịt có định danh máy đích không khớp với định danh của chính nó | BR-002, BR-010 | M |
 | FR-DSP-10 | Thiết bị phải lưu danh sách mã lệnh đã thực hiện và từ chối lệnh có mã trùng | BR-002, BR-010 | M |
-| FR-DSP-11 | Thiết bị phải gửi xác nhận đã tiếp nhận lệnh về hệ thống trước khi bắt đầu thực hiện | BR-002 | M |
-| FR-DSP-12 | Thiết bị phải từ chối thực hiện lệnh xịt khi cảm biến báo cửa đang mở | BR-010 | M |
-| FR-DSP-13 | Thiết bị phải từ chối thực hiện lệnh xịt khi máy đang ở chế độ MAINTENANCE | BR-010 | M |
-| FR-DSP-14 | Thiết bị phải từ chối thực hiện lệnh xịt khi slot đích được đánh dấu là rỗng | BR-005, BR-010 | M |
-| FR-DSP-15 | Thiết bị phải chỉ kích hoạt cơ cấu của đúng slot đích trong một chu kỳ xịt đã hiệu chuẩn | BR-002, BR-010 | M |
+| FR-DSP-11 | Thiết bị phải gửi xác nhận đã tiếp nhận lệnh về hệ thống ngay khi đã sáng đèn nút của slot đích, trước khi khách bấm | BR-002 | M |
+| FR-DSP-12 | Thiết bị phải từ chối thực hiện lệnh xịt khi cảm biến báo cửa đang mở, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-010 | M |
+| FR-DSP-13 | Thiết bị phải từ chối thực hiện lệnh xịt khi máy đang ở chế độ MAINTENANCE, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-010 | M |
+| FR-DSP-14 | Thiết bị phải từ chối thực hiện lệnh xịt khi slot đích được đánh dấu là rỗng, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-005, BR-010 | M |
+| FR-DSP-15 | Thiết bị phải chỉ kích hoạt cơ cấu của đúng slot đích trong một chu kỳ xịt đã hiệu chuẩn, sau khi khách bấm đúng nút của slot đích | BR-002, BR-010 | M |
 | FR-DSP-16 | Thiết bị phải gửi về hệ thống kết quả thực hiện gồm mã lệnh, trạng thái thành công hoặc thất bại, thời điểm thực hiện và mã lỗi nếu có | BR-002, BR-008 | M |
 | FR-DSP-17 | Hệ thống phải chỉ chuyển đơn hàng sang trạng thái DISPENSED sau khi nhận được kết quả thành công từ thiết bị | BR-002 | M |
-| FR-DSP-18 | Hệ thống phải chuyển lệnh xịt sang trạng thái UNKNOWN khi không nhận được kết quả trong vòng 60 giây | BR-002 | M |
+| FR-DSP-18 | Hệ thống phải chuyển lệnh xịt sang trạng thái UNKNOWN khi không nhận được xác nhận hoặc từ chối trong `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc gửi, hoặc không nhận được kết quả hoặc từ chối trong `DISPENSE_PRESS_WINDOW_SEC` cộng `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc xác nhận | BR-002 | M |
 | FR-DSP-19 | Hệ thống phải không tự động tạo lệnh xịt mới cho đơn hàng có lệnh ở trạng thái UNKNOWN | BR-002 | M |
 | FR-DSP-20 | Hệ thống phải ghi nhận riêng các lượt xịt chẩn đoán, không tính vào doanh thu và không tính vào thống kê lượt xịt khách hàng | BR-005, BR-008 | M |
+| FR-DSP-21 | Thiết bị phải sáng đèn nút của đúng slot đích, thay vì kích hoạt cơ cấu ngay, khi nhận một lệnh xịt khách hàng hợp lệ | BR-001, BR-002 | M |
+| FR-DSP-22 | Thiết bị phải chỉ kích hoạt cơ cấu khi khách bấm nút của slot đích trong `DISPENSE_PRESS_WINDOW_SEC` kể từ lúc sáng đèn, và bỏ qua mọi lần bấm nút của slot khác | BR-002, BR-010 | M |
+| FR-DSP-23 | Thiết bị phải kiểm tra lại các điều kiện tại FR-DSP-12 đến FR-DSP-14 đúng lúc khách bấm nút và từ chối kích hoạt nếu không còn thỏa | BR-010 | M |
+| FR-DSP-24 | Thiết bị phải tắt đèn và gửi từ chối với mã `PRESS_TIMEOUT` khi hết `DISPENSE_PRESS_WINDOW_SEC` mà khách chưa bấm nút | BR-002 | M |
+| FR-DSP-25 | Thiết bị phải không khôi phục trạng thái chờ bấm của bất kỳ lệnh nào sau khi khởi động lại | BR-002, BR-010 | M |
+| FR-DSP-26 | Hệ thống phải bảo đảm mỗi máy có tối đa một lệnh xịt khách hàng đang hiệu lực, và chỉ tạo lệnh cho đơn đã thanh toán khi máy không còn lệnh khách hàng nào đang hiệu lực | BR-002 | M |
+| FR-DSP-27 | Thiết bị phải thực hiện lệnh xịt chẩn đoán ngay khi nhận, không sáng đèn chờ bấm | BR-006 | M |
 
 ## A13. FR-IOT — Giao tiếp và giám sát thiết bị
 
@@ -444,7 +456,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-RPT-01 | Hệ thống phải hiển thị cho Platform Super Admin số lượng máy theo từng trạng thái kết nối và chế độ hoạt động | BR-006 | M |
 | FR-RPT-02 | Hệ thống phải hiển thị số giao dịch và doanh thu theo ngày, tuần, tháng và khoảng thời gian tùy chọn | BR-007, BR-009 | M |
 | FR-RPT-03 | Hệ thống phải hiển thị số giao dịch theo từng trạng thái đơn hàng | BR-007 | M |
-| FR-RPT-04 | Hệ thống phải hiển thị tỷ lệ lượt xịt thành công và thất bại | BR-002, BR-007 | M |
+| FR-RPT-04 | Hệ thống phải hiển thị tỷ lệ lượt xịt thành công, thất bại và khách bỏ lượt (FORFEITED), trong đó khách bỏ lượt không tính là thất bại | BR-002, BR-007 | M |
 | FR-RPT-05 | Hệ thống phải liệt kê các đơn hàng đã thanh toán nhưng chưa xác nhận được lượt xịt | BR-002, BR-006 | M |
 | FR-RPT-06 | Hệ thống phải hiển thị xếp hạng sản phẩm theo số lượt được chọn, lọc theo slot, máy, địa điểm và khoảng thời gian | BR-007 | M |
 | FR-RPT-07 | Hệ thống phải hiển thị tồn kho ước tính và danh sách slot sắp hết | BR-005 | M |
@@ -483,10 +495,11 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|
 | NFR-PER-01 | Kiosk phải phản hồi thao tác chọn sản phẩm trong tối đa 500ms ở điều kiện mạng bình thường | Đo trên thiết bị thật, 50 lần lặp |
 | NFR-PER-02 | Hệ thống phải hiển thị mã QR thanh toán trong tối đa 3 giây kể từ khi khách xác nhận đơn | Đo trên thiết bị thật |
-| NFR-PER-03 | Thời gian từ khi hệ thống nhận webhook đến khi thiết bị bắt đầu kích hoạt cơ cấu xịt tối đa 5 giây | Đo bằng log có dấu thời gian hai đầu |
+| NFR-PER-03 | Thời gian từ khi hệ thống nhận webhook đến khi đèn nút của slot đích sáng tối đa `WEBHOOK_TO_ARMED_MAX_SEC` (5 giây) | Đo bằng log có dấu thời gian hai đầu |
 | NFR-PER-04 | API trả kết quả trong tối đa 300ms ở phân vị 95 với 100 yêu cầu đồng thời | Kiểm thử tải |
 | NFR-PER-05 | Báo cáo trên khoảng thời gian 30 ngày phải trả kết quả trong tối đa 3 giây | Đo với dữ liệu mô phỏng 30 ngày |
 | NFR-PER-06 | Bảng quyết toán kỳ cho một thương hiệu có 20 hóa đơn slot phải sinh trong tối đa 10 giây | Đo với dữ liệu mô phỏng |
+| NFR-PER-07 | Thời gian từ khi khách bấm nút đến khi thiết bị bắt đầu kích hoạt cơ cấu xịt tối đa `PRESS_TO_ACTUATION_MAX_MS` (300 ms) | Đo bằng log firmware có dấu thời gian ngắt nút và lệnh mở van |
 
 ## B2. NFR-REL — Độ tin cậy và khả dụng
 
@@ -620,12 +633,12 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 
 | Ưu tiên | Số FR |
 |---|---|
-| **M — Must** (phạm vi MVP 13 tuần) | 248 |
+| **M — Must** (phạm vi MVP 13 tuần) | 259 |
 | **S — Should** (làm nếu còn thời gian sau tuần 9) | 24 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** (không tính mức X) | **275** |
+| **Tổng FR** (không tính mức X) | **286** |
 | **X — Bãi bỏ** (giữ số hiệu, không tính) | 7 |
-| **Tổng NFR** | **50** |
+| **Tổng NFR** | **52** |
 
 **Danh sách W:** FR-PRD-06 chiến dịch khuyến mãi · FR-IOT-15 cập nhật firmware từ xa · FR-ALR-15 thông báo qua kênh ngoài.
 
@@ -634,8 +647,8 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 | Module | Số FR | Module | Số FR |
 |---|---|---|---|
 | AUTH | 12 | RFQ | 12 |
-| BND | 8 | ORD | 23 |
-| USR | 5 | DSP | 20 |
+| BND | 8 | ORD | 27 |
+| USR | 5 | DSP | 27 |
 | PRD | 6 | IOT | 15 |
 | MCH | 17 | ALR | 15 |
 | SLT | 40 | MNT | 16 |
@@ -656,3 +669,5 @@ Tinh thần gốc của NFR-DAT-02 (cấm `float`/`double` vì sai số nhị ph
 **Ghi chú bổ sung (2 — cùng ngày).** Gộp vai trò Operations Manager và Technician thành **Operations Staff** trên toàn bộ tài liệu (chi tiết lý do ở PHẦN D); tổng số vai trò giảm còn 4. Thêm FR-INV-29÷31 (phiếu nạp) và sửa FR-ALR-03 để đóng lỗ hổng báo động giả "cửa mở quá hạn" khi Inventory Staff đang nạp hàng hợp lệ ngoài phiên bảo trì.
 
 **Ghi chú bổ sung (2026-09-25).** Đổi mô hình thuê slot theo `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (**TV1 đã duyệt 2026-09-29**; thay thế ADR-0005 chưa từng được duyệt). Mô hình cũ là đàm phán hợp đồng: Brand Admin gửi yêu cầu, Super Admin duyệt kèm phí cố định theo kỳ và tỷ lệ ăn chia, thương hiệu khai thác slot trước rồi mới quyết toán — không có bước thu tiền trước và công nợ âm không có bảo đảm. Mô hình mới là **mua gói tự phục vụ**: Brand Admin chọn slot, chọn gói thuê 3/6/12 tháng (gói dài có ưu đãi) và bắt buộc một gói bảo quản (bảo hiểm hàng hóa), trả hết một lần qua cổng thanh toán và nhận hóa đơn; thời hạn tính từ lúc lắp chai đầu tiên. Bỏ ăn chia doanh thu. "Hợp đồng thuê slot" đổi tên thành "hóa đơn thuê slot" (định danh kỹ thuật `SlotRental` giữ nguyên). Thêm mức ưu tiên **X** (bãi bỏ) cho FR-SLT-01, 20, 21, 22, 23, 25, 26; viết lại BR-009, quyết định nghiệp vụ #5 ÷ #8, FR-SLT-06, 12, 13, 17, 18, 19, 24, 27, 29, FR-EXP-12, 13, FR-MCH-16; thêm FR-SLT-30 ÷ 47 (18 FR mức M). Hai hằng ngưỡng mới `RENTAL_CHECKOUT_HOLD_MIN`, `RENTAL_MAX_STOCKING_DAYS` đã thêm vào `spec/constraints.md` sau khi ADR được duyệt.
+
+**Ghi chú bổ sung (2026-09-29).** Khách bấm nút vật lý để nhận lượt xịt theo `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (**TV1 đã duyệt 2026-09-29**). Mỗi slot có một nút có đèn; thanh toán xong đèn sáng, khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt, quá thời gian thì đơn chuyển trạng thái mới `FORFEITED` và không hoàn tiền (điều khoản hiện trước khi thanh toán). Mỗi máy tối đa một lệnh xịt khách hàng đang hiệu lực. Làm rõ BR-002; thêm quyết định nghiệp vụ #9; sửa FR-DSP-06, 08, 11÷15, 18, FR-ORD-10, 17, 19, FR-RPT-04, NFR-PER-03; thêm FR-DSP-21÷27, FR-ORD-24÷27 (11 FR mức M) và NFR-PER-07. Đếm lại bảng NFR: trước thay đổi này đã có 51 dòng dù thống kê ghi 50; nay 52.

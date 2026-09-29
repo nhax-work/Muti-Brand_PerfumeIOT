@@ -54,10 +54,17 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 CREATED ──> PENDING_PAYMENT ──> PAID ──> DISPENSE_REQUESTED ──> DISPENSED
                 │                                    │
                 ├──> EXPIRED                         ├──> FAILED
-                └──> FAILED                          └──> REFUND_PENDING ──> REFUNDED
+                └──> FAILED                          ├──> FORFEITED   (khách không bấm nút, PRESS_TIMEOUT)
+                                                     └──> REFUND_PENDING ──> REFUNDED
 ```
 
 Chỉ chuyển sang `DISPENSED` khi thiết bị trả kết quả thành công (FR-DSP-17).
+
+**Khách bấm nút vật lý** (ADR-0007). `DISPENSE_REQUESTED` là lúc đèn nút của slot đã sáng và đang chờ
+khách bấm. Đơn đã `PAID` mà máy còn một lệnh khác chờ bấm thì giữ ở `PAID` — **chờ lượt** — cho tới
+khi lệnh trước kết thúc (FR-DSP-26). `FORFEITED`: khách không bấm trong `DISPENSE_PRESS_WINDOW_SEC`;
+không hoàn tiền, không kiểm tra thủ công, doanh thu vẫn ghi nhận (FR-ORD-27). Mọi lý do khác sau khi đèn
+đã sáng (cửa mở, bảo trì, slot rỗng lúc bấm, mất điện) **không** phải `FORFEITED` mà đi theo FR-ORD-19.
 Lệnh ở trạng thái UNKNOWN **không** tự sinh lệnh mới (FR-DSP-19).
 
 ### SlotRental
@@ -98,13 +105,19 @@ lắp chai: nó kích hoạt nối tiếp đúng `ends_at` của hóa đơn cũ 
 ### DispenseCommand
 
 ```
-CREATED ──> SENT ──> ACKNOWLEDGED ──> SUCCEEDED
+CREATED ──> SENT ──> ACKNOWLEDGED ──> SUCCEEDED   (khách đã bấm, xịt thành công)
               │             │
               │             ├──> FAILED     (đã kích hoạt cơ cấu nhưng hỏng)
-              │             └──> UNKNOWN    (quá DISPENSE_RESULT_TIMEOUT_SEC)
-              └──> REJECTED               (thiết bị từ chối trước khi kích hoạt)
+              │             ├──> REJECTED   (PRESS_TIMEOUT, hoặc kiểm tra an toàn lúc bấm không đạt)
+              │             └──> UNKNOWN    (quá DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC)
+              ├──> REJECTED               (thiết bị từ chối ngay khi nhận lệnh)
+              └──> UNKNOWN                (không có ACK trong DISPENSE_RESULT_TIMEOUT_SEC)
 CREATED ──> EXPIRED                        (quá DISPENSE_CMD_TTL_SEC, chưa gửi được)
 ```
+
+`ACKNOWLEDGED` nghĩa là **đèn nút của slot đích đã sáng, đang chờ khách bấm** (ADR-0007). Lệnh chẩn đoán
+(`DIAGNOSTIC`) không chờ bấm: `ACKNOWLEDGED` rồi kích hoạt ngay (FR-DSP-27). Mỗi máy tối đa một lệnh
+`CUSTOMER` ở `CREATED`/`SENT`/`ACKNOWLEDGED` (`uq_machine_active_customer_command`, FR-DSP-26).
 
 `REJECTED` và `FAILED` là hai kết cục khác nhau: `REJECTED` là thiết bị từ chối **trước khi** kích
 hoạt cơ cấu (FR-DSP-07 đến FR-DSP-14 — chữ ký sai, quá hạn, sai máy, trùng mã, cửa mở, đang bảo trì,
