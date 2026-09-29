@@ -18,7 +18,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 - **Ưu tiên của epic = ưu tiên cao nhất trong các FR thành phần** (M > S > W). Một epic chỉ ở mức S hoặc W nếu *toàn bộ* FR thành phần đều ở mức đó — vì epic đó chỉ có thể được xem là "xong" khi toàn bộ FR M bên trong đã hiện thực.
 - Vai trò nhắc trong bảng dưới đã theo tên hợp nhất: **Operations Staff** thay cho Operations Manager/Technician (xem Phần D của tài liệu chi tiết).
 
-**Thống kê:** 275 FR nguyên tử → **80 epic** (tỷ lệ nén ~3,5 lần). 77 epic mức M, 3 epic mức W (không có epic thuần S — mọi FR mức S đều gắn liền với ít nhất một FR M trong cùng epic).
+**Thống kê:** 286 FR nguyên tử → **82 epic** (tỷ lệ nén ~3,5 lần). 79 epic mức M, 3 epic mức W (không có epic thuần S — mọi FR mức S đều gắn liền với ít nhất một FR M trong cùng epic).
 
 ---
 
@@ -148,6 +148,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | EPIC-ORD-05 | Liên kết đơn hàng với lệnh xịt | Chỉ tạo lệnh xịt từ đơn PAID (không từ FAILED/EXPIRED/REFUNDED); lưu toàn bộ lịch sử chuyển trạng thái đơn hàng kèm thời điểm và nguyên nhân. | ORD-17, 18 | BR-002, BR-008 | M |
 | EPIC-ORD-06 | Xử lý sự cố thanh toán/xịt và hoàn tiền | Đơn thanh toán thành công nhưng xịt thất bại/không rõ kết quả được đánh dấu cần kiểm tra thủ công, Operations Staff khởi tạo hoàn tiền, kiosk hiển thị hướng dẫn kèm mã sự cố cho khách. | ORD-19, 20, 21 | BR-002, BR-006 | M |
 | EPIC-ORD-07 | Tìm kiếm và đối soát giao dịch | Tìm kiếm giao dịch đa tiêu chí (thời gian, máy, slot, địa điểm, sản phẩm, mã, trạng thái) và đối soát nội bộ với dữ liệu từ nhà cung cấp thanh toán. | ORD-22, 23 | BR-008, BR-009 | M |
+| EPIC-ORD-08 | Nút bấm vật lý phía kiosk và đơn bỏ lượt | Hiện điều khoản bấm nút trước mã QR; nhắc "Mời bấm nút số N" kèm đếm ngược; không nhận đơn mới khi máy đang chờ bấm (`MACHINE_BUSY`); khách không bấm trong thời gian chờ thì đơn chuyển `FORFEITED`, không hoàn tiền. (ADR-0007) | ORD-24, 25, 26, 27 | BR-001, BR-002, BR-009 | M |
 
 ## A12. EPIC-DSP — Điều khiển lượt xịt an toàn
 
@@ -158,6 +159,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | EPIC-DSP-03 | Điều kiện an toàn bắt buộc trước khi xịt | Thiết bị gửi xác nhận tiếp nhận trước khi thực hiện; từ chối thực hiện khi cửa đang mở, máy đang MAINTENANCE, hoặc slot đích được đánh dấu rỗng. | DSP-11, 12, 13, 14 | BR-002, BR-005, BR-010 | M |
 | EPIC-DSP-04 | Thực hiện xịt và xác nhận kết quả hai chiều | Thiết bị chỉ kích hoạt đúng slot đích theo chu kỳ đã hiệu chuẩn, gửi kết quả về hệ thống; hệ thống chỉ chuyển đơn DISPENSED khi nhận kết quả thành công, chuyển lệnh UNKNOWN nếu không có phản hồi trong 60 giây và không tự tạo lệnh mới cho đơn đó. | DSP-15, 16, 17, 18, 19 | BR-002, BR-008, BR-010 | M |
 | EPIC-DSP-05 | Xịt chẩn đoán tách biệt khỏi doanh thu | Lượt xịt chẩn đoán được ghi nhận tách biệt, không tính vào doanh thu hay thống kê lượt xịt khách hàng. | DSP-20 | BR-005, BR-008 | M |
+| EPIC-DSP-06 | Kích hoạt lượt xịt bằng nút vật lý | Thiết bị sáng đèn nút của slot đích thay vì xịt ngay; chỉ xịt khi bấm đúng nút trong `DISPENSE_PRESS_WINDOW_SEC`; kiểm tra an toàn lần hai lúc bấm; hết giờ thì `PRESS_TIMEOUT`; không khôi phục trạng thái chờ sau khởi động lại; mỗi máy một lệnh chờ bấm; lệnh chẩn đoán không chờ bấm. (ADR-0007) | DSP-21, 22, 23, 24, 25, 26, 27 | BR-001, BR-002, BR-006, BR-010 | M |
 
 ## A13. EPIC-IOT — Giao tiếp và giám sát thiết bị
 
@@ -211,10 +213,10 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 | Ưu tiên | Số epic |
 |---|---|
-| M — Must | 75 |
+| M — Must | 79 |
 | S — Should | 0 |
 | W — Won't (Future Work) | 3 |
-| **Tổng** | **78** |
+| **Tổng** | **82** |
 
 **Danh sách epic W:** EPIC-PRD-03, EPIC-IOT-06, EPIC-ALR-03 — tương ứng đúng 3 FR nguyên tử mức W đã có ở tài liệu chi tiết (FR-PRD-06, FR-IOT-15, FR-ALR-15).
 
@@ -222,4 +224,4 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 ---
 
-*Tài liệu sinh từ [FR_NFR_SCENTSTATION.md](FR_NFR_SCENTSTATION.md), phiên bản tương ứng với 275 FR hiệu lực / 50 NFR (mục A6 viết lại theo ADR-0006 ngày 2026-09-25). Khi tài liệu chi tiết thay đổi (thêm/bớt FR nguyên tử), cần đồng bộ lại bảng epic tương ứng ở đây.*
+*Tài liệu sinh từ [FR_NFR_SCENTSTATION.md](FR_NFR_SCENTSTATION.md), phiên bản tương ứng với 286 FR hiệu lực / 52 NFR (mục A6 viết lại theo ADR-0006 ngày 2026-09-25; thêm EPIC-ORD-08, EPIC-DSP-06 theo ADR-0007 ngày 2026-09-29). Khi tài liệu chi tiết thay đổi (thêm/bớt FR nguyên tử), cần đồng bộ lại bảng epic tương ứng ở đây.*

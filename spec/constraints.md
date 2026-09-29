@@ -18,8 +18,16 @@
 | `ORDER_PAYMENT_TTL_SEC` | 300 | FR-ORD-09 |
 | `ORDER_STATUS_POLL_MAX_SEC` | 3 | FR-ORD-11 |
 | `DISPENSE_CMD_TTL_SEC` | 60 | FR-DSP-06 |
+| `DISPENSE_PRESS_WINDOW_SEC` | 60 | FR-DSP-22, FR-DSP-24 |
 | `DISPENSE_RESULT_TIMEOUT_SEC` | 60 | FR-DSP-18 |
-| `WEBHOOK_TO_ACTUATION_MAX_SEC` | 5 | NFR-PER-03 |
+| `WEBHOOK_TO_ARMED_MAX_SEC` | 5 | NFR-PER-03 |
+| `PRESS_TO_ACTUATION_MAX_MS` | 300 | NFR-PER-07 |
+
+Theo ADR-0007 (khách bấm nút vật lý), ba mốc lệnh xịt tách bạch: `DISPENSE_CMD_TTL_SEC` đo từ lúc tạo
+lệnh tới lúc thiết bị nhận và **sáng đèn**; `DISPENSE_PRESS_WINDOW_SEC` đo từ lúc sáng đèn tới lúc
+khách **bấm**; `DISPENSE_RESULT_TIMEOUT_SEC` cộng thêm sau mốc chờ tương ứng trước khi lệnh thành
+`UNKNOWN` (gửi → ACK, hoặc ACK + `DISPENSE_PRESS_WINDOW_SEC` → kết quả). `WEBHOOK_TO_ARMED_MAX_SEC`
+thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 
 ## An toàn thiết bị
 

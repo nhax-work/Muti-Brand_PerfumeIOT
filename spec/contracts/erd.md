@@ -385,12 +385,13 @@ erDiagram
     DISPENSE_COMMANDS ||--|| DISPENSE_RESULTS : "trả kết quả"
 ```
 
-**Ba ràng buộc duy nhất giữ cho BR-002 đúng:**
+**Bốn ràng buộc duy nhất giữ cho BR-002 đúng:**
 
 | Ràng buộc | Chặn điều gì |
 |---|---|
 | `uq_payment_event (provider, provider_event_id)` | Cổng thanh toán gửi lại webhook → xử lý hai lần (FR-ORD-15) |
 | `uq_order_active_command (order_id)` partial | Một đơn có hai lệnh xịt cùng hiệu lực → xịt hai lần (FR-DSP-05) |
+| `uq_machine_active_customer_command (machine_id)` partial | Hai nút sáng cùng lúc trên một máy → người sau bấm được lượt của người trước (FR-DSP-26, ADR-0007) |
 | `dispense_results.command_id` UNIQUE | Một lệnh ghi hai kết quả khác nhau (FR-IOT-07) |
 
 **`payments` phục vụ hai loại giao dịch** (ADR-0006): đơn kiosk (`order_id`) và hóa đơn thuê slot

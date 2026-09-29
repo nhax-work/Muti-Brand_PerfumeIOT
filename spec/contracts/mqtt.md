@@ -209,7 +209,7 @@ Lệnh xịt khách hàng, lệnh xịt chẩn đoán, yêu cầu báo cáo tr�
 | `dispense_type` | enum | chỉ khi `DISPENSE` | `CUSTOMER` \| `DIAGNOSTIC` (FR-DSP-20) |
 | `slot_number` | integer | chỉ khi `DISPENSE` | Slot đích (FR-DSP-03) |
 | `dosage_ml` | number | chỉ khi `DISPENSE` | Liều đã hiệu chuẩn cho slot (FR-MCH-06) |
-| `expires_at` | string | có | `ts + DISPENSE_CMD_TTL_SEC` (FR-DSP-06) |
+| `expires_at` | string | có | `ts + DISPENSE_CMD_TTL_SEC` (FR-DSP-06). Là hạn để thiết bị **nhận lệnh và sáng đèn**, không phải hạn để khách bấm (ADR-0007) |
 | `signature` | string | có | Chữ ký số (FR-DSP-04) |
 
 Lệnh **không** mang `order_id`, giá, tên sản phẩm hay bất cứ thông tin thương hiệu nào. Thiết bị
@@ -244,8 +244,29 @@ sống qua khởi động lại; giữ tối thiểu số lượng tương đư�
 
 ### 5.2 Thực hiện
 
-Sau khi qua đủ 7 bước, thiết bị **gửi xác nhận tiếp nhận trước khi bắt đầu thực hiện** (FR-DSP-11),
-rồi kích hoạt **đúng cơ cấu của slot đích**, một chu kỳ đã hiệu chuẩn (FR-DSP-15).
+Mỗi slot có một **nút vật lý có đèn** (ADR-0007). Sau khi qua đủ 7 bước ở §5.1:
+
+**Lệnh `CUSTOMER`:**
+
+1. Thiết bị sáng đèn nút của **đúng slot đích** rồi gửi `stage = ACK` (FR-DSP-11, FR-DSP-21). **Không**
+   kích hoạt cơ cấu ở bước này.
+2. Thiết bị chờ khách bấm nút đó trong `press_window_sec` (= `DISPENSE_PRESS_WINDOW_SEC`, lấy từ
+   `config` §7), đếm bằng timer phần cứng. Bấm nút của slot khác bị bỏ qua (FR-DSP-22). Bấm nhiều lần
+   chỉ tính một (chống dội phím và FR-DSP-10).
+3. Khách bấm đúng nút:
+   - kiểm tra **lần hai** cửa, chế độ bảo trì, slot rỗng (FR-DSP-23). Không đạt → tắt đèn, gửi
+     `stage = REJECT` với mã tương ứng (`DOOR_OPEN`, `MACHINE_IN_MAINTENANCE`, `SLOT_EMPTY`);
+   - đạt → tắt đèn, kích hoạt **đúng cơ cấu của slot đích**, một chu kỳ đã hiệu chuẩn (FR-DSP-15), rồi
+     gửi `RESULT` kèm `pressed_at`. Từ lúc bấm tới lúc kích hoạt ≤ `PRESS_TO_ACTUATION_MAX_MS`
+     (NFR-PER-07).
+4. Hết `press_window_sec` mà chưa bấm → tắt đèn, gửi `stage = REJECT` với `PRESS_TIMEOUT` (FR-DSP-24).
+   Mã lệnh vẫn vào danh sách đã xử lý (FR-DSP-10) để không thể kích hoạt lại.
+
+Trạng thái chờ bấm **chỉ nằm trong RAM**: mất điện hoặc reset thì khởi động lại không sáng đèn, lệnh
+không bao giờ được thực hiện, và thiết bị không gửi gì cho lệnh đó (FR-DSP-25). Nền tảng thấy `UNKNOWN`
+theo §6.
+
+**Lệnh `DIAGNOSTIC`:** gửi `ACK` rồi kích hoạt ngay, không sáng đèn chờ bấm (FR-DSP-27).
 
 Firmware giới hạn cứng thời gian kích hoạt ở `ACTUATOR_MAX_MS`, **độc lập với mọi logic nghiệp vụ**
 (NFR-SAF-01). Vượt ngưỡng thì cắt nguồn cơ cấu và báo `HARD_TIMEOUT`. Giới hạn này không được phép bỏ
@@ -256,6 +277,10 @@ qua bởi bất kỳ trường nào trong bản tin — `dosage_ml` không thể
 ## 6. `command/result` — thiết bị → nền tảng
 
 Dùng cho cả xác nhận tiếp nhận (FR-DSP-11) lẫn kết quả thực hiện (FR-DSP-16), phân biệt bằng `stage`.
+
+Với lệnh `CUSTOMER`, `ACK` nghĩa là **đèn nút đã sáng, đang chờ khách bấm** (ADR-0007). `REJECT` có thể
+đến **trước** `ACK` (từ chối ngay khi nhận lệnh) hoặc **sau** `ACK` (hết giờ chờ bấm, hoặc kiểm tra an
+toàn lúc bấm không đạt).
 
 **Xác nhận tiếp nhận:**
 
@@ -294,6 +319,7 @@ Dùng cho cả xác nhận tiếp nhận (FR-DSP-11) lẫn kết quả thực hi
 | `success` | boolean | chỉ khi `RESULT` | |
 | `failure_code` | string \| null | khi không thành công | **Chỉ dùng mã trong `spec/errors.md`** |
 | `executed_at` | string | chỉ khi `RESULT` | Thời điểm kích hoạt cơ cấu |
+| `pressed_at` | string | khi `RESULT` của lệnh `CUSTOMER` | Thời điểm khách bấm nút (ADR-0007). `executed_at - pressed_at` ≤ `PRESS_TO_ACTUATION_MAX_MS` |
 | `measured_quantity_ml` | number | không | Suy từ load cell nếu có |
 | `device_event_id` | string | chỉ khi `RESULT` | Để khử trùng khi gửi lại |
 
@@ -301,11 +327,14 @@ Dùng cho cả xác nhận tiếp nhận (FR-DSP-11) lẫn kết quả thực hi
 
 | Nhận được | Trạng thái lệnh | Trạng thái đơn |
 |---|---|---|
-| `stage = ACK` | `ACKNOWLEDGED` | giữ nguyên `DISPENSE_REQUESTED` |
-| `stage = REJECT` | `REJECTED` | `FAILED` |
+| `stage = ACK` | `ACKNOWLEDGED` (đèn sáng, chờ bấm) | giữ nguyên `DISPENSE_REQUESTED`; kiosk hiện "Mời bấm nút số N" (FR-ORD-26) |
+| `stage = REJECT`, `failure_code = PRESS_TIMEOUT` | `REJECTED` | **`FORFEITED`** — không hoàn tiền, **không** đặt `needs_manual_review` (FR-ORD-27) |
+| `stage = REJECT`, mã khác, **sau** `ACK` | `REJECTED` | `FAILED`, đặt `needs_manual_review` (FR-ORD-19) — khách đã trả tiền và đã bấm |
+| `stage = REJECT`, mã khác, **trước** `ACK` | `REJECTED` | `FAILED` |
 | `stage = RESULT`, `success = true` | `SUCCEEDED` | `DISPENSED` (FR-DSP-17) |
 | `stage = RESULT`, `success = false` | `FAILED` | `FAILED`, đặt `needs_manual_review` nếu đã thanh toán (FR-ORD-19) |
-| Không nhận gì trong `DISPENSE_RESULT_TIMEOUT_SEC` | `UNKNOWN` (FR-DSP-18) | đặt `needs_manual_review` |
+| Không nhận `ACK`/`REJECT` trong `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc gửi | `UNKNOWN` (FR-DSP-18) | đặt `needs_manual_review` |
+| Đã có `ACK`, không nhận `RESULT`/`REJECT` trong `DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC` kể từ `ACK` | `UNKNOWN` (FR-DSP-18) | đặt `needs_manual_review` — gồm cả trường hợp mất điện khi đèn đang sáng (FR-DSP-25) |
 
 Hai điều tuyệt đối không được làm:
 
@@ -322,8 +351,15 @@ slot) chỉ đếm `FAILED` (xem `spec/decisions/0002-chuan-dat-ten-va-kieu-du-l
 Mỗi bản tin `RESULT` ghi một hàng `dispense_results`, liên kết 1-1 với `dispense_commands` qua
 `command_id` (FR-IOT-07, cưỡng chế bằng `UNIQUE` trên `dispense_results.command_id`).
 
-Ràng buộc thời gian: từ lúc nền tảng nhận webhook thanh toán đến lúc thiết bị bắt đầu kích hoạt cơ
-cấu tối đa `WEBHOOK_TO_ACTUATION_MAX_SEC` (NFR-PER-03).
+Ràng buộc thời gian (ADR-0007):
+- từ lúc nền tảng nhận webhook thanh toán đến lúc đèn nút sáng tối đa `WEBHOOK_TO_ARMED_MAX_SEC`
+  (NFR-PER-03) — đo tới lúc nhận `ACK`;
+- từ lúc khách bấm nút đến lúc kích hoạt cơ cấu tối đa `PRESS_TO_ACTUATION_MAX_MS` (NFR-PER-07) — đo
+  bằng `pressed_at` và `executed_at` trong `RESULT`.
+
+Mỗi máy tối đa **một** lệnh `CUSTOMER` ở `CREATED`/`SENT`/`ACKNOWLEDGED` (`uq_machine_active_customer_command`,
+FR-DSP-26): nền tảng không gửi lệnh `CUSTOMER` thứ hai khi đèn của lệnh trước còn sáng. Thiết bị vì thế
+không bao giờ phải chờ hai nút cùng lúc.
 
 ---
 
@@ -340,6 +376,7 @@ Cấu hình đẩy xuống, retain để thiết bị lấy được ngay khi k�
   "heartbeat_interval_sec": 30,
   "telemetry_interval_sec": 60,
   "operating_mode": "NORMAL",
+  "press_window_sec": 60,
   "slots": [
     { "slot_number": 1, "enabled": true, "calibrated_dosage_ml": 0.12, "actuator_run_ms": 500 },
     { "slot_number": 2, "enabled": false, "calibrated_dosage_ml": 0.12, "actuator_run_ms": 500 }
@@ -350,6 +387,7 @@ Cấu hình đẩy xuống, retain để thiết bị lấy được ngay khi k�
 | Trường | FR |
 |---|---|
 | `operating_mode` | Bật/tắt máy từ xa (FR-MCH-11), chuyển chế độ bảo trì (FR-MNT-05) |
+| `press_window_sec` | Thời gian chờ khách bấm nút = `DISPENSE_PRESS_WINDOW_SEC` (FR-DSP-22, FR-DSP-24, ADR-0007) |
 | `slots[].enabled` | Bật/tắt từng slot từ xa (FR-MCH-12) |
 | `slots[].calibrated_dosage_ml`, `actuator_run_ms` | Hiệu chuẩn liều lượng theo slot (FR-MCH-06) |
 
@@ -427,6 +465,7 @@ thêm vào `spec/errors.md` trước.
 | `ACTUATOR_FAULT` | Cơ cấu không phản hồi |
 | `HARD_TIMEOUT` | Vượt `ACTUATOR_MAX_MS`, đã cắt nguồn |
 | `NO_CURRENT` | Không phát hiện dòng qua cơ cấu |
+| `PRESS_TIMEOUT` | Thiết bị từ chối: khách không bấm nút trong `DISPENSE_PRESS_WINDOW_SEC`, đã tắt đèn — đơn chuyển `FORFEITED`, không hoàn tiền (FR-DSP-24, ADR-0007) |
 
 `MACHINE_IN_MAINTENANCE` (bước 6 ở §5.1) nằm ở nhóm "Đơn hàng và thanh toán" trong `spec/errors.md`,
 không phải nhóm lệnh xịt.
@@ -443,14 +482,16 @@ Không hằng số nào trong tài liệu này được hardcode. Tất cả đ�
 | `HEARTBEAT_INTERVAL_SEC` | §2 chu kỳ heartbeat, §7 `heartbeat_interval_sec` |
 | `MACHINE_UNSTABLE_MISSED` | §2 ngưỡng `UNSTABLE` |
 | `MACHINE_OFFLINE_SEC` | §2 ngưỡng `OFFLINE` |
-| `DISPENSE_CMD_TTL_SEC` | §5 `expires_at` |
-| `DISPENSE_RESULT_TIMEOUT_SEC` | §6 ngưỡng chuyển `UNKNOWN` |
+| `DISPENSE_CMD_TTL_SEC` | §5 `expires_at` — hạn để nhận lệnh và sáng đèn |
+| `DISPENSE_PRESS_WINDOW_SEC` | §5.2 thời gian chờ bấm, §7 `press_window_sec` |
+| `DISPENSE_RESULT_TIMEOUT_SEC` | §6 ngưỡng chuyển `UNKNOWN` (cộng sau mốc chờ tương ứng) |
 | `ACTUATOR_MAX_MS` | §5.2 hard timeout firmware |
 | `ACTUATOR_RUN_MS` | §7 `actuator_run_ms` mặc định |
 | `DEVICE_EVENT_BUFFER_MIN` | §4 dung lượng bộ đệm cục bộ |
 | `DOOR_OPEN_ALERT_MIN` | §3 ngưỡng cảnh báo cửa mở |
 | `LEAK_DETECT_THRESHOLD_PCT` | §3 ngưỡng nghi ngờ rò rỉ |
-| `WEBHOOK_TO_ACTUATION_MAX_SEC` | §6 ràng buộc thời gian đầu-cuối |
+| `WEBHOOK_TO_ARMED_MAX_SEC` | §6 từ webhook tới lúc đèn sáng (NFR-PER-03) |
+| `PRESS_TO_ACTUATION_MAX_MS` | §5.2, §6 từ lúc bấm tới lúc kích hoạt (NFR-PER-07) |
 
 ---
 

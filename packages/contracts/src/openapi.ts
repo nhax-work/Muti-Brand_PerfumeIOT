@@ -1531,7 +1531,8 @@ export interface paths {
         /**
          * Tạo đơn hàng từ kiosk
          * @description FR-ORD-04, FR-ORD-05, FR-ORD-07, FR-ORD-08, FR-ORD-09: chỉ tạo được khi máy ONLINE và slot AVAILABLE. Lưu ảnh chụp máy, slot, hóa đơn, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu tại thời điểm tạo đơn (FR-REV-01, FR-REV-02); các trường này bất biến sau đó (NFR-DAT-06). Sinh mã tham chiếu duy nhất và mã QR thanh toán, hạn thanh toán ORDER_PAYMENT_TTL_SEC.
-         *     Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06), SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04).
+         *     Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06), SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có lệnh xịt chờ khách trước bấm nút (FR-ORD-24, ADR-0007).
+         *     Trước khi hiện mã QR, kiosk phải hiện điều khoản bấm nút trong DISPENSE_PRESS_WINDOW_SEC, quá thời gian mất lượt và không hoàn tiền (FR-ORD-25).
          *     Giới hạn ORDER_RATE_LIMIT_PER_MIN yêu cầu mỗi phút cho mỗi máy (NFR-SEC-06).
          */
         post: operations["createOrder"];
@@ -1598,7 +1599,7 @@ export interface paths {
          * Webhook kết quả thanh toán
          * @description FR-ORD-12, FR-ORD-13, FR-ORD-14, FR-ORD-15, FR-SLT-38: tiếp nhận thông báo kết quả thanh toán cho cả đơn kiosk lẫn hóa đơn thuê slot — phân biệt bằng việc payment trỏ tới orderId hay slotRentalId (ADR-0006). Xác minh chữ ký trước khi xử lý; chữ ký sai trả INVALID_WEBHOOK_SIGNATURE (401) và vẫn ghi lại để rà soát bảo mật. Xác minh mã tham chiếu, số tiền và loại tiền khớp đơn hoặc hóa đơn; lệch trả AMOUNT_MISMATCH (400).
          *     Mỗi webhook chỉ xử lý đúng một lần. Webhook trùng trả **HTTP 200** kèm result WEBHOOK_ALREADY_PROCESSED — đây KHÔNG phải lỗi (spec/errors.md); trả 4xx sẽ khiến nhà cung cấp gửi lại vô hạn.
-         *     Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01). Từ webhook đến lúc thiết bị kích hoạt cơ cấu tối đa WEBHOOK_TO_ACTUATION_MAX_SEC (NFR-PER-03).
+         *     Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01) — nếu máy đang có lệnh khác chờ bấm thì đơn giữ PAID ("chờ lượt") tới khi lệnh đó kết thúc (FR-DSP-26). Thiết bị sáng đèn nút rồi chờ khách bấm (ADR-0007). Từ webhook đến lúc đèn sáng tối đa WEBHOOK_TO_ARMED_MAX_SEC (NFR-PER-03); từ lúc bấm tới lúc kích hoạt tối đa PRESS_TO_ACTUATION_MAX_MS (NFR-PER-07).
          *     Với hóa đơn thuê slot: ghi paidAt và cấp invoiceNumber trong cùng transaction; hóa đơn vẫn DRAFT (chờ nạp hàng) cho tới khi lắp chai đầu tiên (FR-SLT-24). Tiền về sau khi hóa đơn đã CANCELLED thì payment chuyển REFUND_PENDING, hóa đơn không được khôi phục. Ghi nhật ký (FR-AUD-06).
          */
         post: operations["handlePaymentWebhook"];
@@ -2412,14 +2413,20 @@ export interface components {
         BottleStatus: "IN_STOCK" | "INSTALLED" | "LOW" | "EMPTY" | "DAMAGED" | "EXPIRED" | "LIQUIDATED";
         /** @enum {string} */
         RefillStatus: "STARTED" | "COMPLETED" | "CANCELLED";
-        /** @enum {string} */
-        OrderStatus: "CREATED" | "PENDING_PAYMENT" | "PAID" | "DISPENSE_REQUESTED" | "DISPENSED" | "FAILED" | "EXPIRED" | "REFUND_PENDING" | "REFUNDED";
+        /**
+         * @description `FORFEITED` (ADR-0007): khách đã thanh toán nhưng không bấm nút trong
+         *     DISPENSE_PRESS_WINDOW_SEC — mất lượt, không hoàn tiền, không cần kiểm tra thủ công (FR-ORD-27).
+         *     `PAID` kéo dài khi máy đang có lệnh khác chờ bấm — đơn "chờ lượt" (FR-DSP-26).
+         * @enum {string}
+         */
+        OrderStatus: "CREATED" | "PENDING_PAYMENT" | "PAID" | "DISPENSE_REQUESTED" | "DISPENSED" | "FAILED" | "EXPIRED" | "REFUND_PENDING" | "REFUNDED" | "FORFEITED";
         /** @enum {string} */
         PaymentStatus: "PENDING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "EXPIRED" | "REFUND_PENDING" | "PARTIALLY_REFUNDED" | "REFUNDED";
         /**
          * @description `REJECTED` là thiết bị từ chối trước khi kích hoạt cơ cấu (khách chưa mất lượt xịt);
          *     `FAILED` là đã kích hoạt nhưng hỏng. Phân biệt này cần cho FR-ORD-19 và FR-ALR-04
-         *     (ADR-0002).
+         *     (ADR-0002). Với lệnh CUSTOMER, `ACKNOWLEDGED` nghĩa là đèn nút của slot đích đã sáng, đang
+         *     chờ khách bấm; `REJECTED` với PRESS_TIMEOUT là khách không bấm (ADR-0007).
          * @enum {string}
          */
         CommandStatus: "CREATED" | "SENT" | "ACKNOWLEDGED" | "SUCCEEDED" | "FAILED" | "REJECTED" | "EXPIRED" | "UNKNOWN";
@@ -3487,7 +3494,15 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             revenueOwner: components["schemas"]["RevenueOwner"];
             dispenseStatus?: components["schemas"]["CommandStatus"] | null;
+            /** @description PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED). */
             failureCode?: string | null;
+            /** @description Số slot — kiosk hiện "Mời bấm nút số N" khi đèn đã sáng (FR-ORD-26). */
+            slotNumber?: number;
+            /**
+             * Format: date-time
+             * @description acknowledgedAt + DISPENSE_PRESS_WINDOW_SEC, để kiosk đếm ngược (FR-ORD-26). Null khi đèn chưa sáng — kể cả đơn PAID đang chờ lượt vì máy còn lệnh khác (FR-DSP-26).
+             */
+            pressDeadline?: string | null;
             /** @description Mã tham chiếu sự cố hiển thị cho khách khi đã thanh toán nhưng lượt xịt thất bại (FR-ORD-21). */
             supportReference?: string | null;
         };
@@ -3565,12 +3580,15 @@ export interface components {
             status: components["schemas"]["CommandStatus"];
             /**
              * Format: date-time
-             * @description createdAt + DISPENSE_CMD_TTL_SEC (FR-DSP-06).
+             * @description createdAt + DISPENSE_CMD_TTL_SEC (FR-DSP-06) — hạn để thiết bị nhận lệnh và sáng đèn nút. Thời gian khách được bấm là DISPENSE_PRESS_WINDOW_SEC, tính từ acknowledgedAt (ADR-0007).
              */
             expiresAt: string;
             /** Format: date-time */
             sentAt?: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Lệnh CUSTOMER — lúc đèn nút sáng, bắt đầu chờ khách bấm (FR-DSP-21).
+             */
             acknowledgedAt?: string | null;
             /** Format: date-time */
             completedAt?: string | null;

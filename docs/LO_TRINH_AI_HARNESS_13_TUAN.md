@@ -4,6 +4,8 @@
 
 > **Cập nhật 21/09/2026 — điều chỉnh track phần cứng.** Phần mềm giữ nguyên. Xem mục "Nhật ký thay đổi" ở cuối file.
 >
+> **Cập nhật 29/09/2026 (2) — khách bấm nút vật lý để nhận lượt xịt (ADR-0007).** Mỗi slot một nút có đèn; thanh toán xong đèn sáng, khách bấm trong 60 giây thì xịt, không bấm thì mất lượt (không hoàn tiền); mỗi máy một lượt chờ bấm. Dòng đổi đánh dấu **[ADR-0007]**.
+>
 > **Cập nhật 29/09/2026 — thuê slot theo gói trả trước (ADR-0006).** Bỏ luồng xin thuê/duyệt tay và phí cố định + ăn chia; thay bằng mua gói 3/6/12 tháng + gói bảo quản, thanh toán một lần, nhận hóa đơn. "Hợp đồng thuê slot" gọi là **hóa đơn thuê slot**. Phần cứng giữ nguyên. Các dòng đổi từ T3 trở đi đánh dấu **[ADR-0006]**; T1–T2 đã xong, giữ nguyên làm lịch sử.
 
 ---
@@ -48,6 +50,7 @@
 | Thanh toán | Dùng chung bảng `payments` và webhook với đơn kiosk; đúng một trong `order_id`/`slot_rental_id` |
 | Tiền | Bảng giá chụp vào hóa đơn lúc tạo, không đọc lại danh mục. Không còn phí cố định, không còn ăn chia |
 | Không dùng nữa | `slot_rental_requests`, `slot_rentals.fixed_fee`, `revenue_share_percent`, `request_id` — giữ trong lược đồ, **không** viết code mới dùng chúng |
+| Kích hoạt lượt xịt **[ADR-0007]** | Máy **không** tự xịt khi thanh toán xong: sáng đèn nút slot đích, chờ khách bấm `DISPENSE_PRESS_WINDOW_SEC`. `ACK` = đèn đã sáng. Không bấm → `PRESS_TIMEOUT` → đơn `FORFEITED`. Mỗi máy tối đa một lệnh `CUSTOMER` hiệu lực (`uq_machine_active_customer_command`); đơn trả tiền sau giữ `PAID` chờ lượt. Lệnh chẩn đoán xịt ngay |
 
 ---
 
@@ -135,16 +138,17 @@
 | TV | Việc |
 |---|---|
 | TV1 | `DispenseCommand` có chữ ký và TTL · mock payment provider **dùng chung cho đơn kiosk và hóa đơn** · simulator bổ sung chữ ký, TTL, chống lặp **[ADR-0006]** |
+| TV1 | Luồng nút bấm phía backend: `ACK` = đèn sáng, `PRESS_TIMEOUT` → đơn `FORFEITED` (không kiểm tra thủ công), mốc `UNKNOWN` sau ACK, một lệnh `CUSTOMER` mỗi máy + đơn chờ lượt · simulator giả lập **bấm nút / không bấm / bấm nhầm slot** **[ADR-0007]** |
 | TV3 | Thanh toán hóa đơn: `POST /slot-rentals/{id}/payments` (một PENDING/hóa đơn) · xử lý webhook cho hóa đơn: `paid_at`, cấp số hóa đơn, tiền về sau khi hủy → `REFUND_PENDING` (FR-SLT-37, 38) **[ADR-0006]** |
 | TV3 | Job hủy hóa đơn hết giờ giữ chỗ (FR-SLT-39), có bù sau downtime · thông báo thanh toán thành công (FR-SLT-43) **[ADR-0006]** |
 | TV3 | Màn hình web quản trị cho Brand Admin: slot trống → chọn dịch vụ → thanh toán → hóa đơn → cấu hình slot **[ADR-0006]** |
-| TV4 | Kiosk: tạo đơn, hiện QR, theo dõi trạng thái |
+| TV4 | Kiosk: tạo đơn, hiện QR, theo dõi trạng thái · **màn điều khoản bấm nút trước QR, "Mời bấm nút số N" + đếm ngược, "Máy đang phục vụ khách khác" (`MACHINE_BUSY`), "Đang chờ lượt", "Hết thời gian bấm nút"** (FR-ORD-24÷27) **[ADR-0007]** |
 | TV2 | Thử bơm không chổi than: áp bít đầu ra, chất lượng sương với béc 0,15mm |
 | TV2 | Dựng ngăn thứ hai |
-| TV2 | Firmware: nhận lệnh MQTT, kiểm chữ ký, TTL, chống lặp, trả kết quả · trần 800ms bằng `esp_timer` cho cả van và bơm |
+| TV2 | Firmware: nhận lệnh MQTT, kiểm chữ ký, TTL, chống lặp, trả kết quả · trần 800ms bằng `esp_timer` cho cả van và bơm · **sáng đèn nút slot đích, chờ bấm `press_window_sec` bằng timer phần cứng, chống dội phím, bỏ qua nút slot khác, kiểm an toàn lần hai lúc bấm, `PRESS_TIMEOUT`, không lưu trạng thái chờ bấm qua reset; lệnh chẩn đoán xịt ngay** (FR-DSP-21÷27) **[ADR-0007]** |
 | Nhóm | Chốt kích thước bơm, van, bình, vách ngăn → **đặt gia công vỏ máy** (mất 1–2 tuần) |
 
-**Gate 3:** E2E chạy với mock payment + simulator · webhook gửi lại 5 lần chỉ tạo 1 lệnh · **Brand Admin mua gói bằng mock payment: giữ chỗ → thanh toán → có số hóa đơn; hóa đơn không trả tiền tự hủy sau `RENTAL_CHECKOUT_HOLD_MIN`; webhook hóa đơn gửi lại 5 lần chỉ ghi nhận 1 lần** **[ADR-0006]** · **2 ngăn thật xịt đúng ngăn, 2 ngăn còn lại qua simulator**
+**Gate 3:** E2E chạy với mock payment + simulator · webhook gửi lại 5 lần chỉ tạo 1 lệnh · **bấm nút thì xịt đúng 1 lần; không bấm thì đèn tắt sau 60 giây và đơn `FORFEITED`; đơn thứ hai trong lúc chờ bấm bị `MACHINE_BUSY`** **[ADR-0007]** · **Brand Admin mua gói bằng mock payment: giữ chỗ → thanh toán → có số hóa đơn; hóa đơn không trả tiền tự hủy sau `RENTAL_CHECKOUT_HOLD_MIN`; webhook hóa đơn gửi lại 5 lần chỉ ghi nhận 1 lần** **[ADR-0006]** · **2 ngăn thật xịt đúng ngăn, 2 ngăn còn lại qua simulator**
 
 ---
 
@@ -170,7 +174,7 @@
 | TV1 | Xử lý timeout, kết quả không xác định |
 | TV3 | Mua gói bằng **sandbox thật** trên web quản trị, chạy song song luồng vàng **[ADR-0006]** |
 
-**Gate 4 — MỐC SỐNG CÒN:** chọn hương → QR sandbox → thanh toán → xác minh webhook → phát lệnh có chữ ký → máy thật xịt đúng 1 lần → kết quả về → đơn `DISPENSED`
+**Gate 4 — MỐC SỐNG CÒN:** chọn hương → QR sandbox → thanh toán → xác minh webhook → phát lệnh có chữ ký → **đèn nút sáng → khách bấm** → máy thật xịt đúng 1 lần → kết quả về → đơn `DISPENSED` **[ADR-0007]**
 
 > **[ADR-0006]** Slot trong luồng vàng dùng hóa đơn `ACTIVE` từ seed. Hóa đơn mua qua web chỉ tự kích
 > hoạt khi **lắp chai đầu tiên** (FR-SLT-24), mà luồng lắp chai thuộc INV ở T8 — nên G4 **không** phụ
@@ -274,7 +278,7 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 | G2 | 3 | Cô lập slot có test chứng minh (đỏ khi gỡ bộ lọc), **ADR-0006 duyệt + migration sạch**, 1 ngăn xịt đúng thời gian bằng nước, có số liệu 20 lượt |
 | **HW-A** | **4** | **Kiến trúc cơ cấu chốt bằng số liệu: áp, độ lệch chuẩn, đuôi phun, ảnh vệt sương** |
 | G3 | 5 | E2E với mock, idempotency chứng minh được, **mua gói bằng mock payment + tự hủy khi hết giữ chỗ**, 2 ngăn thật + 2 ngăn simulator |
-| **G4** | **7** | **Luồng vàng trên phần cứng thật với sandbox thật · nước hoa thật chỉ khi đủ điều kiện an toàn** (slot dùng hóa đơn seed) |
+| **G4** | **7** | **Luồng vàng trên phần cứng thật với sandbox thật, kích hoạt bằng nút bấm · nước hoa thật chỉ khi đủ điều kiện an toàn** (slot dùng hóa đơn seed) |
 | G5 | 9 | **Hóa đơn đi hết vòng đời từ mua gói tới gia hạn hoặc LIQUIDATED**, doanh thu tách hai nguồn, **bồi thường hàng hóa chạy** |
 | G6 | 11 | 100% FR ưu tiên M có test đạt, CI xanh |
 | G7 | 12 | Pilot có số liệu (brand tự mua gói), video demo đã quay |
@@ -305,11 +309,11 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 | Cô lập mức slot | Brand A truy vấn slot Brand B **trên cùng máy** — **gồm hóa đơn, bồi thường; danh sách slot trống có đúng 7 trường** **[ADR-0006]** |
 | `revenue_owner` | Tạo đơn → thanh lý → đơn cũ vẫn phải thuộc BRAND |
 | Unique constraint slot | Cho thuê slot đang bán hàng thanh lý → phải bị từ chối |
-| TTL lệnh xịt | Gửi lệnh hết hạn thẳng tới thiết bị → thiết bị phải từ chối |
+| TTL lệnh xịt | Gửi lệnh hết hạn thẳng tới thiết bị → thiết bị phải từ chối · **bấm nút sau `DISPENSE_PRESS_WINDOW_SEC` → không xịt, `PRESS_TIMEOUT`** **[ADR-0007]** |
 | Hard timeout firmware | Lệnh sai định dạng → van và bơm vẫn dừng ở 800ms |
 | Chuyển trạng thái theo lịch | Tắt dịch vụ qua mốc chuyển trạng thái, bật lại → phải bù — **gồm hủy hóa đơn hết giờ giữ chỗ (FR-SLT-39) và tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42)** **[ADR-0006]** |
 | ~~Yêu cầu thuê slot trùng lặp~~ → **Giữ chỗ slot đồng thời** | ~~Gửi 2 yêu cầu thuê cùng slot đồng thời (FR-SLT-26)~~ → Hai thương hiệu checkout cùng slot đồng thời → chỉ 1 hóa đơn DRAFT được tạo, do `excl_slot_rental_overlap` chặn (FR-SLT-35) **[ADR-0006]** |
-| **Mất điện giữa lúc xịt** | **Ngắt nguồn hoặc reset ESP32 khi van đang mở → van phải đóng, bơm phải dừng, lệnh không được thực hiện lại khi khởi động** |
+| **Mất điện giữa lúc xịt** | **Ngắt nguồn hoặc reset ESP32 khi van đang mở → van phải đóng, bơm phải dừng, lệnh không được thực hiện lại khi khởi động** · **reset khi đèn nút đang sáng → khởi động lại không sáng đèn, bấm nút không xịt** **[ADR-0007]** |
 
 ---
 
@@ -327,6 +331,16 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 ---
 
 ## Nhật ký thay đổi
+
+### 29/09/2026 (2) — Khách bấm nút vật lý (ADR-0007)
+
+| Thay đổi | Lý do |
+|---|---|
+| Máy sáng đèn nút rồi chờ khách bấm, không tự xịt | Đúng thiết kế phần cứng thật (bàn thử "nút → đèn → bơm" của TV2 ở T3); đặc tả cũ mô tả máy xịt ngay sau webhook |
+| Thêm việc firmware T5 (TV2), backend + simulator T5 (TV1), màn kiosk T5 (TV4) | Ba phía đều phải biết trạng thái "đèn sáng, chờ bấm" |
+| Gate 3, Gate 4 đổi lời thành "đèn sáng → bấm → xịt" | Mốc phải kiểm đúng hành vi thật |
+| Bổ sung ca cho test tự viết "TTL lệnh xịt" và "Mất điện giữa lúc xịt" | Có thêm trạng thái chờ bấm cần chứng minh an toàn |
+| Không hoàn tiền khi khách không bấm (đơn `FORFEITED`) | Quyết định của nhóm; điều khoản hiện trước khi thanh toán (FR-ORD-25) |
 
 ### 29/09/2026 — Thuê slot theo gói trả trước (ADR-0006)
 

@@ -35,7 +35,7 @@ Tổng: **39 bảng**, **25 kiểu enum**.
 | `machine_connection_status` | `ONLINE` · `UNSTABLE` · `OFFLINE` |
 | `machine_operating_mode` | `NORMAL` · `MAINTENANCE` · `DISABLED` |
 | `notification_status` | `PENDING` · `SENT` · `FAILED` · `READ` |
-| `order_status` | `CREATED` · `PENDING_PAYMENT` · `PAID` · `DISPENSE_REQUESTED` · `DISPENSED` · `FAILED` · `EXPIRED` · `REFUND_PENDING` · `REFUNDED` |
+| `order_status` | `CREATED` · `PENDING_PAYMENT` · `PAID` · `DISPENSE_REQUESTED` · `DISPENSED` · `FAILED` · `EXPIRED` · `REFUND_PENDING` · `REFUNDED` · `FORFEITED` |
 | `payment_status` | `PENDING` · `SUCCEEDED` · `FAILED` · `CANCELLED` · `EXPIRED` · `REFUND_PENDING` · `PARTIALLY_REFUNDED` · `REFUNDED` |
 | `refill_request_reason` | `LOW_STOCK` · `EXPIRING` · `PRODUCT_CHANGE` |
 | `refill_request_status` | `SUBMITTED` · `ACCEPTED` · `REJECTED` · `SCHEDULED` · `COMPLETED` · `CANCELLED` |
@@ -835,9 +835,9 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 | `command_token` | `character varying(255)` | — |  | Mã lệnh duy nhất toàn hệ thống (FR-DSP-02). Thiết bị lưu lại để từ chối lệnh trùng (FR-DSP-10, lỗi CMD_DUPLICATE). |
 | `signature` | `text` | — |  |  |
 | `status` | `command_status` | — | `'CREATED'::command_status` |  |
-| `expires_at` | `timestamp with time zone` | — |  | created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06). |
+| `expires_at` | `timestamp with time zone` | — |  | created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06): hạn để thiết bị NHẬN lệnh và sáng đèn nút. Thời gian khách được bấm là DISPENSE_PRESS_WINDOW_SEC, tính từ lúc sáng đèn (ADR-0007). |
 | `sent_at` | `timestamp with time zone` | có |  |  |
-| `acknowledged_at` | `timestamp with time zone` | có |  |  |
+| `acknowledged_at` | `timestamp with time zone` | có |  | Lệnh CUSTOMER: lúc đèn nút của slot đích sáng, bắt đầu chờ khách bấm (FR-DSP-11, FR-DSP-21). Lệnh DIAGNOSTIC: lúc thiết bị nhận lệnh, kích hoạt ngay sau đó (FR-DSP-27). |
 | `completed_at` | `timestamp with time zone` | có |  |  |
 | `retry_count` | `integer` | — | `0` |  |
 | `created_by` | `uuid` | có |  |  |
@@ -860,6 +860,7 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 - `dispense_commands_command_token_key` (UNIQUE) — `USING btree (command_token)`
 - `dispense_commands_pkey` (UNIQUE) — `USING btree (id)`
 - `idx_commands_machine` — `USING btree (machine_id, created_at)`
+- `uq_machine_active_customer_command` (UNIQUE) — `USING btree (machine_id) WHERE ((command_type = 'CUSTOMER'::dispense_type) AND (status = ANY (ARRAY['CREATED'::command_status, 'SENT'::command_status, 'ACKNOWLEDGED'::command_status])))`
 - `uq_order_active_command` (UNIQUE) — `USING btree (order_id) WHERE ((order_id IS NOT NULL) AND (command_type = 'CUSTOMER'::dispense_type) AND (status = ANY (ARRAY['CREATED'::command_status, 'SENT'::command_status, 'ACKNOWLEDGED'::command_status])))`
 
 ### `dispense_results`

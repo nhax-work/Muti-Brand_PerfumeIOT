@@ -54,6 +54,7 @@ Enum order_status {
   EXPIRED
   REFUND_PENDING
   REFUNDED
+  FORFEITED [note: 'ADR-0007: paid but the customer did not press the lit button within DISPENSE_PRESS_WINDOW_SEC; no refund (FR-ORD-27)']
 }
 Enum payment_status {
   PENDING
@@ -767,6 +768,7 @@ Table dispense_commands {
 
   indexes {
     order_id [unique, note: 'Exported SQL must be partial: WHERE order_id IS NOT NULL AND command_type = CUSTOMER']
+    machine_id [unique, name: 'uq_machine_active_customer_command', note: 'ADR-0007, FR-DSP-26 — partial: WHERE command_type = CUSTOMER AND status IN (CREATED, SENT, ACKNOWLEDGED). One lit button per machine']
     (machine_id, created_at)
   }
   checks { `retry_count >= 0` [name: 'chk_command_retry_nonnegative'] }
@@ -1030,5 +1032,6 @@ Note implementation_notes {
   19. First bottle install on a paid DRAFT invoice activates it in the same transaction (FR-SLT-24). Renewal: old invoice → RENEWED and new invoice → ACTIVE in the same transaction, exactly when the new invoice starts (FR-SLT-12, FR-EXP-13) — never at payment time, or the slot would stop selling until the hand-over.
   20. Same-brand composite FKs (note 5) added by ADR-0006: payments(slot_rental_id, brand_id) → slot_rentals(id, brand_id); storage_compensations(bottle_id, brand_id) → bottles(id, brand_id) (needs UNIQUE (id, brand_id) on bottles); storage_compensations(slot_rental_id, brand_id) → slot_rentals(id, brand_id).
   21. Enforce in the domain service: storage_compensations.amount must not exceed slot_rentals.storage_coverage_cap minus the sum of existing amounts for the same slot_rental_id (FR-SLT-44).
+  22. ADR-0007 — physical button per slot. For CUSTOMER commands, ACKNOWLEDGED means the slot button is lit and waiting; the device dispenses only when the customer presses it within DISPENSE_PRESS_WINDOW_SEC, otherwise it rejects with PRESS_TIMEOUT and the order becomes FORFEITED without manual review or refund. Other rejections after ACK make the order FAILED with needs_manual_review. After ACK the UNKNOWN deadline is acknowledged_at + DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC. A paid order waits in PAID while the machine has another active CUSTOMER command; order creation on such a machine fails with MACHINE_BUSY.
   '''
 }

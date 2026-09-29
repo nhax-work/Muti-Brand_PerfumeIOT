@@ -11,6 +11,9 @@
 --                  migrations/1790665900000_slot-rental-status-cancelled.sql và
 --                  migrations/1790665960000_prepaid-rental-packages.sql. Cột thêm bằng ALTER TABLE
 --                  được đặt CUỐI mỗi bảng dưới đây để khớp thứ tự cột thật trong CSDL.
+--                  ADR-0007 (khách bấm nút vật lý) — order_status thêm FORFEITED, index
+--                  uq_machine_active_customer_command; áp bằng migrations/1790752000000_* và
+--                  migrations/1790752060000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -63,9 +66,10 @@ CREATE TYPE bottle_status AS ENUM (
 
 CREATE TYPE refill_status AS ENUM ('STARTED', 'COMPLETED', 'CANCELLED');
 
+-- FORFEITED thêm theo ADR-0007: khách không bấm nút trong DISPENSE_PRESS_WINDOW_SEC (FR-ORD-27).
 CREATE TYPE order_status AS ENUM (
     'CREATED', 'PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED', 'DISPENSED',
-    'FAILED', 'EXPIRED', 'REFUND_PENDING', 'REFUNDED'
+    'FAILED', 'EXPIRED', 'REFUND_PENDING', 'REFUNDED', 'FORFEITED'
 );
 
 CREATE TYPE payment_status AS ENUM (
@@ -923,7 +927,12 @@ COMMENT ON COLUMN dispense_commands.brand_id IS
 COMMENT ON COLUMN dispense_commands.command_token IS
     'Mã lệnh duy nhất toàn hệ thống (FR-DSP-02). Thiết bị lưu lại để từ chối lệnh trùng '
     '(FR-DSP-10, lỗi CMD_DUPLICATE).';
-COMMENT ON COLUMN dispense_commands.expires_at IS 'created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06).';
+COMMENT ON COLUMN dispense_commands.expires_at IS
+    'created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06): hạn để thiết bị NHẬN lệnh và sáng đèn nút. Thời '
+    'gian khách được bấm là DISPENSE_PRESS_WINDOW_SEC, tính từ lúc sáng đèn (ADR-0007).';
+COMMENT ON COLUMN dispense_commands.acknowledged_at IS
+    'Lệnh CUSTOMER: lúc đèn nút của slot đích sáng, bắt đầu chờ khách bấm (FR-DSP-11, FR-DSP-21). '
+    'Lệnh DIAGNOSTIC: lúc thiết bị nhận lệnh, kích hoạt ngay sau đó (FR-DSP-27).';
 
 CREATE TABLE dispense_results (
     id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1218,6 +1227,14 @@ CREATE UNIQUE INDEX uq_order_active_command ON dispense_commands (order_id)
       AND command_type = 'CUSTOMER'
       AND status IN ('CREATED', 'SENT', 'ACKNOWLEDGED');
 
+-- (3b) Một lệnh xịt khách hàng hiệu lực trên mỗi MÁY (FR-DSP-26, ADR-0007). Lệnh ACKNOWLEDGED nghĩa là
+--      đèn nút đang sáng chờ khách bấm; hai lệnh cùng hiệu lực là hai nút sáng cùng lúc và người sau
+--      bấm được lượt của người trước. Đơn thanh toán sau giữ ở PAID ("chờ lượt") tới khi lệnh trước
+--      kết thúc. DIAGNOSTIC không chờ bấm nên không tính.
+CREATE UNIQUE INDEX uq_machine_active_customer_command ON dispense_commands (machine_id)
+    WHERE command_type = 'CUSTOMER'
+      AND status IN ('CREATED', 'SENT', 'ACKNOWLEDGED');
+
 -- (4) Một chai hoạt động trên mỗi slot (FR-MCH-07)
 --     Chiều "một slot một chai" đã do cardinality của cột bảo đảm; index này chặn chiều còn lại:
 --     một chai không thể đồng thời lắp ở hai slot (ADR-0002).
@@ -1509,4 +1526,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --         đúng lúc hóa đơn mới bắt đầu hiệu lực (FR-SLT-12, FR-EXP-13).
 --       - storage_compensations.amount không vượt hạn mức còn lại =
 --         slot_rentals.storage_coverage_cap − tổng amount đã có của cùng slot_rental_id (FR-SLT-44).
+--
+--  11. Nút bấm vật lý (ADR-0007):
+--       - Webhook PAID chỉ tạo lệnh CUSTOMER khi máy không còn lệnh CUSTOMER hiệu lực (index 3b);
+--         nếu còn, đơn giữ PAID và được tạo lệnh ngay khi lệnh trước kết thúc (FR-DSP-26).
+--       - Tạo đơn mới trên máy có lệnh CUSTOMER hiệu lực trả MACHINE_BUSY (FR-ORD-24).
+--       - REJECT với failure_code = PRESS_TIMEOUT → lệnh REJECTED, đơn FORFEITED, KHÔNG đặt
+--         needs_manual_review (FR-ORD-27). Mọi mã từ chối khác sau ACK → đơn FAILED + needs_manual_review.
+--       - Mốc UNKNOWN sau ACK = acknowledged_at + DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC
+--         (FR-DSP-18).
 -- =====================================================================================

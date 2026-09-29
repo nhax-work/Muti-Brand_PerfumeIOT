@@ -45,7 +45,7 @@ export type NotificationStatus = "FAILED" | "PENDING" | "READ" | "SENT";
 
 export type Numeric = ColumnType<string, number | string, number | string>;
 
-export type OrderStatus = "CREATED" | "DISPENSE_REQUESTED" | "DISPENSED" | "EXPIRED" | "FAILED" | "PAID" | "PENDING_PAYMENT" | "REFUND_PENDING" | "REFUNDED";
+export type OrderStatus = "CREATED" | "DISPENSE_REQUESTED" | "DISPENSED" | "EXPIRED" | "FAILED" | "FORFEITED" | "PAID" | "PENDING_PAYMENT" | "REFUND_PENDING" | "REFUNDED";
 
 export type PaymentStatus = "CANCELLED" | "EXPIRED" | "FAILED" | "PARTIALLY_REFUNDED" | "PENDING" | "REFUND_PENDING" | "REFUNDED" | "SUCCEEDED";
 
@@ -210,6 +210,9 @@ export interface DeviceEvents {
 }
 
 export interface DispenseCommands {
+  /**
+   * Lệnh CUSTOMER: lúc đèn nút của slot đích sáng, bắt đầu chờ khách bấm (FR-DSP-11, FR-DSP-21). Lệnh DIAGNOSTIC: lúc thiết bị nhận lệnh, kích hoạt ngay sau đó (FR-DSP-27).
+   */
   acknowledged_at: Timestamp | null;
   /**
    * Có giá trị với lệnh CUSTOMER (chép từ đơn). NULL với lệnh DIAGNOSTIC chạy trên slot chưa có hóa đơn nào.
@@ -224,7 +227,7 @@ export interface DispenseCommands {
   created_at: Generated<Timestamp>;
   created_by: string | null;
   /**
-   * created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06).
+   * created_at + DISPENSE_CMD_TTL_SEC (FR-DSP-06): hạn để thiết bị NHẬN lệnh và sáng đèn nút. Thời gian khách được bấm là DISPENSE_PRESS_WINDOW_SEC, tính từ lúc sáng đèn (ADR-0007).
    */
   expires_at: Timestamp;
   id: Generated<string>;
