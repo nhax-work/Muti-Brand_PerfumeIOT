@@ -17,7 +17,7 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 
 1. `Machine` **không** có `brand_id`. Máy thuộc nền tảng. Một máy chứa slot của nhiều thương
    hiệu. Quan hệ thương hiệu ↔ máy đi qua `SlotRental`.
-2. Một thương hiệu có thể thuê **nhiều slot trên cùng một máy**. Mỗi slot một hợp đồng riêng.
+2. Một thương hiệu có thể thuê **nhiều slot trên cùng một máy**. Mỗi slot một hóa đơn riêng.
 3. `Order` chụp `brand_id`, `slot_rental_id`, `revenue_owner` **tại thời điểm tạo đơn**. Không
    suy ra từ slot khi truy vấn.
 
@@ -29,7 +29,10 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 | `Location` | Địa điểm đặt máy, thuộc nền tảng |
 | `Machine` | Máy trải nghiệm, thuộc nền tảng |
 | `MachineSlot` | Ngăn chứa độc lập trên máy |
-| `SlotRental` | Hợp đồng thuê một slot của một thương hiệu trong một kỳ hạn |
+| `SlotRental` | **Hóa đơn thuê slot**: một lần thương hiệu mua gói thuê một slot, kèm gói bảo quản. Vừa là chứng từ thanh toán vừa là đơn vị cô lập dữ liệu |
+| `RentalPackage` | Gói thuê do nền tảng niêm yết: thời hạn (3, 6, 12 tháng) và tỷ lệ ưu đãi |
+| `StoragePlan` | Gói bảo quản (bảo hiểm hàng hóa): giá mỗi tháng, tỷ lệ và hạn mức bồi thường. Mỗi hóa đơn bắt buộc chọn đúng một gói |
+| `StorageCompensation` | Khoản bồi thường khi chai của thương hiệu hư hỏng lúc nền tảng đang giữ |
 | `Product` | Sản phẩm nước hoa, thuộc một thương hiệu |
 | `Batch` | Lô nhập, thuộc một thương hiệu |
 | `Bottle` | Chai cụ thể, có chủ sở hữu là thương hiệu hoặc nền tảng |
@@ -61,20 +64,36 @@ Lệnh ở trạng thái UNKNOWN **không** tự sinh lệnh mới (FR-DSP-19).
 
 ```
 DRAFT ──> ACTIVE ──> EXPIRING ──> GRACE ──> RENEWED
-                                     │
-                                     └──> LIQUIDATED ──> CLOSED
+  │                     │            │
+  │                     │            └──> LIQUIDATED ──> CLOSED
+  │                     └──> RENEWED        (gia hạn trước khi hết hạn)
+  └──> CANCELLED   (hết giờ giữ chỗ, chưa thanh toán)
 ACTIVE ──> TERMINATED
 ```
 
 | Trạng thái | Slot bán được? | Doanh thu thuộc |
 |---|---|---|
+| `DRAFT` | Không — chờ thanh toán hoặc chờ nạp hàng | — |
 | `ACTIVE` | Có | BRAND |
 | `EXPIRING` | Có | BRAND |
 | `GRACE` | Có | BRAND |
 | `LIQUIDATED` | Có | **PLATFORM** |
-| `RENEWED`, `CLOSED`, `TERMINATED` | Không | — |
+| `RENEWED`, `CLOSED`, `TERMINATED`, `CANCELLED` | Không | — |
 
-Slot chỉ được cho thuê lại sau khi hợp đồng cũ về `CLOSED` hoặc `TERMINATED`.
+Slot chỉ được cho thuê lại sau khi hóa đơn cũ về `CLOSED`, `TERMINATED` hoặc `CANCELLED`.
+
+**Mua gói trả trước** (ADR-0006, đã duyệt 2026-09-29). Brand Admin tự tạo hóa đơn `DRAFT` khi chọn slot, gói
+thuê và gói bảo quản; hóa đơn `DRAFT` giữ chỗ slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút. Hai trạng thái con
+của `DRAFT`, phân biệt bằng `paid_at`:
+
+| `DRAFT` | Nghĩa | Rời khỏi bằng |
+|---|---|---|
+| `paid_at` NULL — **chờ thanh toán** | Đang giữ chỗ | Thanh toán thành công, hoặc hết giờ giữ chỗ → `CANCELLED` |
+| `paid_at` khác NULL — **chờ nạp hàng** | Slot đã thuộc thương hiệu, cấu hình được, chưa bán | Lắp chai đầu tiên, hoặc quá `RENTAL_MAX_STOCKING_DAYS` → `ACTIVE` |
+
+Thời hạn hóa đơn tính từ lúc `ACTIVE`: `ends_at = starts_at + số tháng của gói`. Hóa đơn gia hạn không chờ
+lắp chai: nó kích hoạt nối tiếp đúng `ends_at` của hóa đơn cũ (hoặc ngay khi thanh toán nếu hóa đơn cũ đã
+`GRACE`), và hóa đơn cũ chuyển `RENEWED` trong cùng transaction.
 
 ### DispenseCommand
 
@@ -99,7 +118,7 @@ IN_STOCK ──> INSTALLED ──> LOW ──> EMPTY
                  │                   │
                  ├──> DAMAGED        └──> IN_STOCK (tháo về kho)
                  └──> EXPIRED
-INSTALLED ──> LIQUIDATED   (hợp đồng chuyển LIQUIDATED, chủ sở hữu -> PLATFORM)
+INSTALLED ──> LIQUIDATED   (hóa đơn chuyển LIQUIDATED, chủ sở hữu -> PLATFORM)
 ```
 
 ### RefillRequest
@@ -139,7 +158,7 @@ Máy chỉ về `NORMAL` sau khi checklist kiểm tra sau bảo trì hoàn tất
 ## Quy tắc cô lập dữ liệu
 
 Người dùng thuộc thương hiệu chỉ thấy dữ liệu của slot mà thương hiệu đó **đang hoặc đã từng**
-có hợp đồng, và chỉ trong kỳ hạn hợp đồng tương ứng.
+có hóa đơn, và chỉ trong kỳ hạn hóa đơn tương ứng.
 
 ```sql
 -- ĐÚNG

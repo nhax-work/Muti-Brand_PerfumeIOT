@@ -45,8 +45,23 @@ CREATE INDEX ... WHERE status = 'PARTIALLY_REFUNDED';
 ```
 
 Lý do: PostgreSQL không cho dùng một giá trị enum vừa thêm **trong cùng transaction** mà nó được
-thêm. node-pg-migrate bọc mỗi migration trong một transaction, nên gộp hai việc vào một file sẽ
-lỗi `unsafe use of new value ... of enum type` — thông báo khó đoán nếu chưa gặp bao giờ.
+thêm, và báo lỗi `unsafe use of new value ... of enum type` — thông báo khó đoán nếu chưa gặp bao giờ.
+
+**Tách file thôi là chưa đủ.** node-pg-migrate 9 mặc định `--single-transaction`: mọi migration
+đang chờ chạy chung **một** transaction. Trên máy đã có lược đồ cũ, file 1 (thêm giá trị) và file 2
+(dùng giá trị) sẽ cùng chờ và cùng chạy trong một transaction — vẫn lỗi như gộp một file. (Trên DB
+trống thì không lỗi, vì kiểu enum được tạo ngay trong transaction đó — nên bẫy này không lộ khi chỉ
+thử `make reset && make migrate`.) Hai cách an toàn, đã kiểm trên PostgreSQL 16:
+
+1. Trong file 2, **không ép chuỗi thành giá trị enum mới**: so sánh qua `::text`, ví dụ
+   `CHECK (status::text <> 'CANCELLED')` thay vì `CHECK (status <> 'CANCELLED')`. Cách này dùng ở
+   `1790665960000_prepaid-rental-packages.sql`.
+2. Khi file 2 buộc phải dùng giá trị mới như một giá trị enum (ví dụ `UPDATE ... SET status =
+   'MOI'`), chạy từng bước: `npm run db:migrate -- 1` cho file 1, rồi `npm run db:migrate` cho phần
+   còn lại — và ghi rõ yêu cầu này ở đầu file 2.
+
+Kiểm cả hai kịch bản trước khi commit: DB trống (`make reset && make migrate`) **và** DB đã có lược đồ
+cũ (chỉ chạy các migration mới).
 
 Cũng lưu ý: `ALTER TYPE ... ADD VALUE` **không có đường lùi**. PostgreSQL không hỗ trợ xóa một giá
 trị khỏi enum. Phần Down của migration đó chỉ có thể để trống kèm ghi chú, hoặc phải tạo kiểu mới

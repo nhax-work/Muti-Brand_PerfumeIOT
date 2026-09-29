@@ -41,15 +41,23 @@
 | `SESSION_REVOKE_MAX_SEC` | 60 | FR-AUTH-10 |
 | `REAUTH_TOKEN_TTL_SEC` | 300 | FR-AUTH-09 |
 
-## Hợp đồng thuê slot
+## Hóa đơn thuê slot
 
 | Hằng | Giá trị | FR |
 |---|---|---|
 | `RENTAL_EXPIRING_DAYS` | 7 | FR-EXP-05 |
 | `RENTAL_NOTICE_DAYS` | [7, 3] | FR-EXP-01, FR-EXP-02 |
 | `GRACE_FEE_RATE_DEFAULT` | 0.05 | FR-EXP-10 |
+| `RENTAL_CHECKOUT_HOLD_MIN` | 15 | FR-SLT-35, FR-SLT-39 |
+| `RENTAL_MAX_STOCKING_DAYS` | 30 | FR-SLT-42 |
 
-`GRACE_FEE_RATE_DEFAULT` cấu hình theo từng hợp đồng. Phí = tỷ lệ × giá chai × số chai tồn.
+`GRACE_FEE_RATE_DEFAULT` cấu hình theo từng hóa đơn. Phí = tỷ lệ × giá chai × số chai tồn.
+
+`RENTAL_CHECKOUT_HOLD_MIN` là thời gian hóa đơn `DRAFT` chưa thanh toán giữ chỗ slot; hết giờ thì hóa
+đơn chuyển `CANCELLED`. `RENTAL_MAX_STOCKING_DAYS` là số ngày tối đa từ lúc thanh toán tới lúc lắp chai
+đầu tiên; quá mốc thì hóa đơn tự kích hoạt (ADR-0006). Thời hạn gói thuê, tỷ lệ ưu đãi và mức bồi
+thường **không** phải hằng ngưỡng — chúng là dữ liệu danh mục trong `rental_packages` và
+`storage_plans`, do Platform Super Admin cấu hình.
 
 ## Tồn kho và cảnh báo
 

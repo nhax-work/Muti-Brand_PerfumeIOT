@@ -6,7 +6,8 @@
 Nguồn: `seed_document/DB_DIAGRAM_MERMAID.md` · Chuẩn đặt tên: `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`
 Lược đồ thi hành: `spec/contracts/schema.sql` · Mô tả từng cột: `spec/contracts/data-dictionary.md`
 
-35 bảng, chia theo 6 nhóm. Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
+38 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
+`storage_compensations` theo ADR-0006). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
 tổng quan các quan hệ cốt lõi, rồi 6 sơ đồ chi tiết theo nhóm.
 
 ---
@@ -24,6 +25,9 @@ erDiagram
     BRANDS             ||--o{ FRAGRANCE_PRODUCTS : "sở hữu"
     FRAGRANCE_PRODUCTS ||--o{ SLOT_RENTALS : "được gán vào"
     SLOT_RENTALS       ||--o{ ORDERS : "phát sinh"
+    SLOT_RENTALS       ||--o{ PAYMENTS : "được thanh toán bởi"
+    RENTAL_PACKAGES    ||--o{ SLOT_RENTALS : "được mua qua"
+    STORAGE_PLANS      ||--o{ SLOT_RENTALS : "bảo quản cho"
     ORDERS             ||--|| DISPENSE_COMMANDS : "sinh 1 lệnh hiệu lực"
     DISPENSE_COMMANDS  ||--|| DISPENSE_RESULTS : "nhận kết quả"
     ORDERS             ||--o{ PAYMENTS : "được thanh toán bởi"
@@ -38,8 +42,9 @@ erDiagram
    Đường duy nhất nối thương hiệu với máy là `slot_rentals`. Truy vấn dữ liệu của thương hiệu phải
    lọc qua `orders`/`slot_rentals`, không bao giờ qua `machines` (BR-003, BR-012).
 
-2. **Một hợp đồng ứng với đúng một slot.** Thương hiệu thuê 3 slot có 3 hàng `slot_rentals` độc lập,
-   mỗi hàng có kỳ hạn, sản phẩm và giá riêng, và có thể ở trạng thái khác nhau (BR-009).
+2. **Một hóa đơn thuê slot ứng với đúng một slot.** `slot_rentals` là "hóa đơn thuê slot" — một lần
+   thương hiệu mua gói (ADR-0006). Thương hiệu thuê 3 slot có 3 hàng `slot_rentals` độc lập, mỗi hàng
+   có kỳ hạn, sản phẩm, giá và gói riêng, và có thể ở trạng thái khác nhau (BR-009).
 
 3. **`orders` chụp `brand_id`, `slot_rental_id`, `revenue_owner`, `amount` tại thời điểm tạo đơn.**
    Không suy ra từ slot khi truy vấn. `orders.brand_id` luôn có giá trị kể cả với đơn sau thanh lý;
@@ -145,6 +150,7 @@ erDiagram
         uuid active_bottle_id FK
         numeric calibrated_dosage_ml
         slot_status status
+        numeric monthly_rent_price "NULL = chưa mở cho thuê"
     }
     MACHINE_STATUS_HISTORIES {
         uuid id PK
@@ -163,17 +169,39 @@ erDiagram
         uuid id PK
         uuid slot_id FK
         uuid brand_id FK
-        uuid fragrance_product_id FK "NULL chỉ trong cửa sổ DRAFT"
-        uuid request_id FK
+        uuid fragrance_product_id FK "NULL tới khi cấu hình slot"
+        uuid request_id FK "DEPRECATED"
         uuid previous_rental_id FK
+        uuid rental_package_id FK
+        uuid storage_plan_id FK
+        varchar invoice_number UK "cấp khi thanh toán"
         slot_rental_status status
-        timestamptz starts_at
-        timestamptz ends_at
-        numeric price_per_spray
-        numeric revenue_share_percent
+        timestamptz starts_at "DRAFT: mốc tạm"
+        timestamptz ends_at "DRAFT: mốc tạm"
+        numeric price_per_spray "NULL tới khi cấu hình slot"
+        numeric total_amount "ảnh chụp, chỉ ghi một lần"
+        timestamptz hold_expires_at
+        timestamptz paid_at
+        numeric fixed_fee "DEPRECATED"
+        numeric revenue_share_percent "DEPRECATED"
+    }
+    RENTAL_PACKAGES {
+        uuid id PK
+        varchar name UK
+        smallint duration_months
+        numeric discount_percent
+        boolean is_active
+    }
+    STORAGE_PLANS {
+        uuid id PK
+        varchar name UK
+        numeric monthly_price
+        numeric coverage_percent
+        numeric coverage_cap
+        boolean is_active
     }
     SLOT_RENTAL_REQUESTS {
-        uuid id PK
+        uuid id PK "DEPRECATED"
         uuid slot_id FK
         uuid brand_id FK
         slot_rental_request_status status
@@ -186,8 +214,10 @@ erDiagram
     MACHINE_SLOTS ||--o{ SLOT_RENTALS : "được thuê"
     MACHINE_SLOTS ||--o{ SLOT_RENTAL_REQUESTS : "được yêu cầu thuê"
     FRAGRANCE_PRODUCTS ||--o{ SLOT_RENTALS : "gán vào"
-    SLOT_RENTAL_REQUESTS ||--o| SLOT_RENTALS : "sinh hợp đồng DRAFT"
+    SLOT_RENTAL_REQUESTS ||--o| SLOT_RENTALS : "sinh hóa đơn DRAFT (DEPRECATED)"
     SLOT_RENTALS ||--o| SLOT_RENTALS : "gia hạn từ"
+    RENTAL_PACKAGES ||--o{ SLOT_RENTALS : "được mua qua"
+    STORAGE_PLANS ||--o{ SLOT_RENTALS : "bảo quản cho"
 ```
 
 **`machines` có hai trục trạng thái độc lập.** `status` là kết nối, suy ra từ heartbeat (FR-MCH-08,
@@ -195,10 +225,16 @@ FR-IOT-01..03). `operating_mode` là chế độ do người vận hành đặt 
 có thể vừa `ONLINE` vừa `MAINTENANCE`. `machine_status_histories` ghi cả hai trục vào cùng một bảng
 nhưng mỗi hàng chỉ điền một cặp.
 
-**Luồng tự phục vụ của Brand Admin** (FR-SLT-19..29): `slot_rental_requests` (REQUESTED) → duyệt →
-`slot_rentals` (DRAFT, chưa có sản phẩm) → Brand Admin gán sản phẩm (FR-SLT-27) → đến ngày bắt đầu
-chuyển ACTIVE (FR-SLT-24). Hai bảng trỏ vào nhau (`request_id` ↔ `resulting_rental_id`), nên
-`fk_request_resulting_rental` cũng phải tách ra `ALTER TABLE`.
+**Luồng mua gói của Brand Admin** (ADR-0006, FR-SLT-19, 24, 27, 30 ÷ 43): chọn slot có
+`monthly_rent_price`, một `rental_packages` và một `storage_plans` → `slot_rentals` DRAFT giữ chỗ tới
+`hold_expires_at` (`excl_slot_rental_overlap` chặn thương hiệu thứ hai) → thanh toán qua `payments`
+→ `paid_at` + `invoice_number` → cấu hình sản phẩm và giá → lắp chai đầu tiên thì chuyển ACTIVE với
+`starts_at`/`ends_at` thật. Hết giờ giữ chỗ mà chưa thanh toán thì chuyển CANCELLED. Giá gói và điều
+khoản bảo quản được **chụp** vào `slot_rentals` lúc tạo, không đọc lại từ bảng danh mục.
+
+**`slot_rental_requests` đã DEPRECATED** (ADR-0006): luồng xin thuê và duyệt tay bị bãi bỏ, bảng giữ
+lại vì xóa là thay đổi phá hủy. Hai bảng vẫn trỏ vào nhau (`request_id` ↔ `resulting_rental_id`), nên
+`fk_request_resulting_rental` vẫn nằm ở `ALTER TABLE`.
 
 ---
 
@@ -249,11 +285,21 @@ erDiagram
         numeric difference_ml
         text reason "bắt buộc"
     }
+    STORAGE_COMPENSATIONS {
+        uuid id PK
+        uuid brand_id FK
+        uuid bottle_id FK,UK "một chai bồi thường một lần"
+        uuid slot_rental_id FK "hóa đơn có gói được áp"
+        numeric amount
+        storage_compensation_status status
+        varchar payout_reference
+    }
 
     BRAND_SHIPMENT_DECLARATIONS ||--o| INVENTORY_BATCHES : "sinh lô khi nhận"
     INVENTORY_BATCHES ||--o{ BOTTLES : "gồm"
     BOTTLES ||--o{ REFILL_SESSIONS : "được tháo/lắp qua"
     BOTTLES ||--o{ INVENTORY_ADJUSTMENTS : "được điều chỉnh"
+    BOTTLES ||--o| STORAGE_COMPENSATIONS : "được bồi thường"
 ```
 
 **`bottles` có hai cột chủ sở hữu, đừng nhầm.** `brand_id` là thương hiệu gốc, bất biến để phục vụ
@@ -263,6 +309,10 @@ kiểm toán. `owner` là chủ sở hữu hiện tại, lật sang `PLATFORM` k
 **`refill_sessions` chính là phiếu nạp** (FR-INV-29..31), không phải một bảng riêng: `status=STARTED`
 là phiếu đang mở, `status=COMPLETED` là phiếu đã đóng. Trong lúc phiếu mở, cảnh báo cửa mở quá hạn
 (FR-ALR-03) bị tạm ngưng cho máy/slot đó.
+
+**`storage_compensations` là bảo hiểm hàng hóa** (ADR-0006, FR-SLT-44 ÷ 46). Hai khóa ngoại cùng
+thương hiệu — `(bottle_id, brand_id)` và `(slot_rental_id, brand_id)` — chặn ở tầng CSDL việc bồi
+thường chai của thương hiệu này bằng hạn mức trên hóa đơn của thương hiệu khác.
 
 ---
 
@@ -292,7 +342,8 @@ erDiagram
     }
     PAYMENTS {
         uuid id PK
-        uuid order_id FK
+        uuid order_id FK "NULL với thanh toán hóa đơn"
+        uuid slot_rental_id FK "NULL với thanh toán đơn kiosk"
         varchar provider
         varchar provider_transaction_id
         payment_status status
@@ -328,6 +379,7 @@ erDiagram
 
     ORDERS ||--o{ ORDER_STATUS_HISTORIES : "ghi lịch sử"
     ORDERS ||--o{ PAYMENTS : "thanh toán"
+    SLOT_RENTALS ||--o{ PAYMENTS : "thanh toán hóa đơn"
     PAYMENTS ||--o{ PAYMENT_EVENTS : "nhận webhook"
     ORDERS ||--o{ DISPENSE_COMMANDS : "sinh lệnh"
     DISPENSE_COMMANDS ||--|| DISPENSE_RESULTS : "trả kết quả"
@@ -340,6 +392,11 @@ erDiagram
 | `uq_payment_event (provider, provider_event_id)` | Cổng thanh toán gửi lại webhook → xử lý hai lần (FR-ORD-15) |
 | `uq_order_active_command (order_id)` partial | Một đơn có hai lệnh xịt cùng hiệu lực → xịt hai lần (FR-DSP-05) |
 | `dispense_results.command_id` UNIQUE | Một lệnh ghi hai kết quả khác nhau (FR-IOT-07) |
+
+**`payments` phục vụ hai loại giao dịch** (ADR-0006): đơn kiosk (`order_id`) và hóa đơn thuê slot
+(`slot_rental_id`). `chk_payment_single_target` bắt buộc đúng một trong hai có giá trị;
+`uq_rental_payment_pending` giữ mỗi hóa đơn tối đa một thanh toán PENDING. Webhook dùng chung, nên
+`uq_payment_event` bảo vệ idempotency cho cả hai.
 
 `payment_events.brand_id`/`payment_id` NULL khi webhook không khớp được với đơn nào (chữ ký sai, mã
 tham chiếu lạ) — vẫn ghi lại để rà soát bảo mật (FR-ORD-13/14).

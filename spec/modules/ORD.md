@@ -70,7 +70,7 @@
 ---
 
 ## FR-ORD-05 — Chụp nhanh (Snapshot) dữ liệu vào đơn hàng
-* **Statement:** Hệ thống phải lưu định danh máy, slot, hợp đồng thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn.
+* **Statement:** Hệ thống phải lưu định danh máy, slot, hóa đơn thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn.
 * **Traces:** BR-002, BR-008, BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given yêu cầu tạo đơn hàng hợp lệ,  

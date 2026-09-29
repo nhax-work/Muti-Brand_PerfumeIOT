@@ -26,13 +26,13 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `FORBIDDEN_SCOPE` | 403 | Ngoài phạm vi slot của thương hiệu |
 | `REAUTH_REQUIRED` | 403 | Thao tác nhạy cảm cần xác thực lại |
 
-## Hợp đồng thuê slot
+## Hóa đơn thuê slot
 
 | Mã | HTTP | Khi nào |
 |---|---|---|
-| `RENTAL_OVERLAP` | 409 | Kỳ hạn chồng lấn hợp đồng khác trên cùng slot |
-| `SLOT_OCCUPIED` | 409 | Slot đang có hợp đồng ACTIVE/EXPIRING/GRACE/LIQUIDATED |
-| `RENTAL_NOT_ACTIVE` | 409 | Hợp đồng không ở trạng thái cho phép thao tác |
+| `RENTAL_OVERLAP` | 409 | Kỳ hạn chồng lấn hóa đơn khác trên cùng slot |
+| `SLOT_OCCUPIED` | 409 | Slot đang có hóa đơn ACTIVE/EXPIRING/GRACE/LIQUIDATED |
+| `RENTAL_NOT_ACTIVE` | 409 | Hóa đơn không ở trạng thái cho phép thao tác |
 | `PRODUCT_NOT_OWNED` | 403 | Sản phẩm không thuộc thương hiệu thuê slot |
 | `INVALID_RENTAL_PERIOD` | 400 | Ngày kết thúc trước ngày bắt đầu |
 
