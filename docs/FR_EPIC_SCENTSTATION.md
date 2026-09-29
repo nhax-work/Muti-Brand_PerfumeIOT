@@ -83,7 +83,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 ## A6. EPIC-SLT — Hóa đơn thuê slot
 
-> Viết lại ngày 2026-09-25 theo ADR-0006 (**đề xuất**): thuê slot theo gói trả trước tự phục vụ. FR-SLT-01, 20÷23, 25, 26 đã bãi bỏ (mức X) nên không còn nằm trong epic nào.
+> Viết lại ngày 2026-09-25 theo ADR-0006 (**đã duyệt 2026-09-29**): thuê slot theo gói trả trước tự phục vụ. FR-SLT-01, 20÷23, 25, 26 đã bãi bỏ (mức X) nên không còn nằm trong epic nào.
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|

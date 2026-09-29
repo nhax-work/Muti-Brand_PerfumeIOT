@@ -22,7 +22,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 
 - Nền tảng sở hữu và vận hành toàn bộ máy, địa điểm và nhân sự vận hành/kỹ thuật/kho (BR-004, BR-011).
 - Thương hiệu tự mua gói thuê slot, quản lý danh mục sản phẩm, giá mỗi lượt xịt trên slot mình thuê, báo cáo của mình và yêu cầu bổ sung (BR-007, BR-011).
-- Thuê slot tự phục vụ, không ký hợp đồng, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, **đề xuất**).
+- Thuê slot tự phục vụ, không ký hợp đồng, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, đã duyệt 2026-09-29).
 - Một hóa đơn thuê slot (`SlotRental`) ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). "Hóa đơn" là thuật ngữ tiếng Việt; định danh kỹ thuật vẫn là `SlotRental`.
 - Giá tự do — không có giá sàn hay giá trần (FR-SLT-08).
 - Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009).
@@ -55,7 +55,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > `schema.sql` phải trùng với DB chạy hết migration.
 
 > Trạng thái acceptance criteria trong `spec/modules/` (177/275 FR hiệu lực, đếm lại ngày 2026-09-25
-> sau khi viết lại mục SLT theo ADR-0006 — ADR đang chờ duyệt; 7 FR mức X đã bãi bỏ không tính):
+> sau khi viết lại mục SLT theo ADR-0006 — đã duyệt; 7 FR mức X đã bãi bỏ không tính):
 >
 > - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
 > - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17)

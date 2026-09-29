@@ -1,7 +1,7 @@
 # FR-SLT — Hóa đơn thuê slot
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A6 · 47 mục = 40 FR hiệu lực + 7 FR bãi bỏ (mức X)  
-> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau; ngày 2026-09-25 viết lại theo ADR-0006 — **đề xuất, chờ TV1 duyệt**: bãi bỏ FR-SLT-01, 20÷23, 25, 26; viết lại FR-SLT-06, 08, 12, 13, 17, 18, 19, 24, 27, 29; thêm FR-SLT-30÷47)  
+> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau; ngày 2026-09-25 viết lại theo ADR-0006 — **TV1 đã duyệt 2026-09-29**: bãi bỏ FR-SLT-01, 20÷23, 25, 26; viết lại FR-SLT-06, 08, 12, 13, 17, 18, 19, 24, 27, 29; thêm FR-SLT-30÷47)  
 > Phụ trách: TV3 / Tài  
 
 "Hóa đơn thuê slot" là thuật ngữ tiếng Việt của thực thể `SlotRental`; định danh kỹ thuật không đổi.
@@ -467,15 +467,13 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
 > **Vì sao `fragrance_product_id` và `price_per_spray` nullable ở tầng CSDL.** Hai cột để nullable
 > *chỉ* nhằm phục vụ cửa sổ giữa lúc thương hiệu thanh toán (FR-SLT-38) và lúc cấu hình slot
 > (FR-SLT-08, FR-SLT-27). Ràng buộc "phải có sản phẩm và giá trước khi nhận đơn" nằm ở domain
-> service, không ở CSDL — xem `spec/contracts/schema.sql` §13 mục 3. `price_per_spray` hiện còn
-> `NOT NULL` trong contract; ADR-0006 đề xuất bỏ.
+> service, không ở CSDL — xem `spec/contracts/schema.sql` §13 mục 3.
 
 ---
 
 > **FR-SLT-30 ÷ FR-SLT-47 — Mua gói thuê, hóa đơn và bảo hiểm hàng hóa.** Thêm ngày 2026-09-25 theo
-> `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md`, **trạng thái đề xuất**. Tên cột,
-> endpoint và hằng ngưỡng bên dưới là theo đề xuất trong ADR; chúng chỉ tồn tại trong contract và
-> `spec/constraints.md` sau khi TV1 duyệt.
+> `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (**đã duyệt 2026-09-29**). Tên cột,
+> endpoint và hằng ngưỡng bên dưới đã có trong contract, migration và `spec/constraints.md`.
 
 ## FR-SLT-30 — Danh mục gói thuê
 * **Statement:** Hệ thống phải cho phép Platform Super Admin quản lý danh mục gói thuê gồm tên, thời hạn theo tháng, tỷ lệ ưu đãi và trạng thái mở bán.

@@ -92,7 +92,7 @@
 |---|---|---|
 | TV1 | **Bộ test cô lập slot viết tay**, không giao AI. Seed 1 máy 4 slot: slot 1–2 brand A, slot 3–4 brand B. Test: A đọc trực tiếp slot 3 bị từ chối · endpoint danh sách của A chỉ trả slot 1–2 · đơn, doanh thu, tồn kho, telemetry slot 3 không lọt sang A · endpoint cấp máy không lộ dữ liệu B | **Gỡ tạm bộ lọc cô lập thì test phải đỏ.** Ghi phép thử này vào PR |
 | TV1 | Test ràng buộc CSDL chạy thẳng vào DB, không qua API: 2 hóa đơn ACTIVE cùng slot · đơn thiếu `revenue_owner` · xóa slot đang có hóa đơn | Cả 3 trường hợp bị CSDL từ chối |
-| TV1 | **Duyệt ADR-0006 và PR contract đi kèm** (2 migration, `schema.sql`, `openapi.yaml`, `erd.md`, 2 hằng mới) **[ADR-0006]** | ADR chuyển "đã duyệt"; `make reset && make migrate` sạch; `make test-contract` xanh |
+| TV1 | ~~**Duyệt ADR-0006 và PR contract đi kèm**~~ **Đã duyệt 29/09** — còn merge PR contract (2 migration, `schema.sql`, `openapi.yaml`, `erd.md`, 2 hằng mới) **[ADR-0006]** | ADR "đã duyệt" ✓; PR đã merge; `make reset && make migrate` sạch; `make test-contract` xanh |
 | TV1 | Cập nhật `test_FR_AUTH_07_available_slots_expose_only_location_data` (nhóm cô lập — người tự viết): slot trống có 7 trường (thêm `monthlyRentPrice`), chỉ slot đã có giá niêm yết, loại cả slot đang giữ chỗ **[ADR-0006]** | Test đỏ trên hiện thực cũ, xanh sau khi TV3 sửa `listAvailableSlots` |
 | TV1 | **Nhận Device Simulator từ TV2.** Mức tối thiểu: heartbeat định kỳ, nhận lệnh xịt, trả kết quả sau độ trễ giả lập, theo đúng `mqtt.md` | Simulator online, backend thấy heartbeat. Chữ ký/TTL để T5 |
 | TV3 | Khung `SlotRental` (hóa đơn thuê slot): thực thể, trạng thái gồm `CANCELLED`, API đọc, partial unique trên slot. **Không** làm API tạo thủ công (FR-SLT-01 đã bãi bỏ) **[ADR-0006]** | ACTIVE thứ hai cùng slot bị CSDL từ chối, có test |
@@ -320,7 +320,7 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 3. Đặt van UD-08 bản 12VDC, xác nhận ảnh nhãn DC 12V
 4. Tìm ít nhất một bơm màng không chổi than đạt đủ 4 tiêu chí
 5. TV1 viết bộ test cô lập slot, chạy phép thử gỡ bộ lọc để chứng minh test có tác dụng
-6. **TV1 review và duyệt ADR-0006 cùng PR contract — mọi việc SLT từ T4 chờ bước này** **[ADR-0006]**
+6. ~~TV1 review và duyệt ADR-0006~~ **Đã duyệt 29/09** — còn merge PR contract; mọi việc SLT từ T4 chờ bước merge **[ADR-0006]**
 7. **TV1 cập nhật test FR-AUTH-07 (slot trống 7 trường), rồi TV3 sửa `listAvailableSlots`** **[ADR-0006]**
 8. **TV3 dựng bảng giá (gói thuê, gói bảo quản, giá niêm yết) và seed dữ liệu mẫu** **[ADR-0006]**
 

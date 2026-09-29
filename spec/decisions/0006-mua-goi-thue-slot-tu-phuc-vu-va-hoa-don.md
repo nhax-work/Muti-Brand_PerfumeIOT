@@ -1,7 +1,7 @@
 # ADR-0006 — Thuê slot tự phục vụ theo gói trả trước, gói bảo quản và hóa đơn
 
-**Ngày:** 2026-09-25 · **Trạng thái:** đề xuất — contract đã áp dụng ngày 2026-09-29, chờ TV1 duyệt
-qua review PR (xem "Nhật ký áp dụng" cuối file) · **Người quyết:** TV1
+**Ngày:** 2026-09-25 · **Trạng thái:** đã duyệt (TV1, 2026-09-29) — contract áp dụng cùng ngày (xem "Nhật ký áp dụng" cuối
+file) · **Người quyết:** TV1
 
 Thay thế `spec/decisions/0005-thanh-toan-coc-va-phi-ky-dau-hop-dong-thue-slot.md` (chưa từng được
 duyệt).
@@ -227,7 +227,7 @@ hay hoàn tiền tự động. Chai bị mất (không phải hư hỏng) chưa 
 ## Nhật ký áp dụng — 2026-09-29
 
 Áp theo yêu cầu của nhóm, **trước** khi TV1 duyệt — review PR này chính là bước duyệt. Không đổi
-trạng thái ADR thành "đã duyệt" cho tới khi TV1 xác nhận.
+trạng thái ADR thành "đã duyệt" cho tới khi TV1 xác nhận. **TV1 đã duyệt ngày 2026-09-29.**
 
 | Hạng mục | Đã làm |
 |---|---|
@@ -261,7 +261,7 @@ trạng thái ADR thành "đã duyệt" cho tới khi TV1 xác nhận.
 | `Settlement*` | đánh dấu deprecated | thêm `orderCount`, `amountDue` bắt buộc ở dòng và tổng; bỏ `fixedFee`, `revenueShareAmount` khỏi `required` | Bảng đối soát mới chỉ còn doanh thu chuyển trả |
 
 **Việc còn lại, cần người:**
-1. TV1 duyệt ADR này.
+1. ~~TV1 duyệt ADR này.~~ Đã duyệt 2026-09-29.
 2. Chủ nhóm test "cô lập mức slot" cập nhật `test_FR_AUTH_07_available_slots_expose_only_location_data`
    (7 trường, slot phải có giá niêm yết) — sau đó mới sửa `listAvailableSlots` và đưa
    `monthlyRentPrice` vào `required`. Cùng lúc sửa lỗi có sẵn: truy vấn lọc `machine_slots.status =

@@ -15,7 +15,7 @@
   *(Traces: BR-001, BR-002, BR-008 · FR-ORD-07, FR-ORD-08, FR-ORD-09, FR-ORD-11, FR-ORD-13, FR-ORD-14, FR-ORD-15)*
 
 * **FE-03: Multi-Brand Shared Slot Leasing with Prepaid Packages**  
-  Enables fragrance brands to browse vacant slots, self-purchase prepaid 3/6/12-month rental packages with a mandatory goods-storage (insurance) plan, pay in full and receive an invoice (ADR-0006, proposed), supports platform-managed multi-brand slot sharing on unified physical kiosks, enforces strict single-active-lease occupancy, schedule overlap rejection, and automated lease lifecycle state machine transitions (`DRAFT` → `ACTIVE` → `EXPIRING` → `GRACE` → `RENEWED` / `LIQUIDATED` → `CLOSED`).  
+  Enables fragrance brands to browse vacant slots, self-purchase prepaid 3/6/12-month rental packages with a mandatory goods-storage (insurance) plan, pay in full and receive an invoice (ADR-0006, approved), supports platform-managed multi-brand slot sharing on unified physical kiosks, enforces strict single-active-lease occupancy, schedule overlap rejection, and automated lease lifecycle state machine transitions (`DRAFT` → `ACTIVE` → `EXPIRING` → `GRACE` → `RENEWED` / `LIQUIDATED` → `CLOSED`).  
   *(Traces: BR-003, BR-009, BR-011, BR-013 · FR-SLT-01…06, FR-SLT-11, FR-SLT-12, FR-SLT-19…26)*
 
 * **FE-04: Free-Tier Brand Spray Pricing and Explicit Product-Slot Assignment**  
@@ -195,7 +195,7 @@ graph LR
 |---|---|---|---|
 | **FE-01** | Trải nghiệm Kiosk tự phục vụ | Khách hàng tự chọn slot, xem 3 tầng hương, lọc theo hãng và tạo đơn không cần nhân viên. | Giữ nguyên |
 | **FE-02** | Thanh toán QR động & đồng bộ tức thì | Sinh mã QR động, tiếp nhận webhook bảo mật (HMAC), chống lặp và đồng bộ kết quả lên Kiosk trong 3s. | Giữ nguyên |
-| **FE-03** | Cho thuê slot đa thương hiệu theo gói trả trước | Brand Admin tự mua gói thuê 3/6/12 tháng (gói dài có ưu đãi) kèm gói bảo quản bắt buộc, thanh toán một lần và nhận hóa đơn; chống trùng lặp, chống chồng lấn kỳ hạn, tự động hóa vòng đời hóa đơn. | **Mới (ADR-0006, đề xuất):** Bỏ luồng gửi yêu cầu thuê và duyệt tay (`SlotRentalRequest`); thêm bảng giá, giữ chỗ khi thanh toán, hóa đơn và bảo hiểm hàng hóa. |
+| **FE-03** | Cho thuê slot đa thương hiệu theo gói trả trước | Brand Admin tự mua gói thuê 3/6/12 tháng (gói dài có ưu đãi) kèm gói bảo quản bắt buộc, thanh toán một lần và nhận hóa đơn; chống trùng lặp, chống chồng lấn kỳ hạn, tự động hóa vòng đời hóa đơn. | **Mới (ADR-0006, đã duyệt):** Bỏ luồng gửi yêu cầu thuê và duyệt tay (`SlotRentalRequest`); thêm bảng giá, giữ chỗ khi thanh toán, hóa đơn và bảo hiểm hàng hóa. |
 | **FE-04** | Gán sản phẩm & tự do đặt giá slot | Hãng gán sản phẩm vào slot đã thuê và tự quyết định giá mỗi lượt xịt; giá đã lưu vào đơn hàng là bất biến. | **Mới:** Quy định rõ ràng hành động gán/đổi sản phẩm cho slot (FR-SLT-27..29). |
 | **FE-05** | Ân hạn, gia hạn & thanh lý tự động | Nhắc hết hạn T-7/T-3, tự động chuyển ân hạn (Grace Period) có tính phí lưu kho, thanh lý về Nền tảng nếu không gia hạn. | Giữ nguyên |
 | **FE-06** | Phân tách nguồn thu & đối soát định kỳ | Gán nhãn doanh thu `BRAND` vs `PLATFORM`, sinh bảng đối soát doanh thu lượt xịt chuyển trả cho thương hiệu (tiền thuê đã thu trước qua hóa đơn, không còn ăn chia — ADR-0006). | **Mới:** Chuẩn hóa kiểu dữ liệu tiền tệ `numeric` chính xác cao (NFR-DAT-02). |

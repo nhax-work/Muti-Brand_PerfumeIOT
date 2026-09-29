@@ -82,7 +82,7 @@ ACTIVE ──> TERMINATED
 
 Slot chỉ được cho thuê lại sau khi hóa đơn cũ về `CLOSED`, `TERMINATED` hoặc `CANCELLED`.
 
-**Mua gói trả trước** (ADR-0006, **đề xuất**). Brand Admin tự tạo hóa đơn `DRAFT` khi chọn slot, gói
+**Mua gói trả trước** (ADR-0006, đã duyệt 2026-09-29). Brand Admin tự tạo hóa đơn `DRAFT` khi chọn slot, gói
 thuê và gói bảo quản; hóa đơn `DRAFT` giữ chỗ slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút. Hai trạng thái con
 của `DRAFT`, phân biệt bằng `paid_at`:
 
