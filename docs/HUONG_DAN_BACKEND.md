@@ -60,7 +60,7 @@ Rồi thêm `SltModule` vào `imports` của `apps/api/src/app.module.ts`.
 rồi truyền xuống như tham số thường. Lý do: cùng một nghiệp vụ còn được gọi từ MQTT và scheduler, và
 unit test phải khởi tạo được service mà không dựng server.
 
-**Module gọi nhau qua `index.ts`.** Module `ord` cần hợp đồng thuê thì gọi service của `slt` qua
+**Module gọi nhau qua `index.ts`.** Module `ord` cần hóa đơn thuê thì gọi service của `slt` qua
 `modules/slt/index.ts`. Tuyệt đối không import `slt.queries.ts` từ module khác — làm vậy sáu tuần
 sau không tách được gì.
 
@@ -164,7 +164,7 @@ Brand Admin.
 | `orders` | `brandScopedOrders(scope, 'o')` | Kèm `revenue_owner = 'BRAND'` — đơn sau thanh lý vẫn mang `brand_id` cũ nhưng thương hiệu không được thấy |
 | Bảng có cột `brand_id` khác | `brandScopedByColumn(scope, 'p.brand_id')` | Ảnh chụp `brand_id` bất biến nên tự đúng theo thời gian |
 | `sensor_readings`, `device_events` | `brandScopedBySlotAndTime(scope, 'sr.slot_id', 'sr.measured_at')` | Không có `brand_id`; cùng một slot phục vụ nhiều thương hiệu ở các kỳ khác nhau |
-| Sơ đồ máy, cảnh báo mức máy | `brandOccupiesSlotNow(scope, 'ms.id')` | Chỉ xét hợp đồng đang hiệu lực |
+| Sơ đồ máy, cảnh báo mức máy | `brandOccupiesSlotNow(scope, 'ms.id')` | Chỉ xét hóa đơn đang hiệu lực |
 
 **Không bao giờ lọc qua `machines`.** Bảng đó không có `brand_id` — một máy chứa slot của nhiều
 thương hiệu.
@@ -241,7 +241,7 @@ thời gian thì dùng `FakeClock` và tua đồng hồ, đừng `setTimeout` ch
 **Bảy nhóm test người tự viết** — agent không sinh, và đừng đặt mã FR tương ứng vào unit test của
 mình, vì script truy vết sẽ tưởng FR đó đã có test: idempotency webhook, cô lập mức slot, quy kết
 `revenue_owner`, unique constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái
-hợp đồng (`spec/testing.md`).
+hóa đơn (`spec/testing.md`).
 
 ---
 

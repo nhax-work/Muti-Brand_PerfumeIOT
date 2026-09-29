@@ -22,7 +22,7 @@ info:
     ## Cô lập dữ liệu ở mức slot
 
     Người dùng thuộc thương hiệu chỉ thấy dữ liệu của slot mà thương hiệu đó đang hoặc đã từng có
-    hợp đồng, trong đúng kỳ hạn hợp đồng tương ứng (BR-003, BR-012, FR-AUTH-07, FR-BND-05).
+    hóa đơn, trong đúng kỳ hạn hóa đơn tương ứng (BR-003, BR-012, FR-AUTH-07, FR-BND-05).
 
     Mọi endpoint có dữ liệu thương hiệu phải lọc qua `orders`/`slot_rentals`, **không bao giờ qua
     `machines`** — `machines` không có `brand_id` vì một máy chứa slot của nhiều thương hiệu. Ngoài
@@ -74,7 +74,7 @@ tags:
   - name: MCH
     description: Máy và slot
   - name: SLT
-    description: Hợp đồng thuê slot
+    description: Hóa đơn thuê slot
   - name: EXP
     description: Ân hạn, gia hạn và thanh lý hàng tồn
   - name: REV
@@ -190,7 +190,7 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
           examples:
             slotOccupied:
-              value: { code: SLOT_OCCUPIED, message: Slot đang có hợp đồng hiệu lực }
+              value: { code: SLOT_OCCUPIED, message: Slot đang có hóa đơn hiệu lực }
     Locked:
       description: Tài khoản bị khóa
       content:
@@ -331,10 +331,12 @@ components:
       enum: [PENDING, SENT, FAILED, READ]
     SlotRentalStatus:
       type: string
-      enum: [DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED]
+      enum: [DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED, CANCELLED]
       description: |
         Slot bán được ở ACTIVE, EXPIRING, GRACE, LIQUIDATED. Doanh thu thuộc BRAND ở 3 trạng thái
-        đầu, thuộc PLATFORM ở LIQUIDATED (`spec/glossary.md`).
+        đầu, thuộc PLATFORM ở LIQUIDATED (`spec/glossary.md`). DRAFT là hóa đơn chờ thanh toán
+        (`paidAt` null) hoặc chờ nạp hàng (`paidAt` có giá trị); CANCELLED là hóa đơn hết giờ giữ
+        chỗ mà chưa thanh toán (FR-SLT-39, ADR-0006).
     RevenueOwner:
       type: string
       enum: [BRAND, PLATFORM]
@@ -353,6 +355,18 @@ components:
     ShipmentDeclarationStatus:
       type: string
       enum: [DECLARED, RECEIVED, DISCREPANCY, CANCELLED]
+    StorageCompensationStatus:
+      type: string
+      enum: [PENDING, PAID]
+      description: Trạng thái chi trả khoản bồi thường hàng hóa (FR-SLT-45, ADR-0006).
+    RentalInvoiceStage:
+      type: string
+      enum:
+        [AWAITING_PAYMENT, AWAITING_STOCK, ACTIVE, EXPIRING, GRACE, LIQUIDATED, ENDED, CANCELLED]
+      description: |
+        Nhãn hiển thị cho Brand Admin (FR-SLT-41), SUY RA từ `status` và `paidAt` — không phải cột
+        trong CSDL. DRAFT + chưa thanh toán → AWAITING_PAYMENT; DRAFT + đã thanh toán →
+        AWAITING_STOCK; RENEWED, CLOSED, TERMINATED → ENDED.
     CredentialStatus:
       type: string
       enum: [ACTIVE, REVOKED, EXPIRED]
@@ -578,6 +592,10 @@ components:
         estimatedRemainingSprays: { type: integer }
         activeBottleId: { type: [string, 'null'], format: uuid }
         currentRentalId: { type: [string, 'null'], format: uuid }
+        monthlyRentPrice:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+          description: >-
+            Giá thuê niêm yết mỗi tháng (FR-SLT-32). Null = slot chưa mở cho thuê (ADR-0006).
     SlotConfigUpdate:
       type: object
       description: Hiệu chuẩn liều lượng và ngưỡng cảnh báo sắp hết cho slot (FR-MCH-06).
@@ -652,8 +670,10 @@ components:
     # ---------------------------------------------------------------------------------
     SlotRental:
       type: object
-      required:
-        [id, slotId, brandId, status, startsAt, endsAt, pricePerSpray, currency, revenueSharePercent]
+      description: >-
+        Hóa đơn thuê slot — thuật ngữ tiếng Việt của thực thể SlotRental (ADR-0006). Một hóa đơn ứng
+        với đúng một slot và một lần mua gói.
+      required: [id, slotId, brandId, status, startsAt, endsAt, currency]
       properties:
         id: { type: string, format: uuid }
         slotId: { type: string, format: uuid }
@@ -663,23 +683,78 @@ components:
           type: [string, 'null']
           format: uuid
           description: >-
-            Null chỉ trong cửa sổ DRAFT giữa lúc hợp đồng được tạo tự động (FR-SLT-23) và lúc
-            Brand Admin gán sản phẩm (FR-SLT-27). Slot chưa gán sản phẩm không nhận đơn (FR-SLT-29).
+            Null trong cửa sổ giữa lúc thanh toán (FR-SLT-38) và lúc Brand Admin cấu hình slot
+            (FR-SLT-27). Slot chưa gán sản phẩm không nhận đơn (FR-SLT-29).
         productAssignedAt: { type: [string, 'null'], format: date-time }
-        requestId: { type: [string, 'null'], format: uuid }
+        requestId:
+          type: [string, 'null']
+          format: uuid
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luồng yêu cầu thuê đã bãi bỏ; hóa đơn mới luôn null.
         previousRentalId: { type: [string, 'null'], format: uuid }
         status: { $ref: '#/components/schemas/SlotRentalStatus' }
-        startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
+        stage: { $ref: '#/components/schemas/RentalInvoiceStage' }
+        startsAt:
+          type: string
+          format: date-time
+          description: >-
+            Với DRAFT là mốc tạm giữ chỗ slot; khi kích hoạt được ghi đè bằng thời điểm lắp chai
+            đầu tiên (FR-SLT-24), mốc tự kích hoạt (FR-SLT-42) hoặc ngày nối tiếp (FR-SLT-12).
+        endsAt:
+          type: string
+          format: date-time
+          description: Với DRAFT là mốc tạm; khi kích hoạt = startsAt + durationMonths.
         graceEndsAt: { type: [string, 'null'], format: date-time }
-        pricePerSpray: { $ref: '#/components/schemas/Money' }
+        pricePerSpray:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+          description: >-
+            Null cho tới khi Brand Admin đặt giá ở bước cấu hình slot (FR-SLT-08). Slot chưa có giá
+            không nhận đơn (FR-SLT-29).
         currency: { $ref: '#/components/schemas/Currency' }
-        fixedFee: { $ref: '#/components/schemas/Money' }
-        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+        fixedFee:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — không còn phí cố định theo kỳ; hóa đơn mới luôn 0.
+        revenueSharePercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — không còn ăn chia doanh thu; hóa đơn mới luôn 0.
         terminatedReason: { type: [string, 'null'] }
+        invoiceNumber:
+          type: [string, 'null']
+          maxLength: 30
+          description: Số hóa đơn, cấp đúng lúc thanh toán thành công (FR-SLT-38).
+        rentalPackageId: { type: [string, 'null'], format: uuid }
+        storagePlanId: { type: [string, 'null'], format: uuid }
+        durationMonths: { type: [integer, 'null'], minimum: 1 }
+        monthlyRentPrice:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+          description: Ảnh chụp giá niêm yết lúc tạo hóa đơn (FR-SLT-33).
+        discountPercent: { type: [number, 'null'], minimum: 0, maximum: 100 }
+        storageMonthlyPrice: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+        storageCoveragePercent: { type: [number, 'null'], minimum: 0, maximum: 100 }
+        storageCoverageCap: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+        rentAmount: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+        storageAmount: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+        graceFeeAmount: { $ref: '#/components/schemas/Money' }
+        totalAmount:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+          description: rentAmount + storageAmount + graceFeeAmount (FR-SLT-36).
+        holdExpiresAt:
+          type: [string, 'null']
+          format: date-time
+          description: Hết giờ giữ chỗ — lúc tạo + RENTAL_CHECKOUT_HOLD_MIN (FR-SLT-35, FR-SLT-39).
+        paidAt: { type: [string, 'null'], format: date-time }
+        cancelledAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
     SlotRentalCreate:
       type: object
+      deprecated: true
+      description: >-
+        DEPRECATED (ADR-0006, FR-SLT-01 bãi bỏ). Hóa đơn chỉ sinh ra khi Brand Admin mua gói — xem
+        RentalCheckout.
       required: [slotId, brandId, startsAt, endsAt, pricePerSpray]
       properties:
         slotId: { type: string, format: uuid }
@@ -710,17 +785,17 @@ components:
         fragranceProductId: { type: string, format: uuid }
     SlotRentalRenew:
       type: object
-      required: [startsAt, endsAt, pricePerSpray]
+      required: [rentalPackageId, storagePlanId]
+      description: >-
+        Brand Admin mua gói mới cho chính slot đang thuê (FR-SLT-12, ADR-0006). Giá lượt xịt và sản
+        phẩm giữ nguyên từ hóa đơn cũ; kỳ hạn tính theo gói.
       properties:
-        startsAt: { type: string, format: date-time }
-        endsAt: { type: string, format: date-time }
-        pricePerSpray: { $ref: '#/components/schemas/Money' }
-        fixedFee: { $ref: '#/components/schemas/Money' }
-        revenueSharePercent: { type: number, minimum: 0, maximum: 100 }
+        rentalPackageId: { type: string, format: uuid }
+        storagePlanId: { type: string, format: uuid }
     TerminateRequest:
       type: object
       required: [reason]
-      description: Lý do là bắt buộc (FR-SLT-13).
+      description: Lý do là bắt buộc (FR-SLT-13). Chấm dứt không tự động hoàn tiền.
       properties:
         reason: { type: string, minLength: 1 }
     AvailableSlot:
@@ -736,8 +811,15 @@ components:
         slotNumber: { type: integer }
         locationId: { type: string, format: uuid }
         locationName: { type: string }
+        monthlyRentPrice:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            Giá thuê niêm yết mỗi tháng (FR-SLT-19, FR-SLT-32). Chưa nằm trong `required` chỉ vì
+            hiện thực và test cô lập mức slot (nhóm người tự viết) chưa cập nhật — ADR-0006.
     SlotRentalRequest:
       type: object
+      deprecated: true
+      description: DEPRECATED (ADR-0006) — luồng yêu cầu thuê và duyệt tay đã bãi bỏ (FR-SLT-20 ÷ 26).
       required: [id, slotId, brandId, desiredStartsAt, desiredEndsAt, status, createdAt]
       properties:
         id: { type: string, format: uuid }
@@ -754,9 +836,10 @@ components:
         createdAt: { type: string, format: date-time }
     SlotRentalRequestCreate:
       type: object
+      deprecated: true
       required: [slotIds, desiredStartsAt, desiredEndsAt]
       description: >-
-        Gửi yêu cầu cho một hoặc nhiều slot trống (FR-SLT-20). Mỗi slot sinh một hàng riêng — slot
+        DEPRECATED (ADR-0006). Gửi yêu cầu cho một hoặc nhiều slot trống (FR-SLT-20). Mỗi slot sinh một hàng riêng — slot
         đã có yêu cầu REQUESTED/APPROVED chưa xử lý xong bị từ chối (FR-SLT-26).
       properties:
         slotIds:
@@ -767,9 +850,10 @@ components:
         desiredEndsAt: { type: string, format: date-time }
     SlotRentalRequestApprove:
       type: object
+      deprecated: true
       required: [pricePerSpray]
       description: >-
-        Duyệt và xác nhận điều khoản; hệ thống tự tạo hợp đồng DRAFT liên kết ngược về yêu cầu
+        DEPRECATED (ADR-0006). Duyệt và xác nhận điều khoản; hệ thống tự tạo hợp đồng DRAFT liên kết ngược về yêu cầu
         (FR-SLT-22, FR-SLT-23).
       properties:
         pricePerSpray: { $ref: '#/components/schemas/Money' }
@@ -781,10 +865,247 @@ components:
       description: Lý do là bắt buộc khi từ chối (FR-SLT-22, FR-RFQ-06).
       properties:
         reason: { type: string, minLength: 1 }
+    RentalPackage:
+      type: object
+      required: [id, name, durationMonths, discountPercent, isActive]
+      description: Gói thuê niêm yết (FR-SLT-30, ADR-0006).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 100 }
+        durationMonths: { type: integer, minimum: 1 }
+        discountPercent: { type: number, minimum: 0, maximum: 100 }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    RentalPackageCreate:
+      type: object
+      required: [name, durationMonths]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        durationMonths: { type: integer, minimum: 1 }
+        discountPercent: { type: number, minimum: 0, maximum: 100, default: 0 }
+    RentalPackageUpdate:
+      type: object
+      description: Sửa hoặc ngừng mở bán; hóa đơn đã mua không bị ảnh hưởng (FR-SLT-33).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        discountPercent: { type: number, minimum: 0, maximum: 100 }
+        isActive: { type: boolean }
+    StoragePlan:
+      type: object
+      required: [id, name, monthlyPrice, currency, coveragePercent, coverageCap, isActive]
+      description: Gói bảo quản — bảo hiểm hàng hóa (FR-SLT-31, ADR-0006).
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, maxLength: 100 }
+        description: { type: [string, 'null'] }
+        monthlyPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        coveragePercent:
+          type: number
+          minimum: 0
+          maximum: 100
+          description: Tỷ lệ bồi thường tính trên giá bán lẻ chai.
+        coverageCap:
+          $ref: '#/components/schemas/Money'
+          description: Hạn mức bồi thường tối đa cộng dồn cho một hóa đơn.
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    StoragePlanCreate:
+      type: object
+      required: [name, monthlyPrice, coveragePercent, coverageCap]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string }
+        monthlyPrice: { $ref: '#/components/schemas/Money' }
+        coveragePercent: { type: number, minimum: 0, maximum: 100 }
+        coverageCap: { $ref: '#/components/schemas/Money' }
+    StoragePlanUpdate:
+      type: object
+      description: >-
+        Sửa hoặc ngừng mở bán. Ngừng mở bán gói cuối cùng đang mở trả VALIDATION_ERROR — gói bảo
+        quản là bắt buộc (FR-SLT-31 AC3).
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: string }
+        monthlyPrice: { $ref: '#/components/schemas/Money' }
+        coveragePercent: { type: number, minimum: 0, maximum: 100 }
+        coverageCap: { $ref: '#/components/schemas/Money' }
+        isActive: { type: boolean }
+    SlotRentPriceUpdate:
+      type: object
+      required: [monthlyRentPrice]
+      description: >-
+        Giá thuê niêm yết mỗi tháng của slot (FR-SLT-32). Null = đóng slot khỏi danh sách cho thuê.
+      properties:
+        monthlyRentPrice: { oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }] }
+    RentalQuote:
+      type: object
+      required: [slotId, monthlyRentPrice, currency, packages, storagePlans]
+      description: >-
+        Bảng giá cho slot đã chọn (FR-SLT-34). Chỉ để hiển thị — số tiền chính thức là số chụp vào
+        hóa đơn lúc checkout (FR-SLT-33, FR-SLT-36).
+      properties:
+        slotId: { type: string, format: uuid }
+        monthlyRentPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        packages:
+          type: array
+          items:
+            type: object
+            required: [rentalPackageId, name, durationMonths, discountPercent, rentAmount, listAmount]
+            properties:
+              rentalPackageId: { type: string, format: uuid }
+              name: { type: string }
+              durationMonths: { type: integer, minimum: 1 }
+              discountPercent: { type: number, minimum: 0, maximum: 100 }
+              listAmount:
+                $ref: '#/components/schemas/Money'
+                description: Giá niêm yết × số tháng, chưa ưu đãi.
+              rentAmount:
+                $ref: '#/components/schemas/Money'
+                description: listAmount × (1 − discountPercent).
+        storagePlans:
+          type: array
+          description: Phí bảo quản của một gói = monthlyPrice × durationMonths của gói thuê đã chọn.
+          items: { $ref: '#/components/schemas/StoragePlan' }
+    RentalCheckout:
+      type: object
+      required: [slotId, rentalPackageId, storagePlanId]
+      description: >-
+        Chọn dịch vụ cho một slot trống (FR-SLT-35). Gói bảo quản là bắt buộc — thiếu trả
+        VALIDATION_ERROR.
+      properties:
+        slotId: { type: string, format: uuid }
+        rentalPackageId: { type: string, format: uuid }
+        storagePlanId: { type: string, format: uuid }
+    RentalPaymentIntent:
+      type: object
+      required: [paymentId, rentalId, amount, currency, status, expiresAt]
+      description: >-
+        Thanh toán hóa đơn qua cổng (FR-SLT-37). Mỗi hóa đơn tối đa một thanh toán PENDING — gọi lại
+        trả chính thanh toán đó.
+      properties:
+        paymentId: { type: string, format: uuid }
+        rentalId: { type: string, format: uuid }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/PaymentStatus' }
+        checkoutUrl: { type: [string, 'null'], format: uri }
+        qrPayload: { type: [string, 'null'] }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Bằng holdExpiresAt của hóa đơn.
+    RentalInvoice:
+      type: object
+      required:
+        [rentalId, stage, brandId, slotId, slotNumber, machineId, locationName, durationMonths,
+         monthlyRentPrice, discountPercent, rentAmount, storageAmount, graceFeeAmount, totalAmount,
+         currency, rentalPackage, storagePlan]
+      description: >-
+        Nội dung hóa đơn để xem và tải (FR-SLT-40). invoiceNumber và paidAt null khi chưa thanh
+        toán; startsAt/endsAt null khi đang chờ nạp hàng.
+      properties:
+        rentalId: { type: string, format: uuid }
+        invoiceNumber: { type: [string, 'null'] }
+        stage: { $ref: '#/components/schemas/RentalInvoiceStage' }
+        brandId: { type: string, format: uuid }
+        slotId: { type: string, format: uuid }
+        slotNumber: { type: integer }
+        machineId: { type: string, format: uuid }
+        machineDisplayName: { type: string }
+        locationName: { type: string }
+        rentalPackage:
+          type: object
+          required: [name, durationMonths, discountPercent]
+          properties:
+            name: { type: string }
+            durationMonths: { type: integer, minimum: 1 }
+            discountPercent: { type: number, minimum: 0, maximum: 100 }
+        storagePlan:
+          type: object
+          required: [name, monthlyPrice, coveragePercent, coverageCap]
+          properties:
+            name: { type: string }
+            monthlyPrice: { $ref: '#/components/schemas/Money' }
+            coveragePercent: { type: number, minimum: 0, maximum: 100 }
+            coverageCap: { $ref: '#/components/schemas/Money' }
+        durationMonths: { type: integer, minimum: 1 }
+        monthlyRentPrice: { $ref: '#/components/schemas/Money' }
+        discountPercent: { type: number, minimum: 0, maximum: 100 }
+        rentAmount: { $ref: '#/components/schemas/Money' }
+        storageAmount: { $ref: '#/components/schemas/Money' }
+        graceFeeAmount: { $ref: '#/components/schemas/Money' }
+        totalAmount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        holdExpiresAt: { type: [string, 'null'], format: date-time }
+        paidAt: { type: [string, 'null'], format: date-time }
+        startsAt: { type: [string, 'null'], format: date-time }
+        endsAt: { type: [string, 'null'], format: date-time }
+    StorageCompensation:
+      type: object
+      required:
+        [id, brandId, bottleId, slotRentalId, bottleRetailPrice, coveragePercent, amount, currency,
+         status, createdAt]
+      description: >-
+        Khoản bồi thường khi chai của thương hiệu hư hỏng lúc nền tảng đang giữ (FR-SLT-44, ADR-0006).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        bottleId: { type: string, format: uuid }
+        bottleIdentifier: { type: string }
+        productName: { type: string }
+        slotRentalId: { type: string, format: uuid }
+        storagePlanName: { type: string }
+        bottleRetailPrice: { $ref: '#/components/schemas/Money' }
+        coveragePercent: { type: number, minimum: 0, maximum: 100 }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        status: { $ref: '#/components/schemas/StorageCompensationStatus' }
+        payoutReference: { type: [string, 'null'] }
+        paidAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    StorageCompensationPayout:
+      type: object
+      required: [payoutReference]
+      description: Ghi nhận đã chi trả bồi thường ngoài hệ thống (FR-SLT-45).
+      properties:
+        payoutReference: { type: string, minLength: 1, maxLength: 200 }
+    RentalSalesReport:
+      type: object
+      required: [from, to, currency, groupBy, totals, items]
+      description: >-
+        Doanh thu bán gói thuê và gói bảo quản của nền tảng (FR-SLT-47). Chỉ tính hóa đơn đã thanh
+        toán; không tính hóa đơn CANCELLED.
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        currency: { $ref: '#/components/schemas/Currency' }
+        groupBy: { type: string, enum: [PACKAGE, STORAGE_PLAN, MACHINE, LOCATION] }
+        totals: { $ref: '#/components/schemas/RentalSalesAmounts' }
+        items:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/RentalSalesAmounts'
+              - type: object
+                required: [key, label]
+                properties:
+                  key: { type: string, format: uuid }
+                  label: { type: string }
+    RentalSalesAmounts:
+      type: object
+      required: [invoiceCount, rentAmount, storageAmount, graceFeeAmount, totalAmount]
+      properties:
+        invoiceCount: { type: integer, minimum: 0 }
+        rentAmount: { $ref: '#/components/schemas/Money' }
+        storageAmount: { $ref: '#/components/schemas/Money' }
+        graceFeeAmount: { $ref: '#/components/schemas/Money' }
+        totalAmount: { $ref: '#/components/schemas/Money' }
     GracePeriodUpdate:
       type: object
       required: [graceEndsAt]
-      description: Ấn định ngày kết thúc ân hạn cho từng hợp đồng (FR-EXP-07).
+      description: Ấn định ngày kết thúc ân hạn cho từng hóa đơn (FR-EXP-07).
       properties:
         graceEndsAt: { type: string, format: date-time }
     LiquidationResult:
@@ -803,8 +1124,10 @@ components:
       type: object
       required: [brandId, periodStart, periodEnd, lines, totals]
       description: >-
-        Bảng quyết toán kỳ, gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi tiết theo
-        từng slot (FR-SLT-17, FR-SLT-18). Chỉ tính đơn có revenueOwner = BRAND (FR-REV-05).
+        Bảng đối soát doanh thu kỳ, gộp toàn bộ hóa đơn của thương hiệu trong kỳ, có dòng chi tiết
+        theo từng slot (FR-SLT-17, FR-SLT-18). Chỉ tính đơn có revenueOwner = BRAND (FR-REV-05).
+        Từ ADR-0006 không còn phí cố định hay ăn chia: amountDue = sprayRevenue, là số nền tảng
+        phải chuyển trả cho thương hiệu. Tiền gói thuê nằm trên hóa đơn, không nằm ở đây.
       properties:
         brandId: { type: string, format: uuid }
         periodStart: { type: string, format: date }
@@ -816,25 +1139,49 @@ components:
         totals: { $ref: '#/components/schemas/SettlementTotals' }
     SettlementLine:
       type: object
-      required: [rentalId, slotId, sprayRevenue, fixedFee, revenueShareAmount]
+      required: [rentalId, slotId, orderCount, sprayRevenue, amountDue]
       properties:
         rentalId: { type: string, format: uuid }
         slotId: { type: string, format: uuid }
         machineId: { type: string, format: uuid }
         orderCount: { type: integer }
         sprayRevenue: { $ref: '#/components/schemas/Money' }
-        fixedFee: { $ref: '#/components/schemas/Money' }
-        revenueShareAmount: { $ref: '#/components/schemas/Money' }
-        graceFee: { $ref: '#/components/schemas/Money' }
+        amountDue:
+          $ref: '#/components/schemas/Money'
+          description: Số phải chuyển trả cho thương hiệu cho dòng này = sprayRevenue (ADR-0006).
+        fixedFee:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luôn 0.
+        revenueShareAmount:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luôn 0.
+        graceFee:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — phí ân hạn nay nằm trên hóa đơn gia hạn (FR-EXP-12).
     SettlementTotals:
       type: object
-      required: [sprayRevenue, fixedFee, revenueShareAmount, amountDue]
+      required: [orderCount, sprayRevenue, amountDue]
       properties:
+        orderCount: { type: integer }
         sprayRevenue: { $ref: '#/components/schemas/Money' }
-        fixedFee: { $ref: '#/components/schemas/Money' }
-        revenueShareAmount: { $ref: '#/components/schemas/Money' }
-        graceFee: { $ref: '#/components/schemas/Money' }
-        amountDue: { $ref: '#/components/schemas/Money' }
+        fixedFee:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luôn 0.
+        revenueShareAmount:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luôn 0.
+        graceFee:
+          $ref: '#/components/schemas/Money'
+          deprecated: true
+          description: DEPRECATED (ADR-0006) — luôn 0.
+        amountDue:
+          $ref: '#/components/schemas/Money'
+          description: Tổng số nền tảng phải chuyển trả cho thương hiệu trong kỳ = sprayRevenue.
     RevenueSplit:
       type: object
       required: [periodStart, periodEnd, brandRevenue, platformRevenue]
@@ -1173,11 +1520,14 @@ components:
         occurredAt: { type: string, format: date-time }
     Payment:
       type: object
-      required: [id, orderId, provider, amount, currency, status]
-      description: Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04).
+      required: [id, provider, amount, currency, status]
+      description: >-
+        Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04). Đúng một
+        trong orderId (đơn kiosk) và slotRentalId (hóa đơn thuê slot, ADR-0006) có giá trị.
       properties:
         id: { type: string, format: uuid }
-        orderId: { type: string, format: uuid }
+        orderId: { type: [string, 'null'], format: uuid }
+        slotRentalId: { type: [string, 'null'], format: uuid }
         provider: { type: string }
         providerTransactionId: { type: [string, 'null'] }
         amount: { $ref: '#/components/schemas/Money' }
@@ -1527,7 +1877,7 @@ components:
       required: [order, statusHistory, payments, dispenseCommands]
       description: >-
         Truy vết đầu-cuối từ một đơn hàng: thanh toán, lệnh xịt, kết quả thiết bị, thay đổi tồn kho,
-        hợp đồng thuê và hoàn tiền liên quan (FR-AUD-11, BR-008).
+        hóa đơn thuê và hoàn tiền liên quan (FR-AUD-11, BR-008).
       properties:
         order: { $ref: '#/components/schemas/Order' }
         slotRental: { $ref: '#/components/schemas/SlotRental' }
@@ -2033,7 +2383,7 @@ paths:
       summary: Ngừng kinh doanh sản phẩm
       operationId: discontinueProduct
       description: >-
-        FR-PRD-02: sản phẩm đã ngừng kinh doanh không gán được vào slot mới (FR-SLT-27). Hợp đồng
+        FR-PRD-02: sản phẩm đã ngừng kinh doanh không gán được vào slot mới (FR-SLT-27). Hóa đơn
         đang chạy không bị ảnh hưởng.
       responses:
         '200':
@@ -2345,28 +2695,32 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
   # -----------------------------------------------------------------------------------
-  # SLT — Hợp đồng thuê slot
+  # SLT — Hóa đơn thuê slot
   # -----------------------------------------------------------------------------------
   /slot-rentals:
     get:
       tags: [SLT]
-      summary: Danh sách hợp đồng thuê slot
+      summary: Danh sách hóa đơn thuê slot
       operationId: listSlotRentals
       description: >-
-        FR-SLT-15: Brand Admin chỉ thấy hợp đồng của thương hiệu mình; Platform Super Admin thấy
-        tất cả. Lọc theo brandId của người gọi, không theo tham số truyền vào (FR-BND-05).
+        FR-SLT-15, FR-SLT-41: Brand Admin chỉ thấy hóa đơn của thương hiệu mình, mỗi hóa đơn kèm
+        nhãn `stage`; Platform Super Admin thấy tất cả. Lọc theo brandId của người gọi, không theo
+        tham số truyền vào (FR-BND-05).
       parameters:
         - $ref: '#/components/parameters/page'
         - $ref: '#/components/parameters/pageSize'
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/SlotRentalStatus' }
+        - name: stage
+          in: query
+          schema: { $ref: '#/components/schemas/RentalInvoiceStage' }
         - name: machineId
           in: query
           schema: { type: string, format: uuid }
       responses:
         '200':
-          description: Danh sách hợp đồng
+          description: Danh sách hóa đơn
           content:
             application/json:
               schema:
@@ -2380,11 +2734,13 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [SLT]
-      summary: Tạo hợp đồng thuê slot
+      summary: Tạo hóa đơn thuê slot thủ công (DEPRECATED)
       operationId: createSlotRental
+      deprecated: true
       description: >-
-        FR-SLT-01, FR-SLT-02, FR-SLT-03, FR-SLT-04, FR-SLT-05: một hợp đồng cho đúng một slot. Slot
-        đã có hợp đồng ACTIVE/EXPIRING/GRACE/LIQUIDATED trả SLOT_OCCUPIED; kỳ hạn chồng lấn hợp
+        DEPRECATED (ADR-0006): FR-SLT-01 đã bãi bỏ, hóa đơn chỉ sinh ra qua
+        `POST /slot-rentals/checkout`. Mô tả cũ — FR-SLT-01, FR-SLT-02, FR-SLT-03, FR-SLT-04, FR-SLT-05: một hợp đồng cho đúng một slot. Slot
+        đã có hóa đơn ACTIVE/EXPIRING/GRACE/LIQUIDATED trả SLOT_OCCUPIED; kỳ hạn chồng lấn hợp
         đồng khác trên cùng slot trả RENTAL_OVERLAP; ngày kết thúc trước ngày bắt đầu trả
         INVALID_RENTAL_PERIOD. Ghi nhật ký (FR-AUD-03).
       requestBody:
@@ -2402,17 +2758,85 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /slot-rentals/checkout:
+    post:
+      tags: [SLT]
+      summary: Chọn dịch vụ và giữ chỗ slot
+      operationId: checkoutSlotRental
+      description: >-
+        FR-SLT-35, FR-SLT-36, FR-SLT-33: Brand Admin chọn một slot trống, một gói thuê và đúng một
+        gói bảo quản. Hệ thống tạo hóa đơn DRAFT, chụp bảng giá, tính tổng tiền và giữ chỗ slot
+        trong RENTAL_CHECKOUT_HOLD_MIN. Slot đang bị giữ chỗ hoặc đã có hóa đơn khác trả
+        SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap); gói không mở bán, thiếu gói bảo
+        quản hoặc slot chưa có giá niêm yết trả VALIDATION_ERROR; thương hiệu SUSPENDED trả
+        FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RentalCheckout' }
+      responses:
+        '201':
+          description: Hóa đơn DRAFT đang giữ chỗ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/payments:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Thanh toán hóa đơn thuê slot
+      operationId: payRentalInvoice
+      description: >-
+        FR-SLT-37: Brand Admin thanh toán toàn bộ hóa đơn một lần qua cổng thanh toán. Đã có
+        thanh toán PENDING thì trả lại chính nó (uq_rental_payment_pending). Hóa đơn không ở DRAFT
+        chưa thanh toán, hoặc đã quá holdExpiresAt, trả RENTAL_NOT_ACTIVE — kể cả khi job hủy
+        (FR-SLT-39) chưa kịp chạy. Kết quả thanh toán về qua `POST /webhooks/payments/{provider}`
+        (FR-SLT-38).
+      responses:
+        '200':
+          description: Thanh toán đang chờ (tạo mới hoặc đã có)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalPaymentIntent' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/invoice:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [SLT]
+      summary: Xem hóa đơn thuê slot
+      operationId: getRentalInvoice
+      description: >-
+        FR-SLT-40: nội dung hóa đơn để xem và tải. Ngoài phạm vi thương hiệu trả FORBIDDEN_SCOPE
+        (FR-AUTH-08).
+      responses:
+        '200':
+          description: Hóa đơn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalInvoice' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /slot-rentals/{id}:
     parameters:
       - $ref: '#/components/parameters/idPath'
     get:
       tags: [SLT]
-      summary: Chi tiết hợp đồng
+      summary: Chi tiết hóa đơn
       operationId: getSlotRental
       description: 'FR-SLT-15: ngoài phạm vi thương hiệu trả FORBIDDEN_SCOPE.'
       responses:
         '200':
-          description: Hợp đồng
+          description: Hóa đơn
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SlotRental' }
@@ -2429,8 +2853,9 @@ paths:
       description: >-
         FR-SLT-08, FR-SLT-09: Brand Admin tự do đặt giá, không có giá sàn hay giá trần. Giá mới chỉ
         áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ giá đã chụp (FR-ORD-06).
-        Hợp đồng đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Ghi nhật
-        ký (FR-AUD-04).
+        Hóa đơn đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Mở ngay sau
+        khi thanh toán; hóa đơn DRAFT chưa thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006). Ghi nhật ký
+        (FR-AUD-04).
       requestBody:
         required: true
         content:
@@ -2455,9 +2880,9 @@ paths:
       operationId: assignSlotRentalProduct
       description: >-
         FR-SLT-07, FR-SLT-27, FR-SLT-28: gán đúng một sản phẩm đang kinh doanh của thương hiệu vào
-        slot đang có hợp đồng hiệu lực, ghi nhận thời điểm đổi. Sản phẩm không thuộc thương hiệu
-        thuê slot trả PRODUCT_NOT_OWNED. Hợp đồng chưa gán sản phẩm thì slot không nhận đơn
-        (FR-SLT-29). Ghi nhật ký (FR-AUD-04).
+        slot có hóa đơn đã thanh toán và chưa kết thúc, ghi nhận thời điểm đổi. Sản phẩm không thuộc
+        thương hiệu thuê slot trả PRODUCT_NOT_OWNED; hóa đơn chưa thanh toán trả RENTAL_NOT_ACTIVE.
+        Hóa đơn chưa gán sản phẩm thì slot không nhận đơn (FR-SLT-29). Ghi nhật ký (FR-AUD-04).
       requestBody:
         required: true
         content:
@@ -2477,11 +2902,15 @@ paths:
       - $ref: '#/components/parameters/idPath'
     post:
       tags: [SLT]
-      summary: Gia hạn hợp đồng
+      summary: Gia hạn bằng mua gói mới
       operationId: renewSlotRental
       description: >-
-        FR-SLT-12, FR-EXP-13: tạo hợp đồng kế tiếp liên kết với hợp đồng cũ; hợp đồng cũ chuyển
-        RENEWED và dừng tính phí ân hạn. Ghi nhật ký (FR-AUD-03, FR-EXP-21).
+        FR-SLT-12, FR-EXP-12, FR-EXP-13: Brand Admin mua gói mới cho chính slot đang thuê khi hóa
+        đơn hiện tại ở EXPIRING hoặc GRACE (khác trả RENTAL_NOT_ACTIVE). Tạo hóa đơn gia hạn DRAFT
+        liên kết hóa đơn cũ, cộng phí ân hạn đã phát sinh, rồi thanh toán như hóa đơn thường qua
+        `POST /slot-rentals/{id}/payments`. Hóa đơn cũ chỉ chuyển RENEWED — và dừng tính phí ân
+        hạn — đúng lúc hóa đơn gia hạn đã thanh toán bắt đầu hiệu lực (ADR-0006). Ghi nhật ký
+        (FR-AUD-03, FR-EXP-21).
       requestBody:
         required: true
         content:
@@ -2489,7 +2918,7 @@ paths:
             schema: { $ref: '#/components/schemas/SlotRentalRenew' }
       responses:
         '201':
-          description: Hợp đồng mới
+          description: Hóa đơn gia hạn DRAFT
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SlotRental' }
@@ -2501,10 +2930,11 @@ paths:
       - $ref: '#/components/parameters/idPath'
     post:
       tags: [SLT]
-      summary: Chấm dứt hợp đồng trước hạn
+      summary: Chấm dứt hóa đơn trước hạn
       operationId: terminateSlotRental
       description: >-
-        FR-SLT-13, FR-SLT-11: lý do bắt buộc. Slot chuyển UNAVAILABLE. Ghi nhật ký (FR-AUD-03).
+        FR-SLT-13, FR-SLT-11: lý do bắt buộc. Slot chuyển UNAVAILABLE. Không tự động hoàn tiền
+        (ADR-0006). Ghi nhật ký (FR-AUD-03).
       requestBody:
         required: true
         content:
@@ -2525,11 +2955,11 @@ paths:
       - $ref: '#/components/parameters/idPath'
     post:
       tags: [SLT]
-      summary: Đóng hợp đồng đã thanh lý
+      summary: Đóng hóa đơn đã thanh lý
       operationId: closeSlotRental
       description: >-
-        FR-SLT-14, FR-SLT-11: đóng hợp đồng LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được
-        tháo khỏi slot, giải phóng slot cho hợp đồng mới. Hợp đồng không ở LIQUIDATED trả
+        FR-SLT-14, FR-SLT-11: đóng hóa đơn LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được
+        tháo khỏi slot, giải phóng slot cho hóa đơn mới. Hóa đơn không ở LIQUIDATED trả
         RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-EXP-21).
       responses:
         '200':
@@ -2540,13 +2970,246 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /slots/{id}/rent-price:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [SLT]
+      summary: Đặt giá thuê niêm yết của slot
+      operationId: setSlotRentPrice
+      description: >-
+        FR-SLT-32: Platform Super Admin đặt giá thuê mỗi tháng; null đóng slot khỏi danh sách cho
+        thuê. Không ảnh hưởng hóa đơn đã tạo (FR-SLT-33). Ghi nhật ký (FR-AUD-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentPriceUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MachineSlot' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /slots/{id}/rental-quote:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [SLT]
+      summary: Bảng giá các gói cho slot đã chọn
+      operationId: getSlotRentalQuote
+      description: >-
+        FR-SLT-34: các gói thuê và gói bảo quản đang mở bán kèm số tiền sau ưu đãi. Slot không còn
+        trống trả SLOT_OCCUPIED; chưa có giá niêm yết trả VALIDATION_ERROR. Không kèm thông tin
+        thương hiệu nào (BR-012).
+      responses:
+        '200':
+          description: Bảng giá
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalQuote' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /rental-packages:
+    get:
+      tags: [SLT]
+      summary: Danh mục gói thuê
+      operationId: listRentalPackages
+      description: >-
+        FR-SLT-30: Platform Super Admin thấy mọi gói; Brand Admin chỉ thấy gói đang mở bán.
+      parameters:
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Danh sách gói thuê
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RentalPackage' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [SLT]
+      summary: Tạo gói thuê
+      operationId: createRentalPackage
+      description: 'FR-SLT-30: chỉ Platform Super Admin. Ghi nhật ký (FR-AUD-04).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RentalPackageCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalPackage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /rental-packages/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    patch:
+      tags: [SLT]
+      summary: Sửa hoặc ngừng mở bán gói thuê
+      operationId: updateRentalPackage
+      description: >-
+        FR-SLT-30, FR-SLT-33: chỉ Platform Super Admin. Hóa đơn đã mua gói không bị ảnh hưởng.
+        Ghi nhật ký (FR-AUD-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RentalPackageUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalPackage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /storage-plans:
+    get:
+      tags: [SLT]
+      summary: Danh mục gói bảo quản
+      operationId: listStoragePlans
+      description: >-
+        FR-SLT-31: Platform Super Admin thấy mọi gói; Brand Admin chỉ thấy gói đang mở bán.
+      parameters:
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Danh sách gói bảo quản
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/StoragePlan' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [SLT]
+      summary: Tạo gói bảo quản
+      operationId: createStoragePlan
+      description: 'FR-SLT-31: chỉ Platform Super Admin. Ghi nhật ký (FR-AUD-04).'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoragePlanCreate' }
+      responses:
+        '201':
+          description: Đã tạo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoragePlan' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /storage-plans/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    patch:
+      tags: [SLT]
+      summary: Sửa hoặc ngừng mở bán gói bảo quản
+      operationId: updateStoragePlan
+      description: >-
+        FR-SLT-31, FR-SLT-33: chỉ Platform Super Admin. Ngừng mở bán gói cuối cùng đang mở trả
+        VALIDATION_ERROR. Hóa đơn đã chụp điều khoản gói không bị ảnh hưởng. Ghi nhật ký
+        (FR-AUD-04).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StoragePlanUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StoragePlan' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /storage-compensations:
+    get:
+      tags: [SLT]
+      summary: Danh sách khoản bồi thường hàng hóa
+      operationId: listStorageCompensations
+      description: >-
+        FR-SLT-44, FR-SLT-46: Brand Admin chỉ thấy khoản của thương hiệu mình; Platform Super Admin
+        thấy tất cả. Khoản bồi thường do hệ thống tạo khi chai chuyển DAMAGED, không có endpoint
+        tạo tay.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/StorageCompensationStatus' }
+      responses:
+        '200':
+          description: Danh sách khoản bồi thường
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/StorageCompensation' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /storage-compensations/{id}/payout:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [SLT]
+      summary: Ghi nhận đã chi trả bồi thường
+      operationId: payoutStorageCompensation
+      description: >-
+        FR-SLT-45: Platform Super Admin ghi nhận đã chuyển tiền bồi thường ngoài hệ thống, kèm mã
+        giao dịch. Thao tác nhạy cảm nhóm "hoàn tiền" — cần xác thực lại (FR-AUTH-09). Khoản đã PAID
+        trả VALIDATION_ERROR. Ghi nhật ký (FR-AUD-06).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/StorageCompensationPayout' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StorageCompensation' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /slots/available:
     get:
       tags: [SLT]
       summary: Danh sách slot trống
       operationId: listAvailableSlots
       description: >-
-        FR-SLT-19: slot không có hợp đồng ACTIVE/EXPIRING/GRACE/LIQUIDATED, lọc theo máy và địa
+        FR-SLT-19: slot đã có giá thuê niêm yết, không có hóa đơn DRAFT/ACTIVE/EXPIRING/GRACE/
+        LIQUIDATED (DRAFT gồm cả đang giữ chỗ lẫn chờ nạp hàng — ADR-0006), lọc theo máy và địa
         điểm. KHÔNG kèm thông tin thương hiệu đã từng thuê trước đó (BR-012).
       parameters:
         - $ref: '#/components/parameters/page'
@@ -2575,9 +3238,11 @@ paths:
   /slot-rental-requests:
     get:
       tags: [SLT]
-      summary: Danh sách yêu cầu thuê slot
+      summary: Danh sách yêu cầu thuê slot (DEPRECATED)
       operationId: listSlotRentalRequests
+      deprecated: true
       description: >-
+        DEPRECATED (ADR-0006) — chỉ còn để đọc lịch sử cũ.
         FR-SLT-21, FR-SLT-25: Brand Admin xem trạng thái và lịch sử yêu cầu của thương hiệu mình;
         Platform Super Admin xem tất cả.
       parameters:
@@ -2602,9 +3267,11 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     post:
       tags: [SLT]
-      summary: Gửi yêu cầu thuê slot trống
+      summary: Gửi yêu cầu thuê slot trống (DEPRECATED)
       operationId: createSlotRentalRequest
+      deprecated: true
       description: >-
+        DEPRECATED (ADR-0006) — thay bằng `POST /slot-rentals/checkout`.
         FR-SLT-20, FR-SLT-26: Brand Admin gửi yêu cầu cho một hoặc nhiều slot trống kèm kỳ hạn mong
         muốn. Mỗi slot sinh một yêu cầu riêng. Slot đã có yêu cầu REQUESTED/APPROVED chưa xử lý
         xong trả SLOT_OCCUPIED.
@@ -2630,12 +3297,11 @@ paths:
       - $ref: '#/components/parameters/idPath'
     post:
       tags: [SLT]
-      summary: Duyệt yêu cầu thuê slot
+      summary: Duyệt yêu cầu thuê slot (DEPRECATED)
       operationId: approveSlotRentalRequest
+      deprecated: true
       description: >-
-        FR-SLT-22, FR-SLT-23: duyệt kèm điều khoản phí và tỷ lệ ăn chia, hệ thống tự tạo hợp đồng
-        DRAFT liên kết ngược về yêu cầu. Hợp đồng tự chuyển ACTIVE đúng ngày bắt đầu (FR-SLT-24).
-        Hợp đồng DRAFT chưa có sản phẩm cho tới khi Brand Admin gán (FR-SLT-27).
+        DEPRECATED (ADR-0006, FR-SLT-22 và FR-SLT-23 bãi bỏ) — không còn bước duyệt tay.
       requestBody:
         required: true
         content:
@@ -2643,7 +3309,7 @@ paths:
             schema: { $ref: '#/components/schemas/SlotRentalRequestApprove' }
       responses:
         '200':
-          description: Đã duyệt, kèm hợp đồng DRAFT vừa tạo
+          description: Đã duyệt, kèm hóa đơn DRAFT vừa tạo
           content:
             application/json:
               schema:
@@ -2660,9 +3326,10 @@ paths:
       - $ref: '#/components/parameters/idPath'
     post:
       tags: [SLT]
-      summary: Từ chối yêu cầu thuê slot
+      summary: Từ chối yêu cầu thuê slot (DEPRECATED)
       operationId: rejectSlotRentalRequest
-      description: 'FR-SLT-22: lý do bắt buộc khi từ chối.'
+      deprecated: true
+      description: 'DEPRECATED (ADR-0006, FR-SLT-22 bãi bỏ).'
       requestBody:
         required: true
         content:
@@ -2680,11 +3347,12 @@ paths:
   /settlements:
     get:
       tags: [SLT]
-      summary: Bảng quyết toán kỳ
+      summary: Bảng đối soát doanh thu kỳ
       operationId: getSettlement
       description: >-
-        FR-SLT-17, FR-SLT-18, FR-REV-05: gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi
-        tiết theo từng slot. Chỉ tính đơn có revenueOwner = BRAND. Brand Admin chỉ lấy được bảng
+        FR-SLT-17, FR-SLT-18, FR-REV-05: gộp toàn bộ hóa đơn của thương hiệu trong kỳ, có dòng chi
+        tiết theo từng slot. Chỉ tính đơn có revenueOwner = BRAND. amountDue là số nền tảng phải
+        chuyển trả — không còn trừ phí thuê hay ăn chia (ADR-0006). Brand Admin chỉ lấy được bảng
         của thương hiệu mình.
       parameters:
         - name: brandId
@@ -2718,8 +3386,8 @@ paths:
       summary: Ấn định ngày kết thúc ân hạn
       operationId: setGracePeriod
       description: >-
-        FR-EXP-06, FR-EXP-07: hợp đồng chuyển GRACE khi đến hạn mà chưa gia hạn; Platform Super
-        Admin ấn định độ dài ân hạn cho từng hợp đồng. Trong ân hạn slot vẫn nhận đơn và doanh thu
+        FR-EXP-06, FR-EXP-07: hóa đơn chuyển GRACE khi đến hạn mà chưa gia hạn; Platform Super
+        Admin ấn định độ dài ân hạn cho từng hóa đơn. Trong ân hạn slot vẫn nhận đơn và doanh thu
         vẫn thuộc thương hiệu (FR-EXP-08, FR-EXP-09). Ghi nhật ký (FR-EXP-21).
       requestBody:
         required: true
@@ -2741,12 +3409,12 @@ paths:
       - $ref: '#/components/parameters/reauthToken'
     post:
       tags: [EXP]
-      summary: Thanh lý hàng tồn của hợp đồng
+      summary: Thanh lý hàng tồn của hóa đơn
       operationId: liquidateSlotRental
       description: >-
-        FR-EXP-14, FR-EXP-15, FR-EXP-16: hết ân hạn mà chưa gia hạn thì hợp đồng chuyển LIQUIDATED
+        FR-EXP-14, FR-EXP-15, FR-EXP-16: hết ân hạn mà chưa gia hạn thì hóa đơn chuyển LIQUIDATED
         và toàn bộ chai còn tồn của thương hiệu tại slot chuyển quyền sở hữu sang nền tảng, ghi
-        nhận thời điểm thanh lý và hợp đồng nguồn cho từng chai. Slot tiếp tục bán, doanh thu từ
+        nhận thời điểm thanh lý và hóa đơn nguồn cho từng chai. Slot tiếp tục bán, doanh thu từ
         đó thuộc nền tảng (FR-EXP-17, FR-REV-02). Thương hiệu mất quyền truy cập dữ liệu giao dịch
         phát sinh sau thời điểm này (FR-EXP-20) và được thông báo kèm danh sách chai (FR-EXP-19).
         Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-EXP-21, FR-AUD-07).
@@ -3252,7 +3920,7 @@ paths:
       security: []
       description: >-
         FR-ORD-04, FR-ORD-05, FR-ORD-07, FR-ORD-08, FR-ORD-09: chỉ tạo được khi máy ONLINE và slot
-        AVAILABLE. Lưu ảnh chụp máy, slot, hợp đồng, thương hiệu, sản phẩm, giá, loại tiền và chủ
+        AVAILABLE. Lưu ảnh chụp máy, slot, hóa đơn, thương hiệu, sản phẩm, giá, loại tiền và chủ
         sở hữu doanh thu tại thời điểm tạo đơn (FR-REV-01, FR-REV-02); các trường này bất biến sau
         đó (NFR-DAT-06). Sinh mã tham chiếu duy nhất và mã QR thanh toán, hạn thanh toán
         ORDER_PAYMENT_TTL_SEC.
@@ -3340,10 +4008,11 @@ paths:
       operationId: handlePaymentWebhook
       security: []
       description: >-
-        FR-ORD-12, FR-ORD-13, FR-ORD-14, FR-ORD-15: tiếp nhận thông báo kết quả thanh toán. Xác
-        minh chữ ký trước khi xử lý; chữ ký sai trả INVALID_WEBHOOK_SIGNATURE (401) và vẫn ghi lại
-        để rà soát bảo mật. Xác minh mã tham chiếu, số tiền và loại tiền khớp đơn; lệch trả
-        AMOUNT_MISMATCH (400).
+        FR-ORD-12, FR-ORD-13, FR-ORD-14, FR-ORD-15, FR-SLT-38: tiếp nhận thông báo kết quả thanh
+        toán cho cả đơn kiosk lẫn hóa đơn thuê slot — phân biệt bằng việc payment trỏ tới orderId
+        hay slotRentalId (ADR-0006). Xác minh chữ ký trước khi xử lý; chữ ký sai trả
+        INVALID_WEBHOOK_SIGNATURE (401) và vẫn ghi lại để rà soát bảo mật. Xác minh mã tham chiếu,
+        số tiền và loại tiền khớp đơn hoặc hóa đơn; lệch trả AMOUNT_MISMATCH (400).
 
         Mỗi webhook chỉ xử lý đúng một lần. Webhook trùng trả **HTTP 200** kèm result
         WEBHOOK_ALREADY_PROCESSED — đây KHÔNG phải lỗi (spec/errors.md); trả 4xx sẽ khiến nhà cung
@@ -3351,6 +4020,10 @@ paths:
 
         Thanh toán thành công thì đơn chuyển PAID và hệ thống tạo lệnh xịt (FR-DSP-01). Từ webhook
         đến lúc thiết bị kích hoạt cơ cấu tối đa WEBHOOK_TO_ACTUATION_MAX_SEC (NFR-PER-03).
+
+        Với hóa đơn thuê slot: ghi paidAt và cấp invoiceNumber trong cùng transaction; hóa đơn vẫn
+        DRAFT (chờ nạp hàng) cho tới khi lắp chai đầu tiên (FR-SLT-24). Tiền về sau khi hóa đơn đã
+        CANCELLED thì payment chuyển REFUND_PENDING, hóa đơn không được khôi phục.
         Ghi nhật ký (FR-AUD-06).
       requestBody:
         required: true
@@ -3379,7 +4052,7 @@ paths:
         thái.
 
         Brand Admin chỉ thấy đơn có revenueOwner = BRAND thuộc slot mình đang hoặc đã từng thuê,
-        trong đúng kỳ hạn hợp đồng. Đơn revenueOwner = PLATFORM (sau thanh lý) không hiển thị
+        trong đúng kỳ hạn hóa đơn. Đơn revenueOwner = PLATFORM (sau thanh lý) không hiển thị
         (FR-REV-06, FR-EXP-20). Lọc qua orders/slot_rentals, không qua machines.
       parameters:
         - $ref: '#/components/parameters/page'
@@ -4022,7 +4695,7 @@ paths:
       operationId: getOrdersTimeseries
       description: >-
         FR-RPT-02, FR-RPT-10: theo ngày, tuần, tháng hoặc khoảng tùy chọn. Brand Admin chỉ thấy dữ
-        liệu trong phạm vi hợp đồng của thương hiệu mình, và chỉ đơn revenueOwner = BRAND.
+        liệu trong phạm vi hóa đơn của thương hiệu mình, và chỉ đơn revenueOwner = BRAND.
         Khoảng 30 ngày phải trả kết quả trong tối đa 3 giây (NFR-PER-05).
       parameters:
         - $ref: '#/components/parameters/from'
@@ -4068,6 +4741,35 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/ProductRankingItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /reports/rental-sales:
+    get:
+      tags: [RPT]
+      summary: Doanh thu bán gói thuê và gói bảo quản
+      operationId: getRentalSalesReport
+      description: >-
+        FR-SLT-47, FR-RPT-15: chỉ Platform Super Admin. Tính hóa đơn đã thanh toán trong khoảng
+        from–to theo paidAt, tách phí thuê, phí bảo quản và phí ân hạn; nhóm theo gói, gói bảo
+        quản, máy hoặc địa điểm.
+      parameters:
+        - $ref: '#/components/parameters/from'
+        - $ref: '#/components/parameters/to'
+        - name: groupBy
+          in: query
+          schema: { type: string, enum: [PACKAGE, STORAGE_PLAN, MACHINE, LOCATION], default: PACKAGE }
+        - name: machineId
+          in: query
+          schema: { type: string, format: uuid }
+        - name: locationId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Báo cáo doanh thu bán gói
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalSalesReport' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
   /reports/brand-slots:
@@ -4130,7 +4832,7 @@ paths:
       summary: Sơ đồ slot của một máy
       operationId: getMachineMap
       description: >-
-        FR-RPT-12: Brand Admin chỉ thấy slot thuộc hợp đồng của thương hiệu mình; slot còn lại hiển
+        FR-RPT-12: Brand Admin chỉ thấy slot thuộc hóa đơn của thương hiệu mình; slot còn lại hiển
         thị mine=false, available=false và KHÔNG kèm thông tin nào khác — không tên thương hiệu,
         không tên sản phẩm, không số liệu (BR-012, FR-BND-08).
       responses:
@@ -4150,7 +4852,7 @@ paths:
       summary: Thông báo của tôi
       operationId: listNotifications
       description: >-
-        Hòm thông báo của người dùng hiện tại: sắp hết hạn hợp đồng (FR-EXP-01/02/03), thanh lý
+        Hòm thông báo của người dùng hiện tại: sắp hết hạn hóa đơn (FR-EXP-01/02/03), thanh lý
         hàng tồn (FR-EXP-19), máy chuyển bảo trì (FR-MNT-07), cảnh báo ảnh hưởng slot (FR-ALR-10),
         yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28).
       parameters:
@@ -4232,7 +4934,7 @@ paths:
       operationId: getOrderTrace
       description: >-
         FR-AUD-11, BR-008: truy từ đơn hàng đến thanh toán, lệnh xịt, kết quả thiết bị, thay đổi
-        tồn kho, hợp đồng thuê và hoàn tiền liên quan. Đây là endpoint phục vụ khiếu nại của khách
+        tồn kho, hóa đơn thuê và hoàn tiền liên quan. Đây là endpoint phục vụ khiếu nại của khách
         và tranh chấp với thương hiệu.
       responses:
         '200':

@@ -16,7 +16,7 @@ export const mch = {
   // {status} nhận nhãn đã dịch từ `slotStatus`, KHÔNG nhận thẳng giá trị enum tiếng Anh.
   slotNotDirectlyEnableable: 'Slot đang {status}, không bật trực tiếp được',
   machineDisabledCannotEnableSlot: 'Máy chứa slot đã bị vô hiệu hóa, không bật slot được',
-  slotOccupied: 'Slot đang có hợp đồng thuê, không xóa được',
+  slotOccupied: 'Slot đang có hóa đơn thuê, không xóa được',
   slotChangedConcurrently: 'Slot vừa được thay đổi bởi thao tác khác, vui lòng tải lại và thử lại',
 } as const;
 

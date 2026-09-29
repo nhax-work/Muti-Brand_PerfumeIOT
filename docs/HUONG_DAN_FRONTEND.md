@@ -92,7 +92,7 @@ cùng commit — thiếu bản tiếng Anh là `tsc` đỏ. Nhãn dùng chung đ
 kiosk ở `kiosk`. Tên và mô tả sản phẩm do thương hiệu nhập thì hiển thị nguyên văn, không dịch.
 
 **FE5 — Hiển thị trạng thái máy chủ trả về, không tự tính nghiệp vụ** (QT5). Slot mua được hay
-không đọc `item.available`; trạng thái hợp đồng, đơn, lệnh xịt đọc đúng trường trạng thái. Ẩn
+không đọc `item.available`; trạng thái hóa đơn, đơn, lệnh xịt đọc đúng trường trạng thái. Ẩn
 menu/nút theo vai trò chỉ là trải nghiệm — máy chủ mới là nơi chặn quyền và cô lập dữ liệu.
 
 ## 4. Các cơ chế đã dựng sẵn

@@ -61,9 +61,11 @@ export type ShipmentDeclarationStatus = "CANCELLED" | "DECLARED" | "DISCREPANCY"
 
 export type SlotRentalRequestStatus = "APPROVED" | "CANCELLED" | "CONVERTED" | "REJECTED" | "REQUESTED";
 
-export type SlotRentalStatus = "ACTIVE" | "CLOSED" | "DRAFT" | "EXPIRING" | "GRACE" | "LIQUIDATED" | "RENEWED" | "TERMINATED";
+export type SlotRentalStatus = "ACTIVE" | "CANCELLED" | "CLOSED" | "DRAFT" | "EXPIRING" | "GRACE" | "LIQUIDATED" | "RENEWED" | "TERMINATED";
 
 export type SlotStatus = "AVAILABLE" | "DISABLED" | "MAINTENANCE" | "UNAVAILABLE";
+
+export type StorageCompensationStatus = "PAID" | "PENDING";
 
 export type TicketPriority = "CRITICAL" | "HIGH" | "LOW" | "MEDIUM";
 
@@ -144,7 +146,7 @@ export interface Bottles {
   owner: Generated<RevenueOwnerType>;
   removed_at: Timestamp | null;
   /**
-   * Hợp đồng mà chai đang phục vụ tại thời điểm thanh lý (FR-EXP-16).
+   * Hóa đơn mà chai đang phục vụ tại thời điểm thanh lý (FR-EXP-16).
    */
   source_rental_id: string | null;
   status: Generated<BottleStatus>;
@@ -210,7 +212,7 @@ export interface DeviceEvents {
 export interface DispenseCommands {
   acknowledged_at: Timestamp | null;
   /**
-   * Có giá trị với lệnh CUSTOMER (chép từ đơn). NULL với lệnh DIAGNOSTIC chạy trên slot chưa có hợp đồng nào.
+   * Có giá trị với lệnh CUSTOMER (chép từ đơn). NULL với lệnh DIAGNOSTIC chạy trên slot chưa có hóa đơn nào.
    */
   brand_id: string | null;
   /**
@@ -372,6 +374,10 @@ export interface MachineSlots {
   id: Generated<string>;
   low_stock_threshold_ml: Numeric | null;
   machine_id: string;
+  /**
+   * Giá thuê niêm yết mỗi tháng (FR-SLT-32). NULL = slot chưa mở cho thuê, không hiện trong danh sách slot trống (FR-SLT-19).
+   */
+  monthly_rent_price: Numeric | null;
   slot_number: number;
   status: Generated<SlotStatus>;
   updated_at: Generated<Timestamp>;
@@ -526,12 +532,19 @@ export interface Payments {
   created_at: Generated<Timestamp>;
   currency: string;
   id: Generated<string>;
-  order_id: string;
+  /**
+   * Đơn kiosk được thanh toán. Đúng một trong order_id, slot_rental_id có giá trị (chk_payment_single_target).
+   */
+  order_id: string | null;
   paid_at: Timestamp | null;
   provider: string;
   provider_reference: string | null;
   provider_transaction_id: string | null;
   raw_response: Json | null;
+  /**
+   * Hóa đơn thuê slot được thanh toán (FR-SLT-37). Mỗi hóa đơn tối đa một payment PENDING (uq_rental_payment_pending).
+   */
+  slot_rental_id: string | null;
   status: Generated<PaymentStatus>;
   updated_at: Generated<Timestamp>;
 }
@@ -601,6 +614,16 @@ export interface RefreshSessions {
   user_id: string;
 }
 
+export interface RentalPackages {
+  created_at: Generated<Timestamp>;
+  discount_percent: Generated<Numeric>;
+  duration_months: number;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  name: string;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface RolePermissions {
   created_at: Generated<Timestamp>;
   permission_id: string;
@@ -642,7 +665,7 @@ export interface SlotRentalRequests {
   rejection_reason: string | null;
   requested_by: string;
   /**
-   * Đặt khi yêu cầu được duyệt và hợp đồng DRAFT được tạo tự động (FR-SLT-23).
+   * DEPRECATED (ADR-0006). Trước đây: đặt khi yêu cầu được duyệt và hóa đơn DRAFT được tạo tự động.
    */
   resulting_rental_id: string | null;
   reviewed_at: Timestamp | null;
@@ -654,32 +677,126 @@ export interface SlotRentalRequests {
 
 export interface SlotRentals {
   brand_id: string;
+  cancelled_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   created_by: string;
   currency: Generated<string>;
+  discount_percent: Numeric | null;
+  duration_months: number | null;
+  /**
+   * Hóa đơn DRAFT: mốc TẠM = starts_at + RENTAL_MAX_STOCKING_DAYS + số tháng (hóa đơn mới) hoặc starts_at + số tháng (hóa đơn gia hạn). Khi kích hoạt: starts_at + duration_months.
+   */
   ends_at: Timestamp;
+  /**
+   * DEPRECATED (ADR-0006): mô hình phí cố định theo kỳ đã bỏ. Giữ cột để không phá migration và test hiện có; hóa đơn mới để mặc định 0.
+   */
   fixed_fee: Generated<Numeric>;
   /**
-   * Nullable ở tầng CSDL CHỈ để cho phép cửa sổ DRAFT giữa FR-SLT-23 (tạo hợp đồng tự động) và FR-SLT-27 (Brand Admin gán sản phẩm). Domain service phải chặn tạo đơn khi cột này NULL (FR-SLT-29). Xem §13.
+   * Nullable ở tầng CSDL CHỈ để phục vụ cửa sổ giữa lúc thanh toán (FR-SLT-38) và lúc Brand Admin cấu hình slot (FR-SLT-27). Domain service phải chặn tạo đơn khi cột này NULL (FR-SLT-29). Xem §13.
    */
   fragrance_product_id: string | null;
   /**
    * Ngày kết thúc ân hạn do Platform Super Admin ấn định (FR-EXP-07).
    */
   grace_ends_at: Timestamp | null;
+  /**
+   * Phí ân hạn của hóa đơn cũ chuyển sang hóa đơn gia hạn (FR-EXP-12, FR-SLT-36). 0 với hóa đơn mới.
+   */
+  grace_fee_amount: Generated<Numeric>;
+  /**
+   * Hết giờ giữ chỗ: tạo hóa đơn + RENTAL_CHECKOUT_HOLD_MIN. Quá mốc mà paid_at NULL thì hóa đơn chuyển CANCELLED (FR-SLT-39).
+   */
+  hold_expires_at: Timestamp | null;
   id: Generated<string>;
   /**
-   * Hợp đồng liền trước khi đây là hợp đồng gia hạn (FR-SLT-12).
+   * Số hóa đơn, cấp đúng lúc thanh toán thành công và duy nhất toàn hệ thống (FR-SLT-38).
+   */
+  invoice_number: string | null;
+  /**
+   * Ảnh chụp giá niêm yết của slot lúc tạo hóa đơn (FR-SLT-33). Cùng với duration_months, discount_percent, storage_* , rent_amount, storage_amount, total_amount: chỉ ghi một lần.
+   */
+  monthly_rent_price: Numeric | null;
+  /**
+   * Thời điểm thanh toán được xác nhận (FR-SLT-38). DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng.
+   */
+  paid_at: Timestamp | null;
+  /**
+   * Hóa đơn liền trước khi đây là hóa đơn gia hạn (FR-SLT-12).
    */
   previous_rental_id: string | null;
-  price_per_spray: Numeric;
+  /**
+   * Nullable từ ADR-0006: Brand Admin đặt giá ở bước cấu hình slot sau khi thanh toán (FR-SLT-08). Domain service phải chặn tạo đơn khi cột này NULL (FR-SLT-29).
+   */
+  price_per_spray: Numeric | null;
   product_assigned_at: Timestamp | null;
+  rent_amount: Numeric | null;
+  /**
+   * Gói thuê đã mua. NULL với hóa đơn tạo theo mô hình cũ trước ADR-0006.
+   */
+  rental_package_id: string | null;
+  /**
+   * DEPRECATED (ADR-0006): luồng yêu cầu thuê và duyệt tay đã bãi bỏ. Hóa đơn mới để NULL.
+   */
   request_id: string | null;
+  /**
+   * DEPRECATED (ADR-0006): không còn ăn chia doanh thu lượt xịt. Giữ cột để không phá migration và test hiện có; hóa đơn mới để mặc định 0.
+   */
   revenue_share_percent: Generated<Numeric>;
   slot_id: string;
+  /**
+   * Hóa đơn DRAFT: mốc TẠM để excl_slot_rental_overlap giữ được slot. Ghi đè bằng thời điểm thật khi kích hoạt — lắp chai đầu tiên (FR-SLT-24), quá RENTAL_MAX_STOCKING_DAYS (FR-SLT-42), hoặc nối tiếp hóa đơn cũ (FR-SLT-12).
+   */
   starts_at: Timestamp;
   status: Generated<SlotRentalStatus>;
+  storage_amount: Numeric | null;
+  storage_coverage_cap: Numeric | null;
+  storage_coverage_percent: Numeric | null;
+  storage_monthly_price: Numeric | null;
+  storage_plan_id: string | null;
   terminated_reason: string | null;
+  total_amount: Numeric | null;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface StorageCompensations {
+  /**
+   * min(coverage_percent × bottle_retail_price, hạn mức còn lại của hóa đơn). Domain service tính.
+   */
+  amount: Numeric;
+  bottle_id: string;
+  bottle_retail_price: Numeric;
+  brand_id: string;
+  coverage_percent: Numeric;
+  created_at: Generated<Timestamp>;
+  currency: Generated<string>;
+  id: Generated<string>;
+  paid_at: Timestamp | null;
+  paid_by: string | null;
+  payout_reference: string | null;
+  /**
+   * Hóa đơn có gói bảo quản được áp: hóa đơn của slot chai đang lắp, hoặc — với chai trong kho — hóa đơn hiệu lực có coverage_percent cao nhất của thương hiệu. Hạn mức cộng dồn theo cột này.
+   */
+  slot_rental_id: string;
+  status: Generated<StorageCompensationStatus>;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface StoragePlans {
+  /**
+   * Hạn mức bồi thường tối đa cộng dồn cho MỘT hóa đơn.
+   */
+  coverage_cap: Numeric;
+  /**
+   * Tỷ lệ bồi thường tính trên giá bán lẻ chai (fragrance_products.full_bottle_retail_price).
+   */
+  coverage_percent: Numeric;
+  created_at: Generated<Timestamp>;
+  currency: Generated<string>;
+  description: string | null;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  monthly_price: Numeric;
+  name: string;
   updated_at: Generated<Timestamp>;
 }
 
@@ -744,11 +861,14 @@ export interface DB {
   refill_requests: RefillRequests;
   refill_sessions: RefillSessions;
   refresh_sessions: RefreshSessions;
+  rental_packages: RentalPackages;
   role_permissions: RolePermissions;
   roles: Roles;
   sensor_readings: SensorReadings;
   slot_rental_requests: SlotRentalRequests;
   slot_rentals: SlotRentals;
+  storage_compensations: StorageCompensations;
+  storage_plans: StoragePlans;
   user_roles: UserRoles;
   users: Users;
 }

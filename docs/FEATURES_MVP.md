@@ -56,8 +56,8 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 | F-PSA-03 | Quản lý tài khoản người dùng nội bộ | FR-USR-01…05 | 5 | Tạo tài khoản Brand Admin và nhân sự nền tảng (Operations Staff, Inventory Staff), vô hiệu hóa tài khoản, đặt lại mật khẩu. |
 | F-PSA-04 | Đăng ký máy & quản lý địa điểm | FR-MCH-01…04 | 4 | Đăng ký máy mới (serial, định danh thiết bị, credential MQTT), tạo/quản lý địa điểm, gán máy cho địa điểm. |
 | F-PSA-05 | Cấu hình slot | FR-MCH-05, 06 | 2 | Cấu hình số lượng slot, mã slot, liều lượng xịt và ngưỡng cảnh báo sắp hết cho từng slot. |
-| F-PSA-06 | Quản lý hợp đồng thuê slot | FR-SLT-01, 12, 14 | 3 | Tạo hợp đồng thuê slot mới, gia hạn (tạo hợp đồng kế tiếp), đóng hợp đồng LIQUIDATED sau khi xử lý xong hàng thanh lý. |
-| F-PSA-07 | Quản lý ân hạn & thanh lý | FR-EXP-07, 18 | 2 | Ấn định ngày kết thúc ân hạn cho từng hợp đồng; đặt giá lượt xịt cho slot đang bán hàng thanh lý. |
+| F-PSA-06 | Bảng giá thuê slot & đóng hóa đơn thanh lý | FR-SLT-14, 30, 31, 32 | 4 | Cấu hình gói thuê 3/6/12 tháng kèm ưu đãi, gói bảo quản (bảo hiểm hàng hóa), giá thuê niêm yết của từng slot; đóng hóa đơn LIQUIDATED sau khi xử lý xong hàng thanh lý. *(Viết lại theo ADR-0006, đề xuất — thuê slot giờ do Brand Admin tự mua gói, xem `docs/FR_EPIC_SCENTSTATION.md` EPIC-SLT-07.)* |
+| F-PSA-07 | Quản lý ân hạn & thanh lý | FR-EXP-07, 18 | 2 | Ấn định ngày kết thúc ân hạn cho từng hóa đơn; đặt giá lượt xịt cho slot đang bán hàng thanh lý. |
 | F-PSA-08 | Xem báo cáo doanh thu tách nguồn | FR-REV-04 | 1 | Xem doanh thu tách theo hai nguồn: thuộc thương hiệu và thuộc nền tảng. |
 | F-PSA-09 | Xem báo cáo tồn kho | FR-INV-21 | 1 | Tạo báo cáo tồn kho theo thương hiệu, sản phẩm, lô, máy, slot, khoảng thời gian. |
 | F-PSA-10 | Duyệt yêu cầu bổ sung nước hoa | FR-RFQ-06 | 1 | Chấp nhận hoặc từ chối (kèm lý do bắt buộc) yêu cầu bổ sung của Brand Admin. |
@@ -98,22 +98,22 @@ Nhóm này không có màn hình thao tác riêng — là logic backend bắt bu
 
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
-| F-SYS-01 | Phân quyền & cô lập dữ liệu theo thương hiệu | FR-AUTH-05, 07, 08 + FR-BND-04, 05, 08 | 6 | Giới hạn phạm vi dữ liệu theo hợp đồng thuê slot, từ chối truy cập ngoài phạm vi (403), không tiết lộ thông tin thương hiệu khác. |
+| F-SYS-01 | Phân quyền & cô lập dữ liệu theo thương hiệu | FR-AUTH-05, 07, 08 + FR-BND-04, 05, 08 | 6 | Giới hạn phạm vi dữ liệu theo hóa đơn thuê slot, từ chối truy cập ngoài phạm vi (403), không tiết lộ thông tin thương hiệu khác. |
 | F-SYS-02 | Bảo mật phiên đăng nhập | FR-AUTH-02, 03, 10 | 3 | Cấp access/refresh token có thời hạn, khóa tài khoản sau 5 lần sai, thu hồi phiên trong 60s khi tài khoản bị vô hiệu hóa. |
 | F-SYS-03 | Ràng buộc vận hành máy & slot | FR-MCH-07, 08, 09, 10, 13 | 5 | Ngăn gán 2 chai active cùng slot, hiển thị trạng thái kết nối/chế độ hoạt động, lưu lịch sử thay đổi cấu hình. |
-| F-SYS-04 | Vòng đời & ràng buộc hợp đồng thuê slot | FR-SLT-02, 03, 04, 05, 06, 07, 09, 10, 11, 15 | 10 | Ràng buộc 1 hợp đồng active/slot, chống chồng lấn kỳ hạn, quản lý state machine hợp đồng, áp giá mới đúng thời điểm, khóa slot khi hợp đồng đóng. |
-| F-SYS-05 | Sinh bảng quyết toán kỳ | FR-SLT-17, 18 | 2 | Tự động gộp toàn bộ hợp đồng của một thương hiệu trong kỳ, tính doanh thu/phí thuê/ăn chia/phí ân hạn. |
+| F-SYS-04 | Vòng đời & ràng buộc hóa đơn thuê slot | FR-SLT-02, 03, 04, 05, 06, 07, 09, 10, 11, 15 | 10 | Ràng buộc 1 hóa đơn active/slot, chống chồng lấn kỳ hạn, quản lý state machine hóa đơn, áp giá mới đúng thời điểm, khóa slot khi hóa đơn đóng. |
+| F-SYS-05 | Sinh bảng đối soát doanh thu kỳ | FR-SLT-17, 18 | 2 | Gộp toàn bộ hóa đơn của một thương hiệu trong kỳ, tính doanh thu lượt xịt phải chuyển trả (không còn phí thuê/ăn chia — ADR-0006). |
 | F-SYS-06 | Quy trình tự động ân hạn, gia hạn & thanh lý | FR-EXP-01…06, 08, 09, 13…17, 19…22 | 17 | Thông báo T-7/T-3, chuyển trạng thái EXPIRING→GRACE→LIQUIDATED, chuyển quyền sở hữu chai khi thanh lý, ghi audit toàn bộ sự kiện. |
 | F-SYS-07 | Phân tách & gán chủ sở hữu doanh thu | FR-REV-01, 02, 03, 05, 06 | 5 | Gán BRAND/PLATFORM cho từng đơn hàng tại thời điểm tạo, giữ nguyên dù quyền sở hữu tồn kho đổi sau đó. |
 | F-SYS-08 | Theo dõi & cảnh báo tồn kho tự động | FR-INV-03, 04, 06, 07, 08, 09, 10, 11, 12, 17 | 10 | Ước tính lượng còn lại, cập nhật sau mỗi lượt xịt, sinh cảnh báo sắp hết/rò rỉ, chặn gán chai hết hạn/sai thương hiệu, chuyển slot UNAVAILABLE khi cạn. |
 | F-SYS-09 | Quản lý vòng đời yêu cầu bổ sung | FR-RFQ-04, 05, 11, 12 | 4 | State machine SUBMITTED→…→COMPLETED, thông báo Platform/Inventory Staff, chặn tạo trùng yêu cầu trên cùng slot. |
-| F-SYS-10 | Xử lý đơn hàng & webhook thanh toán | FR-ORD-04, 05, 06, 07, 09, 10, 12…19 | 14 | Kiểm tra điều kiện tạo đơn, lưu snapshot giá/slot/hợp đồng, sinh mã tham chiếu, xác minh chữ ký & idempotency webhook, state machine đơn hàng, xử lý hết hạn/refund flag. |
+| F-SYS-10 | Xử lý đơn hàng & webhook thanh toán | FR-ORD-04, 05, 06, 07, 09, 10, 12…19 | 14 | Kiểm tra điều kiện tạo đơn, lưu snapshot giá/slot/hóa đơn, sinh mã tham chiếu, xác minh chữ ký & idempotency webhook, state machine đơn hàng, xử lý hết hạn/refund flag. |
 | F-SYS-11 | Sinh & ký lệnh xịt | FR-DSP-01…06, 17…20 | 10 | Chỉ tạo lệnh sau khi PAID, ký số, giới hạn 1 lệnh active/đơn, timeout 60s, chuyển DISPENSED/UNKNOWN theo kết quả thiết bị, tách riêng lượt xịt chẩn đoán. |
 | F-SYS-12 | Giám sát kết nối & điều phối thiết bị MQTT | FR-IOT-02, 03, 06, 07, 08, 09, 12 | 7 | Đánh dấu UNSTABLE/OFFLINE theo heartbeat, gửi lệnh qua MQTT, xác thực & phân quyền topic theo định danh máy, chặn tạo đơn khi máy OFFLINE. |
 | F-SYS-13 | Sinh & phân loại cảnh báo tự động | FR-ALR-01…09 | 9 | Sinh cảnh báo theo sự kiện (offline, sắp hết, cửa mở, xịt lỗi liên tiếp, lỗi cảm biến), phân loại mức độ nghiêm trọng, chống trùng lặp, xác định thương hiệu bị ảnh hưởng. |
 | F-SYS-14 | Ràng buộc trạng thái vận hành khi bảo trì | FR-MNT-06, 14 | 2 | Chặn tạo đơn hàng khi máy MAINTENANCE, lưu lịch sử bảo trì của từng máy. |
-| F-SYS-15 | Ràng buộc cô lập dữ liệu trong báo cáo | FR-RPT-10, 11 | 2 | Giới hạn phạm vi dữ liệu báo cáo theo hợp đồng thuê của thương hiệu, không hiển thị chỉ số cho phép suy ra số liệu thương hiệu khác. |
-| F-SYS-16 | Ghi nhật ký kiểm toán tự động | FR-AUD-01…09 | 9 | Ghi log cho mọi sự kiện đăng nhập, đổi quyền, hợp đồng, giá, lệnh thiết bị, thanh toán, tồn kho; log append-only, không sửa/xóa được. |
+| F-SYS-15 | Ràng buộc cô lập dữ liệu trong báo cáo | FR-RPT-10, 11 | 2 | Giới hạn phạm vi dữ liệu báo cáo theo hóa đơn thuê của thương hiệu, không hiển thị chỉ số cho phép suy ra số liệu thương hiệu khác. |
+| F-SYS-16 | Ghi nhật ký kiểm toán tự động | FR-AUD-01…09 | 9 | Ghi log cho mọi sự kiện đăng nhập, đổi quyền, hóa đơn, giá, lệnh thiết bị, thanh toán, tồn kho; log append-only, không sửa/xóa được. |
 
 ---
 

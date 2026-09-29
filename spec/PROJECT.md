@@ -21,17 +21,18 @@ cùng một máy lẫn trên nhiều máy. Dữ liệu kinh doanh được cô l
 Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 
 - Nền tảng sở hữu và vận hành toàn bộ máy, địa điểm và nhân sự vận hành/kỹ thuật/kho (BR-004, BR-011).
-- Thương hiệu chỉ quản lý danh mục sản phẩm, giá mỗi lượt xịt trên slot mình thuê, báo cáo của mình và yêu cầu bổ sung (BR-007, BR-011).
-- Một hợp đồng (`SlotRental`) ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hợp đồng độc lập (BR-009).
+- Thương hiệu tự mua gói thuê slot, quản lý danh mục sản phẩm, giá mỗi lượt xịt trên slot mình thuê, báo cáo của mình và yêu cầu bổ sung (BR-007, BR-011).
+- Thuê slot tự phục vụ, không ký hợp đồng, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, **đề xuất**).
+- Một hóa đơn thuê slot (`SlotRental`) ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). "Hóa đơn" là thuật ngữ tiếng Việt; định danh kỹ thuật vẫn là `SlotRental`.
 - Giá tự do — không có giá sàn hay giá trần (FR-SLT-08).
-- Doanh thu nền tảng = phí thuê cố định theo kỳ + tỷ lệ ăn chia, cấu hình theo từng hợp đồng (BR-009).
-- Khi hợp đồng hết hạn: ân hạn có tính phí trước, sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
+- Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009).
+- Khi hóa đơn hết hạn: ân hạn có tính phí trước, sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
 
 ## 2. Đọc trước khi làm bất cứ việc gì
 
 | # | File | Chứa gì | Mở khi nào |
 |---|---|---|---|
-| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 264 FR + 50 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
+| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 275 FR + 50 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
 | 2 | `spec/glossary.md` | Thực thể và mọi state machine | Đụng tới vòng đời của một thực thể, hoặc viết truy vấn có phạm vi |
 | 3 | `spec/constraints.md` | Tên mọi hằng ngưỡng số | Cần một timeout, TTL, giới hạn hay tỷ lệ — không bao giờ hardcode |
 | 4 | `spec/errors.md` | Danh mục mã lỗi đầy đủ | Cần trả về hoặc kiểm tra một mã lỗi |
@@ -47,11 +48,14 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`.
 >
 > Hai trong số đó **được sinh ra, không viết tay**: `migrations/1789516800000_initial-schema.sql` là
-> bản sao nguyên văn của `schema.sql`, còn `data-dictionary.md` do `scripts/gen-data-dictionary.ts`
-> sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng lệch khỏi chính lược đồ mà chúng
-> mô tả.
+> bản sao nguyên văn của `schema.sql` **lúc đóng băng**, còn `data-dictionary.md` do
+> `scripts/gen-data-dictionary.ts` sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng
+> lệch khỏi chính lược đồ mà chúng mô tả. Từ ADR-0006, `schema.sql` mô tả trạng thái sau **mọi**
+> migration (ban đầu + `1790665900000_*` + `1790665960000_*`); `pg_dump --schema-only` của DB nạp
+> `schema.sql` phải trùng với DB chạy hết migration.
 
-> Trạng thái acceptance criteria trong `spec/modules/` (166/264 FR, đếm lại ngày 2026-09-18):
+> Trạng thái acceptance criteria trong `spec/modules/` (177/275 FR hiệu lực, đếm lại ngày 2026-09-25
+> sau khi viết lại mục SLT theo ADR-0006 — ADR đang chờ duyệt; 7 FR mức X đã bãi bỏ không tính):
 >
 > - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
 > - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17)
@@ -119,7 +123,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 
 | Trường hợp | Lý do |
 |---|---|
-| Viết bất kỳ test nào trong 7 nhóm test người tự viết (idempotency webhook, cô lập mức slot, quy kết `revenue_owner`, unique constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái hợp đồng) | Dành cho người viết, không giao agent (`spec/testing.md`) |
+| Viết bất kỳ test nào trong 7 nhóm test người tự viết (idempotency webhook, cô lập mức slot, quy kết `revenue_owner`, unique constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái hóa đơn) | Dành cho người viết, không giao agent (`spec/testing.md`) |
 | Sửa một file contract đã đóng băng trong `spec/contracts/` | Cần ADR trong `spec/decisions/` và TV1 duyệt trước (`spec/contracts/README.md`) |
 | Đổi hoặc gộp công cụ migration | Ảnh hưởng `make migrate` của mọi người và cả CI. Đã chốt — node-pg-migrate với SQL thuần (`spec/decisions/0002-*.md`); đổi thì cần ADR mới |
 | Thêm một mã lỗi mới | `spec/errors.md` là nguồn duy nhất; agent không được tự nghĩ mã |
@@ -151,7 +155,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 ### 🔍 Review Agent
 
 - Đối chiếu chuyển trạng thái với `spec/glossary.md` thật chính xác — ví dụ `Order` chỉ tới `DISPENSED` sau khi thiết bị trả kết quả thành công (FR-DSP-17), và lệnh ở `UNKNOWN` không được kích hoạt lệnh mới (FR-DSP-19).
-- Xác nhận bất biến "một hợp đồng hiệu lực mỗi slot" và "một lệnh hiệu lực mỗi đơn" được cưỡng chế bằng partial unique index ở CSDL, không chỉ bằng code ứng dụng (FR-SLT-02, FR-DSP-05, NFR-DAT-07).
+- Xác nhận bất biến "một hóa đơn hiệu lực mỗi slot" và "một lệnh hiệu lực mỗi đơn" được cưỡng chế bằng partial unique index ở CSDL, không chỉ bằng code ứng dụng (FR-SLT-02, FR-DSP-05, NFR-DAT-07).
 - Từ chối mọi PR có truy vấn hướng thương hiệu lọc qua `Machine` thay vì qua quyền sở hữu ở `Order`/`SlotRental`.
 - Từ chối PR có chuỗi hướng người dùng viết thẳng tại chỗ dùng, hoặc thêm khóa vào `vi` mà quên `en`.
 - Nêu cờ đỏ với mọi PR sửa file trong `spec/contracts/` mà không kèm ADR trong `spec/decisions/`.
