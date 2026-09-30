@@ -17,7 +17,8 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 
 1. `Machine` **không** có `brand_id`. Máy thuộc nền tảng. Một máy chứa slot của nhiều thương
    hiệu. Quan hệ thương hiệu ↔ máy đi qua `SlotRental`.
-2. Một thương hiệu có thể thuê **nhiều slot trên cùng một máy**. Mỗi slot một hóa đơn riêng.
+2. Một thương hiệu có thể thuê **nhiều slot trên cùng một máy**. Mỗi slot một hóa đơn riêng; nhiều
+   hóa đơn có thể được thanh toán một lần trong cùng một phiên thanh toán (ADR-0008).
 3. `Order` chụp `brand_id`, `slot_rental_id`, `revenue_owner` **tại thời điểm tạo đơn**. Không
    suy ra từ slot khi truy vấn.
 
@@ -30,6 +31,7 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 | `Machine` | Máy trải nghiệm, thuộc nền tảng |
 | `MachineSlot` | Ngăn chứa độc lập trên máy |
 | `SlotRental` | **Hóa đơn thuê slot**: một lần thương hiệu mua gói thuê một slot, kèm gói bảo quản. Vừa là chứng từ thanh toán vừa là đơn vị cô lập dữ liệu |
+| `RentalCheckout` | **Phiên thanh toán** thuê slot: một lần Brand Admin chọn một hoặc nhiều slot và trả tiền một lần. Gom giữ chỗ, tổng tiền và thanh toán của các hóa đơn tạo cùng lúc; không có số hóa đơn riêng (ADR-0008) |
 | `RentalPackage` | Gói thuê do nền tảng niêm yết: thời hạn (3, 6, 12 tháng) và tỷ lệ ưu đãi |
 | `StoragePlan` | Gói bảo quản (bảo hiểm hàng hóa): giá mỗi tháng, tỷ lệ và hạn mức bồi thường. Mỗi hóa đơn bắt buộc chọn đúng một gói |
 | `StorageCompensation` | Khoản bồi thường khi chai của thương hiệu hư hỏng lúc nền tảng đang giữ |
@@ -89,13 +91,15 @@ ACTIVE ──> TERMINATED
 
 Slot chỉ được cho thuê lại sau khi hóa đơn cũ về `CLOSED`, `TERMINATED` hoặc `CANCELLED`.
 
-**Mua gói trả trước** (ADR-0006, đã duyệt 2026-09-29). Brand Admin tự tạo hóa đơn `DRAFT` khi chọn slot, gói
-thuê và gói bảo quản; hóa đơn `DRAFT` giữ chỗ slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút. Hai trạng thái con
-của `DRAFT`, phân biệt bằng `paid_at`:
+**Mua gói trả trước** (ADR-0006, đã duyệt 2026-09-29). Brand Admin chọn một hoặc nhiều slot, mỗi slot một
+gói thuê và một gói bảo quản; hệ thống tạo một **phiên thanh toán** (`RentalCheckout`, ADR-0008) và một hóa
+đơn `DRAFT` cho mỗi slot, giữ chỗ mọi slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút. Phiên được trả tiền một
+lần; thanh toán thành công hay hết giờ giữ chỗ đều áp cho **mọi** hóa đơn của phiên cùng lúc. Sau đó mỗi hóa
+đơn đi vòng đời riêng. Hai trạng thái con của `DRAFT`, phân biệt bằng `paid_at`:
 
 | `DRAFT` | Nghĩa | Rời khỏi bằng |
 |---|---|---|
-| `paid_at` NULL — **chờ thanh toán** | Đang giữ chỗ | Thanh toán thành công, hoặc hết giờ giữ chỗ → `CANCELLED` |
+| `paid_at` NULL — **chờ thanh toán** | Đang giữ chỗ | Phiên thanh toán thành công, hoặc phiên hết giờ giữ chỗ → `CANCELLED` |
 | `paid_at` khác NULL — **chờ nạp hàng** | Slot đã thuộc thương hiệu, cấu hình được, chưa bán | Lắp chai đầu tiên, hoặc quá `RENTAL_MAX_STOCKING_DAYS` → `ACTIVE` |
 
 Thời hạn hóa đơn tính từ lúc `ACTIVE`: `ends_at = starts_at + số tháng của gói`. Hóa đơn gia hạn không chờ

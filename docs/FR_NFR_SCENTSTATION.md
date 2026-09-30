@@ -51,8 +51,8 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | 3 | Xử lý hàng tồn khi hết hạn thuê | Ân hạn có tính phí, sau đó thanh lý về nền tảng nếu không gia hạn |
 | 4 | Giới hạn giá | Không. Thương hiệu tự do đặt giá lượt xịt |
 | 5 | Mô hình doanh thu nền tảng | Bán gói thuê slot trả trước và gói bảo quản. Gói dài hơn có ưu đãi. Không ăn chia doanh thu lượt xịt — doanh thu lượt xịt của thương hiệu về thương hiệu 100% |
-| 6 | Đơn vị thuê | Một hóa đơn cho một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập |
-| 7 | Cách thuê slot | Tự phục vụ, không ký hợp đồng, không cần duyệt: Brand Admin xem slot trống → chọn slot → chọn gói thuê (3/6/12 tháng) và gói bảo quản → thanh toán hết một lần qua cổng thanh toán → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc Inventory Staff lắp chai đầu tiên (`spec/decisions/0006-*.md`) |
+| 6 | Đơn vị thuê | Một hóa đơn cho một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập, nhưng có thể chọn cả 3 slot và thanh toán một lần trong một phiên thanh toán (`spec/decisions/0008-*.md`) |
+| 7 | Cách thuê slot | Tự phục vụ, không ký hợp đồng, không cần duyệt: Brand Admin xem slot trống → chọn một hoặc nhiều slot → chọn gói thuê (3/6/12 tháng) và gói bảo quản cho từng slot → thanh toán hết một lần qua cổng thanh toán → nhận một hóa đơn cho mỗi slot → cấu hình slot. Thời hạn tính từ lúc Inventory Staff lắp chai đầu tiên (`spec/decisions/0006-*.md`) |
 | 8 | Bảo hiểm hàng hóa | Mỗi lượt thuê bắt buộc chọn đúng một gói bảo quản. Chai hư hỏng khi đang do nền tảng giữ được bồi thường theo tỷ lệ và hạn mức của gói |
 | 9 | Khách kích hoạt lượt xịt thế nào | Mỗi slot có một nút vật lý có đèn. Thanh toán xong thì đèn nút của slot đã mua sáng; khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt. Quá thời gian không bấm thì mất lượt, **không hoàn tiền** — điều khoản hiện trên kiosk trước khi thanh toán. Mỗi máy chỉ phục vụ một lượt chờ bấm tại một thời điểm (`spec/decisions/0007-*.md`) |
 
@@ -218,11 +218,11 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-SLT-32 | Hệ thống phải cho phép Platform Super Admin đặt giá thuê niêm yết theo tháng cho từng slot | BR-009 | M |
 | FR-SLT-33 | Hệ thống phải chụp giá niêm yết, tỷ lệ ưu đãi và điều khoản gói bảo quản vào hóa đơn lúc tạo, không thay đổi khi bảng giá thay đổi sau đó | BR-008, BR-009 | M |
 | FR-SLT-34 | Hệ thống phải hiển thị cho Brand Admin các gói thuê và gói bảo quản đang mở bán cho slot đã chọn, kèm số tiền của từng lựa chọn sau ưu đãi | BR-011 | M |
-| FR-SLT-35 | Hệ thống phải cho phép Brand Admin chọn một slot trống, một gói thuê và đúng một gói bảo quản để tạo hóa đơn DRAFT, giữ chỗ slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút | BR-011 | M |
-| FR-SLT-36 | Hệ thống phải tính tổng tiền hóa đơn bằng phí thuê (giá niêm yết × số tháng × (1 − tỷ lệ ưu đãi)) cộng phí bảo quản (giá gói bảo quản mỗi tháng × số tháng) cộng phí ân hạn chuyển sang nếu là hóa đơn gia hạn | BR-009, BR-013 | M |
-| FR-SLT-37 | Hệ thống phải cho phép Brand Admin thanh toán toàn bộ hóa đơn một lần qua cổng thanh toán, và bảo đảm mỗi hóa đơn có tối đa một thanh toán đang chờ | BR-009, BR-011 | M |
-| FR-SLT-38 | Hệ thống phải xác nhận thanh toán hóa đơn qua webhook của cổng thanh toán theo đúng quy tắc của FR-ORD-13 đến FR-ORD-15, và khi thành công thì ghi nhận thời điểm thanh toán và cấp số hóa đơn duy nhất | BR-008, BR-009 | M |
-| FR-SLT-39 | Hệ thống phải tự động chuyển hóa đơn DRAFT chưa thanh toán sang CANCELLED khi hết thời gian giữ chỗ, và giải phóng slot | BR-011 | M |
+| FR-SLT-35 | Hệ thống phải cho phép Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản, để tạo trong một phiên thanh toán một hóa đơn DRAFT cho mỗi slot, giữ chỗ mọi slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút | BR-011 | M |
+| FR-SLT-36 | Hệ thống phải tính tổng tiền hóa đơn bằng phí thuê (giá niêm yết × số tháng × (1 − tỷ lệ ưu đãi)) cộng phí bảo quản (giá gói bảo quản mỗi tháng × số tháng) cộng phí ân hạn chuyển sang nếu là hóa đơn gia hạn, và tổng tiền phiên thanh toán bằng tổng tiền các hóa đơn trong phiên | BR-009, BR-013 | M |
+| FR-SLT-37 | Hệ thống phải cho phép Brand Admin thanh toán một lần toàn bộ các hóa đơn trong một phiên thanh toán qua cổng thanh toán, và bảo đảm mỗi phiên có tối đa một thanh toán đang chờ | BR-009, BR-011 | M |
+| FR-SLT-38 | Hệ thống phải xác nhận thanh toán phiên thanh toán thuê slot qua webhook của cổng thanh toán theo đúng quy tắc của FR-ORD-13 đến FR-ORD-15, và khi thành công thì ghi nhận thời điểm thanh toán cho phiên và mọi hóa đơn trong phiên, và cấp cho mỗi hóa đơn một số hóa đơn duy nhất | BR-008, BR-009 | M |
+| FR-SLT-39 | Hệ thống phải tự động hủy phiên thanh toán chưa thanh toán khi hết thời gian giữ chỗ, chuyển mọi hóa đơn DRAFT của phiên sang CANCELLED, và giải phóng mọi slot của phiên | BR-011 | M |
 | FR-SLT-40 | Hệ thống phải cho phép Brand Admin xem và tải hóa đơn đã thanh toán, gồm số hóa đơn, slot, máy, địa điểm, gói thuê, gói bảo quản, đơn giá, ưu đãi, từng khoản tiền, tổng tiền, thời điểm thanh toán và thời hạn hiệu lực | BR-008, BR-011 | M |
 | FR-SLT-41 | Hệ thống phải cho phép Brand Admin xem danh sách hóa đơn của thương hiệu mình kèm trạng thái: chờ thanh toán, chờ nạp hàng, đang hiệu lực, sắp hết hạn, ân hạn, đã thanh lý, đã kết thúc hoặc đã hủy | BR-011 | M |
 | FR-SLT-42 | Hệ thống phải tự động kích hoạt hóa đơn đã thanh toán khi quá `RENTAL_MAX_STOCKING_DAYS` ngày kể từ lúc thanh toán mà chưa lắp chai, với ngày bắt đầu là thời điểm kích hoạt | BR-009 | M |
@@ -611,7 +611,7 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 
 **Về chủ ngữ "Thiết bị phải".** Theo ranh giới đã chốt, máy nằm ngoài hệ thống, nên các FR trong nhóm DSP và IOT có chủ ngữ này là ràng buộc giao diện mà thiết bị phải tuân thủ, không phải yêu cầu nội tại. Nêu ở đầu tài liệu để tránh bị hỏi về tính nhất quán.
 
-**Về hóa đơn theo từng slot.** Một hóa đơn ứng với một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập, mỗi hóa đơn có kỳ hạn, sản phẩm và giá riêng, và có thể ở trạng thái khác nhau. Việc gộp nhóm xử lý ở tầng thông báo (FR-EXP-03) và tầng quyết toán (FR-SLT-17).
+**Về hóa đơn theo từng slot.** Một hóa đơn ứng với một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập, mỗi hóa đơn có kỳ hạn, sản phẩm và giá riêng, và có thể ở trạng thái khác nhau. Việc gộp nhóm xử lý ở tầng thanh toán (một phiên thanh toán cho nhiều hóa đơn, FR-SLT-35, 37 — ADR-0008), tầng thông báo (FR-EXP-03, FR-SLT-43) và tầng quyết toán (FR-SLT-17).
 
 **Về ma trận truy vết đầy đủ.** Phần C là bảng tổng hợp. Bản nộp cần bảng chi tiết bốn cột BR → FR → Use Case → Test Case, dựng bằng bảng tính sau khi hoàn tất use case specification.
 

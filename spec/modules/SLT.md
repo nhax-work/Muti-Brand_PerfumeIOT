@@ -1,14 +1,17 @@
 # FR-SLT — Hóa đơn thuê slot
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A6 · 47 mục = 40 FR hiệu lực + 7 FR bãi bỏ (mức X)  
-> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau; ngày 2026-09-25 viết lại theo ADR-0006 — **TV1 đã duyệt 2026-09-29**: bãi bỏ FR-SLT-01, 20÷23, 25, 26; viết lại FR-SLT-06, 08, 12, 13, 17, 18, 19, 24, 27, 29; thêm FR-SLT-30÷47)  
+> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau; ngày 2026-09-25 viết lại theo ADR-0006 — **TV1 đã duyệt 2026-09-29**: bãi bỏ FR-SLT-01, 20÷23, 25, 26; viết lại FR-SLT-06, 08, 12, 13, 17, 18, 19, 24, 27, 29; thêm FR-SLT-30÷47. Ngày 2026-09-30 theo ADR-0008 — thanh toán nhiều slot một lần, **TV1 đã duyệt 2026-09-30**: viết lại FR-SLT-35, 36, 37, 38, 39, 43; chỉnh FR-SLT-12, 40)  
 > Phụ trách: TV3 / Tài  
 
 "Hóa đơn thuê slot" là thuật ngữ tiếng Việt của thực thể `SlotRental`; định danh kỹ thuật không đổi.
+"Phiên thanh toán" (`RentalCheckout`, ADR-0008) gom các hóa đơn tạo trong cùng một lần chọn để trả
+tiền một lần; mỗi slot vẫn là một hóa đơn với số hóa đơn và vòng đời riêng.
 
-Luồng của Brand Admin: đăng nhập → xem slot trống (FR-SLT-19) → chọn slot và chọn dịch vụ (FR-SLT-34, 35)
-→ thanh toán (FR-SLT-37, 38) → nhận hóa đơn (FR-SLT-40) → cấu hình slot (FR-SLT-08, 27). Thời hạn bắt đầu
-khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
+Luồng của Brand Admin: đăng nhập → xem slot trống (FR-SLT-19) → chọn một hoặc nhiều slot và chọn dịch
+vụ cho từng slot (FR-SLT-34, 35) → thanh toán một lần cho cả phiên (FR-SLT-37, 38) → nhận một hóa đơn
+cho mỗi slot (FR-SLT-40) → cấu hình từng slot (FR-SLT-08, 27). Thời hạn mỗi hóa đơn bắt đầu khi
+Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 
 Đọc kèm: `spec/glossary.md` (state machine SlotRental), `spec/errors.md`, `spec/constraints.md`,
 `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md`
@@ -205,7 +208,7 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
 * **Acceptance criteria:**
   * **AC1:** Given hóa đơn `H1` của thương hiệu `B` trên slot `S` đang `EXPIRING` với `ends_at = E`,  
     When Brand Admin của `B` chọn gói thuê `P` và gói bảo quản `G` để gia hạn,  
-    Then hệ thống tạo hóa đơn `H2` ở `DRAFT` với `previous_rental_id = H1.id`, kỳ hạn tạm `[E, E + P.duration_months)`, tổng tiền theo FR-SLT-36; `H1` giữ nguyên trạng thái.
+    Then hệ thống tạo một phiên thanh toán gồm đúng một hóa đơn `H2` ở `DRAFT` với `previous_rental_id = H1.id`, kỳ hạn tạm `[E, E + P.duration_months)`, tổng tiền theo FR-SLT-36; thanh toán như FR-SLT-37 (ADR-0008); `H1` giữ nguyên trạng thái.
   * **AC2 (Nối tiếp khi hết hạn):** Given `H2` đã thanh toán và `H1` vẫn `EXPIRING`,  
     When tới mốc `E`,  
     Then trong **cùng một transaction** `H1` → `RENEWED` và `H2` → `ACTIVE` với `starts_at = E` — slot bán liên tục, không có khoảnh khắc nào không có hóa đơn hiệu lực. `H2` không chờ lắp chai vì chai đã nằm sẵn trong slot.
@@ -218,7 +221,7 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
   * **AC5 (Cô lập dữ liệu):** Given `H1` thuộc thương hiệu khác,  
     When Brand Admin gia hạn,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-  * **AC6 (Không thanh toán):** Given `H2` hết giờ giữ chỗ và chuyển `CANCELLED` (FR-SLT-39),  
+  * **AC6 (Không thanh toán):** Given phiên của `H2` hết giờ giữ chỗ và `H2` chuyển `CANCELLED` (FR-SLT-39),  
     When kiểm tra `H1`,  
     Then `H1` tiếp tục vòng đời bình thường (`EXPIRING` → `GRACE` → `LIQUIDATED`), và Brand Admin gia hạn lại được.
 * **Test:** `test_FR_SLT_12_brand_renews_by_buying_package`
@@ -566,35 +569,44 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
 
 ---
 
-## FR-SLT-35 — Chọn dịch vụ và giữ chỗ slot
-* **Statement:** Hệ thống phải cho phép Brand Admin chọn một slot trống, một gói thuê và đúng một gói bảo quản để tạo hóa đơn DRAFT, giữ chỗ slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút.
+## FR-SLT-35 — Chọn dịch vụ và giữ chỗ một hoặc nhiều slot
+* **Statement:** Hệ thống phải cho phép Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản, để tạo trong một phiên thanh toán một hóa đơn DRAFT cho mỗi slot, giữ chỗ mọi slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút.
 * **Traces:** BR-011 · **Priority:** M
-* **API:** `POST /slot-rentals/checkout`
+* **API:** `POST /rental-checkouts`
 * **Acceptance criteria:**
   * **AC1:** Given slot `S` trống, gói thuê `P` và gói bảo quản `G` đang mở bán,  
-    When Brand Admin của `B` gửi `{ slotId: S, rentalPackageId: P, storagePlanId: G }` lúc `t0`,  
-    Then hệ thống tạo hóa đơn `H` ở `DRAFT` cho `B` với tổng tiền theo FR-SLT-36, `hold_expires_at = t0 + RENTAL_CHECKOUT_HOLD_MIN`, và kỳ hạn tạm `[t0, t0 + RENTAL_MAX_STOCKING_DAYS + P.duration_months)`.
-  * **AC2 (Thiếu gói bảo quản):** Given yêu cầu không có `storagePlanId`,  
+    When Brand Admin của `B` gửi `{ items: [{ slotId: S, rentalPackageId: P, storagePlanId: G }] }` lúc `t0`,  
+    Then hệ thống tạo phiên thanh toán `C` cho `B` với `hold_expires_at = t0 + RENTAL_CHECKOUT_HOLD_MIN`, và trong `C` một hóa đơn `H` ở `DRAFT` với tổng tiền theo FR-SLT-36 và kỳ hạn tạm `[t0, t0 + RENTAL_MAX_STOCKING_DAYS + P.duration_months)`.
+  * **AC2 (Nhiều slot một lần):** Given slot `S1`, `S2`, `S3` trống (trên cùng máy hoặc khác máy),  
+    When Brand Admin của `B` gửi ba phần tử `items`, mỗi slot một gói thuê và một gói bảo quản (có thể khác nhau),  
+    Then trong **cùng một transaction** hệ thống tạo một phiên `C` và ba hóa đơn DRAFT thuộc `C`, mỗi hóa đơn chụp giá và tính tiền riêng (FR-SLT-33, FR-SLT-36), cả ba slot cùng giữ chỗ tới `C.hold_expires_at`.
+  * **AC3 (Giữ chỗ — ràng buộc ở tầng CSDL):** Given hai Brand Admin của hai thương hiệu khác nhau cùng chọn slot `S` đồng thời,  
+    When cả hai cùng tạo phiên,  
+    Then `excl_slot_rental_overlap` bảo đảm chỉ một hóa đơn trên `S` được tạo; bên còn lại nhận HTTP 409 `SLOT_OCCUPIED`.
+  * **AC4 (Tất cả hoặc không có gì):** Given giỏ gồm `S1` trống và `S2` đang bị thương hiệu khác giữ chỗ,  
+    When Brand Admin gửi yêu cầu,  
+    Then hệ thống từ chối cả phiên với HTTP 409 `SLOT_OCCUPIED`, và không có phiên hay hóa đơn nào được tạo — kể cả cho `S1`.
+  * **AC5 (Thiếu gói bảo quản):** Given một phần tử `items` không có `storagePlanId`,  
     When gửi yêu cầu,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR` — gói bảo quản là bắt buộc.
-  * **AC3 (Giữ chỗ — ràng buộc ở tầng CSDL):** Given hai Brand Admin của hai thương hiệu khác nhau cùng chọn slot `S` đồng thời,  
-    When cả hai cùng tạo hóa đơn,  
-    Then `excl_slot_rental_overlap` bảo đảm chỉ một hóa đơn được tạo; bên còn lại nhận HTTP 409 `SLOT_OCCUPIED`.
-  * **AC4 (Gói hoặc slot không hợp lệ):** Given gói đã ngừng mở bán, hoặc slot chưa có giá niêm yết,  
+  * **AC6 (Giỏ không hợp lệ):** Given `items` rỗng, hoặc một slot xuất hiện hai lần trong `items`,  
     When gửi yêu cầu,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
-  * **AC5 (Thương hiệu bị đình chỉ):** Given thương hiệu `B` ở trạng thái `SUSPENDED`,  
+  * **AC7 (Gói hoặc slot không hợp lệ):** Given một gói trong giỏ đã ngừng mở bán, hoặc một slot chưa có giá niêm yết,  
+    When gửi yêu cầu,  
+    Then hệ thống từ chối cả phiên với HTTP 400 `VALIDATION_ERROR`.
+  * **AC8 (Thương hiệu bị đình chỉ):** Given thương hiệu `B` ở trạng thái `SUSPENDED`,  
     When gửi yêu cầu,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_SLT_35_checkout_holds_slot`
 
-> AC3 thuộc nhóm "unique constraint slot" trong 7 nhóm test người tự viết (`spec/testing.md`) —
-> agent không sinh test cho ca này.
+> AC3 và AC4 thuộc nhóm "unique constraint slot" trong 7 nhóm test người tự viết (`spec/testing.md`)
+> — agent không sinh test cho hai ca này. Không giới hạn số slot mỗi phiên (ADR-0008).
 
 ---
 
 ## FR-SLT-36 — Tính tổng tiền hóa đơn
-* **Statement:** Hệ thống phải tính tổng tiền hóa đơn bằng phí thuê (giá niêm yết × số tháng × (1 − tỷ lệ ưu đãi)) cộng phí bảo quản (giá gói bảo quản mỗi tháng × số tháng) cộng phí ân hạn chuyển sang nếu là hóa đơn gia hạn.
+* **Statement:** Hệ thống phải tính tổng tiền hóa đơn bằng phí thuê (giá niêm yết × số tháng × (1 − tỷ lệ ưu đãi)) cộng phí bảo quản (giá gói bảo quản mỗi tháng × số tháng) cộng phí ân hạn chuyển sang nếu là hóa đơn gia hạn, và tổng tiền phiên thanh toán bằng tổng tiền các hóa đơn trong phiên.
 * **Traces:** BR-009, BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given slot giá `1,000,000 VND/tháng`, gói 6 tháng ưu đãi `5%`, gói bảo quản `200,000 VND/tháng`,  
@@ -609,57 +621,69 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
   * **AC4 (Kiểu số):** Given phép nhân với tỷ lệ ưu đãi cho ra phần thập phân,  
     When lưu số tiền,  
     Then lưu bằng `numeric`, không dùng kiểu dấu phẩy động (NFR-DAT-02).
+  * **AC5 (Tổng phiên):** Given phiên `C` gồm hóa đơn `H1` tổng `6,900,000 VND` và `H2` tổng `3,300,000 VND`,  
+    When tạo phiên,  
+    Then `C.total_amount = 10,200,000 VND`; mỗi hóa đơn vẫn chỉ ghi khoản tiền của chính slot đó.
+  * **AC6 (Ràng buộc ở tầng CSDL):** Given `C.total_amount` khác tổng `total_amount` các hóa đơn của `C`,  
+    When transaction COMMIT,  
+    Then CSDL từ chối (`chk_checkout_total_matches_invoices`, ADR-0008).
 * **Test:** `test_FR_SLT_36_compute_invoice_total`
 
 ---
 
-## FR-SLT-37 — Thanh toán hóa đơn
-* **Statement:** Hệ thống phải cho phép Brand Admin thanh toán toàn bộ hóa đơn một lần qua cổng thanh toán, và bảo đảm mỗi hóa đơn có tối đa một thanh toán đang chờ.
+## FR-SLT-37 — Thanh toán phiên thanh toán thuê slot
+* **Statement:** Hệ thống phải cho phép Brand Admin thanh toán một lần toàn bộ các hóa đơn trong một phiên thanh toán qua cổng thanh toán, và bảo đảm mỗi phiên có tối đa một thanh toán đang chờ.
 * **Traces:** BR-009, BR-011 · **Priority:** M
-* **API:** `POST /slot-rentals/{id}/payments`
+* **API:** `POST /rental-checkouts/{id}/payments`, `GET /rental-checkouts/{id}`
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` của thương hiệu `B` ở `DRAFT`, chưa thanh toán, chưa quá `hold_expires_at`,  
+  * **AC1:** Given phiên `C` của thương hiệu `B` gồm các hóa đơn `DRAFT`, chưa thanh toán, chưa hủy, chưa quá `C.hold_expires_at`,  
     When Brand Admin của `B` bấm thanh toán,  
-    Then hệ thống tạo một `Payment` `PENDING` với `slot_rental_id = H.id`, `order_id = NULL`, `amount = H.total_amount`, và trả về thông tin để mở trang thanh toán/QR của cổng.
-  * **AC2 (Bấm lại):** Given `H` đã có một `Payment` `PENDING`,  
+    Then hệ thống tạo một `Payment` `PENDING` với `rental_checkout_id = C.id`, `order_id = NULL`, `amount = C.total_amount`, và trả về thông tin để mở trang thanh toán/QR của cổng.
+  * **AC2 (Bấm lại):** Given `C` đã có một `Payment` `PENDING`,  
     When Brand Admin bấm thanh toán lần nữa,  
     Then hệ thống trả lại chính `Payment` đó, không tạo bản ghi mới.
-  * **AC3 (Ràng buộc ở tầng CSDL):** Given hai yêu cầu thanh toán cho `H` đến đồng thời,  
+  * **AC3 (Ràng buộc ở tầng CSDL):** Given hai yêu cầu thanh toán cho `C` đến đồng thời,  
     When cả hai cùng ghi vào CSDL,  
-    Then partial unique index `uq_rental_payment_pending` bảo đảm chỉ có một `Payment` `PENDING`.
-  * **AC4 (Hết giờ giữ chỗ):** Given `now() > H.hold_expires_at`,  
+    Then partial unique index `uq_checkout_payment_pending` bảo đảm chỉ có một `Payment` `PENDING`.
+  * **AC4 (Hết giờ giữ chỗ):** Given `now() > C.hold_expires_at`,  
     When Brand Admin bấm thanh toán,  
     Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE` — kể cả khi job hủy (FR-SLT-39) chưa kịp chạy.
-  * **AC5 (Sai trạng thái):** Given `H` đã thanh toán, hoặc không ở `DRAFT`,  
+  * **AC5 (Sai trạng thái):** Given `C` đã thanh toán hoặc đã hủy,  
     When Brand Admin bấm thanh toán,  
     Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE`.
-  * **AC6 (Sai phạm vi):** Given người gọi là Brand Admin của thương hiệu khác,  
-    When bấm thanh toán cho `H`,  
+  * **AC6 (Quay lại thanh toán):** Given Brand Admin rời trang sau khi tạo `C`,  
+    When mở lại `C` (`GET /rental-checkouts/{id}`) trước `C.hold_expires_at`,  
+    Then hệ thống trả `C` kèm mọi hóa đơn và tổng tiền để thanh toán tiếp.
+  * **AC7 (Sai phạm vi):** Given người gọi là Brand Admin của thương hiệu khác,  
+    When xem hoặc bấm thanh toán cho `C`,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_SLT_37_initiate_invoice_payment`
 
 ---
 
 ## FR-SLT-38 — Xác nhận thanh toán và cấp số hóa đơn
-* **Statement:** Hệ thống phải xác nhận thanh toán hóa đơn qua webhook của cổng thanh toán theo đúng quy tắc của FR-ORD-13 đến FR-ORD-15, và khi thành công thì ghi nhận thời điểm thanh toán và cấp số hóa đơn duy nhất.
+* **Statement:** Hệ thống phải xác nhận thanh toán phiên thanh toán thuê slot qua webhook của cổng thanh toán theo đúng quy tắc của FR-ORD-13 đến FR-ORD-15, và khi thành công thì ghi nhận thời điểm thanh toán cho phiên và mọi hóa đơn trong phiên, và cấp cho mỗi hóa đơn một số hóa đơn duy nhất.
 * **Traces:** BR-008, BR-009 · **Priority:** M
 * **API:** `POST /webhooks/payments/{provider}`
 * **Acceptance criteria:**
-  * **AC1:** Given `Payment` `P` `PENDING` của hóa đơn `H`,  
+  * **AC1:** Given `Payment` `P` `PENDING` của phiên `C` gồm hóa đơn `H1`, `H2`, `H3`,  
     When nhận webhook hợp lệ báo `P` thành công, đúng mã tham chiếu, số tiền và loại tiền,  
-    Then trong **cùng một transaction**: `P` → `SUCCEEDED`, `H.paid_at = now()`, `H.invoice_number` được cấp và duy nhất toàn hệ thống, và ghi AuditLog (FR-AUD-06). `H` vẫn ở `DRAFT` (chờ nạp hàng) cho tới FR-SLT-24.
-  * **AC2 (Số tiền lệch):** Given webhook báo số tiền khác `H.total_amount`,  
+    Then trong **cùng một transaction**: `P` → `SUCCEEDED`, `C.paid_at = now()`, và với **mỗi** `Hi`: `Hi.paid_at = C.paid_at`, `Hi.invoice_number` được cấp riêng và duy nhất toàn hệ thống; ghi AuditLog (FR-AUD-06). Mỗi `Hi` vẫn ở `DRAFT` (chờ nạp hàng) cho tới khi lắp chai đầu tiên vào slot của nó (FR-SLT-24).
+  * **AC2 (Số tiền lệch):** Given webhook báo số tiền khác `C.total_amount`,  
     When xử lý,  
-    Then hệ thống trả HTTP 400 `AMOUNT_MISMATCH`, không đổi trạng thái `P` và `H`.
+    Then hệ thống trả HTTP 400 `AMOUNT_MISMATCH`, không đổi trạng thái `P`, `C` và các hóa đơn.
   * **AC3 (Chữ ký sai):** Given webhook có chữ ký không hợp lệ,  
     When xử lý,  
     Then hệ thống trả HTTP 401 `INVALID_WEBHOOK_SIGNATURE` và vẫn ghi `payment_events` để rà soát.
   * **AC4 (Webhook trùng):** Given webhook của `P` đã được xử lý,  
     When nhà cung cấp gửi lại,  
-    Then hệ thống trả HTTP 200 `WEBHOOK_ALREADY_PROCESSED`, không ghi nhận thanh toán lần hai và không cấp số hóa đơn thứ hai.
-  * **AC5 (Tiền về sau khi đã hủy):** Given `H` đã `CANCELLED` và `P` đã `EXPIRED` (FR-SLT-39),  
+    Then hệ thống trả HTTP 200 `WEBHOOK_ALREADY_PROCESSED`, không ghi nhận thanh toán lần hai và không cấp số hóa đơn thứ hai cho hóa đơn nào.
+  * **AC5 (Tiền về sau khi đã hủy):** Given `C` đã hủy, các hóa đơn của `C` đã `CANCELLED` và `P` đã `EXPIRED` (FR-SLT-39),  
     When nhận webhook hợp lệ báo `P` thành công,  
-    Then `P` → `REFUND_PENDING` (tiền đã về nhưng phải trả lại), `H` **không** được khôi phục, và ghi AuditLog.
+    Then `P` → `REFUND_PENDING` (tiền đã về nhưng phải trả lại), `C` và các hóa đơn **không** được khôi phục, và ghi AuditLog.
+  * **AC6 (Không ghi nhận nửa phiên — ràng buộc ở tầng CSDL):** Given transaction đặt `C.paid_at` nhưng sót một hóa đơn của `C`,  
+    When COMMIT,  
+    Then CSDL từ chối (`chk_checkout_invoice_state_sync`, ADR-0008) — không có phiên đã trả tiền mà còn hóa đơn "chờ thanh toán".
 * **Test:** `test_FR_SLT_38_confirm_invoice_payment_webhook`
 
 > AC4 thuộc nhóm "idempotency webhook" trong 7 nhóm test người tự viết (`spec/testing.md`) — agent
@@ -667,22 +691,25 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
 
 ---
 
-## FR-SLT-39 — Hủy hóa đơn hết giờ giữ chỗ
-* **Statement:** Hệ thống phải tự động chuyển hóa đơn DRAFT chưa thanh toán sang CANCELLED khi hết thời gian giữ chỗ, và giải phóng slot.
+## FR-SLT-39 — Hủy phiên và hóa đơn hết giờ giữ chỗ
+* **Statement:** Hệ thống phải tự động hủy phiên thanh toán chưa thanh toán khi hết thời gian giữ chỗ, chuyển mọi hóa đơn DRAFT của phiên sang CANCELLED, và giải phóng mọi slot của phiên.
 * **Traces:** BR-011 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` ở `DRAFT`, chưa thanh toán, `now() > H.hold_expires_at`,  
+  * **AC1:** Given phiên `C` chưa thanh toán gồm hóa đơn `H1`, `H2` ở `DRAFT`, `now() > C.hold_expires_at`,  
     When job chuyển trạng thái chạy,  
-    Then trong cùng transaction: `H` → `CANCELLED` với `cancelled_at = now()`, `Payment` `PENDING` của `H` (nếu có) → `EXPIRED`, và ghi AuditLog.
-  * **AC2 (Giải phóng slot):** Given `H` vừa chuyển `CANCELLED`,  
-    When bất kỳ thương hiệu nào chọn slot đó,  
-    Then hệ thống cho tạo hóa đơn mới — `excl_slot_rental_overlap` không còn tính `H`.
-  * **AC3 (Bù sau downtime):** Given hệ thống ngừng hoạt động qua mốc `hold_expires_at` của `H`,  
+    Then trong cùng transaction: `C.cancelled_at = now()`, `H1` và `H2` → `CANCELLED` với `cancelled_at = now()`, `Payment` `PENDING` của `C` (nếu có) → `EXPIRED`, và ghi AuditLog.
+  * **AC2 (Giải phóng slot):** Given `C` vừa bị hủy,  
+    When bất kỳ thương hiệu nào chọn slot của `H1` hoặc `H2`,  
+    Then hệ thống cho tạo hóa đơn mới — `excl_slot_rental_overlap` không còn tính `H1`, `H2`.
+  * **AC3 (Bù sau downtime):** Given hệ thống ngừng hoạt động qua mốc `hold_expires_at` của `C`,  
     When job chạy lần đầu sau khi khởi động lại,  
-    Then `H` vẫn được hủy, không bị bỏ sót.
-  * **AC4:** Given `H` đã thanh toán,  
+    Then `C` và mọi hóa đơn của nó vẫn được hủy, không bị bỏ sót.
+  * **AC4:** Given `C` đã thanh toán,  
     When job chạy sau `hold_expires_at`,  
-    Then `H` không bị hủy.
+    Then `C` và các hóa đơn của nó không bị hủy.
+  * **AC5 (Không hủy nửa phiên — ràng buộc ở tầng CSDL):** Given transaction hủy `C` nhưng sót một hóa đơn của `C` ở `DRAFT`,  
+    When COMMIT,  
+    Then CSDL từ chối (`chk_checkout_invoice_state_sync`, ADR-0008).
 * **Test:** `test_FR_SLT_39_cancel_unpaid_invoice_after_hold`
 
 > Thuộc nhóm "job chuyển trạng thái hóa đơn" trong 7 nhóm test người tự viết (`spec/testing.md`) —
@@ -703,7 +730,10 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
     Then thời hạn hiệu lực hiện "bắt đầu khi lắp chai đầu tiên" thay vì ngày cụ thể.
   * **AC3 (Chưa thanh toán):** Given `H` còn ở `DRAFT` chưa thanh toán,  
     When mở hóa đơn,  
-    Then hệ thống trả bảng tính tiền kèm `hold_expires_at` nhưng chưa có số hóa đơn.
+    Then hệ thống trả bảng tính tiền của riêng `H` kèm `hold_expires_at` và mã phiên thanh toán chứa `H` (ADR-0008), nhưng chưa có số hóa đơn.
+  * **AC3b (Thanh toán chung phiên):** Given `H1`, `H2` đã thanh toán trong cùng một phiên,  
+    When mở `H1`,  
+    Then hóa đơn chỉ ghi các khoản tiền và số hóa đơn của `H1`, kèm mã phiên để đối chiếu với giao dịch đã trả.
   * **AC4 (Cô lập dữ liệu):** Given `H` thuộc thương hiệu `B2`,  
     When Brand Admin của `B1` mở `H`,  
     Then hệ thống trả HTTP 403 `FORBIDDEN_SCOPE` (FR-AUTH-08).
@@ -750,9 +780,9 @@ khi Inventory Staff lắp chai đầu tiên (FR-SLT-24).
 * **Statement:** Hệ thống phải thông báo cho Brand Admin khi hóa đơn được thanh toán thành công và khi hóa đơn bắt đầu hiệu lực, kèm ngày kết thúc.
 * **Traces:** BR-011 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` của thương hiệu `B` vừa được xác nhận thanh toán (FR-SLT-38),  
+  * **AC1:** Given phiên `C` của thương hiệu `B` vừa được xác nhận thanh toán (FR-SLT-38),  
     When transaction hoàn tất,  
-    Then mọi Brand Admin của `B` nhận thông báo trong hệ thống kèm số hóa đơn và lời nhắc gửi hàng, cấu hình slot.
+    Then mọi Brand Admin của `B` nhận **một** thông báo trong hệ thống liệt kê số hóa đơn của mọi hóa đơn trong `C`, kèm lời nhắc gửi hàng, cấu hình slot — không phải một thông báo cho mỗi hóa đơn (ADR-0008).
   * **AC2:** Given `H` chuyển `ACTIVE` (FR-SLT-24, FR-SLT-42 hoặc gia hạn FR-SLT-12),  
     When transaction hoàn tất,  
     Then mọi Brand Admin của `B` nhận thông báo kèm `starts_at` và `ends_at`.
