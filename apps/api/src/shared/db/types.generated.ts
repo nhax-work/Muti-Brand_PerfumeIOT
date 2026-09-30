@@ -536,7 +536,7 @@ export interface Payments {
   currency: string;
   id: Generated<string>;
   /**
-   * Đơn kiosk được thanh toán. Đúng một trong order_id, slot_rental_id có giá trị (chk_payment_single_target).
+   * Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị (chk_payment_single_target).
    */
   order_id: string | null;
   paid_at: Timestamp | null;
@@ -545,9 +545,9 @@ export interface Payments {
   provider_transaction_id: string | null;
   raw_response: Json | null;
   /**
-   * Hóa đơn thuê slot được thanh toán (FR-SLT-37). Mỗi hóa đơn tối đa một payment PENDING (uq_rental_payment_pending).
+   * Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending).
    */
-  slot_rental_id: string | null;
+  rental_checkout_id: string | null;
   status: Generated<PaymentStatus>;
   updated_at: Generated<Timestamp>;
 }
@@ -617,6 +617,31 @@ export interface RefreshSessions {
   user_id: string;
 }
 
+export interface RentalCheckouts {
+  brand_id: string;
+  /**
+   * Hết giờ giữ chỗ mà chưa thanh toán (FR-SLT-39). Cùng transaction: mọi hóa đơn của phiên → CANCELLED và payment PENDING của phiên → EXPIRED.
+   */
+  cancelled_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  currency: Generated<string>;
+  /**
+   * Hết giờ giữ chỗ cho MỌI slot trong phiên: lúc tạo + RENTAL_CHECKOUT_HOLD_MIN (FR-SLT-35). Quá mốc mà paid_at NULL thì phiên và mọi hóa đơn của nó chuyển CANCELLED (FR-SLT-39).
+   */
+  hold_expires_at: Timestamp;
+  id: Generated<string>;
+  /**
+   * Thời điểm thanh toán được xác nhận (FR-SLT-38). Cùng transaction: mọi hóa đơn của phiên nhận paid_at và mỗi hóa đơn một số hóa đơn riêng.
+   */
+  paid_at: Timestamp | null;
+  /**
+   * Tổng total_amount của mọi hóa đơn trong phiên (FR-SLT-36), chỉ ghi một lần lúc tạo. Số tiền webhook đối chiếu (FR-SLT-38). trg_rental_checkouts_consistency kiểm lúc COMMIT.
+   */
+  total_amount: Numeric;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface RentalPackages {
   created_at: Generated<Timestamp>;
   discount_percent: Generated<Numeric>;
@@ -681,6 +706,10 @@ export interface SlotRentalRequests {
 export interface SlotRentals {
   brand_id: string;
   cancelled_at: Timestamp | null;
+  /**
+   * Phiên thanh toán sinh ra hóa đơn (ADR-0008). Bắt buộc với hóa đơn theo gói (chk_rental_package_snapshot_complete); NULL với hóa đơn mô hình cũ trước ADR-0006.
+   */
+  checkout_id: string | null;
   created_at: Generated<Timestamp>;
   created_by: string;
   currency: Generated<string>;
@@ -706,10 +735,6 @@ export interface SlotRentals {
    * Phí ân hạn của hóa đơn cũ chuyển sang hóa đơn gia hạn (FR-EXP-12, FR-SLT-36). 0 với hóa đơn mới.
    */
   grace_fee_amount: Generated<Numeric>;
-  /**
-   * Hết giờ giữ chỗ: tạo hóa đơn + RENTAL_CHECKOUT_HOLD_MIN. Quá mốc mà paid_at NULL thì hóa đơn chuyển CANCELLED (FR-SLT-39).
-   */
-  hold_expires_at: Timestamp | null;
   id: Generated<string>;
   /**
    * Số hóa đơn, cấp đúng lúc thanh toán thành công và duy nhất toàn hệ thống (FR-SLT-38).
@@ -720,7 +745,7 @@ export interface SlotRentals {
    */
   monthly_rent_price: Numeric | null;
   /**
-   * Thời điểm thanh toán được xác nhận (FR-SLT-38). DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng.
+   * Thời điểm thanh toán được xác nhận (FR-SLT-38) — ghi cùng lúc với rental_checkouts.paid_at của phiên. DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng.
    */
   paid_at: Timestamp | null;
   /**
@@ -864,6 +889,7 @@ export interface DB {
   refill_requests: RefillRequests;
   refill_sessions: RefillSessions;
   refresh_sessions: RefreshSessions;
+  rental_checkouts: RentalCheckouts;
   rental_packages: RentalPackages;
   role_permissions: RolePermissions;
   roles: Roles;

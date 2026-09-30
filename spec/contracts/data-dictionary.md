@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **39 bảng**, **25 kiểu enum**.
+Tổng: **40 bảng**, **25 kiểu enum**.
 
 ---
 
@@ -209,7 +209,7 @@ Vai trò là dữ liệu, không phải enum — đổi tập vai trò chỉ c�
 
 ## Nhóm Catalog và Machines
 
-Địa điểm, máy, slot, danh mục sản phẩm và hợp đồng thuê slot. `machines` KHÔNG có `brand_id` — đường duy nhất nối thương hiệu với máy là `slot_rentals` (BR-003, BR-012).
+Địa điểm, máy, slot, danh mục sản phẩm, gói thuê và hóa đơn thuê slot. `machines` KHÔNG có `brand_id` — đường duy nhất nối thương hiệu với máy là `slot_rentals` (BR-003, BR-012). Một lần thanh toán có thể gồm nhiều hóa đơn, gom bằng `rental_checkouts` (ADR-0008).
 
 ### `locations`
 
@@ -399,9 +399,95 @@ DEPRECATED (ADR-0006): luồng Brand Admin gửi yêu cầu thuê, Super Admin d
 - `slot_rental_requests_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_slot_rental_request_open` (UNIQUE) — `USING btree (slot_id) WHERE (status = ANY (ARRAY['REQUESTED'::slot_rental_request_status, 'APPROVED'::slot_rental_request_status]))`
 
+### `rental_packages`
+
+Gói thuê niêm yết: thời hạn theo tháng và tỷ lệ ưu đãi (FR-SLT-30, ADR-0006). Ngừng mở bán bằng is_active = false; hóa đơn đã mua không bị ảnh hưởng vì giá đã được chụp (FR-SLT-33).
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `name` | `character varying(100)` | — |  |  |
+| `duration_months` | `smallint` | — |  |  |
+| `discount_percent` | `numeric(5,2)` | — | `0` |  |
+| `is_active` | `boolean` | — | `true` |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_package_discount_percent` — `CHECK (((discount_percent >= (0)::numeric) AND (discount_percent <= (100)::numeric)))`
+- `chk_package_duration_positive` — `CHECK ((duration_months > 0))`
+
+**Index**
+
+- `rental_packages_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_rental_package_name` (UNIQUE) — `USING btree (name)`
+
+### `storage_plans`
+
+Gói bảo quản — bảo hiểm hàng hóa (FR-SLT-31, ADR-0006). Mỗi hóa đơn bắt buộc chọn đúng một gói. Domain service phải giữ ít nhất một gói is_active = true (FR-SLT-31 AC3).
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `name` | `character varying(100)` | — |  |  |
+| `description` | `text` | có |  |  |
+| `monthly_price` | `numeric(19,4)` | — |  |  |
+| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
+| `coverage_percent` | `numeric(5,2)` | — |  | Tỷ lệ bồi thường tính trên giá bán lẻ chai (fragrance_products.full_bottle_retail_price). |
+| `coverage_cap` | `numeric(19,4)` | — |  | Hạn mức bồi thường tối đa cộng dồn cho MỘT hóa đơn. |
+| `is_active` | `boolean` | — | `true` |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_storage_plan_cap_nonnegative` — `CHECK ((coverage_cap >= (0)::numeric))`
+- `chk_storage_plan_coverage_percent` — `CHECK (((coverage_percent >= (0)::numeric) AND (coverage_percent <= (100)::numeric)))`
+- `chk_storage_plan_price_nonnegative` — `CHECK ((monthly_price >= (0)::numeric))`
+
+**Index**
+
+- `storage_plans_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_storage_plan_name` (UNIQUE) — `USING btree (name)`
+
+### `rental_checkouts`
+
+Phiên thanh toán thuê slot (ADR-0008): một lần Brand Admin chọn một hoặc nhiều slot rồi trả tiền một lần. Mỗi slot vẫn là một hóa đơn (slot_rentals) có số hóa đơn, ảnh chụp giá và vòng đời riêng; phiên chỉ gom giữ chỗ, tổng tiền và thanh toán. Trạng thái suy ra từ paid_at và cancelled_at: cả hai NULL = chờ thanh toán.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `brand_id` | `uuid` | — |  |  |
+| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
+| `total_amount` | `numeric(19,4)` | — |  | Tổng total_amount của mọi hóa đơn trong phiên (FR-SLT-36), chỉ ghi một lần lúc tạo. Số tiền webhook đối chiếu (FR-SLT-38). trg_rental_checkouts_consistency kiểm lúc COMMIT. |
+| `hold_expires_at` | `timestamp with time zone` | — |  | Hết giờ giữ chỗ cho MỌI slot trong phiên: lúc tạo + RENTAL_CHECKOUT_HOLD_MIN (FR-SLT-35). Quá mốc mà paid_at NULL thì phiên và mọi hóa đơn của nó chuyển CANCELLED (FR-SLT-39). |
+| `paid_at` | `timestamp with time zone` | có |  | Thời điểm thanh toán được xác nhận (FR-SLT-38). Cùng transaction: mọi hóa đơn của phiên nhận paid_at và mỗi hóa đơn một số hóa đơn riêng. |
+| `cancelled_at` | `timestamp with time zone` | có |  | Hết giờ giữ chỗ mà chưa thanh toán (FR-SLT-39). Cùng transaction: mọi hóa đơn của phiên → CANCELLED và payment PENDING của phiên → EXPIRED. |
+| `created_by` | `uuid` | — |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_checkout_amount_nonnegative` — `CHECK ((total_amount >= (0)::numeric))`
+- `chk_checkout_paid_or_cancelled` — `CHECK (((paid_at IS NULL) OR (cancelled_at IS NULL)))`
+
+**Khóa ngoại**
+
+- `rental_checkouts_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `rental_checkouts_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
+
+**Index**
+
+- `idx_checkouts_brand` — `USING btree (brand_id, created_at)`
+- `idx_checkouts_unpaid_hold` — `USING btree (hold_expires_at) WHERE ((paid_at IS NULL) AND (cancelled_at IS NULL))`
+- `rental_checkouts_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_checkout_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
+
 ### `slot_rentals`
 
-Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (ADR-0006). Một hóa đơn ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). Đây là đường duy nhất nối thương hiệu với máy.
+Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (ADR-0006). Một hóa đơn ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009), có thể thanh toán chung trong một phiên (rental_checkouts, ADR-0008). Đây là đường duy nhất nối thương hiệu với máy.
 
 | Cột | Kiểu | Null | Mặc định | Mô tả |
 |---|---|---|---|---|
@@ -437,9 +523,9 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 | `storage_amount` | `numeric(19,4)` | có |  |  |
 | `grace_fee_amount` | `numeric(19,4)` | — | `0` | Phí ân hạn của hóa đơn cũ chuyển sang hóa đơn gia hạn (FR-EXP-12, FR-SLT-36). 0 với hóa đơn mới. |
 | `total_amount` | `numeric(19,4)` | có |  |  |
-| `hold_expires_at` | `timestamp with time zone` | có |  | Hết giờ giữ chỗ: tạo hóa đơn + RENTAL_CHECKOUT_HOLD_MIN. Quá mốc mà paid_at NULL thì hóa đơn chuyển CANCELLED (FR-SLT-39). |
-| `paid_at` | `timestamp with time zone` | có |  | Thời điểm thanh toán được xác nhận (FR-SLT-38). DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng. |
+| `paid_at` | `timestamp with time zone` | có |  | Thời điểm thanh toán được xác nhận (FR-SLT-38) — ghi cùng lúc với rental_checkouts.paid_at của phiên. DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng. |
 | `cancelled_at` | `timestamp with time zone` | có |  |  |
+| `checkout_id` | `uuid` | có |  | Phiên thanh toán sinh ra hóa đơn (ADR-0008). Bắt buộc với hóa đơn theo gói (chk_rental_package_snapshot_complete); NULL với hóa đơn mô hình cũ trước ADR-0006. |
 
 **Ràng buộc kiểm tra**
 
@@ -449,7 +535,7 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 - `chk_rental_duration_positive` — `CHECK (((duration_months IS NULL) OR (duration_months > 0)))`
 - `chk_rental_fee_nonnegative` — `CHECK ((fixed_fee >= (0)::numeric))`
 - `chk_rental_invoice_on_payment` — `CHECK (((paid_at IS NULL) = (invoice_number IS NULL)))`
-- `chk_rental_package_snapshot_complete` — `CHECK (((rental_package_id IS NULL) OR (num_nulls(storage_plan_id, duration_months, monthly_rent_price, discount_percent, storage_monthly_price, storage_coverage_percent, storage_coverage_cap, rent_amount, storage_amount, total_amount, hold_expires_at) = 0)))`
+- `chk_rental_package_snapshot_complete` — `CHECK (((rental_package_id IS NULL) OR (num_nulls(storage_plan_id, duration_months, monthly_rent_price, discount_percent, storage_monthly_price, storage_coverage_percent, storage_coverage_cap, rent_amount, storage_amount, total_amount, checkout_id) = 0)))`
 - `chk_rental_percents` — `CHECK ((((discount_percent IS NULL) OR ((discount_percent >= (0)::numeric) AND (discount_percent <= (100)::numeric))) AND ((storage_coverage_percent IS NULL) OR ((storage_coverage_percent >= (0)::numeric) AND (storage_coverage_percent <= (100)::numeric)))))`
 - `chk_rental_period` — `CHECK ((ends_at > starts_at))`
 - `chk_rental_price_nonnegative` — `CHECK ((price_per_spray >= (0)::numeric))`
@@ -459,6 +545,7 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 
 **Khóa ngoại**
 
+- `fk_rental_checkout_same_brand` — `FOREIGN KEY (checkout_id, brand_id) REFERENCES rental_checkouts(id, brand_id)` — *ràng buộc cùng thương hiệu*
 - `fk_rental_product_same_brand` — `FOREIGN KEY (fragrance_product_id, brand_id) REFERENCES fragrance_products(id, brand_id)` — *ràng buộc cùng thương hiệu*
 - `slot_rentals_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
 - `slot_rentals_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
@@ -473,8 +560,8 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 
 - `excl_slot_rental_overlap` — `USING gist (slot_id, tstzrange(starts_at, ends_at, '[)'::text)) WHERE (status = ANY (ARRAY['DRAFT'::slot_rental_status, 'ACTIVE'::slot_rental_status, 'EXPIRING'::slot_rental_status, 'GRACE'::slot_rental_status, 'LIQUIDATED'::slot_rental_status]))`
 - `idx_rentals_brand` — `USING btree (brand_id, status, starts_at)`
+- `idx_rentals_checkout` — `USING btree (checkout_id) WHERE (checkout_id IS NOT NULL)`
 - `idx_rentals_draft_awaiting_stock` — `USING btree (paid_at) WHERE ((status = 'DRAFT'::slot_rental_status) AND (paid_at IS NOT NULL))`
-- `idx_rentals_draft_unpaid_hold` — `USING btree (hold_expires_at) WHERE ((status = 'DRAFT'::slot_rental_status) AND (paid_at IS NULL))`
 - `idx_rentals_product` — `USING btree (fragrance_product_id, status)`
 - `idx_rentals_slot` — `USING btree (slot_id, starts_at, ends_at)`
 - `slot_rentals_pkey` (UNIQUE) — `USING btree (id)`
@@ -670,6 +757,47 @@ Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (F
 - `idx_adjustments_brand_bottle` — `USING btree (brand_id, bottle_id, created_at)`
 - `inventory_adjustments_pkey` (UNIQUE) — `USING btree (id)`
 
+### `storage_compensations`
+
+Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc nền tảng đang giữ (FR-SLT-44). Tiền chuyển ngoài hệ thống; Super Admin ghi nhận chi trả sau khi xác thực lại (FR-SLT-45).
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `brand_id` | `uuid` | — |  |  |
+| `bottle_id` | `uuid` | — |  |  |
+| `slot_rental_id` | `uuid` | — |  | Hóa đơn có gói bảo quản được áp: hóa đơn của slot chai đang lắp, hoặc — với chai trong kho — hóa đơn hiệu lực có coverage_percent cao nhất của thương hiệu. Hạn mức cộng dồn theo cột này. |
+| `bottle_retail_price` | `numeric(19,4)` | — |  |  |
+| `coverage_percent` | `numeric(5,2)` | — |  |  |
+| `amount` | `numeric(19,4)` | — |  | min(coverage_percent × bottle_retail_price, hạn mức còn lại của hóa đơn). Domain service tính. |
+| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
+| `status` | `storage_compensation_status` | — | `'PENDING'::storage_compensation_status` |  |
+| `payout_reference` | `character varying(200)` | có |  |  |
+| `paid_by` | `uuid` | có |  |  |
+| `paid_at` | `timestamp with time zone` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_compensation_amounts_nonnegative` — `CHECK (((bottle_retail_price >= (0)::numeric) AND (amount >= (0)::numeric)))`
+- `chk_compensation_coverage_percent` — `CHECK (((coverage_percent >= (0)::numeric) AND (coverage_percent <= (100)::numeric)))`
+- `chk_compensation_paid_fields` — `CHECK (((status = 'PAID'::storage_compensation_status) = ((paid_at IS NOT NULL) AND (paid_by IS NOT NULL) AND (payout_reference IS NOT NULL))))`
+
+**Khóa ngoại**
+
+- `fk_compensation_bottle_same_brand` — `FOREIGN KEY (bottle_id, brand_id) REFERENCES bottles(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `fk_compensation_rental_same_brand` — `FOREIGN KEY (slot_rental_id, brand_id) REFERENCES slot_rentals(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `storage_compensations_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `storage_compensations_paid_by_fkey` — `FOREIGN KEY (paid_by) REFERENCES users(id)`
+
+**Index**
+
+- `idx_compensations_brand_status` — `USING btree (brand_id, status, created_at)`
+- `idx_compensations_rental` — `USING btree (slot_rental_id)`
+- `storage_compensations_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_compensation_bottle` (UNIQUE) — `USING btree (bottle_id)`
+
 ## Nhóm Orders và Payments
 
 Đơn hàng, thanh toán, lệnh xịt và tương tác kiosk. Ba ràng buộc duy nhất ở nhóm này (`uq_payment_event`, `uq_order_active_command`, `dispense_results.command_id`) là toàn bộ cơ chế giữ cho BR-002 "một giao dịch một lượt xịt" đúng.
@@ -761,7 +889,7 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 |---|---|---|---|---|
 | `id` | `uuid` | — | `gen_random_uuid()` |  |
 | `brand_id` | `uuid` | — |  |  |
-| `order_id` | `uuid` | có |  | Đơn kiosk được thanh toán. Đúng một trong order_id, slot_rental_id có giá trị (chk_payment_single_target). |
+| `order_id` | `uuid` | có |  | Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị (chk_payment_single_target). |
 | `provider` | `character varying(50)` | — |  |  |
 | `provider_transaction_id` | `character varying(200)` | có |  |  |
 | `provider_reference` | `character varying(200)` | có |  |  |
@@ -772,27 +900,27 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 | `paid_at` | `timestamp with time zone` | có |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
-| `slot_rental_id` | `uuid` | có |  | Hóa đơn thuê slot được thanh toán (FR-SLT-37). Mỗi hóa đơn tối đa một payment PENDING (uq_rental_payment_pending). |
+| `rental_checkout_id` | `uuid` | có |  | Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending). |
 
 **Ràng buộc kiểm tra**
 
 - `chk_payment_amount_nonnegative` — `CHECK ((amount >= (0)::numeric))`
-- `chk_payment_single_target` — `CHECK ((num_nonnulls(order_id, slot_rental_id) = 1))`
+- `chk_payment_single_target` — `CHECK ((num_nonnulls(order_id, rental_checkout_id) = 1))`
 
 **Khóa ngoại**
 
-- `fk_payment_rental_same_brand` — `FOREIGN KEY (slot_rental_id, brand_id) REFERENCES slot_rentals(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `fk_payment_checkout_same_brand` — `FOREIGN KEY (rental_checkout_id, brand_id) REFERENCES rental_checkouts(id, brand_id)` — *ràng buộc cùng thương hiệu*
 - `payments_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
 - `payments_order_id_fkey` — `FOREIGN KEY (order_id) REFERENCES orders(id)`
 
 **Index**
 
 - `idx_payments_brand_status` — `USING btree (brand_id, status, created_at)`
+- `idx_payments_checkout` — `USING btree (rental_checkout_id) WHERE (rental_checkout_id IS NOT NULL)`
 - `idx_payments_order` — `USING btree (order_id)`
-- `idx_payments_rental` — `USING btree (slot_rental_id) WHERE (slot_rental_id IS NOT NULL)`
 - `payments_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_checkout_payment_pending` (UNIQUE) — `USING btree (rental_checkout_id) WHERE ((rental_checkout_id IS NOT NULL) AND (status = 'PENDING'::payment_status))`
 - `uq_payment_provider_txn` (UNIQUE) — `USING btree (provider, provider_transaction_id) WHERE (provider_transaction_id IS NOT NULL)`
-- `uq_rental_payment_pending` (UNIQUE) — `USING btree (slot_rental_id) WHERE ((slot_rental_id IS NOT NULL) AND (status = 'PENDING'::payment_status))`
 
 ### `payment_events`
 
@@ -1222,101 +1350,4 @@ Telemetry theo FR-IOT-04, lưu lịch sử phục vụ báo cáo và phân tích
 
 - `idx_sensor_readings` — `USING btree (machine_id, slot_id, measured_at)`
 - `sensor_readings_pkey` (UNIQUE) — `USING btree (id)`
-
-## Bảng chưa xếp nhóm
-
-Những bảng sau có trong CSDL nhưng chưa được xếp vào nhóm nào trong `scripts/gen-data-dictionary.ts`. Bổ sung vào `GROUPS` rồi sinh lại.
-
-### `rental_packages`
-
-Gói thuê niêm yết: thời hạn theo tháng và tỷ lệ ưu đãi (FR-SLT-30, ADR-0006). Ngừng mở bán bằng is_active = false; hóa đơn đã mua không bị ảnh hưởng vì giá đã được chụp (FR-SLT-33).
-
-| Cột | Kiểu | Null | Mặc định | Mô tả |
-|---|---|---|---|---|
-| `id` | `uuid` | — | `gen_random_uuid()` |  |
-| `name` | `character varying(100)` | — |  |  |
-| `duration_months` | `smallint` | — |  |  |
-| `discount_percent` | `numeric(5,2)` | — | `0` |  |
-| `is_active` | `boolean` | — | `true` |  |
-| `created_at` | `timestamp with time zone` | — | `now()` |  |
-| `updated_at` | `timestamp with time zone` | — | `now()` |  |
-
-**Ràng buộc kiểm tra**
-
-- `chk_package_discount_percent` — `CHECK (((discount_percent >= (0)::numeric) AND (discount_percent <= (100)::numeric)))`
-- `chk_package_duration_positive` — `CHECK ((duration_months > 0))`
-
-**Index**
-
-- `rental_packages_pkey` (UNIQUE) — `USING btree (id)`
-- `uq_rental_package_name` (UNIQUE) — `USING btree (name)`
-
-### `storage_compensations`
-
-Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc nền tảng đang giữ (FR-SLT-44). Tiền chuyển ngoài hệ thống; Super Admin ghi nhận chi trả sau khi xác thực lại (FR-SLT-45).
-
-| Cột | Kiểu | Null | Mặc định | Mô tả |
-|---|---|---|---|---|
-| `id` | `uuid` | — | `gen_random_uuid()` |  |
-| `brand_id` | `uuid` | — |  |  |
-| `bottle_id` | `uuid` | — |  |  |
-| `slot_rental_id` | `uuid` | — |  | Hóa đơn có gói bảo quản được áp: hóa đơn của slot chai đang lắp, hoặc — với chai trong kho — hóa đơn hiệu lực có coverage_percent cao nhất của thương hiệu. Hạn mức cộng dồn theo cột này. |
-| `bottle_retail_price` | `numeric(19,4)` | — |  |  |
-| `coverage_percent` | `numeric(5,2)` | — |  |  |
-| `amount` | `numeric(19,4)` | — |  | min(coverage_percent × bottle_retail_price, hạn mức còn lại của hóa đơn). Domain service tính. |
-| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
-| `status` | `storage_compensation_status` | — | `'PENDING'::storage_compensation_status` |  |
-| `payout_reference` | `character varying(200)` | có |  |  |
-| `paid_by` | `uuid` | có |  |  |
-| `paid_at` | `timestamp with time zone` | có |  |  |
-| `created_at` | `timestamp with time zone` | — | `now()` |  |
-| `updated_at` | `timestamp with time zone` | — | `now()` |  |
-
-**Ràng buộc kiểm tra**
-
-- `chk_compensation_amounts_nonnegative` — `CHECK (((bottle_retail_price >= (0)::numeric) AND (amount >= (0)::numeric)))`
-- `chk_compensation_coverage_percent` — `CHECK (((coverage_percent >= (0)::numeric) AND (coverage_percent <= (100)::numeric)))`
-- `chk_compensation_paid_fields` — `CHECK (((status = 'PAID'::storage_compensation_status) = ((paid_at IS NOT NULL) AND (paid_by IS NOT NULL) AND (payout_reference IS NOT NULL))))`
-
-**Khóa ngoại**
-
-- `fk_compensation_bottle_same_brand` — `FOREIGN KEY (bottle_id, brand_id) REFERENCES bottles(id, brand_id)` — *ràng buộc cùng thương hiệu*
-- `fk_compensation_rental_same_brand` — `FOREIGN KEY (slot_rental_id, brand_id) REFERENCES slot_rentals(id, brand_id)` — *ràng buộc cùng thương hiệu*
-- `storage_compensations_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
-- `storage_compensations_paid_by_fkey` — `FOREIGN KEY (paid_by) REFERENCES users(id)`
-
-**Index**
-
-- `idx_compensations_brand_status` — `USING btree (brand_id, status, created_at)`
-- `idx_compensations_rental` — `USING btree (slot_rental_id)`
-- `storage_compensations_pkey` (UNIQUE) — `USING btree (id)`
-- `uq_compensation_bottle` (UNIQUE) — `USING btree (bottle_id)`
-
-### `storage_plans`
-
-Gói bảo quản — bảo hiểm hàng hóa (FR-SLT-31, ADR-0006). Mỗi hóa đơn bắt buộc chọn đúng một gói. Domain service phải giữ ít nhất một gói is_active = true (FR-SLT-31 AC3).
-
-| Cột | Kiểu | Null | Mặc định | Mô tả |
-|---|---|---|---|---|
-| `id` | `uuid` | — | `gen_random_uuid()` |  |
-| `name` | `character varying(100)` | — |  |  |
-| `description` | `text` | có |  |  |
-| `monthly_price` | `numeric(19,4)` | — |  |  |
-| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
-| `coverage_percent` | `numeric(5,2)` | — |  | Tỷ lệ bồi thường tính trên giá bán lẻ chai (fragrance_products.full_bottle_retail_price). |
-| `coverage_cap` | `numeric(19,4)` | — |  | Hạn mức bồi thường tối đa cộng dồn cho MỘT hóa đơn. |
-| `is_active` | `boolean` | — | `true` |  |
-| `created_at` | `timestamp with time zone` | — | `now()` |  |
-| `updated_at` | `timestamp with time zone` | — | `now()` |  |
-
-**Ràng buộc kiểm tra**
-
-- `chk_storage_plan_cap_nonnegative` — `CHECK ((coverage_cap >= (0)::numeric))`
-- `chk_storage_plan_coverage_percent` — `CHECK (((coverage_percent >= (0)::numeric) AND (coverage_percent <= (100)::numeric)))`
-- `chk_storage_plan_price_nonnegative` — `CHECK ((monthly_price >= (0)::numeric))`
-
-**Index**
-
-- `storage_plans_pkey` (UNIQUE) — `USING btree (id)`
-- `uq_storage_plan_name` (UNIQUE) — `USING btree (name)`
 

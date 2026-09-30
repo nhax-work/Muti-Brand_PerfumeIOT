@@ -6,7 +6,7 @@
 --
 -- Nguồn thiết kế : seed_document/DB_DIAGRAM_MERMAID.md
 -- Chuẩn đặt tên  : spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md
--- Quy mô         : 25 enum · 38 bảng · 4 partial unique index bắt buộc · 1 exclusion constraint
+-- Quy mô         : 25 enum · 39 bảng · 4 partial unique index bắt buộc · 1 exclusion constraint
 -- Cập nhật       : ADR-0006 (thuê slot theo gói trả trước, hóa đơn, bảo hiểm hàng hóa) — áp bằng
 --                  migrations/1790665900000_slot-rental-status-cancelled.sql và
 --                  migrations/1790665960000_prepaid-rental-packages.sql. Cột thêm bằng ALTER TABLE
@@ -14,6 +14,9 @@
 --                  ADR-0007 (khách bấm nút vật lý) — order_status thêm FORFEITED, index
 --                  uq_machine_active_customer_command; áp bằng migrations/1790752000000_* và
 --                  migrations/1790752060000_*.
+--                  ADR-0008 (thanh toán nhiều slot một lần) — bảng rental_checkouts,
+--                  slot_rentals.checkout_id thay hold_expires_at, payments.rental_checkout_id thay
+--                  slot_rental_id, constraint trigger §10d; áp bằng migrations/1790757100000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -26,6 +29,7 @@
 --   §8  Bảng — Device và IoT
 --   §9  Khóa ngoại vòng (tách ra vì phụ thuộc hai chiều)
 --   §10 Index và ràng buộc bắt buộc (spec/contracts/README.md)
+--   §10b Ràng buộc cùng thương hiệu · §10c updated_at · §10d Bất biến phiên thanh toán (ADR-0008)
 --   §11 Audit log append-only (FR-AUD-09, NFR-SEC-08)
 --   §12 Row-Level Security — mẫu, chưa bật
 --   §13 Ràng buộc thuộc tầng domain service, KHÔNG nằm ở CSDL
@@ -442,6 +446,50 @@ COMMENT ON TABLE slot_rental_requests IS
 COMMENT ON COLUMN slot_rental_requests.resulting_rental_id IS
     'DEPRECATED (ADR-0006). Trước đây: đặt khi yêu cầu được duyệt và hóa đơn DRAFT được tạo tự động.';
 
+-- Phiên thanh toán thuê slot (ADR-0008): gom các hóa đơn tạo trong cùng một lần chọn để trả tiền một
+-- lần. Bất biến chéo bảng với slot_rentals (có hóa đơn, tổng khớp, trạng thái đồng bộ) ở §10d.
+CREATE TABLE rental_checkouts (
+    id              uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id        uuid          NOT NULL REFERENCES brands (id),
+    currency        char(3)       NOT NULL DEFAULT 'VND',
+    total_amount    numeric(19,4) NOT NULL,
+    hold_expires_at timestamptz   NOT NULL,
+    paid_at         timestamptz,
+    cancelled_at    timestamptz,
+    created_by      uuid          NOT NULL REFERENCES users (id),
+    created_at      timestamptz   NOT NULL DEFAULT now(),
+    updated_at      timestamptz   NOT NULL DEFAULT now(),
+
+    CONSTRAINT chk_checkout_amount_nonnegative
+        CHECK (total_amount >= 0),
+    -- Đã thanh toán thì không hủy; tiền về sau khi đã hủy chỉ làm payment REFUND_PENDING (FR-SLT-38 AC5).
+    CONSTRAINT chk_checkout_paid_or_cancelled
+        CHECK (paid_at IS NULL OR cancelled_at IS NULL)
+);
+
+CREATE INDEX idx_checkouts_brand ON rental_checkouts (brand_id, created_at);
+-- Job hủy phiên hết giờ giữ chỗ (FR-SLT-39) quét đúng tập này mỗi lần chạy.
+CREATE INDEX idx_checkouts_unpaid_hold ON rental_checkouts (hold_expires_at)
+    WHERE paid_at IS NULL AND cancelled_at IS NULL;
+
+COMMENT ON TABLE rental_checkouts IS
+    'Phiên thanh toán thuê slot (ADR-0008): một lần Brand Admin chọn một hoặc nhiều slot rồi trả '
+    'tiền một lần. Mỗi slot vẫn là một hóa đơn (slot_rentals) có số hóa đơn, ảnh chụp giá và vòng '
+    'đời riêng; phiên chỉ gom giữ chỗ, tổng tiền và thanh toán. Trạng thái suy ra từ paid_at và '
+    'cancelled_at: cả hai NULL = chờ thanh toán.';
+COMMENT ON COLUMN rental_checkouts.total_amount IS
+    'Tổng total_amount của mọi hóa đơn trong phiên (FR-SLT-36), chỉ ghi một lần lúc tạo. Số tiền '
+    'webhook đối chiếu (FR-SLT-38). trg_rental_checkouts_consistency kiểm lúc COMMIT.';
+COMMENT ON COLUMN rental_checkouts.hold_expires_at IS
+    'Hết giờ giữ chỗ cho MỌI slot trong phiên: lúc tạo + RENTAL_CHECKOUT_HOLD_MIN (FR-SLT-35). Quá '
+    'mốc mà paid_at NULL thì phiên và mọi hóa đơn của nó chuyển CANCELLED (FR-SLT-39).';
+COMMENT ON COLUMN rental_checkouts.paid_at IS
+    'Thời điểm thanh toán được xác nhận (FR-SLT-38). Cùng transaction: mọi hóa đơn của phiên nhận '
+    'paid_at và mỗi hóa đơn một số hóa đơn riêng.';
+COMMENT ON COLUMN rental_checkouts.cancelled_at IS
+    'Hết giờ giữ chỗ mà chưa thanh toán (FR-SLT-39). Cùng transaction: mọi hóa đơn của phiên → '
+    'CANCELLED và payment PENDING của phiên → EXPIRED.';
+
 CREATE TABLE slot_rentals (
     id                    uuid               PRIMARY KEY DEFAULT gen_random_uuid(),
     slot_id               uuid               NOT NULL REFERENCES machine_slots (id),
@@ -487,17 +535,19 @@ CREATE TABLE slot_rentals (
     storage_amount           numeric(19,4),
     grace_fee_amount         numeric(19,4) NOT NULL DEFAULT 0,
     total_amount             numeric(19,4),
-    hold_expires_at          timestamptz,
     paid_at                  timestamptz,
     cancelled_at             timestamptz,
+    -- ADR-0008: phiên thanh toán sinh ra hóa đơn. Giờ giữ chỗ nằm trên phiên, không trên hóa đơn.
+    checkout_id              uuid,
 
+    -- Hóa đơn theo gói phải đủ bộ chụp giá VÀ thuộc một phiên thanh toán (ADR-0008).
     CONSTRAINT chk_rental_package_snapshot_complete
         CHECK (
             rental_package_id IS NULL
             OR num_nulls(
                 storage_plan_id, duration_months, monthly_rent_price, discount_percent,
                 storage_monthly_price, storage_coverage_percent, storage_coverage_cap,
-                rent_amount, storage_amount, total_amount, hold_expires_at
+                rent_amount, storage_amount, total_amount, checkout_id
             ) = 0
         ),
     CONSTRAINT chk_rental_amounts_nonnegative
@@ -536,17 +586,17 @@ CREATE INDEX idx_rentals_brand   ON slot_rentals (brand_id, status, starts_at);
 CREATE INDEX idx_rentals_slot    ON slot_rentals (slot_id, starts_at, ends_at);
 CREATE INDEX idx_rentals_product ON slot_rentals (fragrance_product_id, status);
 
--- Job hủy hóa đơn hết giờ giữ chỗ (FR-SLT-39) và job tự kích hoạt khi chờ nạp hàng quá lâu
--- (FR-SLT-42) quét đúng hai tập này mỗi lần chạy.
-CREATE INDEX idx_rentals_draft_unpaid_hold ON slot_rentals (hold_expires_at)
-    WHERE status = 'DRAFT' AND paid_at IS NULL;
+-- Job tự kích hoạt khi chờ nạp hàng quá lâu (FR-SLT-42) quét đúng tập này mỗi lần chạy. Job hủy khi
+-- hết giờ giữ chỗ (FR-SLT-39) quét rental_checkouts (idx_checkouts_unpaid_hold), không quét bảng này.
 CREATE INDEX idx_rentals_draft_awaiting_stock ON slot_rentals (paid_at)
     WHERE status = 'DRAFT' AND paid_at IS NOT NULL;
+CREATE INDEX idx_rentals_checkout ON slot_rentals (checkout_id)
+    WHERE checkout_id IS NOT NULL;
 
 COMMENT ON TABLE slot_rentals IS
     'Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (ADR-0006). Một hóa đơn ứng với '
-    'đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). Đây là đường duy nhất nối '
-    'thương hiệu với máy.';
+    'đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009), có thể thanh toán chung '
+    'trong một phiên (rental_checkouts, ADR-0008). Đây là đường duy nhất nối thương hiệu với máy.';
 COMMENT ON COLUMN slot_rentals.fragrance_product_id IS
     'Nullable ở tầng CSDL CHỈ để phục vụ cửa sổ giữa lúc thanh toán (FR-SLT-38) và lúc Brand Admin '
     'cấu hình slot (FR-SLT-27). Domain service phải chặn tạo đơn khi cột này NULL (FR-SLT-29). Xem §13.';
@@ -571,12 +621,12 @@ COMMENT ON COLUMN slot_rentals.monthly_rent_price IS
     'discount_percent, storage_* , rent_amount, storage_amount, total_amount: chỉ ghi một lần.';
 COMMENT ON COLUMN slot_rentals.grace_fee_amount IS
     'Phí ân hạn của hóa đơn cũ chuyển sang hóa đơn gia hạn (FR-EXP-12, FR-SLT-36). 0 với hóa đơn mới.';
-COMMENT ON COLUMN slot_rentals.hold_expires_at IS
-    'Hết giờ giữ chỗ: tạo hóa đơn + RENTAL_CHECKOUT_HOLD_MIN. Quá mốc mà paid_at NULL thì hóa đơn '
-    'chuyển CANCELLED (FR-SLT-39).';
 COMMENT ON COLUMN slot_rentals.paid_at IS
-    'Thời điểm thanh toán được xác nhận (FR-SLT-38). DRAFT + paid_at NULL = chờ thanh toán; '
-    'DRAFT + paid_at khác NULL = chờ nạp hàng.';
+    'Thời điểm thanh toán được xác nhận (FR-SLT-38) — ghi cùng lúc với rental_checkouts.paid_at của '
+    'phiên. DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng.';
+COMMENT ON COLUMN slot_rentals.checkout_id IS
+    'Phiên thanh toán sinh ra hóa đơn (ADR-0008). Bắt buộc với hóa đơn theo gói '
+    '(chk_rental_package_snapshot_complete); NULL với hóa đơn mô hình cũ trước ADR-0006.';
 COMMENT ON COLUMN slot_rentals.fixed_fee IS
     'DEPRECATED (ADR-0006): mô hình phí cố định theo kỳ đã bỏ. Giữ cột để không phá migration và test '
     'hiện có; hóa đơn mới để mặc định 0.';
@@ -858,11 +908,12 @@ CREATE TABLE payments (
 
     CONSTRAINT chk_payment_amount_nonnegative CHECK (amount >= 0),
 
-    -- ADR-0006: thanh toán hóa đơn thuê slot đi chung bảng với đơn kiosk (FR-SLT-37).
-    -- Khóa ngoại cùng thương hiệu fk_payment_rental_same_brand nằm ở §10b.
-    slot_rental_id          uuid,
+    -- ADR-0006, ADR-0008: thanh toán thuê slot đi chung bảng với đơn kiosk (FR-SLT-37) và trỏ tới
+    -- PHIÊN thanh toán — một thanh toán cho mọi hóa đơn trong phiên. Khóa ngoại cùng thương hiệu
+    -- fk_payment_checkout_same_brand nằm ở §10b.
+    rental_checkout_id      uuid,
     CONSTRAINT chk_payment_single_target
-        CHECK (num_nonnulls(order_id, slot_rental_id) = 1)
+        CHECK (num_nonnulls(order_id, rental_checkout_id) = 1)
 );
 
 CREATE INDEX idx_payments_order        ON payments (order_id);
@@ -872,11 +923,11 @@ COMMENT ON TABLE payments IS
     'Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04). '
     'raw_response chỉ chứa phản hồi của cổng thanh toán đã loại dữ liệu nhạy cảm.';
 COMMENT ON COLUMN payments.order_id IS
-    'Đơn kiosk được thanh toán. Đúng một trong order_id, slot_rental_id có giá trị '
+    'Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị '
     '(chk_payment_single_target).';
-COMMENT ON COLUMN payments.slot_rental_id IS
-    'Hóa đơn thuê slot được thanh toán (FR-SLT-37). Mỗi hóa đơn tối đa một payment PENDING '
-    '(uq_rental_payment_pending).';
+COMMENT ON COLUMN payments.rental_checkout_id IS
+    'Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa '
+    'đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending).';
 
 CREATE TABLE payment_events (
     id                uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1298,11 +1349,11 @@ CREATE INDEX idx_alerts_machine         ON alerts (machine_id);              -- 
 CREATE INDEX idx_refill_requests_rental ON refill_requests (slot_rental_id); -- FR-RFQ-10
 CREATE INDEX idx_payment_events_payment ON payment_events (payment_id);      -- FR-AUD-11
 
--- Mỗi hóa đơn thuê slot tối đa một thanh toán đang chờ (FR-SLT-37 AC3, ADR-0006).
-CREATE UNIQUE INDEX uq_rental_payment_pending ON payments (slot_rental_id)
-    WHERE slot_rental_id IS NOT NULL AND status = 'PENDING';
-CREATE INDEX idx_payments_rental ON payments (slot_rental_id)
-    WHERE slot_rental_id IS NOT NULL;
+-- Mỗi phiên thanh toán thuê slot tối đa một thanh toán đang chờ (FR-SLT-37 AC3, ADR-0008).
+CREATE UNIQUE INDEX uq_checkout_payment_pending ON payments (rental_checkout_id)
+    WHERE rental_checkout_id IS NOT NULL AND status = 'PENDING';
+CREATE INDEX idx_payments_checkout ON payments (rental_checkout_id)
+    WHERE rental_checkout_id IS NOT NULL;
 
 
 -- =====================================================================================
@@ -1323,6 +1374,8 @@ ALTER TABLE inventory_batches
     ADD CONSTRAINT uq_batch_id_brand UNIQUE (id, brand_id);
 ALTER TABLE bottles
     ADD CONSTRAINT uq_bottle_id_brand UNIQUE (id, brand_id);
+ALTER TABLE rental_checkouts
+    ADD CONSTRAINT uq_checkout_id_brand UNIQUE (id, brand_id);
 
 -- (1) Đơn hàng phải cùng thương hiệu với hóa đơn thuê sinh ra nó.
 --     Vẫn đúng sau thanh lý: hóa đơn LIQUIDATED giữ nguyên brand_id của thương hiệu thuê, chỉ
@@ -1360,10 +1413,16 @@ ALTER TABLE bottles
     ADD CONSTRAINT fk_bottle_batch_same_brand
     FOREIGN KEY (batch_id, brand_id) REFERENCES inventory_batches (id, brand_id);
 
--- (7) Thanh toán hóa đơn phải cùng thương hiệu với hóa đơn (ADR-0006).
+-- (7) Thanh toán thuê slot phải cùng thương hiệu với phiên thanh toán (ADR-0006, ADR-0008).
 ALTER TABLE payments
-    ADD CONSTRAINT fk_payment_rental_same_brand
-    FOREIGN KEY (slot_rental_id, brand_id) REFERENCES slot_rentals (id, brand_id);
+    ADD CONSTRAINT fk_payment_checkout_same_brand
+    FOREIGN KEY (rental_checkout_id, brand_id) REFERENCES rental_checkouts (id, brand_id);
+
+-- (7b) Mọi hóa đơn trong một phiên thanh toán phải cùng thương hiệu với phiên (ADR-0008). Kết hợp với
+--      (7): một thương hiệu không bao giờ trả tiền cho slot mà thương hiệu khác giữ chỗ.
+ALTER TABLE slot_rentals
+    ADD CONSTRAINT fk_rental_checkout_same_brand
+    FOREIGN KEY (checkout_id, brand_id) REFERENCES rental_checkouts (id, brand_id);
 
 -- (8) Khoản bồi thường phải cùng thương hiệu với chai hư hỏng và với hóa đơn có gói bảo quản được
 --     áp (FR-SLT-44, ADR-0006). Chặn đúng lỗi "bồi thường chai của B bằng hạn mức hóa đơn của A".
@@ -1400,7 +1459,8 @@ BEGIN
     FOREACH t IN ARRAY ARRAY[
         'bottles', 'brand_shipment_declarations', 'brands', 'fragrance_products', 'locations',
         'machine_slots', 'machines', 'maintenance_tickets', 'orders', 'payments',
-        'refill_requests', 'rental_packages', 'roles', 'slot_rental_requests', 'slot_rentals',
+        'refill_requests', 'rental_checkouts', 'rental_packages', 'roles', 'slot_rental_requests',
+        'slot_rentals',
         'storage_compensations', 'storage_plans', 'users'
     ]
     LOOP
@@ -1412,6 +1472,102 @@ BEGIN
     END LOOP;
 END;
 $$;
+
+
+-- =====================================================================================
+-- §10d. BẤT BIẾN PHIÊN THANH TOÁN THUÊ SLOT (ADR-0008)
+--
+-- CHECK không nhìn sang bảng khác được, nên dùng constraint trigger HOÃN tới lúc COMMIT: trong
+-- transaction, domain service tạo phiên rồi mới tạo hóa đơn (hoặc cập nhật phiên rồi mới cập nhật
+-- hóa đơn), chỉ trạng thái cuối cùng bị kiểm. Ba điều được bảo đảm:
+--   1. Phiên có ít nhất một hóa đơn.
+--   2. total_amount của phiên = tổng total_amount các hóa đơn (FR-SLT-36) — số tiền webhook đối
+--      chiếu là số của phiên, nên lệch ở đây là thu sai tiền.
+--   3. Phiên và mọi hóa đơn của nó cùng đã thanh toán hoặc cùng chưa (FR-SLT-38), cùng đã hủy hoặc
+--      cùng chưa (FR-SLT-39) — không có phiên đã trả tiền mà còn hóa đơn "chờ thanh toán".
+-- Lỗi mang ERRCODE check_violation và tên ràng buộc chk_checkout_* để tầng ứng dụng phân loại như
+-- một CHECK thường.
+-- =====================================================================================
+
+CREATE FUNCTION fn_check_rental_checkout(p_checkout_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_checkout    rental_checkouts%ROWTYPE;
+    v_count       integer;
+    v_total       numeric(19,4);
+    v_out_of_sync integer;
+BEGIN
+    IF p_checkout_id IS NULL THEN
+        RETURN;
+    END IF;
+
+    SELECT * INTO v_checkout FROM rental_checkouts WHERE id = p_checkout_id;
+    IF NOT FOUND THEN
+        -- Phiên đã bị xóa cùng transaction; khóa ngoại của hóa đơn tự chặn nếu còn hóa đơn trỏ tới.
+        RETURN;
+    END IF;
+
+    SELECT count(*),
+           coalesce(sum(total_amount), 0),
+           count(*) FILTER (
+               WHERE (paid_at IS NULL) <> (v_checkout.paid_at IS NULL)
+                  OR (cancelled_at IS NULL) <> (v_checkout.cancelled_at IS NULL)
+           )
+      INTO v_count, v_total, v_out_of_sync
+      FROM slot_rentals
+     WHERE checkout_id = p_checkout_id;
+
+    IF v_count = 0 THEN
+        RAISE EXCEPTION 'Phiên thanh toán % không có hóa đơn nào (ADR-0008)', p_checkout_id
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_checkout_has_invoices';
+    END IF;
+    IF v_total <> v_checkout.total_amount THEN
+        RAISE EXCEPTION 'Phiên thanh toán %: tổng tiền % khác tổng các hóa đơn % (FR-SLT-36)',
+            p_checkout_id, v_checkout.total_amount, v_total
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_checkout_total_matches_invoices';
+    END IF;
+    IF v_out_of_sync > 0 THEN
+        RAISE EXCEPTION 'Phiên thanh toán %: % hóa đơn lệch trạng thái thanh toán/hủy với phiên '
+            '(FR-SLT-38, FR-SLT-39)', p_checkout_id, v_out_of_sync
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_checkout_invoice_state_sync';
+    END IF;
+END;
+$$;
+
+CREATE FUNCTION fn_rental_checkout_consistency()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_TABLE_NAME = 'rental_checkouts' THEN
+        PERFORM fn_check_rental_checkout(NEW.id);
+        RETURN NULL;
+    END IF;
+
+    -- slot_rentals: kiểm phiên mới, và cả phiên cũ khi hóa đơn rời khỏi nó (đổi checkout_id, xóa).
+    IF TG_OP IN ('INSERT', 'UPDATE') THEN
+        PERFORM fn_check_rental_checkout(NEW.checkout_id);
+    END IF;
+    IF TG_OP = 'DELETE'
+       OR (TG_OP = 'UPDATE' AND OLD.checkout_id IS DISTINCT FROM NEW.checkout_id) THEN
+        PERFORM fn_check_rental_checkout(OLD.checkout_id);
+    END IF;
+    RETURN NULL;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER trg_rental_checkouts_consistency
+    AFTER INSERT OR UPDATE OF total_amount, paid_at, cancelled_at ON rental_checkouts
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION fn_rental_checkout_consistency();
+
+CREATE CONSTRAINT TRIGGER trg_slot_rentals_checkout_consistency
+    AFTER INSERT OR DELETE OR UPDATE OF checkout_id, total_amount, paid_at, cancelled_at
+    ON slot_rentals
+    DEFERRABLE INITIALLY DEFERRED
+    FOR EACH ROW EXECUTE FUNCTION fn_rental_checkout_consistency();
 
 
 -- =====================================================================================
@@ -1518,8 +1674,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --       - Các cột ảnh chụp giá trên slot_rentals (duration_months, monthly_rent_price,
 --         discount_percent, storage_*, rent_amount, storage_amount, grace_fee_amount, total_amount)
 --         chỉ ghi một lần lúc tạo hóa đơn (FR-SLT-33), như cột ảnh chụp trên orders ở mục 7.
---       - hold_expires_at = lúc tạo + RENTAL_CHECKOUT_HOLD_MIN; job FR-SLT-39 chuyển DRAFT chưa
---         thanh toán quá mốc sang CANCELLED và đặt payment PENDING của nó sang EXPIRED.
+--       - rental_checkouts.hold_expires_at = lúc tạo phiên + RENTAL_CHECKOUT_HOLD_MIN; job
+--         FR-SLT-39 quét phiên chưa thanh toán quá mốc và trong CÙNG transaction: đặt
+--         cancelled_at của phiên, chuyển mọi hóa đơn của phiên sang CANCELLED, đặt payment PENDING
+--         của phiên sang EXPIRED (ADR-0008; §10d chặn trường hợp sót hóa đơn).
 --       - Lắp chai đầu tiên (FR-SLT-24) hoặc quá RENTAL_MAX_STOCKING_DAYS kể từ paid_at (FR-SLT-42)
 --         chuyển DRAFT đã thanh toán sang ACTIVE và ghi đè starts_at/ends_at bằng kỳ hạn thật.
 --       - Hóa đơn gia hạn: hóa đơn cũ → RENEWED và hóa đơn mới → ACTIVE trong CÙNG transaction,
@@ -1535,4 +1693,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --         needs_manual_review (FR-ORD-27). Mọi mã từ chối khác sau ACK → đơn FAILED + needs_manual_review.
 --       - Mốc UNKNOWN sau ACK = acknowledged_at + DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC
 --         (FR-DSP-18).
+--
+--  12. Phiên thanh toán nhiều slot (ADR-0008):
+--       - Mọi hóa đơn của một phiên tạo trong CÙNG transaction với phiên. Một slot bị giữ chỗ hoặc
+--         đã có hóa đơn làm excl_slot_rental_overlap từ chối, transaction rollback, không hóa đơn
+--         nào của giỏ được tạo (tất cả hoặc không có gì, FR-SLT-35).
+--       - Một slot xuất hiện hai lần trong cùng giỏ trả VALIDATION_ERROR trước khi ghi CSDL.
+--       - Webhook thành công (FR-SLT-38): payment SUCCEEDED, rental_checkouts.paid_at, và với MỖI
+--         hóa đơn của phiên: paid_at cùng giá trị + một invoice_number riêng — cùng transaction.
+--       - rental_checkouts.total_amount chỉ ghi một lần lúc tạo, như cột ảnh chụp ở mục 10.
 -- =====================================================================================
