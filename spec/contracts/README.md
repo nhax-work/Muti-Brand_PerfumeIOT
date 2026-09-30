@@ -40,13 +40,19 @@ CREATE UNIQUE INDEX uq_order_active_command ON dispense_commands (order_id)
 CREATE UNIQUE INDEX uq_slot_active_bottle ON machine_slots (active_bottle_id)
   WHERE active_bottle_id IS NOT NULL;
 
--- Một thanh toán đang chờ trên mỗi hóa đơn thuê slot (FR-SLT-37, ADR-0006)
-CREATE UNIQUE INDEX uq_rental_payment_pending ON payments (slot_rental_id)
-  WHERE slot_rental_id IS NOT NULL AND status = 'PENDING';
+-- Một thanh toán đang chờ trên mỗi phiên thanh toán thuê slot (FR-SLT-37, ADR-0008)
+CREATE UNIQUE INDEX uq_checkout_payment_pending ON payments (rental_checkout_id)
+  WHERE rental_checkout_id IS NOT NULL AND status = 'PENDING';
 ```
 
 `excl_slot_rental_overlap` (exclusion constraint, tính cả hóa đơn `DRAFT`) là thứ giữ chỗ slot khi
-thương hiệu đang thanh toán — hai thương hiệu không thể cùng giữ một slot (FR-SLT-35, ADR-0006).
+thương hiệu đang thanh toán — hai thương hiệu không thể cùng giữ một slot (FR-SLT-35, ADR-0006). Với
+giỏ nhiều slot, mọi hóa đơn tạo trong một transaction nên một slot bị chặn là cả giỏ bị từ chối
+(ADR-0008).
+
+Constraint trigger `trg_rental_checkouts_consistency` / `trg_slot_rentals_checkout_consistency`
+(`schema.sql` §10d) kiểm lúc COMMIT: phiên có ít nhất một hóa đơn, tổng phiên = tổng các hóa đơn,
+phiên và mọi hóa đơn cùng đã/chưa thanh toán và cùng đã/chưa hủy (ADR-0008).
 
 ## Cột không được NULL và không được sửa sau khi tạo
 
@@ -56,4 +62,6 @@ thương hiệu đang thanh toán — hai thương hiệu không thể cùng gi�
 theo mô hình cũ không có gói, nhưng đã ghi thì không sửa: `slot_rentals.duration_months` ·
 `monthly_rent_price` · `discount_percent` · `storage_monthly_price` · `storage_coverage_percent` ·
 `storage_coverage_cap` · `rent_amount` · `storage_amount` · `grace_fee_amount` · `total_amount` ·
-`invoice_number`
+`invoice_number` · `checkout_id`
+
+Phiên thanh toán (ADR-0008): `rental_checkouts.total_amount` chỉ ghi một lần lúc tạo phiên.

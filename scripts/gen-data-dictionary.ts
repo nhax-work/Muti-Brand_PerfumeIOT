@@ -40,8 +40,9 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
   {
     title: 'Catalog và Machines',
     intro:
-      'Địa điểm, máy, slot, danh mục sản phẩm và hợp đồng thuê slot. `machines` KHÔNG có `brand_id` ' +
-      '— đường duy nhất nối thương hiệu với máy là `slot_rentals` (BR-003, BR-012).',
+      'Địa điểm, máy, slot, danh mục sản phẩm, gói thuê và hóa đơn thuê slot. `machines` KHÔNG có ' +
+      '`brand_id` — đường duy nhất nối thương hiệu với máy là `slot_rentals` (BR-003, BR-012). Một ' +
+      'lần thanh toán có thể gồm nhiều hóa đơn, gom bằng `rental_checkouts` (ADR-0008).',
     tables: [
       'locations',
       'fragrance_products',
@@ -49,6 +50,9 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'machine_slots',
       'machine_status_histories',
       'slot_rental_requests',
+      'rental_packages',
+      'storage_plans',
+      'rental_checkouts',
       'slot_rentals',
     ],
   },
@@ -63,6 +67,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'bottles',
       'refill_sessions',
       'inventory_adjustments',
+      'storage_compensations',
     ],
   },
   {

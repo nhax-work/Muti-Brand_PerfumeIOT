@@ -61,8 +61,8 @@ thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 
 `GRACE_FEE_RATE_DEFAULT` cấu hình theo từng hóa đơn. Phí = tỷ lệ × giá chai × số chai tồn.
 
-`RENTAL_CHECKOUT_HOLD_MIN` là thời gian hóa đơn `DRAFT` chưa thanh toán giữ chỗ slot; hết giờ thì hóa
-đơn chuyển `CANCELLED`. `RENTAL_MAX_STOCKING_DAYS` là số ngày tối đa từ lúc thanh toán tới lúc lắp chai
+`RENTAL_CHECKOUT_HOLD_MIN` là thời gian một phiên thanh toán chưa trả tiền giữ chỗ **mọi** slot của nó;
+hết giờ thì phiên bị hủy và mọi hóa đơn `DRAFT` của phiên chuyển `CANCELLED` (ADR-0008). `RENTAL_MAX_STOCKING_DAYS` là số ngày tối đa từ lúc thanh toán tới lúc lắp chai
 đầu tiên; quá mốc thì hóa đơn tự kích hoạt (ADR-0006). Thời hạn gói thuê, tỷ lệ ưu đãi và mức bồi
 thường **không** phải hằng ngưỡng — chúng là dữ liệu danh mục trong `rental_packages` và
 `storage_plans`, do Platform Super Admin cấu hình.

@@ -1,6 +1,6 @@
 Project ScentStation {
   database_type: 'PostgreSQL'
-  Note: 'Logical database model for ScentStation. Source: Phieu_FA26SE114.docx, BRD, Use Case Specification and Database Design. Updated 2026-09-29 for ADR-0006 (prepaid slot rental packages, invoices, goods storage insurance) — mirrors spec/contracts/schema.sql after migrations 1790665900000 and 1790665960000.'
+  Note: 'Logical database model for ScentStation. Source: Phieu_FA26SE114.docx, BRD, Use Case Specification and Database Design. Updated 2026-09-29 for ADR-0006 (prepaid slot rental packages, invoices, goods storage insurance) — mirrors spec/contracts/schema.sql after migrations 1790665900000 and 1790665960000. Updated 2026-09-30 for ADR-0008 (one payment for several slots via rental_checkouts) — migration 1790757100000.'
 }
 
 Enum brand_status {
@@ -376,6 +376,30 @@ Table storage_plans {
   Note: 'ADR-0006, FR-SLT-31: goods storage plans ("bảo hiểm hàng hóa"). Every invoice must pick exactly one.'
 }
 
+Table rental_checkouts {
+  id uuid [pk]
+  brand_id uuid [not null, ref: > brands.id]
+  currency char(3) [not null, default: 'VND']
+  total_amount numeric(19,4) [not null, note: 'Sum of total_amount of every invoice in the checkout (FR-SLT-36); write-once']
+  hold_expires_at timestamptz [not null, note: 'created_at + RENTAL_CHECKOUT_HOLD_MIN — holds EVERY slot of the checkout (FR-SLT-35, FR-SLT-39)']
+  paid_at timestamptz [note: 'Set with paid_at of every invoice in the same transaction (FR-SLT-38)']
+  cancelled_at timestamptz [note: 'Hold expired unpaid: every invoice → CANCELLED in the same transaction (FR-SLT-39)']
+  created_by uuid [not null, ref: > users.id]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz [not null, default: `now()`]
+
+  indexes {
+    (id, brand_id) [unique, name: 'uq_checkout_id_brand']
+    (brand_id, created_at)
+    hold_expires_at [name: 'idx_checkouts_unpaid_hold', note: 'Partial: WHERE paid_at IS NULL AND cancelled_at IS NULL (FR-SLT-39 job)']
+  }
+  checks {
+    `total_amount >= 0` [name: 'chk_checkout_amount_nonnegative']
+    `paid_at IS NULL OR cancelled_at IS NULL` [name: 'chk_checkout_paid_or_cancelled']
+  }
+  Note: 'ADR-0008: one Brand Admin checkout of one or more slots, paid once. Each slot is still its own invoice (slot_rentals) with its own invoice_number, price snapshot and lifecycle; the checkout only groups the hold, the total and the payment. Status is derived: both paid_at and cancelled_at null = awaiting payment. Cross-table invariants in implementation note 23.'
+}
+
 Table slot_rentals {
   id uuid [pk]
   slot_id uuid [not null, ref: > machine_slots.id]
@@ -409,29 +433,29 @@ Table slot_rentals {
   storage_amount numeric(19,4) [note: 'storage_monthly_price × duration_months']
   grace_fee_amount numeric(19,4) [not null, default: 0, note: 'Grace fee carried from the previous invoice on renewal (FR-EXP-12)']
   total_amount numeric(19,4)
-  hold_expires_at timestamptz [note: 'created_at + RENTAL_CHECKOUT_HOLD_MIN (FR-SLT-35, FR-SLT-39)']
-  paid_at timestamptz
+  paid_at timestamptz [note: 'Same moment as rental_checkouts.paid_at of its checkout']
   cancelled_at timestamptz
+  checkout_id uuid [ref: > rental_checkouts.id, note: 'ADR-0008: checkout that created this invoice. Required when rental_package_id is set; null for pre-ADR-0006 invoices. Same-brand composite FK fk_rental_checkout_same_brand. The hold (hold_expires_at) lives on the checkout, not here']
 
   indexes {
     (brand_id, status, starts_at)
     (slot_id, starts_at, ends_at)
     (fragrance_product_id, status)
-    hold_expires_at [name: 'idx_rentals_draft_unpaid_hold', note: 'Partial: WHERE status = DRAFT AND paid_at IS NULL (FR-SLT-39 job)']
     paid_at [name: 'idx_rentals_draft_awaiting_stock', note: 'Partial: WHERE status = DRAFT AND paid_at IS NOT NULL (FR-SLT-42 job)']
+    checkout_id [name: 'idx_rentals_checkout', note: 'Partial: WHERE checkout_id IS NOT NULL']
   }
   checks {
     `ends_at > starts_at` [name: 'chk_rental_period']
     `price_per_spray >= 0` [name: 'chk_rental_price_nonnegative']
     `fixed_fee >= 0` [name: 'chk_rental_fee_nonnegative']
     `revenue_share_percent >= 0 AND revenue_share_percent <= 100` [name: 'chk_revenue_share_percent']
-    `rental_package_id IS NULL OR num_nulls(storage_plan_id, duration_months, monthly_rent_price, discount_percent, storage_monthly_price, storage_coverage_percent, storage_coverage_cap, rent_amount, storage_amount, total_amount, hold_expires_at) = 0` [name: 'chk_rental_package_snapshot_complete']
+    `rental_package_id IS NULL OR num_nulls(storage_plan_id, duration_months, monthly_rent_price, discount_percent, storage_monthly_price, storage_coverage_percent, storage_coverage_cap, rent_amount, storage_amount, total_amount, checkout_id) = 0` [name: 'chk_rental_package_snapshot_complete']
     `total_amount IS NULL OR total_amount = rent_amount + storage_amount + grace_fee_amount` [name: 'chk_rental_total_amount']
     `(paid_at IS NULL) = (invoice_number IS NULL)` [name: 'chk_rental_invoice_on_payment']
     `status::text <> 'CANCELLED' OR paid_at IS NULL` [name: 'chk_rental_cancelled_unpaid']
     `(status::text = 'CANCELLED') = (cancelled_at IS NOT NULL)` [name: 'chk_rental_cancelled_at']
   }
-  Note: 'Slot rental invoice ("hóa đơn thuê slot", ADR-0006): one purchase of one package for one slot. Also carries non-negativity/percent-range checks on every snapshot column (chk_rental_amounts_nonnegative, chk_rental_percents, chk_rental_duration_positive) — see schema.sql. The CANCELLED checks compare status::text because node-pg-migrate runs pending migrations in one transaction (docs/MIGRATIONS.md).'
+  Note: 'Slot rental invoice ("hóa đơn thuê slot", ADR-0006): one purchase of one package for one slot; several invoices may be paid together in one rental_checkouts row (ADR-0008). Also carries non-negativity/percent-range checks on every snapshot column (chk_rental_amounts_nonnegative, chk_rental_percents, chk_rental_duration_positive) — see schema.sql. The CANCELLED checks compare status::text because node-pg-migrate runs pending migrations in one transaction (docs/MIGRATIONS.md).'
 }
 
 Table slot_rental_requests {
@@ -704,7 +728,7 @@ Table order_status_histories {
 Table payments {
   id uuid [pk]
   brand_id uuid [not null, ref: > brands.id]
-  order_id uuid [ref: > orders.id, note: 'Kiosk order being paid. Exactly one of order_id / slot_rental_id is set (chk_payment_single_target)']
+  order_id uuid [ref: > orders.id, note: 'Kiosk order being paid. Exactly one of order_id / rental_checkout_id is set (chk_payment_single_target)']
   provider varchar(50) [not null]
   provider_transaction_id varchar(200)
   provider_reference varchar(200)
@@ -715,17 +739,17 @@ Table payments {
   paid_at timestamptz
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz [not null, default: `now()`]
-  slot_rental_id uuid [ref: > slot_rentals.id, note: 'ADR-0006: slot rental invoice being paid (FR-SLT-37). Same webhook and idempotency as kiosk orders']
+  rental_checkout_id uuid [ref: > rental_checkouts.id, note: 'ADR-0008 (replaces ADR-0006 slot_rental_id): slot rental checkout being paid — one payment for every invoice in it (FR-SLT-37). Same webhook and idempotency as kiosk orders']
 
   indexes {
     (provider, provider_transaction_id) [unique, note: 'In PostgreSQL make this partial: WHERE provider_transaction_id IS NOT NULL']
     order_id
     (brand_id, status, created_at)
-    slot_rental_id [unique, name: 'uq_rental_payment_pending', note: 'Partial: WHERE slot_rental_id IS NOT NULL AND status = PENDING — at most one pending payment per invoice']
+    rental_checkout_id [unique, name: 'uq_checkout_payment_pending', note: 'Partial: WHERE rental_checkout_id IS NOT NULL AND status = PENDING — at most one pending payment per checkout']
   }
   checks {
     `amount >= 0` [name: 'chk_payment_amount_nonnegative']
-    `num_nonnulls(order_id, slot_rental_id) = 1` [name: 'chk_payment_single_target']
+    `num_nonnulls(order_id, rental_checkout_id) = 1` [name: 'chk_payment_single_target']
   }
 }
 
@@ -972,6 +996,7 @@ TableGroup Catalog_and_Machines {
   slot_rental_requests
   rental_packages
   storage_plans
+  rental_checkouts
 }
 
 TableGroup Inventory {
@@ -1028,10 +1053,11 @@ Note implementation_notes {
   15. Roles/permissions are data rows, not enum values, so no schema change is needed to merge the former Operations Manager and Technician roles into one Operations Staff role — only update the seed/reference data in the roles table (drop one role code, or keep one canonical code and stop issuing the other).
   16. On FR-EXP-15 liquidation: set bottles.owner = PLATFORM, bottles.status = LIQUIDATED, bottles.liquidated_at = now(), bottles.source_rental_id = the liquidated slot_rentals.id, for every bottle installed or held in reserve for that rental's slot.
   17. ADR-0006 — prepaid slot rental packages. The exclusion constraint of note 8 covers DRAFT, so a DRAFT invoice holds the slot during checkout: a second brand checking out the same slot fails with SLOT_OCCUPIED (FR-SLT-35). CANCELLED is outside the constraint, so a cancelled invoice frees the slot.
-  18. Domain service jobs (with catch-up after downtime, NFR-REL-07): DRAFT + unpaid past hold_expires_at → CANCELLED and its PENDING payment → EXPIRED (FR-SLT-39); DRAFT + paid for more than RENTAL_MAX_STOCKING_DAYS → ACTIVE with real starts_at/ends_at (FR-SLT-42).
+  18. Domain service jobs (with catch-up after downtime, NFR-REL-07): unpaid rental_checkouts past hold_expires_at → cancelled_at set, every invoice of the checkout → CANCELLED, its PENDING payment → EXPIRED, all in one transaction (FR-SLT-39, ADR-0008); DRAFT + paid for more than RENTAL_MAX_STOCKING_DAYS → ACTIVE with real starts_at/ends_at (FR-SLT-42).
   19. First bottle install on a paid DRAFT invoice activates it in the same transaction (FR-SLT-24). Renewal: old invoice → RENEWED and new invoice → ACTIVE in the same transaction, exactly when the new invoice starts (FR-SLT-12, FR-EXP-13) — never at payment time, or the slot would stop selling until the hand-over.
-  20. Same-brand composite FKs (note 5) added by ADR-0006: payments(slot_rental_id, brand_id) → slot_rentals(id, brand_id); storage_compensations(bottle_id, brand_id) → bottles(id, brand_id) (needs UNIQUE (id, brand_id) on bottles); storage_compensations(slot_rental_id, brand_id) → slot_rentals(id, brand_id).
+  20. Same-brand composite FKs (note 5) added by ADR-0006 and ADR-0008: payments(rental_checkout_id, brand_id) → rental_checkouts(id, brand_id); slot_rentals(checkout_id, brand_id) → rental_checkouts(id, brand_id); storage_compensations(bottle_id, brand_id) → bottles(id, brand_id) (needs UNIQUE (id, brand_id) on bottles); storage_compensations(slot_rental_id, brand_id) → slot_rentals(id, brand_id).
   21. Enforce in the domain service: storage_compensations.amount must not exceed slot_rentals.storage_coverage_cap minus the sum of existing amounts for the same slot_rental_id (FR-SLT-44).
   22. ADR-0007 — physical button per slot. For CUSTOMER commands, ACKNOWLEDGED means the slot button is lit and waiting; the device dispenses only when the customer presses it within DISPENSE_PRESS_WINDOW_SEC, otherwise it rejects with PRESS_TIMEOUT and the order becomes FORFEITED without manual review or refund. Other rejections after ACK make the order FAILED with needs_manual_review. After ACK the UNKNOWN deadline is acknowledged_at + DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC. A paid order waits in PAID while the machine has another active CUSTOMER command; order creation on such a machine fails with MACHINE_BUSY.
+  23. ADR-0008 — one payment for several slots. A checkout and all its invoices are created in ONE transaction; excl_slot_rental_overlap rejecting any slot rolls back the whole cart (all or nothing, FR-SLT-35). Deferred constraint triggers (schema.sql §10d) check at COMMIT that a checkout has at least one invoice, that rental_checkouts.total_amount = sum of its invoices total_amount, and that the checkout and every invoice agree on paid (paid_at null or not) and cancelled (cancelled_at null or not). On webhook success each invoice gets its own invoice_number (FR-SLT-38).
   '''
 }

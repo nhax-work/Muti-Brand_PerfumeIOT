@@ -4,6 +4,8 @@
 
 > **Cập nhật 21/09/2026 — điều chỉnh track phần cứng.** Phần mềm giữ nguyên. Xem mục "Nhật ký thay đổi" ở cuối file.
 >
+> **Cập nhật 30/09/2026 — thanh toán một lần cho nhiều slot (ADR-0008, TV1 đã duyệt 30/09).** Brand Admin chọn nhiều slot vào một **phiên thanh toán** và trả tiền một lần; mỗi slot vẫn là một hóa đơn có số hóa đơn riêng. Thanh toán trỏ tới phiên (`payments.rental_checkout_id`), giờ giữ chỗ nằm trên phiên. Dòng đổi đánh dấu **[ADR-0008]**.
+>
 > **Cập nhật 29/09/2026 (2) — khách bấm nút vật lý để nhận lượt xịt (ADR-0007).** Mỗi slot một nút có đèn; thanh toán xong đèn sáng, khách bấm trong 60 giây thì xịt, không bấm thì mất lượt (không hoàn tiền); mỗi máy một lượt chờ bấm. Dòng đổi đánh dấu **[ADR-0007]**.
 >
 > **Cập nhật 29/09/2026 — thuê slot theo gói trả trước (ADR-0006).** Bỏ luồng xin thuê/duyệt tay và phí cố định + ăn chia; thay bằng mua gói 3/6/12 tháng + gói bảo quản, thanh toán một lần, nhận hóa đơn. "Hợp đồng thuê slot" gọi là **hóa đơn thuê slot**. Phần cứng giữ nguyên. Các dòng đổi từ T3 trở đi đánh dấu **[ADR-0006]**; T1–T2 đã xong, giữ nguyên làm lịch sử.
@@ -45,9 +47,9 @@
 | Ràng buộc | Nội dung |
 |---|---|
 | Luồng Brand Admin | Xem slot trống → chọn slot → chọn gói thuê + gói bảo quản → thanh toán → nhận hóa đơn → cấu hình slot (sản phẩm, giá) |
-| Giữ chỗ | Hóa đơn `DRAFT` giữ slot `RENTAL_CHECKOUT_HOLD_MIN`; cưỡng chế bằng `excl_slot_rental_overlap`, không bằng code. Hết giờ chưa trả → `CANCELLED` |
+| Giữ chỗ | Phiên thanh toán giữ **mọi** slot của nó `RENTAL_CHECKOUT_HOLD_MIN`; mỗi slot là một hóa đơn `DRAFT`; cưỡng chế bằng `excl_slot_rental_overlap`, không bằng code — một slot bị chặn là cả giỏ bị từ chối. Hết giờ chưa trả → phiên hủy, mọi hóa đơn `CANCELLED` **[ADR-0008]** |
 | Kích hoạt | **Lắp chai đầu tiên** chuyển hóa đơn đã thanh toán sang `ACTIVE` (FR-SLT-24) — phụ thuộc INV. Quá `RENTAL_MAX_STOCKING_DAYS` thì tự kích hoạt |
-| Thanh toán | Dùng chung bảng `payments` và webhook với đơn kiosk; đúng một trong `order_id`/`slot_rental_id` |
+| Thanh toán | Dùng chung bảng `payments` và webhook với đơn kiosk; đúng một trong `order_id`/`rental_checkout_id` — một thanh toán cho cả phiên, webhook cấp số hóa đơn riêng cho từng hóa đơn **[ADR-0008]** |
 | Tiền | Bảng giá chụp vào hóa đơn lúc tạo, không đọc lại danh mục. Không còn phí cố định, không còn ăn chia |
 | Không dùng nữa | `slot_rental_requests`, `slot_rentals.fixed_fee`, `revenue_share_percent`, `request_id` — giữ trong lược đồ, **không** viết code mới dùng chúng |
 | Kích hoạt lượt xịt **[ADR-0007]** | Máy **không** tự xịt khi thanh toán xong: sáng đèn nút slot đích, chờ khách bấm `DISPENSE_PRESS_WINDOW_SEC`. `ACK` = đèn đã sáng. Không bấm → `PRESS_TIMEOUT` → đơn `FORFEITED`. Mỗi máy tối đa một lệnh `CUSTOMER` hiệu lực (`uq_machine_active_customer_command`); đơn trả tiền sau giữ `PAID` chờ lượt. Lệnh chẩn đoán xịt ngay |
@@ -119,8 +121,8 @@
 
 | TV | Việc |
 |---|---|
-| TV1 | Order state machine · webhook idempotent · `revenue_owner` · **webhook nhận cả payment có `slot_rental_id`** (chỉ phân nhánh, chưa xử lý nghiệp vụ hóa đơn) **[ADR-0006]** |
-| TV3 | Mua gói: xem bảng giá cho slot (FR-SLT-34) · checkout tạo hóa đơn DRAFT, chụp giá, tính tiền, giữ chỗ (FR-SLT-33, 35, 36) · chống chồng lấn · danh sách và chi tiết hóa đơn (FR-SLT-40, 41) **[ADR-0006]** |
+| TV1 | Order state machine · webhook idempotent · `revenue_owner` · **webhook nhận cả payment có `rental_checkout_id`** (chỉ phân nhánh, chưa xử lý nghiệp vụ phiên/hóa đơn) **[ADR-0006, ADR-0008]** |
+| TV3 | Mua gói: xem bảng giá cho slot (FR-SLT-34) · checkout `POST /rental-checkouts` tạo phiên + một hóa đơn DRAFT mỗi slot trong một transaction, chụp giá, tính tiền, giữ chỗ cả giỏ (FR-SLT-33, 35, 36) **[ADR-0008]** · chống chồng lấn · danh sách và chi tiết hóa đơn (FR-SLT-40, 41) **[ADR-0006]** |
 | TV3 | Cấu hình slot sau thanh toán: gán/đổi sản phẩm (FR-SLT-27÷29), đặt giá tự do (FR-SLT-08) — slot chưa có sản phẩm **hoặc** chưa có giá không nhận đơn **[ADR-0006]** |
 | TV4 | Kiosk đa thương hiệu: danh mục, chi tiết sản phẩm |
 | TV2 | Lắp van UD-08 · chuyển sang kiến trúc bơm nạp áp → van định liều |
@@ -139,9 +141,9 @@
 |---|---|
 | TV1 | `DispenseCommand` có chữ ký và TTL · mock payment provider **dùng chung cho đơn kiosk và hóa đơn** · simulator bổ sung chữ ký, TTL, chống lặp **[ADR-0006]** |
 | TV1 | Luồng nút bấm phía backend: `ACK` = đèn sáng, `PRESS_TIMEOUT` → đơn `FORFEITED` (không kiểm tra thủ công), mốc `UNKNOWN` sau ACK, một lệnh `CUSTOMER` mỗi máy + đơn chờ lượt · simulator giả lập **bấm nút / không bấm / bấm nhầm slot** **[ADR-0007]** |
-| TV3 | Thanh toán hóa đơn: `POST /slot-rentals/{id}/payments` (một PENDING/hóa đơn) · xử lý webhook cho hóa đơn: `paid_at`, cấp số hóa đơn, tiền về sau khi hủy → `REFUND_PENDING` (FR-SLT-37, 38) **[ADR-0006]** |
-| TV3 | Job hủy hóa đơn hết giờ giữ chỗ (FR-SLT-39), có bù sau downtime · thông báo thanh toán thành công (FR-SLT-43) **[ADR-0006]** |
-| TV3 | Màn hình web quản trị cho Brand Admin: slot trống → chọn dịch vụ → thanh toán → hóa đơn → cấu hình slot **[ADR-0006]** |
+| TV3 | Thanh toán phiên: `POST /rental-checkouts/{id}/payments` (một PENDING/phiên) · xử lý webhook cho phiên: `paid_at` phiên và mọi hóa đơn, cấp số hóa đơn riêng từng hóa đơn, tiền về sau khi hủy → `REFUND_PENDING` (FR-SLT-37, 38) **[ADR-0008]** **[ADR-0006]** |
+| TV3 | Job hủy phiên hết giờ giữ chỗ — cả phiên và mọi hóa đơn (FR-SLT-39), có bù sau downtime · một thông báo thanh toán thành công mỗi phiên (FR-SLT-43) **[ADR-0006, ADR-0008]** |
+| TV3 | Màn hình web quản trị cho Brand Admin: slot trống → chọn một hoặc nhiều slot, gói cho từng slot → xem tổng → thanh toán một lần → các hóa đơn → cấu hình slot **[ADR-0006, ADR-0008]** |
 | TV4 | Kiosk: tạo đơn, hiện QR, theo dõi trạng thái · **màn điều khoản bấm nút trước QR, "Mời bấm nút số N" + đếm ngược, "Máy đang phục vụ khách khác" (`MACHINE_BUSY`), "Đang chờ lượt", "Hết thời gian bấm nút"** (FR-ORD-24÷27) **[ADR-0007]** |
 | TV2 | Thử bơm không chổi than: áp bít đầu ra, chất lượng sương với béc 0,15mm |
 | TV2 | Dựng ngăn thứ hai |
@@ -305,14 +307,14 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 
 | Chỗ | Test bắt buộc |
 |---|---|
-| Idempotency webhook | Gửi 2 webhook song song, phải có unique constraint ở CSDL — **cho cả đơn kiosk và hóa đơn thuê slot** **[ADR-0006]** |
+| Idempotency webhook | Gửi 2 webhook song song, phải có unique constraint ở CSDL — **cho cả đơn kiosk và phiên thanh toán thuê slot; phiên nhiều hóa đơn không được cấp số hóa đơn lần hai** **[ADR-0006, ADR-0008]** |
 | Cô lập mức slot | Brand A truy vấn slot Brand B **trên cùng máy** — **gồm hóa đơn, bồi thường; danh sách slot trống có đúng 7 trường** **[ADR-0006]** |
 | `revenue_owner` | Tạo đơn → thanh lý → đơn cũ vẫn phải thuộc BRAND |
 | Unique constraint slot | Cho thuê slot đang bán hàng thanh lý → phải bị từ chối |
 | TTL lệnh xịt | Gửi lệnh hết hạn thẳng tới thiết bị → thiết bị phải từ chối · **bấm nút sau `DISPENSE_PRESS_WINDOW_SEC` → không xịt, `PRESS_TIMEOUT`** **[ADR-0007]** |
 | Hard timeout firmware | Lệnh sai định dạng → van và bơm vẫn dừng ở 800ms |
-| Chuyển trạng thái theo lịch | Tắt dịch vụ qua mốc chuyển trạng thái, bật lại → phải bù — **gồm hủy hóa đơn hết giờ giữ chỗ (FR-SLT-39) và tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42)** **[ADR-0006]** |
-| ~~Yêu cầu thuê slot trùng lặp~~ → **Giữ chỗ slot đồng thời** | ~~Gửi 2 yêu cầu thuê cùng slot đồng thời (FR-SLT-26)~~ → Hai thương hiệu checkout cùng slot đồng thời → chỉ 1 hóa đơn DRAFT được tạo, do `excl_slot_rental_overlap` chặn (FR-SLT-35) **[ADR-0006]** |
+| Chuyển trạng thái theo lịch | Tắt dịch vụ qua mốc chuyển trạng thái, bật lại → phải bù — **gồm hủy phiên hết giờ giữ chỗ cùng mọi hóa đơn của nó (FR-SLT-39) và tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42)** **[ADR-0006]** |
+| ~~Yêu cầu thuê slot trùng lặp~~ → **Giữ chỗ slot đồng thời** | ~~Gửi 2 yêu cầu thuê cùng slot đồng thời (FR-SLT-26)~~ → Hai thương hiệu checkout cùng slot đồng thời → chỉ 1 hóa đơn DRAFT được tạo, do `excl_slot_rental_overlap` chặn (FR-SLT-35) **[ADR-0006]** · **giỏ nhiều slot có một slot đã bị giữ → cả phiên bị từ chối, không sót hóa đơn nào; hai giỏ chồng nhau một slot checkout đồng thời → chỉ một giỏ thành công** **[ADR-0008]** |
 | **Mất điện giữa lúc xịt** | **Ngắt nguồn hoặc reset ESP32 khi van đang mở → van phải đóng, bơm phải dừng, lệnh không được thực hiện lại khi khởi động** · **reset khi đèn nút đang sáng → khởi động lại không sáng đèn, bấm nút không xịt** **[ADR-0007]** |
 
 ---
@@ -331,6 +333,16 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 ---
 
 ## Nhật ký thay đổi
+
+### 30/09/2026 — Thanh toán một lần cho nhiều slot (ADR-0008)
+
+| Thay đổi | Lý do |
+|---|---|
+| Thêm phiên thanh toán (`rental_checkouts`): chọn nhiều slot, trả một lần; mỗi slot vẫn một hóa đơn, một số hóa đơn | ADR-0006 bắt thương hiệu thuê 3 slot phải checkout và quét QR 3 lần; gộp vào một hóa đơn thì vỡ vòng đời từng slot |
+| `POST /slot-rentals/checkout` → `POST /rental-checkouts`; `POST /slot-rentals/{id}/payments` → `POST /rental-checkouts/{id}/payments` | Thanh toán trỏ tới phiên; hai endpoint cũ chưa hiện thực nên thay, không để DEPRECATED |
+| TV1 T4: webhook phân nhánh theo `rental_checkout_id` thay vì `slot_rental_id` · duyệt ADR-0008 | Payment giờ trỏ tới phiên |
+| TV3 T4–T5: checkout giỏ, thanh toán phiên, job hủy theo phiên, màn hình giỏ | Khối lượng tăng nhẹ; không đổi mốc |
+| Bổ sung ca cho test tự viết "Giữ chỗ slot đồng thời", "Idempotency webhook", "Chuyển trạng thái theo lịch" | Giỏ nhiều slot phải tất cả hoặc không có gì; phiên nhiều hóa đơn không được cấp số hai lần hay hủy sót |
 
 ### 29/09/2026 (2) — Khách bấm nút vật lý (ADR-0007)
 

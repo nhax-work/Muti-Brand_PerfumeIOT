@@ -24,6 +24,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - Thương hiệu tự mua gói thuê slot, quản lý danh mục sản phẩm, giá mỗi lượt xịt trên slot mình thuê, báo cáo của mình và yêu cầu bổ sung (BR-007, BR-011).
 - Thuê slot tự phục vụ, không ký hợp đồng, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, đã duyệt 2026-09-29).
 - Một hóa đơn thuê slot (`SlotRental`) ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). "Hóa đơn" là thuật ngữ tiếng Việt; định danh kỹ thuật vẫn là `SlotRental`.
+- Nhiều slot được chọn và trả tiền **một lần** trong một **phiên thanh toán** (`RentalCheckout`): phiên gom giữ chỗ, tổng tiền và thanh toán; mỗi slot vẫn nhận hóa đơn và số hóa đơn riêng (ADR-0008, đã duyệt 2026-09-30).
 - Giá tự do — không có giá sàn hay giá trần (FR-SLT-08).
 - Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009).
 - Khi hóa đơn hết hạn: ân hạn có tính phí trước, sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
@@ -47,7 +48,8 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > **Quyết định mới nhất phải đọc trước khi đụng SLT, EXP, INV, ORD, DSP hay firmware:**
 > `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (thuê slot theo gói trả trước, hóa
 > đơn, bảo hiểm hàng hóa) và `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (nút bấm vật
-> lý). Hai ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
+> lý), cùng `spec/decisions/0008-thanh-toan-nhieu-slot-mot-lan.md` (phiên thanh toán nhiều slot, bổ
+> sung ADR-0006). Các ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
 > và mọi ghi nhớ cũ về "hợp đồng thuê", "yêu cầu thuê", "phí cố định", "ăn chia", "xịt ngay sau
 > thanh toán" đều đã lỗi thời.
 
@@ -59,7 +61,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > bản sao nguyên văn của `schema.sql` **lúc đóng băng**, còn `data-dictionary.md` do
 > `scripts/gen-data-dictionary.ts` sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng
 > lệch khỏi chính lược đồ mà chúng mô tả. Từ ADR-0006, `schema.sql` mô tả trạng thái sau **mọi**
-> migration (ban đầu + `1790665900000_*` + `1790665960000_*` + `1790752000000_*` + `1790752060000_*`); `pg_dump --schema-only` của DB nạp
+> migration (ban đầu + `1790665900000_*` + `1790665960000_*` + `1790752000000_*` + `1790752060000_*` + `1790757100000_*`); `pg_dump --schema-only` của DB nạp
 > `schema.sql` phải trùng với DB chạy hết migration.
 
 > Trạng thái acceptance criteria trong `spec/modules/` (188/286 FR hiệu lực, đếm lại ngày 2026-09-29
@@ -131,7 +133,8 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - **Không viết code mới dùng phần DEPRECATED (ADR-0006).** Bảng `slot_rental_requests`, cột
   `slot_rentals.fixed_fee`, `revenue_share_percent`, `request_id` và các endpoint `/slot-rental-requests*`,
   `POST /slot-rentals` chỉ còn để không phá migration và test cũ. Hóa đơn chỉ sinh ra qua
-  `POST /slot-rentals/checkout`.
+  `POST /rental-checkouts` (hoặc gia hạn qua `POST /slot-rentals/{id}/renew`), luôn thuộc một phiên
+  thanh toán; thanh toán trỏ tới phiên (`payments.rental_checkout_id`), không tới từng hóa đơn (ADR-0008).
 - **Migration thêm giá trị enum** phải nằm ở file riêng, và file sau **không** được ép chuỗi thành giá
   trị enum mới (so sánh qua `::text`): node-pg-migrate chạy mọi migration đang chờ trong **một**
   transaction. Kiểm cả DB trống lẫn DB đã có lược đồ cũ (`docs/MIGRATIONS.md`).
