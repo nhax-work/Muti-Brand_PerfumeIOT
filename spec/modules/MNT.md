@@ -97,7 +97,7 @@
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho máy có các slot đang thuộc các thương hiệu có hợp đồng hiệu lực, Khi máy chuyển sang MAINTENANCE, Thì hệ thống thông báo cho Brand Admin của các thương hiệu bị ảnh hưởng.
+- AC1: Cho máy có các slot đang thuộc các thương hiệu có hóa đơn hiệu lực, Khi máy chuyển sang MAINTENANCE, Thì hệ thống thông báo cho Brand Admin của các thương hiệu bị ảnh hưởng.
 - AC2: Cho thương hiệu không có slot đang thuộc máy, Khi máy chuyển sang MAINTENANCE, Thì Brand Admin của thương hiệu đó không nhận thông báo ảnh hưởng máy.
 
 **Kiểm tra:** `test_FR_MNT_07_maintenance_notification`

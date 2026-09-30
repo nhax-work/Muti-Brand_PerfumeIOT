@@ -65,9 +65,12 @@ class FakeSltQueries {
         (r) => r.slotId === input.slotId && r.status === 'ACTIVE',
       );
       if (activeExists) {
-        const err = new Error('duplicate key value violates unique constraint "uq_slot_active_rental"');
+        const err = new Error(
+          'duplicate key value violates unique constraint "uq_slot_active_rental"',
+        );
         (err as unknown as { code: string; constraint: string }).code = '23505';
-        (err as unknown as { code: string; constraint: string }).constraint = 'uq_slot_active_rental';
+        (err as unknown as { code: string; constraint: string }).constraint =
+          'uq_slot_active_rental';
         throw err;
       }
     }
@@ -86,7 +89,7 @@ class FakeSltQueries {
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       graceEndsAt: input.graceEndsAt ?? null,
-      pricePerSpray: input.pricePerSpray,
+      pricePerSpray: input.pricePerSpray ?? null,
       currency: input.currency ?? 'VND',
       fixedFee: input.fixedFee ?? '0',
       revenueSharePercent: input.revenueSharePercent ?? 0,
@@ -112,9 +115,12 @@ class FakeSltQueries {
         (r) => r.id !== id && r.slotId === current.slotId && r.status === 'ACTIVE',
       );
       if (activeExists) {
-        const err = new Error('duplicate key value violates unique constraint "uq_slot_active_rental"');
+        const err = new Error(
+          'duplicate key value violates unique constraint "uq_slot_active_rental"',
+        );
         (err as unknown as { code: string; constraint: string }).code = '23505';
-        (err as unknown as { code: string; constraint: string }).constraint = 'uq_slot_active_rental';
+        (err as unknown as { code: string; constraint: string }).constraint =
+          'uq_slot_active_rental';
         throw err;
       }
     }
@@ -122,7 +128,8 @@ class FakeSltQueries {
     const updated: SlotRentalRecord = {
       ...current,
       status,
-      terminatedReason: extra?.terminatedReason !== undefined ? extra.terminatedReason : current.terminatedReason,
+      terminatedReason:
+        extra?.terminatedReason !== undefined ? extra.terminatedReason : current.terminatedReason,
       graceEndsAt: extra?.graceEndsAt !== undefined ? extra.graceEndsAt : current.graceEndsAt,
       updatedAt: new Date(),
     };

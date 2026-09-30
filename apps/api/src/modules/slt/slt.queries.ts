@@ -8,14 +8,7 @@ import { DATABASE, type Database } from '../../shared/db/index.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
 export type SlotRentalStatus =
-  | 'DRAFT'
-  | 'ACTIVE'
-  | 'EXPIRING'
-  | 'GRACE'
-  | 'RENEWED'
-  | 'LIQUIDATED'
-  | 'CLOSED'
-  | 'TERMINATED';
+  'DRAFT' | 'ACTIVE' | 'EXPIRING' | 'GRACE' | 'RENEWED' | 'LIQUIDATED' | 'CLOSED' | 'TERMINATED';
 
 export interface SlotRentalRecord {
   readonly id: string;
@@ -30,7 +23,7 @@ export interface SlotRentalRecord {
   readonly startsAt: Date;
   readonly endsAt: Date;
   readonly graceEndsAt: Date | null;
-  readonly pricePerSpray: string;
+  readonly pricePerSpray: string | null;
   readonly currency: string;
   readonly fixedFee: string;
   readonly revenueSharePercent: number;
@@ -58,7 +51,7 @@ export interface CreateSlotRentalData {
   readonly startsAt: Date;
   readonly endsAt: Date;
   readonly graceEndsAt?: Date | null;
-  readonly pricePerSpray: string;
+  readonly pricePerSpray?: string | null;
   readonly currency?: string;
   readonly fixedFee?: string;
   readonly revenueSharePercent?: number;
@@ -174,10 +167,11 @@ export class SltQueries {
         starts_at: data.startsAt,
         ends_at: data.endsAt,
         grace_ends_at: data.graceEndsAt ?? null,
-        price_per_spray: data.pricePerSpray,
+        price_per_spray: data.pricePerSpray ?? null,
         currency: data.currency ?? 'VND',
         fixed_fee: data.fixedFee ?? '0',
-        revenue_share_percent: data.revenueSharePercent !== undefined ? String(data.revenueSharePercent) : '0',
+        revenue_share_percent:
+          data.revenueSharePercent !== undefined ? String(data.revenueSharePercent) : '0',
         created_by: data.createdBy,
       })
       .returning('id')
@@ -219,7 +213,7 @@ function toRecord(row: {
   starts_at: Date;
   ends_at: Date;
   grace_ends_at: Date | null;
-  price_per_spray: string | number;
+  price_per_spray: string | number | null;
   currency: string;
   fixed_fee: string | number;
   revenue_share_percent: string | number;
@@ -241,7 +235,7 @@ function toRecord(row: {
     startsAt: new Date(row.starts_at),
     endsAt: new Date(row.ends_at),
     graceEndsAt: row.grace_ends_at ? new Date(row.grace_ends_at) : null,
-    pricePerSpray: String(row.price_per_spray),
+    pricePerSpray: row.price_per_spray != null ? String(row.price_per_spray) : null,
     currency: row.currency,
     fixedFee: String(row.fixed_fee),
     revenueSharePercent: Number(row.revenue_share_percent),

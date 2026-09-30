@@ -11,8 +11,8 @@
 
 ---
 
-## FR-BND-05 — Tự động lọc truy vấn theo hợp đồng thuê slot
-* **Statement:** Hệ thống phải tự động lọc mọi truy vấn dữ liệu của người dùng thuộc thương hiệu theo tập hợp đồng thuê slot của thương hiệu đó.
+## FR-BND-05 — Tự động lọc truy vấn theo hóa đơn thuê slot
+* **Statement:** Hệ thống phải tự động lọc mọi truy vấn dữ liệu của người dùng thuộc thương hiệu theo tập hóa đơn thuê slot của thương hiệu đó.
 * **Traces:** BR-003, BR-012 · **Priority:** M
 * **Cơ chế:** chốt chặn duy nhất ở `apps/api/src/shared/scoping` (QT4, ADR-0003). Controller lấy phạm vi bằng `@CurrentBrandScope()`, truyền xuống query, dựng điều kiện bằng các hàm `brandScoped*`.
 * **Acceptance criteria:**
@@ -27,7 +27,7 @@
     Then điều kiện gồm cả `brand_id` và `revenue_owner = 'BRAND'` — đơn phát sinh sau thanh lý không lọt ra (FR-EXP-20, FR-REV-06).
   * **AC4 (Bảng không có brand_id):** Given truy vấn trên bảng gắn slot/máy như `sensor_readings`, `device_events`,  
     When dựng điều kiện,  
-    Then điều kiện nối qua `slot_rentals` VÀ so mốc thời gian của bản ghi với kỳ hạn hợp đồng — cùng một slot phục vụ nhiều thương hiệu ở các kỳ khác nhau.
+    Then điều kiện nối qua `slot_rentals` VÀ so mốc thời gian của bản ghi với kỳ hạn hóa đơn — cùng một slot phục vụ nhiều thương hiệu ở các kỳ khác nhau.
   * **AC5 (Tài khoản nền tảng):** Given người dùng không gắn thương hiệu,  
     When dựng điều kiện,  
     Then điều kiện luôn đúng — Platform Super Admin xem được mọi thương hiệu (FR-BND-07).
@@ -39,7 +39,7 @@
 ---
 
 ## FR-BND-08 — Không tiết lộ thông tin thương hiệu khác
-* **Statement:** Hệ thống phải không tiết lộ cho người dùng thuộc một thương hiệu bất kỳ thông tin nào về thương hiệu khác, bao gồm tên, sản phẩm và sự tồn tại của hợp đồng thuê trên cùng máy.
+* **Statement:** Hệ thống phải không tiết lộ cho người dùng thuộc một thương hiệu bất kỳ thông tin nào về thương hiệu khác, bao gồm tên, sản phẩm và sự tồn tại của hóa đơn thuê trên cùng máy.
 * **Traces:** BR-012 · **Priority:** M
 * **Cơ chế:** `notFoundFor(principal)` ở `apps/api/src/shared/errors` — mọi chỗ tra tài nguyên theo id mà không thấy đều gọi hàm này, không tự chọn 403 hay 404.
 * **Acceptance criteria:**

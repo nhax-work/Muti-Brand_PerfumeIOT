@@ -14,8 +14,8 @@
   Generates dynamic, single-use QR payment codes linked to uniquely generated orders, verifies payment provider webhooks using cryptographic signatures (HMAC-SHA256) and idempotency guards, and updates transaction status on the kiosk screen within 3 seconds.  
   *(Traces: BR-001, BR-002, BR-008 · FR-ORD-07, FR-ORD-08, FR-ORD-09, FR-ORD-11, FR-ORD-13, FR-ORD-14, FR-ORD-15)*
 
-* **FE-03: Multi-Brand Shared Slot Leasing and Online Rental Requests**  
-  Enables fragrance brands to browse vacant slots and submit online lease requests, supports platform-managed multi-brand slot sharing on unified physical kiosks, enforces strict single-active-lease occupancy, schedule overlap rejection, and automated lease lifecycle state machine transitions (`DRAFT` → `ACTIVE` → `EXPIRING` → `GRACE` → `RENEWED` / `LIQUIDATED` → `CLOSED`).  
+* **FE-03: Multi-Brand Shared Slot Leasing with Prepaid Packages**  
+  Enables fragrance brands to browse vacant slots, self-purchase prepaid 3/6/12-month rental packages with a mandatory goods-storage (insurance) plan, pay in full and receive an invoice (ADR-0006, approved), supports platform-managed multi-brand slot sharing on unified physical kiosks, enforces strict single-active-lease occupancy, schedule overlap rejection, and automated lease lifecycle state machine transitions (`DRAFT` → `ACTIVE` → `EXPIRING` → `GRACE` → `RENEWED` / `LIQUIDATED` → `CLOSED`).  
   *(Traces: BR-003, BR-009, BR-011, BR-013 · FR-SLT-01…06, FR-SLT-11, FR-SLT-12, FR-SLT-19…26)*
 
 * **FE-04: Free-Tier Brand Spray Pricing and Explicit Product-Slot Assignment**  
@@ -27,7 +27,7 @@
   *(Traces: BR-009, BR-013 · FR-EXP-01, FR-EXP-02, FR-EXP-05, FR-EXP-06, FR-EXP-07, FR-EXP-08, FR-EXP-10, FR-EXP-14, FR-EXP-15, FR-EXP-18)*
 
 * **FE-06: Multi-Source Revenue Separation and Periodic Financial Settlement**  
-  Snapshots revenue ownership (`BRAND` vs. `PLATFORM`) immutably at order creation, strictly isolates brand sales from liquidated platform earnings, and automatically generates comprehensive periodic settlement statements calculating net revenue after rent, revenue-share, and grace fees using high-precision decimal math.  
+  Snapshots revenue ownership (`BRAND` vs. `PLATFORM`) immutably at order creation, strictly isolates brand sales from liquidated platform earnings, and automatically generates periodic revenue-reconciliation statements of brand spray revenue to be paid out (rent is prepaid via invoices; no revenue share — ADR-0006) using high-precision decimal math.  
   *(Traces: BR-008, BR-009, BR-012, BR-013 · FR-REV-01, FR-REV-02, FR-REV-03, FR-REV-05, FR-SLT-17, FR-SLT-18, NFR-DAT-02)*
 
 * **FE-07: Smart IoT Inventory Tracking, Refill Tickets, and Leakage Detection**  
@@ -71,7 +71,7 @@ mindmap
       3s Real-Time Status Sync
       Spray Failure Incident Assistance
     Slot Leasing & Commercials
-      Online Slot Rental Requests
+      Prepaid Slot Packages & Invoices
       Multi-Brand Slot Leases
       Custom Spray Pricing per Slot
       Schedule Overlap Rejection
@@ -131,7 +131,7 @@ graph LR
     %% Branch 2: Commercial & Slot Leasing
     Root --> B2["<b>Slot Leasing & Commercials</b>"]
     B2 --> B2_1["Contract Management"]
-    B2_1 --> B2_1_1["Online Slot Rental Requests"]
+    B2_1 --> B2_1_1["Prepaid Slot Packages & Invoices"]
     B2_1 --> B2_1_2["Multi-Brand Slot Leases"]
     B2_1 --> B2_1_3["Overlap Prevention"]
     B2_1 --> B2_1_4["Custom Spray Pricing"]
@@ -195,10 +195,10 @@ graph LR
 |---|---|---|---|
 | **FE-01** | Trải nghiệm Kiosk tự phục vụ | Khách hàng tự chọn slot, xem 3 tầng hương, lọc theo hãng và tạo đơn không cần nhân viên. | Giữ nguyên |
 | **FE-02** | Thanh toán QR động & đồng bộ tức thì | Sinh mã QR động, tiếp nhận webhook bảo mật (HMAC), chống lặp và đồng bộ kết quả lên Kiosk trong 3s. | Giữ nguyên |
-| **FE-03** | Cho thuê slot đa thương hiệu & yêu cầu trực tuyến | Quản lý hợp đồng thuê slot, chống trùng lặp, chống chồng lấn kỳ hạn, tự động hóa vòng đời hợp đồng. | **Mới:** Thêm luồng Brand Admin tự duyệt slot trống và gửi yêu cầu thuê trực tuyến (`SlotRentalRequest`). |
+| **FE-03** | Cho thuê slot đa thương hiệu theo gói trả trước | Brand Admin tự mua gói thuê 3/6/12 tháng (gói dài có ưu đãi) kèm gói bảo quản bắt buộc, thanh toán một lần và nhận hóa đơn; chống trùng lặp, chống chồng lấn kỳ hạn, tự động hóa vòng đời hóa đơn. | **Mới (ADR-0006, đã duyệt):** Bỏ luồng gửi yêu cầu thuê và duyệt tay (`SlotRentalRequest`); thêm bảng giá, giữ chỗ khi thanh toán, hóa đơn và bảo hiểm hàng hóa. |
 | **FE-04** | Gán sản phẩm & tự do đặt giá slot | Hãng gán sản phẩm vào slot đã thuê và tự quyết định giá mỗi lượt xịt; giá đã lưu vào đơn hàng là bất biến. | **Mới:** Quy định rõ ràng hành động gán/đổi sản phẩm cho slot (FR-SLT-27..29). |
 | **FE-05** | Ân hạn, gia hạn & thanh lý tự động | Nhắc hết hạn T-7/T-3, tự động chuyển ân hạn (Grace Period) có tính phí lưu kho, thanh lý về Nền tảng nếu không gia hạn. | Giữ nguyên |
-| **FE-06** | Phân tách nguồn thu & quyết toán định kỳ | Gán nhãn doanh thu `BRAND` vs `PLATFORM`, tính toán bảng quyết toán khấu trừ tự động tiền thuê, ăn chia và phí ân hạn. | **Mới:** Chuẩn hóa kiểu dữ liệu tiền tệ `numeric` chính xác cao (NFR-DAT-02). |
+| **FE-06** | Phân tách nguồn thu & đối soát định kỳ | Gán nhãn doanh thu `BRAND` vs `PLATFORM`, sinh bảng đối soát doanh thu lượt xịt chuyển trả cho thương hiệu (tiền thuê đã thu trước qua hóa đơn, không còn ăn chia — ADR-0006). | **Mới:** Chuẩn hóa kiểu dữ liệu tiền tệ `numeric` chính xác cao (NFR-DAT-02). |
 | **FE-07** | Quản lý tồn kho IoT, phiếu nạp & cảnh báo rò rỉ | Theo dõi chai theo mã số, ước tính tiêu thụ kết hợp cảm biến tải trọng (Load Cell), cảnh báo rò rỉ, checklist nạp chai. | **Mới:** Bổ sung Phiếu nạp (Refill Ticket) để chặn báo động giả "cửa mở" và đối soát lô hàng kho. |
 | **FE-08** | Lệnh xịt ký số & chống xịt trùng | Lệnh xịt ký HMAC kèm thời hạn TTL, kiểm tra cảm biến an toàn (cửa đóng, không bảo trì), bảo đảm 100% không xịt trùng (BR-002). | Giữ nguyên |
 | **FE-09** | Telemetry thời gian thực & điều khiển máy từ xa | Theo dõi heartbeat MQTT (Online/Unstable/Offline), truyền nhận telemetry cảm biến, bật/tắt máy hoặc slot từ xa. | **Mới:** Bàn giao quyền điều khiển máy/slot cho vai trò hợp nhất **Operations Staff**; quy định rõ luật AVAILABLE của slot. |
