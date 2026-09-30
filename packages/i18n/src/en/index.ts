@@ -101,6 +101,14 @@ export const en: SameKeysAs<typeof vi> = {
     skuTaken: 'This SKU already exists within the brand',
   },
 
+  slt: {
+    rentalNotFound: 'Slot rental contract not found',
+    invalidRentalPeriod: 'End date must be after start date',
+    financialsInvalid: 'Fixed fee and revenue share rate are invalid',
+    slotOccupied: 'The slot already has an active rental contract',
+    invalidStatusTransition: 'Invalid contract status transition',
+  },
+
   usr: {
     brandAdminNeedsBrand: 'A Brand Admin must be attached to exactly one brand',
     platformRoleNoBrand: 'Platform roles must not be attached to a brand',

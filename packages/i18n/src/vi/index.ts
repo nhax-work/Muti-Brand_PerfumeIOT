@@ -12,6 +12,7 @@ import { common } from './common.js';
 import { kiosk } from './kiosk.js';
 import { mch, slotStatus } from './mch.js';
 import { prd } from './prd.js';
+import { slt } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
 import { validation } from './validation.js';
@@ -24,6 +25,7 @@ export const vi = {
   slotStatus,
   bnd,
   prd,
+  slt,
   usr,
   ui,
   kiosk,
