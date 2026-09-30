@@ -30,4 +30,3 @@ export const vi = {
   ui,
   kiosk,
 } as const;
-

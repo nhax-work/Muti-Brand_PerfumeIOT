@@ -11,8 +11,16 @@ import { UsrModule } from './modules/usr/index.js';
 import { ApiExceptionFilter } from './shared/http/exception.filter.js';
 
 @Module({
-  imports: [CoreModule, AuthModule, BndModule, PrdModule, UsrModule, MchModule, RptModule, SltModule],
+  imports: [
+    CoreModule,
+    AuthModule,
+    BndModule,
+    PrdModule,
+    UsrModule,
+    MchModule,
+    RptModule,
+    SltModule,
+  ],
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })
 export class AppModule {}
-
