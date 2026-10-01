@@ -4,6 +4,7 @@ import { CoreModule } from './core.module.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { MchModule } from './modules/mch/index.js';
+import { OrdModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
 import { RptModule } from './modules/rpt/index.js';
 import { SltModule } from './modules/slt/index.js';
@@ -20,6 +21,7 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     MchModule,
     RptModule,
     SltModule,
+    OrdModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })
