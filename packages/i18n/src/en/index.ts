@@ -126,11 +126,10 @@ export const en: SameKeysAs<typeof vi> = {
   },
 
   slt: {
-    rentalNotFound: 'Slot rental contract not found',
-    invalidRentalPeriod: 'End date must be after start date',
-    financialsInvalid: 'Fixed fee and revenue share rate are invalid',
-    slotOccupied: 'The slot already has an active rental contract',
-    invalidStatusTransition: 'Invalid contract status transition',
+    packageNameTaken: 'A rental package with this name already exists',
+    storagePlanNameTaken: 'A storage plan with this name already exists',
+    lastActiveStoragePlan:
+      'Cannot stop selling the last storage plan — every rental must include one storage plan',
   },
 
   usr: {

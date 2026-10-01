@@ -262,10 +262,12 @@ trạng thái ADR thành "đã duyệt" cho tới khi TV1 xác nhận. **TV1 đ�
 
 **Việc còn lại, cần người:**
 1. ~~TV1 duyệt ADR này.~~ Đã duyệt 2026-09-29.
-2. Chủ nhóm test "cô lập mức slot" cập nhật `test_FR_AUTH_07_available_slots_expose_only_location_data`
+2. ~~Chủ nhóm test "cô lập mức slot" cập nhật `test_FR_AUTH_07_available_slots_expose_only_location_data`
    (7 trường, slot phải có giá niêm yết) — sau đó mới sửa `listAvailableSlots` và đưa
    `monthlyRentPrice` vào `required`. Cùng lúc sửa lỗi có sẵn: truy vấn lọc `machine_slots.status =
    'AVAILABLE'` trong khi slot chỉ AVAILABLE khi đã có hóa đơn hiệu lực (FR-MCH-16), nên trên dữ liệu
-   thật danh sách luôn rỗng; fixture của test đang đặt tay `status = 'AVAILABLE'` nên không lộ.
+   thật danh sách luôn rỗng; fixture của test đang đặt tay `status = 'AVAILABLE'` nên không lộ.~~
+   **Đã làm 2026-10-01** (nhánh `fix/week3-slt-gaps`): test do agent viết theo yêu cầu TV1, TV1
+   review — ngoại lệ có chủ đích với quy định nhóm người tự viết.
 3. Chủ các nhóm test "job chuyển trạng thái", "unique constraint slot", "idempotency webhook" bổ sung ca
    ở mục "Hệ quả".
