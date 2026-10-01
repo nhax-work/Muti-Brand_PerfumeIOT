@@ -1,4 +1,4 @@
-import { DashboardOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DashboardOutlined } from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
 import type { ReactNode } from 'react';
@@ -17,4 +17,10 @@ export interface NavItem {
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { path: '/', label: 'ui.dashboard', icon: <DashboardOutlined /> },
+  {
+    path: '/machines',
+    label: 'ui.machines',
+    icon: <AppstoreOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
 ];

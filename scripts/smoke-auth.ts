@@ -50,6 +50,7 @@ function section(title: string): void {
 
 interface Reply {
   status: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   body: Record<string, any>;
   raw: string;
 }
@@ -69,9 +70,11 @@ async function call(
     body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   });
   const raw = await response.text();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let body: Record<string, any> = {};
   try {
-    body = raw ? JSON.parse(raw) : {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    body = raw ? (JSON.parse(raw) as Record<string, any>) : {};
   } catch {
     // phản hồi không phải JSON
   }

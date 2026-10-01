@@ -43,6 +43,7 @@ const ID = {
     '66666666-6666-4666-8666-000000000002',
     '66666666-6666-4666-8666-000000000003',
     '66666666-6666-4666-8666-000000000004',
+    '66666666-6666-4666-8666-000000000005',
   ] as const,
 
   products: [
@@ -50,6 +51,7 @@ const ID = {
     '77777777-7777-4777-8777-000000000002',
     '77777777-7777-4777-8777-000000000003',
     '77777777-7777-4777-8777-000000000004',
+    '77777777-7777-4777-8777-000000000005',
   ] as const,
 
   batches: [
@@ -62,6 +64,7 @@ const ID = {
     '99999999-9999-4999-8999-000000000002',
     '99999999-9999-4999-8999-000000000003',
     '99999999-9999-4999-8999-000000000004',
+    '99999999-9999-4999-8999-000000000005',
   ] as const,
 
   rentals: [
@@ -69,11 +72,12 @@ const ID = {
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000003',
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000004',
+    'aaaaaaaa-aaaa-4aaa-8aaa-000000000005',
   ] as const,
 } as const;
 
 /**
- * Bốn slot: 1-2 thuộc Maison Aurore, 3-4 thuộc Nhà Hương Việt.
+ * Năm slot: 1-2 thuộc Maison Aurore, 3-5 thuộc Nhà Hương Việt.
  * Cùng một máy vật lý, hai thương hiệu không được thấy nhau (BR-012).
  */
 const SLOT_PLAN = [
@@ -81,6 +85,7 @@ const SLOT_PLAN = [
   { slot: 1, brand: ID.brandA, product: 1, bottle: 1, batch: 0, rental: 1, price: '42000.0000' },
   { slot: 2, brand: ID.brandB, product: 2, bottle: 2, batch: 1, rental: 2, price: '28000.0000' },
   { slot: 3, brand: ID.brandB, product: 3, bottle: 3, batch: 1, rental: 3, price: '50000.0000' },
+  { slot: 4, brand: ID.brandB, product: 4, bottle: 4, batch: 1, rental: 4, price: '55000.0000' },
 ] as const;
 
 const PERMISSIONS = [
@@ -285,6 +290,7 @@ async function seedProducts(client: pg.Client): Promise<void> {
     [ID.products[1], ID.brandA, 'MA-002', 'Aurore Nocturne', '42000.0000', '2900000.0000'],
     [ID.products[2], ID.brandB, 'HV-001', 'Hương Sen Đồng Tháp', '28000.0000', '1500000.0000'],
     [ID.products[3], ID.brandB, 'HV-002', 'Hương Quế Trà Bồng', '50000.0000', '3200000.0000'],
+    [ID.products[4], ID.brandB, 'HV-003', 'Trầm Hương Khánh Hòa', '55000.0000', '3500000.0000'],
   ] as const;
 
   for (const [id, brandId, sku, name, defaultPrice, retailPrice] of products) {
