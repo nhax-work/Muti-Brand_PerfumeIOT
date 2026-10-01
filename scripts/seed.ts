@@ -43,6 +43,7 @@ const ID = {
     '66666666-6666-4666-8666-000000000002',
     '66666666-6666-4666-8666-000000000003',
     '66666666-6666-4666-8666-000000000004',
+    '66666666-6666-4666-8666-000000000005',
   ] as const,
 
   products: [
@@ -50,6 +51,7 @@ const ID = {
     '77777777-7777-4777-8777-000000000002',
     '77777777-7777-4777-8777-000000000003',
     '77777777-7777-4777-8777-000000000004',
+    '77777777-7777-4777-8777-000000000005',
   ] as const,
 
   batches: [
@@ -62,6 +64,7 @@ const ID = {
     '99999999-9999-4999-8999-000000000002',
     '99999999-9999-4999-8999-000000000003',
     '99999999-9999-4999-8999-000000000004',
+    '99999999-9999-4999-8999-000000000005',
   ] as const,
 
   rentals: [
@@ -69,11 +72,12 @@ const ID = {
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000002',
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000003',
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000004',
+    'aaaaaaaa-aaaa-4aaa-8aaa-000000000005',
   ] as const,
 } as const;
 
 /**
- * Bốn slot: 1-2 thuộc Maison Aurore, 3-4 thuộc Nhà Hương Việt.
+ * Năm slot: 1-2 thuộc Maison Aurore, 3-5 thuộc Nhà Hương Việt.
  * Cùng một máy vật lý, hai thương hiệu không được thấy nhau (BR-012).
  */
 const SLOT_PLAN = [
@@ -81,6 +85,7 @@ const SLOT_PLAN = [
   { slot: 1, brand: ID.brandA, product: 1, bottle: 1, batch: 0, rental: 1, price: '42000.0000' },
   { slot: 2, brand: ID.brandB, product: 2, bottle: 2, batch: 1, rental: 2, price: '28000.0000' },
   { slot: 3, brand: ID.brandB, product: 3, bottle: 3, batch: 1, rental: 3, price: '50000.0000' },
+  { slot: 4, brand: ID.brandB, product: 4, bottle: 4, batch: 1, rental: 4, price: '55000.0000' },
 ] as const;
 
 const PERMISSIONS = [
@@ -163,6 +168,7 @@ async function main(): Promise<void> {
     await seedProducts(client);
     await seedInventory(client);
     await seedRentalsAndBottles(client);
+    await seedRentalCatalog(client);
 
     await client.query('COMMIT');
 
@@ -290,12 +296,61 @@ async function seedLocationAndMachine(client: pg.Client): Promise<void> {
   }
 }
 
+/**
+ * Bảng giá thuê slot (FR-SLT-30..32, ADR-0006): 3 gói thuê, 3 gói bảo quản, giá niêm yết 4 slot.
+ * Giá trị theo đề xuất của ADR-0006 — là DỮ LIỆU danh mục, Super Admin sửa được, không phải hằng
+ * ngưỡng (spec/constraints.md).
+ *
+ * Idempotent theo tên gói; giá slot chỉ đặt khi còn NULL để không ghi đè giá Super Admin đã sửa.
+ */
+async function seedRentalCatalog(client: pg.Client): Promise<void> {
+  const packages = [
+    ['Gói 3 tháng', 3, '0'],
+    ['Gói 6 tháng', 6, '5'],
+    ['Gói 12 tháng', 12, '10'],
+  ] as const;
+  for (const [name, months, discount] of packages) {
+    await client.query(
+      `INSERT INTO rental_packages (name, duration_months, discount_percent)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (name) DO NOTHING`,
+      [name, months, discount],
+    );
+  }
+
+  const plans = [
+    ['Cơ bản', 'Bồi thường 30% giá bán lẻ chai hư hỏng', '100000.0000', '30', '3000000.0000'],
+    ['Tiêu chuẩn', 'Bồi thường 60% giá bán lẻ chai hư hỏng', '200000.0000', '60', '6000000.0000'],
+    ['Toàn diện', 'Bồi thường 100% giá bán lẻ chai hư hỏng', '350000.0000', '100', '10000000.0000'],
+  ] as const;
+  for (const [name, description, monthlyPrice, coverage, cap] of plans) {
+    await client.query(
+      `INSERT INTO storage_plans (name, description, monthly_price, coverage_percent, coverage_cap)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name) DO NOTHING`,
+      [name, description, monthlyPrice, coverage, cap],
+    );
+  }
+
+  // Bốn slot mẫu đang được thuê nên chưa hiện trong danh sách slot trống; giá có sẵn để khi một
+  // hóa đơn kết thúc thì slot quay lại thị trường ngay (FR-SLT-19).
+  const rentPrices = ['1500000.0000', '1500000.0000', '1200000.0000', '1200000.0000'];
+  for (const [index, price] of rentPrices.entries()) {
+    await client.query(
+      `UPDATE machine_slots SET monthly_rent_price = $2
+        WHERE id = $1 AND monthly_rent_price IS NULL`,
+      [ID.slots[index], price],
+    );
+  }
+}
+
 async function seedProducts(client: pg.Client): Promise<void> {
   const products = [
     [ID.products[0], ID.brandA, 'MA-001', 'Aurore Matinale', '35000.0000', '2400000.0000'],
     [ID.products[1], ID.brandA, 'MA-002', 'Aurore Nocturne', '42000.0000', '2900000.0000'],
     [ID.products[2], ID.brandB, 'HV-001', 'Hương Sen Đồng Tháp', '28000.0000', '1500000.0000'],
     [ID.products[3], ID.brandB, 'HV-002', 'Hương Quế Trà Bồng', '50000.0000', '3200000.0000'],
+    [ID.products[4], ID.brandB, 'HV-003', 'Trầm Hương Khánh Hòa', '55000.0000', '3500000.0000'],
   ] as const;
 
   for (const [id, brandId, sku, name, defaultPrice, retailPrice] of products) {

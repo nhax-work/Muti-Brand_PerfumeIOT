@@ -10,7 +10,7 @@ import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import { common } from './common.js';
 import { kiosk } from './kiosk.js';
-import { mch, slotStatus } from './mch.js';
+import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { slt } from './slt.js';
@@ -24,6 +24,9 @@ export const vi = {
   auth,
   mch,
   slotStatus,
+  machineStatus,
+  machineOperatingMode,
+  slotRentalStatus,
   bnd,
   prd,
   slt,
