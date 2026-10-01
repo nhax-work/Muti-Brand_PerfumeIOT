@@ -178,7 +178,9 @@ export default function MachinesPage() {
                 </Typography.Title>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {stats.total > 0
-                    ? t('ui.onlinePercent', { percent: Math.round((stats.online / stats.total) * 100) })
+                    ? t('ui.onlinePercent', {
+                        percent: Math.round((stats.online / stats.total) * 100),
+                      })
                     : '0%'}
                 </Typography.Text>
               </Space>

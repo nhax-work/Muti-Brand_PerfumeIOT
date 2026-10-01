@@ -111,13 +111,15 @@ export const ui = {
   // Chế độ xem & mô tả danh sách máy
   tableView: 'Bảng',
   gridView: 'Lưới thiết bị',
-  machineListSubtitle: 'Giám sát tình trạng phần cứng, kết nối mạng và phân bổ vị trí các máy kiosk ScentStation.',
+  machineListSubtitle:
+    'Giám sát tình trạng phần cứng, kết nối mạng và phân bổ vị trí các máy kiosk ScentStation.',
   totalMachinesDesc: 'Thiết bị thuộc toàn hệ thống',
   onlinePercent: '{percent}% trực tuyến',
   normalOperatingMode: 'Vận hành bình thường',
   normalOperatingModeDesc: 'Chế độ hoạt động chuẩn',
   availableSlotsDesc: 'Tổng số vị trí xịt khả dụng',
-  slotsSubtitle: 'Sơ đồ buồng chứa nước hoa, trạng thái xịt và chi tiết thương hiệu đang thuê từng slot.',
+  slotsSubtitle:
+    'Sơ đồ buồng chứa nước hoa, trạng thái xịt và chi tiết thương hiệu đang thuê từng slot.',
   noSlotsConfigured: 'Chưa có slot nào được thiết lập.',
   slotChamber: 'Buồng chứa',
   slotDisabledTooltip: 'Slot đang trong trạng thái bảo trì hoặc vô hiệu hóa',
@@ -127,16 +129,21 @@ export const ui = {
   currentModeBadge: '(Chế độ hiện tại)',
   modeNormalTitle: 'Bình thường',
   modeNormalBadge: 'Sẵn sàng phục vụ',
-  modeNormalDesc: 'Máy Kiosk mở đầy đủ tính năng xịt thử, nhận thanh toán và cấp hương tự động cho khách.',
+  modeNormalDesc:
+    'Máy Kiosk mở đầy đủ tính năng xịt thử, nhận thanh toán và cấp hương tự động cho khách.',
   modeMaintTitle: 'Bảo trì',
   modeMaintBadge: 'Tạm ngưng nhận đơn',
-  modeMaintDesc: 'Màn hình Kiosk chuyển sang giao diện bảo trì buồng chứa, kỹ thuật viên thao tác an toàn.',
+  modeMaintDesc:
+    'Màn hình Kiosk chuyển sang giao diện bảo trì buồng chứa, kỹ thuật viên thao tác an toàn.',
   modeDisabledTitle: 'Vô hiệu hóa',
   modeDisabledBadge: 'Tắt hệ thống',
-  modeDisabledDesc: 'Ngắt toàn bộ quyền vận hành máy từ xa do sự cố nghiêm trọng hoặc địa điểm tạm đóng cửa.',
-  modeReauthNotice: 'Thao tác thay đổi chế độ IoT yêu cầu xác thực mật khẩu lại (Reauth) để đảm bảo an ninh vận hành.',
+  modeDisabledDesc:
+    'Ngắt toàn bộ quyền vận hành máy từ xa do sự cố nghiêm trọng hoặc địa điểm tạm đóng cửa.',
+  modeReauthNotice:
+    'Thao tác thay đổi chế độ IoT yêu cầu xác thực mật khẩu lại (Reauth) để đảm bảo an ninh vận hành.',
   reasonLabel: 'LÝ DO CHUYỂN ĐỔI CHẾ ĐỘ',
-  reasonPlaceholderFull: 'Nhập lý do chuyển đổi (ví dụ: Bảo trì định kỳ buồng chứa, xử lý sự cố kẹt vòi...)',
+  reasonPlaceholderFull:
+    'Nhập lý do chuyển đổi (ví dụ: Bảo trì định kỳ buồng chứa, xử lý sự cố kẹt vòi...)',
   btnActivateNormal: 'Kích hoạt Bình thường',
   btnSwitchMaintenance: 'Chuyển sang Bảo trì',
   btnConfirmDisabled: 'Xác nhận Vô hiệu hóa',
@@ -154,7 +161,8 @@ export const ui = {
   calcTotalSprays: 'Tổng lượt xịt / chai đầy',
   calcAlertSprays: 'Báo động đỏ khi còn',
   calcSpraysUnit: '~{count} lượt',
-  configReauthNotice: 'Thay đổi định lượng ảnh hưởng trực tiếp tới độ chính xác cấp hương. Thao tác yêu cầu xác thực mật khẩu lại.',
+  configReauthNotice:
+    'Thay đổi định lượng ảnh hưởng trực tiếp tới độ chính xác cấp hương. Thao tác yêu cầu xác thực mật khẩu lại.',
   configSavedSuccess: 'Đã lưu cấu hình Slot {slotNumber}',
   configSavedDesc: 'Định lượng mới: {dosage} ml/lượt • Ngưỡng cảnh báo: {threshold} ml.',
 } as const;

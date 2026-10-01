@@ -1,15 +1,5 @@
 import { useEffect, useState } from 'react';
-import {
-  Button,
-  Col,
-  Form,
-  InputNumber,
-  Modal,
-  Row,
-  Tag,
-  Typography,
-  notification,
-} from 'antd';
+import { Button, Col, Form, InputNumber, Modal, Row, Tag, Typography, notification } from 'antd';
 import {
   ControlOutlined,
   ExperimentOutlined,

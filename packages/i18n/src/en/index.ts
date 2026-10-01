@@ -239,13 +239,15 @@ export const en: SameKeysAs<typeof vi> = {
     // Machine list views and descriptions
     tableView: 'Table',
     gridView: 'Grid',
-    machineListSubtitle: 'Monitor hardware health, network connectivity, and location distribution of ScentStation kiosks.',
+    machineListSubtitle:
+      'Monitor hardware health, network connectivity, and location distribution of ScentStation kiosks.',
     totalMachinesDesc: 'Total machines deployed',
     onlinePercent: '{percent}% online',
     normalOperatingMode: 'Normal Operation',
     normalOperatingModeDesc: 'Standard operating status',
     availableSlotsDesc: 'Total available spray slots',
-    slotsSubtitle: 'Cartridge chamber layout, spray status, and rental brand details for each slot.',
+    slotsSubtitle:
+      'Cartridge chamber layout, spray status, and rental brand details for each slot.',
     noSlotsConfigured: 'No slots configured yet.',
     slotChamber: 'Chamber',
     slotDisabledTooltip: 'Slot is in maintenance or disabled mode',
@@ -255,16 +257,21 @@ export const en: SameKeysAs<typeof vi> = {
     currentModeBadge: '(Current Mode)',
     modeNormalTitle: 'Normal',
     modeNormalBadge: 'Ready for Service',
-    modeNormalDesc: 'Kiosk operates with full capabilities, accepts payments, and dispenses fragrances automatically.',
+    modeNormalDesc:
+      'Kiosk operates with full capabilities, accepts payments, and dispenses fragrances automatically.',
     modeMaintTitle: 'Maintenance',
     modeMaintBadge: 'Suspended',
-    modeMaintDesc: 'Kiosk displays maintenance screen, safely suspending dispensing for technicians.',
+    modeMaintDesc:
+      'Kiosk displays maintenance screen, safely suspending dispensing for technicians.',
     modeDisabledTitle: 'Disabled',
     modeDisabledBadge: 'System Offline',
-    modeDisabledDesc: 'Remotely suspends all kiosk operations due to severe issues or location closure.',
-    modeReauthNotice: 'Changing IoT operating mode requires password re-authentication for operational security.',
+    modeDisabledDesc:
+      'Remotely suspends all kiosk operations due to severe issues or location closure.',
+    modeReauthNotice:
+      'Changing IoT operating mode requires password re-authentication for operational security.',
     reasonLabel: 'REASON FOR MODE CHANGE',
-    reasonPlaceholderFull: 'Enter reason for change (e.g., Routine maintenance, nozzle clearing...)',
+    reasonPlaceholderFull:
+      'Enter reason for change (e.g., Routine maintenance, nozzle clearing...)',
     btnActivateNormal: 'Activate Normal Mode',
     btnSwitchMaintenance: 'Switch to Maintenance',
     btnConfirmDisabled: 'Confirm Disabled Mode',
@@ -282,7 +289,8 @@ export const en: SameKeysAs<typeof vi> = {
     calcTotalSprays: 'Total sprays / full bottle',
     calcAlertSprays: 'Low stock alert at',
     calcSpraysUnit: '~{count} sprays',
-    configReauthNotice: 'Dosage calibration directly affects dispensing accuracy and requires password re-authentication.',
+    configReauthNotice:
+      'Dosage calibration directly affects dispensing accuracy and requires password re-authentication.',
     configSavedSuccess: 'Slot {slotNumber} configuration saved',
     configSavedDesc: 'New dosage: {dosage} ml/spray • Alert threshold: {threshold} ml.',
   },
