@@ -12,18 +12,18 @@
 
 ## Ba điều phải nắm trước khi hiện thực module này
 
-**1. Phạm vi của người dùng thuộc thương hiệu đi qua hợp đồng, không qua máy.** `machines` không có
+**1. Phạm vi của người dùng thuộc thương hiệu đi qua hóa đơn, không qua máy.** `machines` không có
 `brand_id`. Mọi truy vấn dữ liệu thương hiệu phải nối qua `orders`/`slot_rentals`. Đây là quy tắc
 ở `spec/PROJECT.md` Mục 3 và là thứ Review Agent bắt buộc kiểm mọi PR.
 
-**2. Lọc theo `revenue_owner`, không chỉ theo `brand_id`.** Đơn phát sinh sau khi hợp đồng bị thanh
+**2. Lọc theo `revenue_owner`, không chỉ theo `brand_id`.** Đơn phát sinh sau khi hóa đơn bị thanh
 lý vẫn giữ `orders.brand_id` của thương hiệu cũ, nhưng `revenue_owner = PLATFORM` và thương hiệu
 **không** được thấy (FR-REV-06, FR-EXP-20). Lọc chỉ bằng `brand_id` là rò rỉ dữ liệu.
 
 **3. Phạm vi bị giới hạn theo thời gian, không chỉ theo tập slot.** FR-AUTH-07 cho phép thấy slot
-"đang **hoặc đã từng**" có hợp đồng — nhưng chỉ trong đúng kỳ hạn hợp đồng tương ứng
+"đang **hoặc đã từng**" có hóa đơn — nhưng chỉ trong đúng kỳ hạn hóa đơn tương ứng
 (`spec/glossary.md` §"Quy tắc cô lập dữ liệu"). Thương hiệu không được thấy giao dịch phát sinh
-trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
+trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
 
 ---
 
@@ -164,22 +164,22 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
 ---
 
 ## FR-AUTH-07 — Giới hạn phạm vi dữ liệu theo tập slot đã thuê
-* **Statement:** Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hợp đồng thuê.
+* **Statement:** Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hóa đơn thuê.
 * **Traces:** BR-003, BR-012 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Slot đang thuê):** Given thương hiệu `B1` có hợp đồng `ACTIVE` trên slot `S1`,  
+  * **AC1 (Slot đang thuê):** Given thương hiệu `B1` có hóa đơn `ACTIVE` trên slot `S1`,  
     When Brand Admin của `B1` truy vấn đơn hàng,  
-    Then kết quả chứa đơn của slot `S1` phát sinh trong kỳ hạn hợp đồng đó.
-  * **AC2 (Slot đã từng thuê):** Given `B1` từng thuê slot `S1` trong kỳ `[T1, T2]` và hợp đồng nay đã `CLOSED`,  
+    Then kết quả chứa đơn của slot `S1` phát sinh trong kỳ hạn hóa đơn đó.
+  * **AC2 (Slot đã từng thuê):** Given `B1` từng thuê slot `S1` trong kỳ `[T1, T2]` và hóa đơn nay đã `CLOSED`,  
     When Brand Admin của `B1` truy vấn đơn hàng,  
-    Then kết quả vẫn chứa đơn phát sinh **trong** `[T1, T2]` — quyền xem lịch sử không mất khi hợp đồng kết thúc.
+    Then kết quả vẫn chứa đơn phát sinh **trong** `[T1, T2]` — quyền xem lịch sử không mất khi hóa đơn kết thúc.
   * **AC3 (Giới hạn theo thời gian):** Given slot `S1` có đơn phát sinh **trước** `T1` (thuộc thương hiệu khác) hoặc **sau** `T2`,  
     When Brand Admin của `B1` truy vấn,  
     Then các đơn đó **không** xuất hiện — phạm vi bị chặn cả theo slot lẫn theo kỳ hạn.
   * **AC4 (Máy dùng chung):** Given máy `M` có slot `S1` của `B1` và slot `S2` của `B2`,  
     When Brand Admin của `B1` truy vấn bất kỳ dữ liệu nào,  
     Then không kết quả nào chứa dữ liệu của `S2`, và không có trường nào tiết lộ sự tồn tại của `B2` trên máy `M` (BR-012, FR-BND-08).
-  * **AC5 (Sau thanh lý):** Given hợp đồng của `B1` trên slot `S1` đã `LIQUIDATED` và slot tiếp tục bán hàng thanh lý,  
+  * **AC5 (Sau thanh lý):** Given hóa đơn của `B1` trên slot `S1` đã `LIQUIDATED` và slot tiếp tục bán hàng thanh lý,  
     When Brand Admin của `B1` truy vấn đơn hàng,  
     Then các đơn có `revenue_owner = PLATFORM` phát sinh sau thời điểm thanh lý **không** xuất hiện (FR-EXP-20, FR-REV-06) — lọc phải theo `revenue_owner`, không chỉ theo `brand_id`.
   * **AC6 (Đường truy vấn):** Given bất kỳ truy vấn nào trả dữ liệu thuộc thương hiệu,  
@@ -202,13 +202,13 @@ trên slot đó trước khi mình thuê hay sau khi hợp đồng kết thúc.
 * **Statement:** Hệ thống phải từ chối mọi yêu cầu truy cập tài nguyên ngoài phạm vi cho phép và trả về mã lỗi 403.
 * **Traces:** BR-003 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given Brand Admin của `B1` và một tài nguyên thuộc `B2` (đơn hàng, hợp đồng, sản phẩm, chai, yêu cầu bổ sung…),  
+  * **AC1:** Given Brand Admin của `B1` và một tài nguyên thuộc `B2` (đơn hàng, hóa đơn, sản phẩm, chai, yêu cầu bổ sung…),  
     When truy cập tài nguyên đó bằng id trực tiếp,  
     Then hệ thống trả HTTP 403 `FORBIDDEN_SCOPE`.
   * **AC2 (Không tiết lộ tồn tại):** Given id của một tài nguyên thuộc `B2` và id của một tài nguyên **không tồn tại**,  
     When Brand Admin của `B1` truy cập cả hai,  
     Then phản hồi không cho phép phân biệt hai trường hợp — không dùng 404 cho cái này và 403 cho cái kia theo cách suy ra được sự tồn tại (BR-012).
-  * **AC3 (Vai trò nền tảng):** Given người dùng có vai trò không đủ quyền cho thao tác (ví dụ Inventory Staff gọi endpoint duyệt hợp đồng),  
+  * **AC3 (Vai trò nền tảng):** Given người dùng có vai trò không đủ quyền cho thao tác (ví dụ Inventory Staff gọi endpoint duyệt hóa đơn),  
     When gửi yêu cầu,  
     Then hệ thống trả HTTP 403 `FORBIDDEN_SCOPE`.
   * **AC4 (Áp cho mọi động từ):** Given một tài nguyên ngoài phạm vi,  

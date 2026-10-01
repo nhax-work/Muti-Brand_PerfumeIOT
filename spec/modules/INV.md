@@ -74,14 +74,14 @@
 
 ## FR-INV-06 — Kiểm tra quyền sở hữu khi gán slot
 
-**Tuyên bố:** Hệ thống phải từ chối gán vào slot chai thuộc thương hiệu không có hợp đồng thuê slot đó.
+**Tuyên bố:** Hệ thống phải từ chối gán vào slot chai thuộc thương hiệu không có hóa đơn thuê slot đó.
 
 **Dấu vết:** BR-003, BR-012 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho slot có hợp đồng hiệu lực của Brand A và chai thuộc Brand A, Khi Inventory Staff gán chai vào slot, Thì hệ thống cho phép thao tác.
-- AC2: Cho slot có hợp đồng hiệu lực của Brand A và chai thuộc Brand B, Khi Inventory Staff gán chai vào slot, Thì hệ thống từ chối thao tác.
+- AC1: Cho slot có hóa đơn hiệu lực của Brand A và chai thuộc Brand A, Khi Inventory Staff gán chai vào slot, Thì hệ thống cho phép thao tác.
+- AC2: Cho slot có hóa đơn hiệu lực của Brand A và chai thuộc Brand B, Khi Inventory Staff gán chai vào slot, Thì hệ thống từ chối thao tác.
 
 **Kiểm tra:** `test_FR_INV_06_owner_contract`
 

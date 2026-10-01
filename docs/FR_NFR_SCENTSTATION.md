@@ -25,14 +25,14 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | Mã | Mục tiêu nghiệp vụ | Tiêu chí thành công |
 |---|---|---|
 | **BR-001** | Cho phép khách tự trải nghiệm nước hoa mà không cần nhân viên hỗ trợ, giúp thương hiệu mở rộng điểm trải nghiệm mà không tăng chi phí nhân sự | 100% lượt trải nghiệm hoàn tất không cần người can thiệp |
-| **BR-002** | Bảo đảm mỗi giao dịch đã thanh toán nhận đúng một lượt xịt, để khách tin tưởng và thương hiệu không thất thoát | 0 trường hợp xịt trùng; ≤1% giao dịch chưa xác định kết quả, và 100% số đó được xử lý trong 24 giờ |
+| **BR-002** | Bảo đảm mỗi giao dịch đã thanh toán được quyền nhận đúng một lượt xịt (khách bấm nút trong thời gian chờ — ADR-0007), để khách tin tưởng và thương hiệu không thất thoát | 0 trường hợp xịt trùng; ≤1% giao dịch chưa xác định kết quả, và 100% số đó được xử lý trong 24 giờ |
 | **BR-003** | Cho phép nhiều thương hiệu cùng khai thác một máy vật lý với dữ liệu kinh doanh được cô lập ở mức slot, để nền tảng tối đa hóa tỷ lệ lấp đầy máy | Thương hiệu chỉ truy cập được dữ liệu của slot mình đang hoặc đã từng thuê; 0 trường hợp rò rỉ dữ liệu chéo trong kiểm thử |
 | **BR-004** | Giảm chi phí vận hành bằng cách nền tảng quản lý tập trung toàn bộ máy, địa điểm và nhân sự vận hành, giúp thương hiệu tham gia mà không cần bộ máy vận hành riêng | Thương hiệu không cần bất kỳ nhân sự kỹ thuật nào để duy trì hoạt động slot của mình |
 | **BR-005** | Kiểm soát lượng nước hoa trong máy để tránh thất thoát và tránh tình trạng slot hết hàng khi khách đến | Sai lệch giữa tồn ước tính và số đo thực ≤10%; tỷ lệ thời gian slot hết hàng ≤2% |
 | **BR-006** | Rút ngắn thời gian máy ngừng hoạt động thông qua phát hiện sự cố sớm và quy trình bảo trì có theo dõi | Thời gian từ khi phát sinh cảnh báo nghiêm trọng đến khi tiếp nhận ≤4 giờ; uptime ≥95% |
 | **BR-007** | Cung cấp cho thương hiệu dữ liệu về mức độ quan tâm của khách với từng dòng nước hoa theo địa điểm và thời gian, phục vụ quyết định marketing và phân phối | Brand Admin xuất được báo cáo xếp hạng sản phẩm theo slot, máy, địa điểm và khoảng thời gian |
 | **BR-008** | Bảo đảm mọi khiếu nại của khách và tranh chấp với thương hiệu đều truy vết được đến từng giao dịch và từng lệnh xịt | 100% đơn hàng truy được chuỗi đơn → thanh toán → lệnh xịt → kết quả thiết bị |
-| **BR-009** | Tạo doanh thu cho nền tảng qua mô hình cho thuê slot theo kỳ, kết hợp phí cố định và tỷ lệ ăn chia doanh thu, với cơ chế đối soát và quyết toán theo từng hợp đồng slot | Mỗi kỳ sinh được bảng quyết toán theo từng thương hiệu, tách rõ phí thuê và phần ăn chia |
+| **BR-009** | Tạo doanh thu cho nền tảng qua bán gói thuê slot trả trước (3, 6, 12 tháng) kèm gói bảo quản hàng hóa, có hóa đơn cho từng lượt thuê và đối soát doanh thu lượt xịt chuyển trả theo từng thương hiệu | 100% slot chỉ nhận đơn sau khi hóa đơn thuê đã được thanh toán; mỗi kỳ sinh được bảng đối soát doanh thu theo từng thương hiệu và báo cáo doanh thu bán gói của nền tảng |
 | **BR-010** | Bảo đảm an toàn cho người dùng và tài sản khi máy vận hành không có người giám sát | Máy không xịt trong mọi điều kiện không an toàn đã định nghĩa; 0 sự cố an toàn trong giai đoạn pilot |
 | **BR-011** | Hạ rào cản tham gia cho thương hiệu bằng cách cho phép thuê từ một slot đơn lẻ, để thương hiệu thử nghiệm địa điểm mới với chi phí và rủi ro thấp | Một thương hiệu có thể bắt đầu kinh doanh với đúng một slot trên một máy |
 | **BR-012** | Bảo đảm thương hiệu chia sẻ chung một máy hoàn toàn không biết đến sự tồn tại, danh tính hay số liệu kinh doanh của nhau | Không có màn hình, báo cáo hay chỉ số nào trong hệ thống cho phép thương hiệu xác định thương hiệu khác đang thuê slot trên cùng máy, hoặc suy ra doanh thu và lượt bán của họ |
@@ -50,18 +50,21 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | 2 | Thương hiệu có biết ai chia sẻ cùng máy | Không. Hệ thống không tiết lộ danh tính, sản phẩm hay sự tồn tại của thương hiệu khác |
 | 3 | Xử lý hàng tồn khi hết hạn thuê | Ân hạn có tính phí, sau đó thanh lý về nền tảng nếu không gia hạn |
 | 4 | Giới hạn giá | Không. Thương hiệu tự do đặt giá lượt xịt |
-| 5 | Mô hình doanh thu nền tảng | Phí thuê slot cố định theo kỳ, cộng tỷ lệ ăn chia doanh thu, cấu hình theo từng hợp đồng |
-| 6 | Đơn vị hợp đồng | Một hợp đồng cho một slot. Thương hiệu thuê 3 slot có 3 hợp đồng độc lập |
+| 5 | Mô hình doanh thu nền tảng | Bán gói thuê slot trả trước và gói bảo quản. Gói dài hơn có ưu đãi. Không ăn chia doanh thu lượt xịt — doanh thu lượt xịt của thương hiệu về thương hiệu 100% |
+| 6 | Đơn vị thuê | Một hóa đơn cho một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập, nhưng có thể chọn cả 3 slot và thanh toán một lần trong một phiên thanh toán (`spec/decisions/0008-*.md`) |
+| 7 | Cách thuê slot | Tự phục vụ, không ký hợp đồng, không cần duyệt: Brand Admin xem slot trống → chọn một hoặc nhiều slot → chọn gói thuê (3/6/12 tháng) và gói bảo quản cho từng slot → thanh toán hết một lần qua cổng thanh toán → nhận một hóa đơn cho mỗi slot → cấu hình slot. Thời hạn tính từ lúc Inventory Staff lắp chai đầu tiên (`spec/decisions/0006-*.md`) |
+| 8 | Bảo hiểm hàng hóa | Mỗi lượt thuê bắt buộc chọn đúng một gói bảo quản. Chai hư hỏng khi đang do nền tảng giữ được bồi thường theo tỷ lệ và hạn mức của gói |
+| 9 | Khách kích hoạt lượt xịt thế nào | Mỗi slot có một nút vật lý có đèn. Thanh toán xong thì đèn nút của slot đã mua sáng; khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt. Quá thời gian không bấm thì mất lượt, **không hoàn tiền** — điều khoản hiện trên kiosk trước khi thanh toán. Mỗi máy chỉ phục vụ một lượt chờ bấm tại một thời điểm (`spec/decisions/0007-*.md`) |
 
-### Quy trình hết hạn hợp đồng và thanh lý
+### Quy trình hết hạn hóa đơn và thanh lý
 
 | Mốc | Diễn biến |
 |---|---|
 | T−7 ngày | Hệ thống thông báo cho Brand Admin, kèm lời mời gia hạn |
 | T−3 ngày | Hệ thống thông báo lần hai |
-| T (ngày hết hạn) | Hợp đồng chuyển sang thời gian ân hạn; Platform Super Admin ấn định độ dài |
+| T (ngày hết hạn) | Hóa đơn chuyển sang thời gian ân hạn; Platform Super Admin ấn định độ dài |
 | Trong ân hạn | Slot vẫn bán bình thường, doanh thu vẫn thuộc thương hiệu. Nền tảng tính phí lưu kho = tỷ lệ phần trăm × giá chai × số chai còn tồn |
-| Gia hạn thành công | Tạo hợp đồng mới nối tiếp; phí ân hạn quyết toán cùng kỳ |
+| Gia hạn thành công | Thương hiệu mua gói thuê mới cho chính slot đó; phí ân hạn đã phát sinh được cộng vào hóa đơn gia hạn |
 | Hết ân hạn, không gia hạn | Toàn bộ hàng tồn chuyển sang sở hữu nền tảng, đánh dấu là hàng thanh lý |
 | Sau thanh lý | Slot tiếp tục bán; toàn bộ doanh thu thuộc nền tảng |
 
@@ -78,6 +81,7 @@ BR trả lời câu hỏi *tại sao xây dựng hệ thống này*. Mỗi BR m�
 | **M** | Must — thuộc phạm vi MVP, bắt buộc hiện thực trong 13 tuần |
 | **S** | Should — hiện thực nếu còn thời gian sau tuần 9 |
 | **W** | Won't — có trong phân tích, không hiện thực, ghi vào chương Future Work |
+| **X** | Bãi bỏ — giữ dòng để số hiệu và truy vết không đứt, không hiện thực, không tính vào thống kê |
 
 Mỗi FR viết ở dạng "Hệ thống phải…", nguyên tử (một câu một yêu cầu), và kiểm chứng được.
 
@@ -90,7 +94,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | USR | Người dùng và vai trò | DSP | Điều khiển lượt xịt |
 | PRD | Danh mục sản phẩm | IOT | Giao tiếp thiết bị |
 | MCH | Máy và slot | ALR | Cảnh báo |
-| SLT | Hợp đồng thuê slot | MNT | Bảo trì |
+| SLT | Hóa đơn thuê slot | MNT | Bảo trì |
 | EXP | Ân hạn và thanh lý | RPT | Dashboard và báo cáo |
 | REV | Phân tách doanh thu | AUD | Nhật ký kiểm toán |
 | INV | Tồn kho và nạp nước hoa | | |
@@ -109,7 +113,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-AUTH-04 | Hệ thống phải cho phép người dùng đăng xuất và vô hiệu hóa refresh token của phiên đó | BR-003 | M |
 | FR-AUTH-05 | Hệ thống phải liên kết tài khoản Brand Admin với đúng một thương hiệu; tài khoản Platform Super Admin, Operations Staff và Inventory Staff không liên kết với thương hiệu nào | BR-003, BR-004 | M |
 | FR-AUTH-06 | Hệ thống phải gán cho mỗi tài khoản một hoặc nhiều vai trò trong tập: Platform Super Admin, Operations Staff, Inventory Staff, Brand Admin | BR-003 | M |
-| FR-AUTH-07 | Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hợp đồng thuê | BR-003, BR-012 | M |
+| FR-AUTH-07 | Hệ thống phải giới hạn phạm vi dữ liệu của người dùng thuộc thương hiệu theo tập slot mà thương hiệu đó đang hoặc đã từng có hóa đơn thuê | BR-003, BR-012 | M |
 | FR-AUTH-08 | Hệ thống phải từ chối mọi yêu cầu truy cập tài nguyên ngoài phạm vi cho phép và trả về mã lỗi 403 | BR-003 | M |
 | FR-AUTH-09 | Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy | BR-002, BR-005, BR-013 | M |
 | FR-AUTH-10 | Hệ thống phải thu hồi toàn bộ phiên đăng nhập đang hoạt động trong vòng 60 giây khi tài khoản bị vô hiệu hóa | BR-003 | M |
@@ -124,10 +128,10 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-BND-02 | Hệ thống phải cho phép Platform Super Admin cập nhật thông tin thương hiệu | BR-003 | M |
 | FR-BND-03 | Hệ thống phải cho phép Platform Super Admin chuyển thương hiệu sang trạng thái ACTIVE hoặc SUSPENDED | BR-003 | M |
 | FR-BND-04 | Hệ thống phải từ chối tạo đơn hàng mới trên slot thuộc thương hiệu đang ở trạng thái SUSPENDED | BR-003 | M |
-| FR-BND-05 | Hệ thống phải tự động lọc mọi truy vấn dữ liệu của người dùng thuộc thương hiệu theo tập hợp đồng thuê slot của thương hiệu đó | BR-003, BR-012 | M |
+| FR-BND-05 | Hệ thống phải tự động lọc mọi truy vấn dữ liệu của người dùng thuộc thương hiệu theo tập hóa đơn thuê slot của thương hiệu đó | BR-003, BR-012 | M |
 | FR-BND-06 | Hệ thống phải cho phép Brand Admin quản lý tên hiển thị, logo, mô tả và thông tin liên hệ của thương hiệu mình | BR-003 | M |
 | FR-BND-07 | Hệ thống phải cho phép Platform Super Admin xem dữ liệu tổng hợp của tất cả thương hiệu | BR-003, BR-009 | M |
-| FR-BND-08 | Hệ thống phải không tiết lộ cho người dùng thuộc một thương hiệu bất kỳ thông tin nào về thương hiệu khác, bao gồm tên, sản phẩm và sự tồn tại của hợp đồng thuê trên cùng máy | BR-012 | M |
+| FR-BND-08 | Hệ thống phải không tiết lộ cho người dùng thuộc một thương hiệu bất kỳ thông tin nào về thương hiệu khác, bao gồm tên, sản phẩm và sự tồn tại của hóa đơn thuê trên cùng máy | BR-012 | M |
 
 ## A3. FR-USR — Người dùng và vai trò
 
@@ -169,69 +173,91 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-MCH-13 | Hệ thống phải lưu lịch sử thay đổi cấu hình máy và slot | BR-008 | M |
 | FR-MCH-14 | Hệ thống phải lưu lịch sử di chuyển máy giữa các địa điểm | BR-004 | S |
 | FR-MCH-15 | Hệ thống phải quản lý trạng thái khả dụng của slot theo tập: AVAILABLE, UNAVAILABLE, MAINTENANCE, DISABLED | BR-002, BR-005 | M |
-| FR-MCH-16 | Hệ thống phải chuyển slot sang AVAILABLE khi đồng thời thỏa: có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED; đã gán sản phẩm; có chai đang lắp với lượng còn lại đủ cho một lượt xịt; và slot không bị tắt thủ công | BR-002, BR-005 | M |
+| FR-MCH-16 | Hệ thống phải chuyển slot sang AVAILABLE khi đồng thời thỏa: có hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED; đã gán sản phẩm và đặt giá lượt xịt; có chai đang lắp với lượng còn lại đủ cho một lượt xịt; và slot không bị tắt thủ công | BR-002, BR-005 | M |
 | FR-MCH-17 | Hệ thống phải chuyển slot sang UNAVAILABLE ngay khi bất kỳ điều kiện tại FR-MCH-16 không còn thỏa | BR-002, BR-005 | M |
 
-## A6. FR-SLT — Hợp đồng thuê slot
+## A6. FR-SLT — Hóa đơn thuê slot
+
+> Viết lại ngày 2026-09-25 theo `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md`
+> (**đã duyệt 2026-09-29**): thuê slot theo gói trả trước tự phục vụ, không ký hợp đồng, không
+> duyệt tay. "Hóa đơn thuê slot" là thuật ngữ tiếng Việt của thực thể `SlotRental`.
 
 | Mã | Yêu cầu | BR | Ưu tiên |
 |---|---|---|---|
-| FR-SLT-01 | Hệ thống phải cho phép Platform Super Admin tạo hợp đồng thuê slot gồm slot, thương hiệu, ngày bắt đầu, ngày kết thúc, phí cố định theo kỳ và tỷ lệ ăn chia doanh thu | BR-009, BR-011 | M |
-| FR-SLT-02 | Hệ thống phải bảo đảm mỗi slot chỉ có tối đa một hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED tại một thời điểm | BR-009 | M |
+| FR-SLT-01 | ~~Hệ thống phải cho phép Platform Super Admin tạo hợp đồng thuê slot gồm slot, thương hiệu, ngày bắt đầu, ngày kết thúc, phí cố định theo kỳ và tỷ lệ ăn chia doanh thu~~ — bãi bỏ theo ADR-0006; hóa đơn chỉ sinh ra từ việc thương hiệu mua gói (FR-SLT-35) | BR-009, BR-011 | X |
+| FR-SLT-02 | Hệ thống phải bảo đảm mỗi slot chỉ có tối đa một hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED tại một thời điểm | BR-009 | M |
 | FR-SLT-03 | Hệ thống phải cho phép một thương hiệu thuê đồng thời nhiều slot trên cùng một máy | BR-011 | M |
 | FR-SLT-04 | Hệ thống phải cho phép mỗi slot của cùng một thương hiệu trên cùng một máy có sản phẩm, giá và kỳ hạn riêng biệt | BR-009, BR-011 | M |
-| FR-SLT-05 | Hệ thống phải từ chối tạo hợp đồng có kỳ hạn chồng lấn với hợp đồng đang tồn tại trên cùng slot | BR-009 | M |
-| FR-SLT-06 | Hệ thống phải quản lý trạng thái hợp đồng theo tập: DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED | BR-009, BR-013 | M |
-| FR-SLT-07 | Hệ thống phải chỉ cho phép gán vào slot sản phẩm thuộc thương hiệu đang có hợp đồng thuê slot đó | BR-003, BR-012 | M |
+| FR-SLT-05 | Hệ thống phải từ chối tạo hóa đơn có kỳ hạn chồng lấn với hóa đơn đang tồn tại trên cùng slot | BR-009 | M |
+| FR-SLT-06 | Hệ thống phải quản lý trạng thái hóa đơn theo tập: DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED, CANCELLED | BR-009, BR-013 | M |
+| FR-SLT-07 | Hệ thống phải chỉ cho phép gán vào slot sản phẩm thuộc thương hiệu đang có hóa đơn thuê slot đó | BR-003, BR-012 | M |
 | FR-SLT-08 | Hệ thống phải cho phép Brand Admin tự do đặt giá mỗi lượt xịt cho slot mình thuê, không bị giới hạn bởi giá sàn hay giá trần | BR-009, BR-011 | M |
 | FR-SLT-09 | Hệ thống phải áp dụng giá mới cho các đơn hàng tạo sau thời điểm thay đổi, không ảnh hưởng đơn hàng đang chờ thanh toán | BR-002, BR-009 | M |
-| FR-SLT-10 | Hệ thống phải từ chối tạo đơn hàng mới trên slot không có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED | BR-002, BR-009 | M |
-| FR-SLT-11 | Hệ thống phải chuyển slot sang trạng thái UNAVAILABLE khi hợp đồng chuyển sang TERMINATED hoặc CLOSED | BR-009 | M |
-| FR-SLT-12 | Hệ thống phải cho phép Platform Super Admin gia hạn hợp đồng bằng cách tạo hợp đồng kế tiếp và liên kết với hợp đồng cũ | BR-009 | M |
-| FR-SLT-13 | Hệ thống phải cho phép Platform Super Admin chấm dứt hợp đồng trước hạn kèm lý do bắt buộc | BR-009 | S |
-| FR-SLT-14 | Hệ thống phải cho phép Platform Super Admin đóng hợp đồng ở trạng thái LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được tháo khỏi slot, để giải phóng slot cho hợp đồng mới | BR-009, BR-013 | M |
-| FR-SLT-15 | Hệ thống phải lưu lịch sử toàn bộ hợp đồng đã từng tồn tại trên mỗi slot | BR-008, BR-009 | M |
+| FR-SLT-10 | Hệ thống phải từ chối tạo đơn hàng mới trên slot không có hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED | BR-002, BR-009 | M |
+| FR-SLT-11 | Hệ thống phải chuyển slot sang trạng thái UNAVAILABLE khi hóa đơn chuyển sang TERMINATED hoặc CLOSED | BR-009 | M |
+| FR-SLT-12 | Hệ thống phải cho phép Brand Admin gia hạn bằng cách mua gói thuê mới cho chính slot mình đang thuê khi hóa đơn hiện tại ở EXPIRING hoặc GRACE, tạo hóa đơn gia hạn liên kết với hóa đơn cũ | BR-009, BR-011 | M |
+| FR-SLT-13 | Hệ thống phải cho phép Platform Super Admin chấm dứt hóa đơn trước hạn kèm lý do bắt buộc, không tự động hoàn tiền | BR-009 | S |
+| FR-SLT-14 | Hệ thống phải cho phép Platform Super Admin đóng hóa đơn ở trạng thái LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được tháo khỏi slot, để giải phóng slot cho hóa đơn mới | BR-009, BR-013 | M |
+| FR-SLT-15 | Hệ thống phải lưu lịch sử toàn bộ hóa đơn đã từng tồn tại trên mỗi slot | BR-008, BR-009 | M |
 | FR-SLT-16 | Hệ thống phải hiển thị cho Platform Super Admin tỷ lệ lấp đầy slot theo máy và theo địa điểm | BR-009 | S |
-| FR-SLT-17 | Hệ thống phải tạo bảng quyết toán theo kỳ cho mỗi thương hiệu, gộp toàn bộ hợp đồng của thương hiệu trong kỳ, có dòng chi tiết theo từng slot | BR-009 | M |
-| FR-SLT-18 | Hệ thống phải tính trong bảng quyết toán: doanh thu lượt xịt thuộc thương hiệu, phí thuê cố định, phần ăn chia doanh thu, phí ân hạn và số tiền phải thanh toán | BR-009, BR-013 | M |
-| FR-SLT-19 | Hệ thống phải cho phép Brand Admin xem danh sách slot đang trống (không có hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED) theo máy và địa điểm, không kèm thông tin thương hiệu đã từng thuê trước đó | BR-011, BR-012 | M |
-| FR-SLT-20 | Hệ thống phải cho phép Brand Admin gửi yêu cầu thuê một hoặc nhiều slot trống, kèm kỳ hạn mong muốn | BR-011 | M |
-| FR-SLT-21 | Hệ thống phải quản lý trạng thái yêu cầu thuê theo tập: REQUESTED, APPROVED, REJECTED, CONVERTED, CANCELLED | BR-011 | M |
-| FR-SLT-22 | Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối yêu cầu thuê, kèm lý do bắt buộc khi từ chối | BR-009, BR-011 | M |
-| FR-SLT-23 | Hệ thống phải tự động tạo hợp đồng ở trạng thái DRAFT khi yêu cầu thuê được duyệt, liên kết với yêu cầu gốc, điền theo điều khoản phí và tỷ lệ ăn chia do Platform Super Admin xác nhận | BR-009 | M |
-| FR-SLT-24 | Hệ thống phải tự động chuyển hợp đồng từ DRAFT sang ACTIVE đúng ngày bắt đầu đã cấu hình, kể cả khi hệ thống có thời gian ngừng qua mốc chuyển trạng thái | BR-009 | M |
-| FR-SLT-25 | Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các yêu cầu thuê của thương hiệu mình | BR-011 | M |
-| FR-SLT-26 | Hệ thống phải ngăn Brand Admin gửi yêu cầu thuê mới trên cùng slot khi đã tồn tại yêu cầu ở trạng thái REQUESTED hoặc APPROVED chưa xử lý xong | BR-011 | M |
-| FR-SLT-27 | Hệ thống phải cho phép Brand Admin gán đúng một sản phẩm đang kinh doanh của thương hiệu mình vào slot đang có hợp đồng hiệu lực | BR-011 | M |
+| FR-SLT-17 | Hệ thống phải tạo bảng đối soát doanh thu theo kỳ cho mỗi thương hiệu, gộp toàn bộ hóa đơn của thương hiệu trong kỳ, có dòng chi tiết theo từng slot | BR-009 | M |
+| FR-SLT-18 | Hệ thống phải tính trong bảng đối soát: số đơn hàng, doanh thu lượt xịt thuộc thương hiệu và số tiền nền tảng phải chuyển trả cho thương hiệu | BR-009 | M |
+| FR-SLT-19 | Hệ thống phải cho phép Brand Admin xem danh sách slot đang trống đã có giá thuê niêm yết, theo máy và địa điểm, kèm giá niêm yết theo tháng, không kèm thông tin thương hiệu đã từng thuê trước đó | BR-011, BR-012 | M |
+| FR-SLT-20 | ~~Hệ thống phải cho phép Brand Admin gửi yêu cầu thuê một hoặc nhiều slot trống, kèm kỳ hạn mong muốn~~ — bãi bỏ theo ADR-0006; thay bằng FR-SLT-35 | BR-011 | X |
+| FR-SLT-21 | ~~Hệ thống phải quản lý trạng thái yêu cầu thuê theo tập: REQUESTED, APPROVED, REJECTED, CONVERTED, CANCELLED~~ — bãi bỏ theo ADR-0006 | BR-011 | X |
+| FR-SLT-22 | ~~Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối yêu cầu thuê, kèm lý do bắt buộc khi từ chối~~ — bãi bỏ theo ADR-0006; không còn bước duyệt tay | BR-009, BR-011 | X |
+| FR-SLT-23 | ~~Hệ thống phải tự động tạo hợp đồng ở trạng thái DRAFT khi yêu cầu thuê được duyệt~~ — bãi bỏ theo ADR-0006; thay bằng FR-SLT-35 | BR-009 | X |
+| FR-SLT-24 | Hệ thống phải chuyển hóa đơn đã thanh toán từ DRAFT sang ACTIVE khi Inventory Staff lắp chai đầu tiên vào slot, đặt ngày bắt đầu là thời điểm lắp và ngày kết thúc bằng ngày bắt đầu cộng thời hạn gói thuê | BR-009 | M |
+| FR-SLT-25 | ~~Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các yêu cầu thuê của thương hiệu mình~~ — bãi bỏ theo ADR-0006; thay bằng FR-SLT-41 | BR-011 | X |
+| FR-SLT-26 | ~~Hệ thống phải ngăn Brand Admin gửi yêu cầu thuê mới trên cùng slot khi đã tồn tại yêu cầu chưa xử lý xong~~ — bãi bỏ theo ADR-0006; thay bằng giữ chỗ ở FR-SLT-35 | BR-011 | X |
+| FR-SLT-27 | Hệ thống phải cho phép Brand Admin gán đúng một sản phẩm đang kinh doanh của thương hiệu mình vào slot có hóa đơn đã thanh toán và chưa kết thúc | BR-011 | M |
 | FR-SLT-28 | Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot, ghi nhận thời điểm đổi | BR-011 | M |
-| FR-SLT-29 | Hệ thống phải từ chối tạo đơn hàng tại slot chưa được gán sản phẩm | BR-002, BR-011 | M |
+| FR-SLT-29 | Hệ thống phải từ chối tạo đơn hàng tại slot chưa được gán sản phẩm hoặc chưa đặt giá lượt xịt | BR-002, BR-011 | M |
+| FR-SLT-30 | Hệ thống phải cho phép Platform Super Admin quản lý danh mục gói thuê gồm tên, thời hạn theo tháng, tỷ lệ ưu đãi và trạng thái mở bán | BR-009, BR-011 | M |
+| FR-SLT-31 | Hệ thống phải cho phép Platform Super Admin quản lý danh mục gói bảo quản gồm tên, mô tả quyền lợi, giá mỗi tháng, tỷ lệ bồi thường theo giá bán lẻ chai, hạn mức bồi thường và trạng thái mở bán | BR-005, BR-009 | M |
+| FR-SLT-32 | Hệ thống phải cho phép Platform Super Admin đặt giá thuê niêm yết theo tháng cho từng slot | BR-009 | M |
+| FR-SLT-33 | Hệ thống phải chụp giá niêm yết, tỷ lệ ưu đãi và điều khoản gói bảo quản vào hóa đơn lúc tạo, không thay đổi khi bảng giá thay đổi sau đó | BR-008, BR-009 | M |
+| FR-SLT-34 | Hệ thống phải hiển thị cho Brand Admin các gói thuê và gói bảo quản đang mở bán cho slot đã chọn, kèm số tiền của từng lựa chọn sau ưu đãi | BR-011 | M |
+| FR-SLT-35 | Hệ thống phải cho phép Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản, để tạo trong một phiên thanh toán một hóa đơn DRAFT cho mỗi slot, giữ chỗ mọi slot trong `RENTAL_CHECKOUT_HOLD_MIN` phút | BR-011 | M |
+| FR-SLT-36 | Hệ thống phải tính tổng tiền hóa đơn bằng phí thuê (giá niêm yết × số tháng × (1 − tỷ lệ ưu đãi)) cộng phí bảo quản (giá gói bảo quản mỗi tháng × số tháng) cộng phí ân hạn chuyển sang nếu là hóa đơn gia hạn, và tổng tiền phiên thanh toán bằng tổng tiền các hóa đơn trong phiên | BR-009, BR-013 | M |
+| FR-SLT-37 | Hệ thống phải cho phép Brand Admin thanh toán một lần toàn bộ các hóa đơn trong một phiên thanh toán qua cổng thanh toán, và bảo đảm mỗi phiên có tối đa một thanh toán đang chờ | BR-009, BR-011 | M |
+| FR-SLT-38 | Hệ thống phải xác nhận thanh toán phiên thanh toán thuê slot qua webhook của cổng thanh toán theo đúng quy tắc của FR-ORD-13 đến FR-ORD-15, và khi thành công thì ghi nhận thời điểm thanh toán cho phiên và mọi hóa đơn trong phiên, và cấp cho mỗi hóa đơn một số hóa đơn duy nhất | BR-008, BR-009 | M |
+| FR-SLT-39 | Hệ thống phải tự động hủy phiên thanh toán chưa thanh toán khi hết thời gian giữ chỗ, chuyển mọi hóa đơn DRAFT của phiên sang CANCELLED, và giải phóng mọi slot của phiên | BR-011 | M |
+| FR-SLT-40 | Hệ thống phải cho phép Brand Admin xem và tải hóa đơn đã thanh toán, gồm số hóa đơn, slot, máy, địa điểm, gói thuê, gói bảo quản, đơn giá, ưu đãi, từng khoản tiền, tổng tiền, thời điểm thanh toán và thời hạn hiệu lực | BR-008, BR-011 | M |
+| FR-SLT-41 | Hệ thống phải cho phép Brand Admin xem danh sách hóa đơn của thương hiệu mình kèm trạng thái: chờ thanh toán, chờ nạp hàng, đang hiệu lực, sắp hết hạn, ân hạn, đã thanh lý, đã kết thúc hoặc đã hủy | BR-011 | M |
+| FR-SLT-42 | Hệ thống phải tự động kích hoạt hóa đơn đã thanh toán khi quá `RENTAL_MAX_STOCKING_DAYS` ngày kể từ lúc thanh toán mà chưa lắp chai, với ngày bắt đầu là thời điểm kích hoạt | BR-009 | M |
+| FR-SLT-43 | Hệ thống phải thông báo cho Brand Admin khi hóa đơn được thanh toán thành công và khi hóa đơn bắt đầu hiệu lực, kèm ngày kết thúc | BR-011 | M |
+| FR-SLT-44 | Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá bán lẻ chai, không vượt hạn mức còn lại | BR-005, BR-008 | M |
+| FR-SLT-45 | Hệ thống phải cho phép Platform Super Admin ghi nhận đã chi trả bồi thường kèm mã giao dịch, sau khi xác thực lại mật khẩu | BR-008 | M |
+| FR-SLT-46 | Hệ thống phải cho phép Brand Admin xem các khoản bồi thường của thương hiệu mình và trạng thái chi trả | BR-005, BR-012 | M |
+| FR-SLT-47 | Hệ thống phải cho phép Platform Super Admin xem doanh thu bán gói thuê và gói bảo quản theo khoảng thời gian, gói, máy và địa điểm | BR-009 | M |
 
 ## A7. FR-EXP — Ân hạn, gia hạn và thanh lý hàng tồn
 
 | Mã | Yêu cầu | BR | Ưu tiên |
 |---|---|---|---|
-| FR-EXP-01 | Hệ thống phải thông báo cho Brand Admin khi hợp đồng còn 7 ngày là hết hạn, kèm lời mời gia hạn | BR-009, BR-013 | M |
-| FR-EXP-02 | Hệ thống phải thông báo lần hai cho Brand Admin khi hợp đồng còn 3 ngày là hết hạn | BR-009, BR-013 | M |
-| FR-EXP-03 | Hệ thống phải gộp các hợp đồng của cùng một thương hiệu hết hạn trong cùng ngày thành một thông báo duy nhất liệt kê đầy đủ các slot | BR-013 | M |
+| FR-EXP-01 | Hệ thống phải thông báo cho Brand Admin khi hóa đơn còn 7 ngày là hết hạn, kèm lời mời gia hạn | BR-009, BR-013 | M |
+| FR-EXP-02 | Hệ thống phải thông báo lần hai cho Brand Admin khi hóa đơn còn 3 ngày là hết hạn | BR-009, BR-013 | M |
+| FR-EXP-03 | Hệ thống phải gộp các hóa đơn của cùng một thương hiệu hết hạn trong cùng ngày thành một thông báo duy nhất liệt kê đầy đủ các slot | BR-013 | M |
 | FR-EXP-04 | Hệ thống phải ghi nhật ký kiểm toán cho mỗi lần gửi thông báo hết hạn, kèm thời điểm và người nhận | BR-008, BR-013 | M |
-| FR-EXP-05 | Hệ thống phải chuyển hợp đồng sang trạng thái EXPIRING khi còn 7 ngày là hết hạn | BR-009 | M |
-| FR-EXP-06 | Hệ thống phải chuyển hợp đồng sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hợp đồng gia hạn | BR-013 | M |
-| FR-EXP-07 | Hệ thống phải cho phép Platform Super Admin ấn định ngày kết thúc thời gian ân hạn cho từng hợp đồng | BR-013 | M |
+| FR-EXP-05 | Hệ thống phải chuyển hóa đơn sang trạng thái EXPIRING khi còn 7 ngày là hết hạn | BR-009 | M |
+| FR-EXP-06 | Hệ thống phải chuyển hóa đơn sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hóa đơn gia hạn | BR-013 | M |
+| FR-EXP-07 | Hệ thống phải cho phép Platform Super Admin ấn định ngày kết thúc thời gian ân hạn cho từng hóa đơn | BR-013 | M |
 | FR-EXP-08 | Hệ thống phải cho phép slot tiếp tục tiếp nhận đơn hàng trong thời gian ân hạn | BR-013 | M |
 | FR-EXP-09 | Hệ thống phải ghi nhận doanh thu phát sinh trong thời gian ân hạn thuộc về thương hiệu | BR-013 | M |
 | FR-EXP-10 | Hệ thống phải tính phí lưu kho trong thời gian ân hạn bằng tỷ lệ phần trăm cấu hình được nhân với giá chai và số chai còn tồn của thương hiệu tại slot đó | BR-013 | S |
 | FR-EXP-11 | Hệ thống phải hiển thị cho Brand Admin số tiền phí ân hạn đang phát sinh và ngày kết thúc ân hạn | BR-013 | S |
-| FR-EXP-12 | Hệ thống phải đưa phí ân hạn đã phát sinh vào bảng quyết toán của kỳ tương ứng | BR-009, BR-013 | S |
-| FR-EXP-13 | Hệ thống phải chuyển hợp đồng sang trạng thái RENEWED và dừng tính phí ân hạn khi thương hiệu gia hạn thành công | BR-013 | M |
-| FR-EXP-14 | Hệ thống phải chuyển hợp đồng sang trạng thái LIQUIDATED khi hết thời gian ân hạn mà chưa gia hạn | BR-013 | M |
-| FR-EXP-15 | Hệ thống phải chuyển quyền sở hữu toàn bộ chai còn tồn của thương hiệu tại slot đó sang nền tảng khi hợp đồng chuyển sang LIQUIDATED | BR-013 | M |
-| FR-EXP-16 | Hệ thống phải ghi nhận thời điểm thanh lý và hợp đồng nguồn cho mỗi chai bị thanh lý | BR-008, BR-013 | M |
+| FR-EXP-12 | Hệ thống phải cộng phí ân hạn đã phát sinh vào hóa đơn gia hạn của slot tương ứng | BR-009, BR-013 | S |
+| FR-EXP-13 | Hệ thống phải chuyển hóa đơn sang trạng thái RENEWED và dừng tính phí ân hạn khi thương hiệu gia hạn thành công, tức là khi hóa đơn gia hạn đã thanh toán bắt đầu hiệu lực | BR-013 | M |
+| FR-EXP-14 | Hệ thống phải chuyển hóa đơn sang trạng thái LIQUIDATED khi hết thời gian ân hạn mà chưa gia hạn | BR-013 | M |
+| FR-EXP-15 | Hệ thống phải chuyển quyền sở hữu toàn bộ chai còn tồn của thương hiệu tại slot đó sang nền tảng khi hóa đơn chuyển sang LIQUIDATED | BR-013 | M |
+| FR-EXP-16 | Hệ thống phải ghi nhận thời điểm thanh lý và hóa đơn nguồn cho mỗi chai bị thanh lý | BR-008, BR-013 | M |
 | FR-EXP-17 | Hệ thống phải cho phép slot tiếp tục tiếp nhận đơn hàng sau khi thanh lý, bán hàng tồn thuộc sở hữu nền tảng | BR-013 | M |
 | FR-EXP-18 | Hệ thống phải cho phép Platform Super Admin đặt giá lượt xịt cho slot đang bán hàng thanh lý | BR-013 | M |
 | FR-EXP-19 | Hệ thống phải thông báo cho Brand Admin khi hàng tồn của họ bị thanh lý, kèm danh sách chai và khối lượng còn lại | BR-013 | M |
 | FR-EXP-20 | Hệ thống phải chấm dứt quyền truy cập của thương hiệu tới dữ liệu giao dịch phát sinh sau thời điểm thanh lý trên slot đó | BR-012, BR-013 | M |
-| FR-EXP-21 | Hệ thống phải ghi nhật ký kiểm toán cho mọi sự kiện chuyển sang ân hạn, gia hạn, thanh lý và đóng hợp đồng | BR-008 | M |
-| FR-EXP-22 | Hệ thống phải áp dụng quy trình ân hạn và thanh lý độc lập cho từng hợp đồng, kể cả khi cùng thương hiệu có nhiều slot trên cùng máy | BR-013 | M |
+| FR-EXP-21 | Hệ thống phải ghi nhật ký kiểm toán cho mọi sự kiện chuyển sang ân hạn, gia hạn, thanh lý và đóng hóa đơn | BR-008 | M |
+| FR-EXP-22 | Hệ thống phải áp dụng quy trình ân hạn và thanh lý độc lập cho từng hóa đơn, kể cả khi cùng thương hiệu có nhiều slot trên cùng máy | BR-013 | M |
 
 ## A8. FR-REV — Phân tách doanh thu
 
@@ -254,7 +280,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-03 | Hệ thống phải ghi nhận cho mỗi chai chủ sở hữu là một thương hiệu cụ thể hoặc là nền tảng | BR-005, BR-013 | M |
 | FR-INV-04 | Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED | BR-005, BR-013 | M |
 | FR-INV-05 | Hệ thống phải ghi nhận khối lượng ban đầu của chai tại thời điểm lắp vào slot | BR-005 | M |
-| FR-INV-06 | Hệ thống phải từ chối gán vào slot chai thuộc thương hiệu không có hợp đồng thuê slot đó | BR-003, BR-012 | M |
+| FR-INV-06 | Hệ thống phải từ chối gán vào slot chai thuộc thương hiệu không có hóa đơn thuê slot đó | BR-003, BR-012 | M |
 | FR-INV-07 | Hệ thống phải cảnh báo khi Inventory Staff gán chai có sản phẩm không khớp với sản phẩm cấu hình cho slot | BR-005 | M |
 | FR-INV-08 | Hệ thống phải từ chối gán chai đã quá hạn sử dụng vào slot | BR-005 | M |
 | FR-INV-09 | Hệ thống phải ước tính lượng còn lại của mỗi slot dựa trên số lượt xịt thành công và lượng tiêu thụ trung bình đã hiệu chuẩn | BR-005 | M |
@@ -306,25 +332,29 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-02 | Hệ thống phải hiển thị tên, mô tả, hình ảnh, tầng hương và giá của sản phẩm khi khách chọn một slot | BR-001 | M |
 | FR-ORD-03 | Hệ thống phải cho phép khách lọc danh mục trên kiosk theo thương hiệu | BR-001 | S |
 | FR-ORD-04 | Hệ thống phải chỉ cho phép tạo đơn khi máy ở trạng thái ONLINE và slot được chọn ở trạng thái AVAILABLE | BR-001, BR-002 | M |
-| FR-ORD-05 | Hệ thống phải lưu định danh máy, slot, hợp đồng thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn | BR-002, BR-008, BR-013 | M |
+| FR-ORD-05 | Hệ thống phải lưu định danh máy, slot, hóa đơn thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn | BR-002, BR-008, BR-013 | M |
 | FR-ORD-06 | Hệ thống phải giữ nguyên giá đã lưu trong đơn hàng kể cả khi giá slot thay đổi sau đó | BR-002 | M |
 | FR-ORD-07 | Hệ thống phải sinh cho mỗi đơn hàng một mã tham chiếu duy nhất trên toàn hệ thống | BR-002, BR-008 | M |
 | FR-ORD-08 | Hệ thống phải sinh mã QR thanh toán tương ứng với mã tham chiếu của đơn hàng | BR-001 | M |
 | FR-ORD-09 | Hệ thống phải gán cho mỗi đơn hàng một thời hạn thanh toán mặc định 5 phút, có thể cấu hình | BR-002 | M |
-| FR-ORD-10 | Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED | BR-002, BR-008 | M |
+| FR-ORD-10 | Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED, FORFEITED | BR-002, BR-008 | M |
 | FR-ORD-11 | Hệ thống phải hiển thị trạng thái thanh toán trên kiosk và cập nhật trong vòng 3 giây kể từ khi trạng thái thay đổi | BR-001 | M |
 | FR-ORD-12 | Hệ thống phải tiếp nhận thông báo kết quả thanh toán từ nhà cung cấp qua webhook | BR-002 | M |
 | FR-ORD-13 | Hệ thống phải xác minh chữ ký của mỗi webhook trước khi xử lý và từ chối webhook có chữ ký không hợp lệ | BR-002 | M |
 | FR-ORD-14 | Hệ thống phải xác minh mã tham chiếu, số tiền và loại tiền trong webhook khớp với đơn hàng tương ứng | BR-002 | M |
 | FR-ORD-15 | Hệ thống phải bảo đảm mỗi webhook chỉ được xử lý đúng một lần, kể cả khi nhà cung cấp gửi lại nhiều lần | BR-002 | M |
 | FR-ORD-16 | Hệ thống phải chuyển đơn hàng sang trạng thái EXPIRED khi quá thời hạn thanh toán mà chưa nhận được xác nhận | BR-002 | M |
-| FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED hoặc REFUNDED | BR-002 | M |
+| FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED, REFUNDED hoặc FORFEITED | BR-002 | M |
 | FR-ORD-18 | Hệ thống phải lưu toàn bộ lịch sử chuyển trạng thái của đơn hàng kèm thời điểm và nguyên nhân | BR-008 | M |
-| FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định | BR-002, BR-006 | M |
+| FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định, trừ trường hợp khách không bấm nút trong thời gian chờ | BR-002, BR-006 | M |
 | FR-ORD-20 | Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công | BR-002 | S |
 | FR-ORD-21 | Hệ thống phải hiển thị hướng dẫn xử lý cho khách trên kiosk khi đã thanh toán nhưng lượt xịt thất bại, kèm mã tham chiếu sự cố | BR-002 | M |
 | FR-ORD-22 | Hệ thống phải cho phép tìm kiếm giao dịch theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng thái | BR-008 | M |
 | FR-ORD-23 | Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch | BR-008, BR-009 | S |
+| FR-ORD-24 | Hệ thống phải từ chối tạo đơn hàng mới trên máy đang có lệnh xịt khách hàng chờ bấm nút | BR-002 | M |
+| FR-ORD-25 | Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền | BR-001, BR-002 | M |
+| FR-ORD-26 | Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ | BR-001 | M |
+| FR-ORD-27 | Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn | BR-002, BR-009 | M |
 
 ## A12. FR-DSP — Điều khiển lượt xịt an toàn
 
@@ -335,21 +365,28 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-DSP-03 | Hệ thống phải gán cho mỗi lệnh xịt định danh máy đích, định danh slot đích, thời điểm tạo và thời hạn hiệu lực | BR-002 | M |
 | FR-DSP-04 | Hệ thống phải ký số mỗi lệnh xịt trước khi gửi tới thiết bị | BR-002 | M |
 | FR-DSP-05 | Hệ thống phải bảo đảm mỗi đơn hàng không có quá một lệnh xịt ở trạng thái đang hiệu lực tại bất kỳ thời điểm nào | BR-002 | M |
-| FR-DSP-06 | Hệ thống phải đặt thời hạn hiệu lực của lệnh xịt tối đa 60 giây kể từ thời điểm tạo | BR-002 | M |
+| FR-DSP-06 | Hệ thống phải đặt thời hạn để lệnh xịt tới thiết bị và được sáng đèn chờ bấm tối đa `DISPENSE_CMD_TTL_SEC` kể từ thời điểm tạo | BR-002 | M |
 | FR-DSP-07 | Thiết bị phải xác minh chữ ký của lệnh xịt và từ chối lệnh có chữ ký không hợp lệ | BR-002, BR-010 | M |
-| FR-DSP-08 | Thiết bị phải từ chối lệnh xịt đã quá thời hạn hiệu lực | BR-002, BR-010 | M |
+| FR-DSP-08 | Thiết bị phải từ chối lệnh xịt đã quá thời hạn hiệu lực tại thời điểm nhận lệnh | BR-002, BR-010 | M |
 | FR-DSP-09 | Thiết bị phải từ chối lệnh xịt có định danh máy đích không khớp với định danh của chính nó | BR-002, BR-010 | M |
 | FR-DSP-10 | Thiết bị phải lưu danh sách mã lệnh đã thực hiện và từ chối lệnh có mã trùng | BR-002, BR-010 | M |
-| FR-DSP-11 | Thiết bị phải gửi xác nhận đã tiếp nhận lệnh về hệ thống trước khi bắt đầu thực hiện | BR-002 | M |
-| FR-DSP-12 | Thiết bị phải từ chối thực hiện lệnh xịt khi cảm biến báo cửa đang mở | BR-010 | M |
-| FR-DSP-13 | Thiết bị phải từ chối thực hiện lệnh xịt khi máy đang ở chế độ MAINTENANCE | BR-010 | M |
-| FR-DSP-14 | Thiết bị phải từ chối thực hiện lệnh xịt khi slot đích được đánh dấu là rỗng | BR-005, BR-010 | M |
-| FR-DSP-15 | Thiết bị phải chỉ kích hoạt cơ cấu của đúng slot đích trong một chu kỳ xịt đã hiệu chuẩn | BR-002, BR-010 | M |
+| FR-DSP-11 | Thiết bị phải gửi xác nhận đã tiếp nhận lệnh về hệ thống ngay khi đã sáng đèn nút của slot đích, trước khi khách bấm | BR-002 | M |
+| FR-DSP-12 | Thiết bị phải từ chối thực hiện lệnh xịt khi cảm biến báo cửa đang mở, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-010 | M |
+| FR-DSP-13 | Thiết bị phải từ chối thực hiện lệnh xịt khi máy đang ở chế độ MAINTENANCE, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-010 | M |
+| FR-DSP-14 | Thiết bị phải từ chối thực hiện lệnh xịt khi slot đích được đánh dấu là rỗng, cả lúc nhận lệnh lẫn lúc khách bấm nút | BR-005, BR-010 | M |
+| FR-DSP-15 | Thiết bị phải chỉ kích hoạt cơ cấu của đúng slot đích trong một chu kỳ xịt đã hiệu chuẩn, sau khi khách bấm đúng nút của slot đích | BR-002, BR-010 | M |
 | FR-DSP-16 | Thiết bị phải gửi về hệ thống kết quả thực hiện gồm mã lệnh, trạng thái thành công hoặc thất bại, thời điểm thực hiện và mã lỗi nếu có | BR-002, BR-008 | M |
 | FR-DSP-17 | Hệ thống phải chỉ chuyển đơn hàng sang trạng thái DISPENSED sau khi nhận được kết quả thành công từ thiết bị | BR-002 | M |
-| FR-DSP-18 | Hệ thống phải chuyển lệnh xịt sang trạng thái UNKNOWN khi không nhận được kết quả trong vòng 60 giây | BR-002 | M |
+| FR-DSP-18 | Hệ thống phải chuyển lệnh xịt sang trạng thái UNKNOWN khi không nhận được xác nhận hoặc từ chối trong `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc gửi, hoặc không nhận được kết quả hoặc từ chối trong `DISPENSE_PRESS_WINDOW_SEC` cộng `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc xác nhận | BR-002 | M |
 | FR-DSP-19 | Hệ thống phải không tự động tạo lệnh xịt mới cho đơn hàng có lệnh ở trạng thái UNKNOWN | BR-002 | M |
 | FR-DSP-20 | Hệ thống phải ghi nhận riêng các lượt xịt chẩn đoán, không tính vào doanh thu và không tính vào thống kê lượt xịt khách hàng | BR-005, BR-008 | M |
+| FR-DSP-21 | Thiết bị phải sáng đèn nút của đúng slot đích, thay vì kích hoạt cơ cấu ngay, khi nhận một lệnh xịt khách hàng hợp lệ | BR-001, BR-002 | M |
+| FR-DSP-22 | Thiết bị phải chỉ kích hoạt cơ cấu khi khách bấm nút của slot đích trong `DISPENSE_PRESS_WINDOW_SEC` kể từ lúc sáng đèn, và bỏ qua mọi lần bấm nút của slot khác | BR-002, BR-010 | M |
+| FR-DSP-23 | Thiết bị phải kiểm tra lại các điều kiện tại FR-DSP-12 đến FR-DSP-14 đúng lúc khách bấm nút và từ chối kích hoạt nếu không còn thỏa | BR-010 | M |
+| FR-DSP-24 | Thiết bị phải tắt đèn và gửi từ chối với mã `PRESS_TIMEOUT` khi hết `DISPENSE_PRESS_WINDOW_SEC` mà khách chưa bấm nút | BR-002 | M |
+| FR-DSP-25 | Thiết bị phải không khôi phục trạng thái chờ bấm của bất kỳ lệnh nào sau khi khởi động lại | BR-002, BR-010 | M |
+| FR-DSP-26 | Hệ thống phải bảo đảm mỗi máy có tối đa một lệnh xịt khách hàng đang hiệu lực, và chỉ tạo lệnh cho đơn đã thanh toán khi máy không còn lệnh khách hàng nào đang hiệu lực | BR-002 | M |
+| FR-DSP-27 | Thiết bị phải thực hiện lệnh xịt chẩn đoán ngay khi nhận, không sáng đèn chờ bấm | BR-006 | M |
 
 ## A13. FR-IOT — Giao tiếp và giám sát thiết bị
 
@@ -383,7 +420,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ALR-06 | Hệ thống phải phân loại mỗi cảnh báo theo loại, mức độ nghiêm trọng, máy, slot, địa điểm và thời điểm phát sinh | BR-006 | M |
 | FR-ALR-07 | Hệ thống phải không sinh cảnh báo mới cùng loại trên cùng đối tượng khi đã tồn tại một cảnh báo chưa xử lý | BR-006 | M |
 | FR-ALR-08 | Hệ thống phải quản lý trạng thái cảnh báo theo tập: OPEN, ACKNOWLEDGED, RESOLVED, CLOSED | BR-006 | M |
-| FR-ALR-09 | Hệ thống phải xác định danh sách thương hiệu bị ảnh hưởng bởi mỗi cảnh báo mức máy, dựa trên các slot đang có hợp đồng hiệu lực | BR-006, BR-012 | M |
+| FR-ALR-09 | Hệ thống phải xác định danh sách thương hiệu bị ảnh hưởng bởi mỗi cảnh báo mức máy, dựa trên các slot đang có hóa đơn hiệu lực | BR-006, BR-012 | M |
 | FR-ALR-10 | Hệ thống phải thông báo cho Brand Admin các cảnh báo ảnh hưởng đến slot của thương hiệu mình, không tiết lộ thông tin slot của thương hiệu khác | BR-006, BR-012 | M |
 | FR-ALR-11 | Hệ thống phải cho phép Operations Staff tiếp nhận, phân công và đóng cảnh báo | BR-006 | M |
 | FR-ALR-12 | Hệ thống phải lưu người xử lý, thời điểm tiếp nhận, nội dung xử lý và thời điểm hoàn thành của mỗi cảnh báo | BR-006, BR-008 | M |
@@ -419,15 +456,15 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-RPT-01 | Hệ thống phải hiển thị cho Platform Super Admin số lượng máy theo từng trạng thái kết nối và chế độ hoạt động | BR-006 | M |
 | FR-RPT-02 | Hệ thống phải hiển thị số giao dịch và doanh thu theo ngày, tuần, tháng và khoảng thời gian tùy chọn | BR-007, BR-009 | M |
 | FR-RPT-03 | Hệ thống phải hiển thị số giao dịch theo từng trạng thái đơn hàng | BR-007 | M |
-| FR-RPT-04 | Hệ thống phải hiển thị tỷ lệ lượt xịt thành công và thất bại | BR-002, BR-007 | M |
+| FR-RPT-04 | Hệ thống phải hiển thị tỷ lệ lượt xịt thành công, thất bại và khách bỏ lượt (FORFEITED), trong đó khách bỏ lượt không tính là thất bại | BR-002, BR-007 | M |
 | FR-RPT-05 | Hệ thống phải liệt kê các đơn hàng đã thanh toán nhưng chưa xác nhận được lượt xịt | BR-002, BR-006 | M |
 | FR-RPT-06 | Hệ thống phải hiển thị xếp hạng sản phẩm theo số lượt được chọn, lọc theo slot, máy, địa điểm và khoảng thời gian | BR-007 | M |
 | FR-RPT-07 | Hệ thống phải hiển thị tồn kho ước tính và danh sách slot sắp hết | BR-005 | M |
 | FR-RPT-08 | Hệ thống phải cho phép Brand Admin xem báo cáo doanh thu và lượt xịt theo từng slot mình thuê | BR-007, BR-009 | M |
 | FR-RPT-09 | Hệ thống phải cho phép Platform Super Admin xem báo cáo doanh thu theo máy, địa điểm, slot và thương hiệu | BR-009 | M |
-| FR-RPT-10 | Hệ thống phải giới hạn phạm vi dữ liệu trong mọi báo cáo của người dùng thuộc thương hiệu theo tập hợp đồng thuê slot của thương hiệu đó | BR-003, BR-012 | M |
+| FR-RPT-10 | Hệ thống phải giới hạn phạm vi dữ liệu trong mọi báo cáo của người dùng thuộc thương hiệu theo tập hóa đơn thuê slot của thương hiệu đó | BR-003, BR-012 | M |
 | FR-RPT-11 | Hệ thống phải không hiển thị cho Brand Admin bất kỳ chỉ số tổng hợp mức máy nào cho phép suy ra số liệu của thương hiệu khác | BR-012 | M |
-| FR-RPT-12 | Hệ thống phải chỉ hiển thị cho Brand Admin các slot thuộc hợp đồng của thương hiệu mình khi xem sơ đồ máy; các slot còn lại hiển thị là không khả dụng mà không kèm thông tin | BR-012 | M |
+| FR-RPT-12 | Hệ thống phải chỉ hiển thị cho Brand Admin các slot thuộc hóa đơn của thương hiệu mình khi xem sơ đồ máy; các slot còn lại hiển thị là không khả dụng mà không kèm thông tin | BR-012 | M |
 | FR-RPT-13 | Hệ thống phải báo cáo thời gian hoạt động, thời gian ngừng và tần suất cảnh báo theo máy | BR-006 | S |
 | FR-RPT-14 | Hệ thống phải cho phép người có quyền xuất báo cáo ở định dạng CSV | BR-007 | S |
 | FR-RPT-15 | Hệ thống phải chỉ cho phép Platform Super Admin xem báo cáo tổng hợp toàn nền tảng | BR-003, BR-012 | M |
@@ -438,7 +475,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|---|
 | FR-AUD-01 | Hệ thống phải ghi nhật ký cho mọi sự kiện đăng nhập, đăng xuất và đăng nhập thất bại | BR-008 | M |
 | FR-AUD-02 | Hệ thống phải ghi nhật ký cho mọi thay đổi tài khoản, vai trò và quyền hạn | BR-008 | M |
-| FR-AUD-03 | Hệ thống phải ghi nhật ký cho mọi thao tác tạo, gia hạn, chấm dứt, thanh lý và đóng hợp đồng thuê slot | BR-008, BR-009, BR-013 | M |
+| FR-AUD-03 | Hệ thống phải ghi nhật ký cho mọi thao tác tạo, gia hạn, chấm dứt, thanh lý và đóng hóa đơn thuê slot | BR-008, BR-009, BR-013 | M |
 | FR-AUD-04 | Hệ thống phải ghi nhật ký cho mọi thay đổi giá lượt xịt và gán sản phẩm vào slot | BR-008 | M |
 | FR-AUD-05 | Hệ thống phải ghi nhật ký cho mọi lệnh gửi tới thiết bị và kết quả tương ứng | BR-002, BR-008 | M |
 | FR-AUD-06 | Hệ thống phải ghi nhật ký cho mọi sự kiện thanh toán và hoàn tiền | BR-008 | M |
@@ -446,7 +483,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-AUD-08 | Hệ thống phải lưu cho mỗi bản ghi nhật ký: chủ thể thực hiện, thương hiệu liên quan, hành động, đối tượng tác động, thời điểm, nguồn và dữ liệu trước và sau khi thay đổi | BR-008 | M |
 | FR-AUD-09 | Hệ thống phải không cung cấp bất kỳ chức năng nào cho phép sửa hoặc xóa bản ghi nhật ký kiểm toán | BR-008 | M |
 | FR-AUD-10 | Hệ thống phải cho phép Platform Super Admin tìm kiếm nhật ký theo thời gian, người dùng, máy, slot, hành động và đối tượng | BR-008 | M |
-| FR-AUD-11 | Hệ thống phải cho phép truy vết từ một đơn hàng đến thanh toán, lệnh xịt, kết quả thiết bị, thay đổi tồn kho, hợp đồng thuê và hoàn tiền liên quan | BR-008 | M |
+| FR-AUD-11 | Hệ thống phải cho phép truy vết từ một đơn hàng đến thanh toán, lệnh xịt, kết quả thiết bị, thay đổi tồn kho, hóa đơn thuê và hoàn tiền liên quan | BR-008 | M |
 
 ---
 
@@ -458,10 +495,11 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|
 | NFR-PER-01 | Kiosk phải phản hồi thao tác chọn sản phẩm trong tối đa 500ms ở điều kiện mạng bình thường | Đo trên thiết bị thật, 50 lần lặp |
 | NFR-PER-02 | Hệ thống phải hiển thị mã QR thanh toán trong tối đa 3 giây kể từ khi khách xác nhận đơn | Đo trên thiết bị thật |
-| NFR-PER-03 | Thời gian từ khi hệ thống nhận webhook đến khi thiết bị bắt đầu kích hoạt cơ cấu xịt tối đa 5 giây | Đo bằng log có dấu thời gian hai đầu |
+| NFR-PER-03 | Thời gian từ khi hệ thống nhận webhook đến khi đèn nút của slot đích sáng tối đa `WEBHOOK_TO_ARMED_MAX_SEC` (5 giây) | Đo bằng log có dấu thời gian hai đầu |
 | NFR-PER-04 | API trả kết quả trong tối đa 300ms ở phân vị 95 với 100 yêu cầu đồng thời | Kiểm thử tải |
 | NFR-PER-05 | Báo cáo trên khoảng thời gian 30 ngày phải trả kết quả trong tối đa 3 giây | Đo với dữ liệu mô phỏng 30 ngày |
-| NFR-PER-06 | Bảng quyết toán kỳ cho một thương hiệu có 20 hợp đồng slot phải sinh trong tối đa 10 giây | Đo với dữ liệu mô phỏng |
+| NFR-PER-06 | Bảng quyết toán kỳ cho một thương hiệu có 20 hóa đơn slot phải sinh trong tối đa 10 giây | Đo với dữ liệu mô phỏng |
+| NFR-PER-07 | Thời gian từ khi khách bấm nút đến khi thiết bị bắt đầu kích hoạt cơ cấu xịt tối đa `PRESS_TO_ACTUATION_MAX_MS` (300 ms) | Đo bằng log firmware có dấu thời gian ngắt nút và lệnh mở van |
 
 ## B2. NFR-REL — Độ tin cậy và khả dụng
 
@@ -473,7 +511,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | NFR-REL-04 | Thiết bị phải tự kết nối lại MQTT trong tối đa 60 giây sau khi mạng phục hồi | Kiểm thử ngắt mạng |
 | NFR-REL-05 | Thiết bị phải lưu tạm tối thiểu 500 sự kiện khi mất kết nối | Kiểm thử ngắt mạng kéo dài |
 | NFR-REL-06 | Cơ cấu xịt của mỗi slot phải hoạt động ổn định qua tối thiểu 1.000 chu kỳ với sai số khối lượng dưới 15% | Kiểm thử độ bền, cân điện tử 0,01g |
-| NFR-REL-07 | Việc chuyển trạng thái hợp đồng theo lịch phải thực hiện đúng ngày kể cả khi hệ thống có thời gian ngừng, thông qua cơ chế bù khi khởi động lại | Kiểm thử ngắt dịch vụ qua mốc chuyển trạng thái |
+| NFR-REL-07 | Việc chuyển trạng thái hóa đơn theo lịch phải thực hiện đúng ngày kể cả khi hệ thống có thời gian ngừng, thông qua cơ chế bù khi khởi động lại | Kiểm thử ngắt dịch vụ qua mốc chuyển trạng thái |
 
 ## B3. NFR-SEC — Bảo mật
 
@@ -537,11 +575,11 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 |---|---|---|
 | NFR-DAT-01 | Hệ thống phải lưu toàn bộ thời điểm ở múi giờ UTC và hiển thị theo múi giờ địa phương | Kiểm tra cơ sở dữ liệu |
 | NFR-DAT-02 | Hệ thống phải lưu số tiền bằng kiểu số thập phân chính xác (`numeric`), không dùng kiểu dấu phẩy động | Kiểm tra lược đồ |
-| NFR-DAT-03 | Hệ thống phải giữ dữ liệu giao dịch, hợp đồng thuê và nhật ký kiểm toán tối thiểu 12 tháng | Kiểm tra chính sách lưu trữ |
+| NFR-DAT-03 | Hệ thống phải giữ dữ liệu giao dịch, hóa đơn thuê và nhật ký kiểm toán tối thiểu 12 tháng | Kiểm tra chính sách lưu trữ |
 | NFR-DAT-04 | Hệ thống phải không lưu bất kỳ thông tin thẻ hoặc tài khoản ngân hàng nào của khách hàng | Rà soát lược đồ dữ liệu |
 | NFR-DAT-05 | Hệ thống phải có cơ chế sao lưu cơ sở dữ liệu hằng ngày trong giai đoạn chạy thử | Kiểm tra quy trình |
 | NFR-DAT-06 | Trường thương hiệu và chủ sở hữu doanh thu trên đơn hàng phải là NOT NULL và bất biến sau khi tạo | Kiểm tra ràng buộc cơ sở dữ liệu |
-| NFR-DAT-07 | Hệ thống phải có chỉ số duy nhất từng phần trên slot, áp dụng cho hợp đồng ở trạng thái ACTIVE, EXPIRING, GRACE và LIQUIDATED | Kiểm tra lược đồ |
+| NFR-DAT-07 | Hệ thống phải có chỉ số duy nhất từng phần trên slot, áp dụng cho hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE và LIQUIDATED | Kiểm tra lược đồ |
 
 ---
 
@@ -573,7 +611,7 @@ Mỗi BR có tối thiểu một FR phục vụ; mỗi FR truy được về t�
 
 **Về chủ ngữ "Thiết bị phải".** Theo ranh giới đã chốt, máy nằm ngoài hệ thống, nên các FR trong nhóm DSP và IOT có chủ ngữ này là ràng buộc giao diện mà thiết bị phải tuân thủ, không phải yêu cầu nội tại. Nêu ở đầu tài liệu để tránh bị hỏi về tính nhất quán.
 
-**Về hợp đồng theo từng slot.** Một hợp đồng ứng với một slot. Thương hiệu thuê 3 slot có 3 hợp đồng độc lập, mỗi hợp đồng có kỳ hạn, sản phẩm và giá riêng, và có thể ở trạng thái khác nhau. Việc gộp nhóm xử lý ở tầng thông báo (FR-EXP-03) và tầng quyết toán (FR-SLT-17).
+**Về hóa đơn theo từng slot.** Một hóa đơn ứng với một slot. Thương hiệu thuê 3 slot có 3 hóa đơn độc lập, mỗi hóa đơn có kỳ hạn, sản phẩm và giá riêng, và có thể ở trạng thái khác nhau. Việc gộp nhóm xử lý ở tầng thanh toán (một phiên thanh toán cho nhiều hóa đơn, FR-SLT-35, 37 — ADR-0008), tầng thông báo (FR-EXP-03, FR-SLT-43) và tầng quyết toán (FR-SLT-17).
 
 **Về ma trận truy vết đầy đủ.** Phần C là bảng tổng hợp. Bản nộp cần bảng chi tiết bốn cột BR → FR → Use Case → Test Case, dựng bằng bảng tính sau khi hoàn tất use case specification.
 
@@ -595,11 +633,12 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 
 | Ưu tiên | Số FR |
 |---|---|
-| **M — Must** (phạm vi MVP 13 tuần) | 237 |
+| **M — Must** (phạm vi MVP 13 tuần) | 259 |
 | **S — Should** (làm nếu còn thời gian sau tuần 9) | 24 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** | **264** |
-| **Tổng NFR** | **50** |
+| **Tổng FR** (không tính mức X) | **286** |
+| **X — Bãi bỏ** (giữ số hiệu, không tính) | 7 |
+| **Tổng NFR** | **52** |
 
 **Danh sách W:** FR-PRD-06 chiến dịch khuyến mãi · FR-IOT-15 cập nhật firmware từ xa · FR-ALR-15 thông báo qua kênh ngoài.
 
@@ -608,16 +647,16 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 | Module | Số FR | Module | Số FR |
 |---|---|---|---|
 | AUTH | 12 | RFQ | 12 |
-| BND | 8 | ORD | 23 |
-| USR | 5 | DSP | 20 |
+| BND | 8 | ORD | 27 |
+| USR | 5 | DSP | 27 |
 | PRD | 6 | IOT | 15 |
 | MCH | 17 | ALR | 15 |
-| SLT | 29 | MNT | 16 |
+| SLT | 40 | MNT | 16 |
 | EXP | 22 | RPT | 15 |
 | REV | 7 | AUD | 11 |
 | INV | 31 | | |
 
-**Ghi chú bổ sung (2026-09-15).** FR-MCH-15÷17, FR-SLT-19÷29 và FR-INV-22÷28 được thêm để lấp các khoảng trống nghiệp vụ: (1) luồng Brand Admin tự yêu cầu thuê slot và trigger kích hoạt hợp đồng DRAFT→ACTIVE (FR-SLT-19÷26), (2) hành động gán/đổi sản phẩm cho slot như một chức năng tường minh thay vì ràng buộc ngầm định (FR-SLT-27÷29), (3) định nghĩa tường minh điều kiện AVAILABLE/UNAVAILABLE của slot, hợp nhất các ràng buộc rải rác ở FR-SLT-11 và FR-INV-12 (FR-MCH-15÷17), và (4) luồng Brand Admin khai báo và Inventory Staff đối soát lô hàng gửi đến kho nền tảng theo quyết định nghiệp vụ #1 (FR-INV-22÷28).
+**Ghi chú bổ sung (2026-09-15).** FR-MCH-15÷17, FR-SLT-19÷29 và FR-INV-22÷28 được thêm để lấp các khoảng trống nghiệp vụ: (1) luồng Brand Admin tự yêu cầu thuê slot và trigger kích hoạt hóa đơn DRAFT→ACTIVE (FR-SLT-19÷26), (2) hành động gán/đổi sản phẩm cho slot như một chức năng tường minh thay vì ràng buộc ngầm định (FR-SLT-27÷29), (3) định nghĩa tường minh điều kiện AVAILABLE/UNAVAILABLE của slot, hợp nhất các ràng buộc rải rác ở FR-SLT-11 và FR-INV-12 (FR-MCH-15÷17), và (4) luồng Brand Admin khai báo và Inventory Staff đối soát lô hàng gửi đến kho nền tảng theo quyết định nghiệp vụ #1 (FR-INV-22÷28).
 
 **Ghi chú bổ sung (2026-09-16).** Sửa NFR-DAT-02 theo `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`:
 yêu cầu cũ "lưu số tiền dưới dạng số nguyên theo đơn vị nhỏ nhất của loại tiền" được thay bằng "lưu
@@ -628,3 +667,7 @@ vị nhỏ hơn đồng nên hai cách biểu diễn tương đương về tập
 Tinh thần gốc của NFR-DAT-02 (cấm `float`/`double` vì sai số nhị phân) được giữ nguyên.
 
 **Ghi chú bổ sung (2 — cùng ngày).** Gộp vai trò Operations Manager và Technician thành **Operations Staff** trên toàn bộ tài liệu (chi tiết lý do ở PHẦN D); tổng số vai trò giảm còn 4. Thêm FR-INV-29÷31 (phiếu nạp) và sửa FR-ALR-03 để đóng lỗ hổng báo động giả "cửa mở quá hạn" khi Inventory Staff đang nạp hàng hợp lệ ngoài phiên bảo trì.
+
+**Ghi chú bổ sung (2026-09-25).** Đổi mô hình thuê slot theo `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (**TV1 đã duyệt 2026-09-29**; thay thế ADR-0005 chưa từng được duyệt). Mô hình cũ là đàm phán hợp đồng: Brand Admin gửi yêu cầu, Super Admin duyệt kèm phí cố định theo kỳ và tỷ lệ ăn chia, thương hiệu khai thác slot trước rồi mới quyết toán — không có bước thu tiền trước và công nợ âm không có bảo đảm. Mô hình mới là **mua gói tự phục vụ**: Brand Admin chọn slot, chọn gói thuê 3/6/12 tháng (gói dài có ưu đãi) và bắt buộc một gói bảo quản (bảo hiểm hàng hóa), trả hết một lần qua cổng thanh toán và nhận hóa đơn; thời hạn tính từ lúc lắp chai đầu tiên. Bỏ ăn chia doanh thu. "Hợp đồng thuê slot" đổi tên thành "hóa đơn thuê slot" (định danh kỹ thuật `SlotRental` giữ nguyên). Thêm mức ưu tiên **X** (bãi bỏ) cho FR-SLT-01, 20, 21, 22, 23, 25, 26; viết lại BR-009, quyết định nghiệp vụ #5 ÷ #8, FR-SLT-06, 12, 13, 17, 18, 19, 24, 27, 29, FR-EXP-12, 13, FR-MCH-16; thêm FR-SLT-30 ÷ 47 (18 FR mức M). Hai hằng ngưỡng mới `RENTAL_CHECKOUT_HOLD_MIN`, `RENTAL_MAX_STOCKING_DAYS` đã thêm vào `spec/constraints.md` sau khi ADR được duyệt.
+
+**Ghi chú bổ sung (2026-09-29).** Khách bấm nút vật lý để nhận lượt xịt theo `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (**TV1 đã duyệt 2026-09-29**). Mỗi slot có một nút có đèn; thanh toán xong đèn sáng, khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt, quá thời gian thì đơn chuyển trạng thái mới `FORFEITED` và không hoàn tiền (điều khoản hiện trước khi thanh toán). Mỗi máy tối đa một lệnh xịt khách hàng đang hiệu lực. Làm rõ BR-002; thêm quyết định nghiệp vụ #9; sửa FR-DSP-06, 08, 11÷15, 18, FR-ORD-10, 17, 19, FR-RPT-04, NFR-PER-03; thêm FR-DSP-21÷27, FR-ORD-24÷27 (11 FR mức M) và NFR-PER-07. Đếm lại bảng NFR: trước thay đổi này đã có 51 dòng dù thống kê ghi 50; nay 52.

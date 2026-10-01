@@ -38,6 +38,7 @@ const ENUM_MAP: Record<string, string> = {
   SlotRentalRequestStatus: 'slot_rental_request_status',
   ShipmentDeclarationStatus: 'shipment_declaration_status',
   CredentialStatus: 'credential_status',
+  StorageCompensationStatus: 'storage_compensation_status',
 };
 
 interface OpenApiDoc {
@@ -63,8 +64,9 @@ const sqlEnums = parseSqlEnums(readFileSync('spec/contracts/schema.sql', 'utf8')
 const openapi = loadYaml(readFileSync('spec/contracts/openapi.yaml', 'utf8')) as OpenApiDoc;
 
 describe('openapi.yaml khớp schema.sql', () => {
-  it('schema.sql khai báo đủ 24 enum', () => {
-    expect(sqlEnums.size).toBe(24);
+  it('schema.sql khai báo đủ 25 enum', () => {
+    // 24 enum ban đầu + storage_compensation_status (ADR-0006).
+    expect(sqlEnums.size).toBe(25);
   });
 
   it('mọi enum trong schema.sql đều có schema tương ứng trong openapi.yaml', () => {

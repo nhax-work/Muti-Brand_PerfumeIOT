@@ -1,7 +1,7 @@
 # FR-ORD — Đơn hàng và thanh toán
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 23 FR  
-> Trạng thái AC: **hoàn thành**  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 27 FR  
+> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý)  
 > Phụ trách: TV1 / Tài  
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
@@ -70,7 +70,7 @@
 ---
 
 ## FR-ORD-05 — Chụp nhanh (Snapshot) dữ liệu vào đơn hàng
-* **Statement:** Hệ thống phải lưu định danh máy, slot, hợp đồng thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn.
+* **Statement:** Hệ thống phải lưu định danh máy, slot, hóa đơn thuê, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu vào đơn hàng tại thời điểm tạo đơn.
 * **Traces:** BR-002, BR-008, BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given yêu cầu tạo đơn hàng hợp lệ,  
@@ -136,13 +136,14 @@
 ---
 
 ## FR-ORD-10 — Quản lý vòng đời trạng thái đơn hàng
-* **Statement:** Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED.
+* **Statement:** Hệ thống phải quản lý trạng thái đơn hàng theo tập: CREATED, PENDING_PAYMENT, PAID, DISPENSE_REQUESTED, DISPENSED, FAILED, EXPIRED, REFUND_PENDING, REFUNDED, FORFEITED.
 * **Traces:** BR-002, BR-008 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given đơn hàng ở `PENDING_PAYMENT`, khi thanh toán thành công, chuyển sang `PAID`.
-  * **AC2:** Given đơn hàng ở `PAID`, khi gửi lệnh xịt qua MQTT đến thiết bị, chuyển sang `DISPENSE_REQUESTED`.
+  * **AC2:** Given đơn hàng ở `PAID` và máy không còn lệnh xịt khách hàng nào đang hiệu lực, khi gửi lệnh xịt qua MQTT đến thiết bị, chuyển sang `DISPENSE_REQUESTED`. Nếu máy đang bận, đơn giữ `PAID` cho tới khi lệnh trước kết thúc (FR-DSP-26).
   * **AC3:** Given đơn hàng ở `DISPENSE_REQUESTED`, khi thiết bị trả kết quả xịt thành công, chuyển sang `DISPENSED`.
   * **AC4:** Given đơn hàng ở `DISPENSE_REQUESTED`, khi thiết bị báo lỗi hoặc timeout không phản hồi, chuyển sang `FAILED` và cắm cờ kiểm tra thủ công / chuyển `REFUND_PENDING`.
+  * **AC5 (Khách không bấm nút):** Given đơn hàng ở `DISPENSE_REQUESTED`, khi thiết bị từ chối với mã `PRESS_TIMEOUT`, chuyển sang `FORFEITED` (FR-ORD-27) — không cắm cờ kiểm tra thủ công.
 * **Test:** `test_FR_ORD_10_order_status_lifecycle`
 
 ---
@@ -240,10 +241,10 @@
 ---
 
 ## FR-ORD-17 — Từ chối tạo lệnh xịt từ đơn hàng không hợp lệ
-* **Statement:** Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED hoặc REFUNDED.
+* **Statement:** Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED, REFUNDED hoặc FORFEITED.
 * **Traces:** BR-002 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given đơn hàng `O` đang ở trạng thái `FAILED`, `EXPIRED`, hoặc `REFUNDED`,  
+  * **AC1:** Given đơn hàng `O` đang ở trạng thái `FAILED`, `EXPIRED`, `REFUNDED` hoặc `FORFEITED`,  
     When có bất kỳ yêu cầu nào cố gắng tạo lệnh xịt cho đơn hàng `O`,  
     Then hệ thống từ chối ngay lập tức và không phát sinh bất kỳ lệnh xịt nào trên MQTT.
   * **AC2 (Chống xịt trùng):** Given đơn hàng `O` đã ở trạng thái `DISPENSED` (đã xịt thành công),  
@@ -268,7 +269,7 @@
 ---
 
 ## FR-ORD-19 — Đánh dấu đơn hàng cần kiểm tra thủ công khi xịt thất bại
-* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định.
+* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định, trừ trường hợp khách không bấm nút trong thời gian chờ.
 * **Traces:** BR-002, BR-006 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given đơn hàng `O` đã thanh toán (`PAID`), lệnh xịt được gửi đi nhưng thiết bị báo lỗi (`FAILED`) hoặc quá `DISPENSE_RESULT_TIMEOUT_SEC = 60` không có phản hồi (`UNKNOWN`),  
@@ -277,6 +278,12 @@
   * **AC2 (Không tự xịt lại):** Given đơn hàng rơi vào trạng thái xịt thất bại hoặc không xác định,  
     When hệ thống xử lý,  
     Then tuyệt đối không tự động sinh lệnh xịt thứ hai (bảo đảm an toàn theo BR-002).
+  * **AC3 (Khách không bấm nút):** Given thiết bị từ chối lệnh với mã `PRESS_TIMEOUT`,  
+    When hệ thống xử lý kết quả,  
+    Then đơn chuyển `FORFEITED` và **không** được đánh dấu `needs_manual_review`, không sinh cảnh báo (ADR-0007).
+  * **AC4 (Từ chối lúc bấm vì lý do an toàn):** Given đèn đã sáng, khách bấm nút nhưng cửa đang mở (`DOOR_OPEN`),  
+    When thiết bị từ chối,  
+    Then đơn chuyển `FAILED` và được đánh dấu `needs_manual_review = TRUE` — khách không có lỗi.
 * **Test:** `test_FR_ORD_19_flag_order_for_manual_review_on_dispense_failure`
 
 ---
@@ -343,3 +350,76 @@
     When tiến trình đối soát kết thúc,  
     Then hệ thống lập danh sách chênh lệch (discrepancy report) và gửi cảnh báo để bộ phận vận hành xử lý hoàn tiền hoặc đối soát thủ công.
 * **Test:** `test_FR_ORD_23_payment_reconciliation_audit`
+
+---
+
+> **FR-ORD-24 ÷ FR-ORD-27 — Nút bấm vật lý.** Thêm ngày 2026-09-29 theo
+> `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (TV1 đã duyệt).
+
+## FR-ORD-24 — Từ chối đơn mới khi máy đang chờ bấm nút
+* **Statement:** Hệ thống phải từ chối tạo đơn hàng mới trên máy đang có lệnh xịt khách hàng chờ bấm nút.
+* **Traces:** BR-002 · **Priority:** M
+* **API:** `POST /kiosk/orders`
+* **Acceptance criteria:**
+  * **AC1:** Given máy `M` có một lệnh xịt `CUSTOMER` ở trạng thái `CREATED`, `SENT` hoặc `ACKNOWLEDGED`,  
+    When kiosk của `M` gửi yêu cầu tạo đơn trên bất kỳ slot nào,  
+    Then hệ thống từ chối với HTTP 409 `MACHINE_BUSY` và không tạo đơn.
+  * **AC2:** Given lệnh đó vừa kết thúc (`SUCCEEDED`, `FAILED`, `REJECTED` hoặc `UNKNOWN`),  
+    When kiosk gửi yêu cầu tạo đơn,  
+    Then hệ thống tạo đơn bình thường.
+  * **AC3:** Given máy `M` chỉ có lệnh `DIAGNOSTIC` đang chạy,  
+    When kiosk gửi yêu cầu tạo đơn,  
+    Then điều kiện này không chặn (máy ở `MAINTENANCE` đã bị chặn riêng bởi FR-MNT-06).
+* **Test:** `test_FR_ORD_24_reject_order_while_machine_awaits_press`
+
+---
+
+## FR-ORD-25 — Điều khoản bấm nút trước khi thanh toán
+* **Statement:** Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền.
+* **Traces:** BR-001, BR-002 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given khách đã chọn sản phẩm và bấm xác nhận,  
+    When kiosk chuẩn bị hiện mã QR,  
+    Then kiosk hiện điều khoản kèm số giây lấy từ `DISPENSE_PRESS_WINDOW_SEC` và số nút sẽ sáng, bằng ngôn ngữ thông thường (NFR-USA-03), và chỉ hiện mã QR sau khi khách xác nhận đã đọc.
+  * **AC2:** Given `DISPENSE_PRESS_WINDOW_SEC` được đổi trong cấu hình,  
+    When kiosk hiện điều khoản,  
+    Then số giây hiển thị là giá trị mới — không viết cứng trong chuỗi i18n.
+* **Test:** `test_FR_ORD_25_show_press_terms_before_qr`
+
+---
+
+## FR-ORD-26 — Nhắc bấm nút kèm đếm ngược
+* **Statement:** Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ.
+* **Traces:** BR-001 · **Priority:** M
+* **API:** `GET /kiosk/orders/{id}/status`
+* **Acceptance criteria:**
+  * **AC1:** Given lệnh xịt của đơn `O` vừa chuyển `ACKNOWLEDGED` lúc `t`,  
+    When kiosk hỏi trạng thái đơn,  
+    Then phản hồi có `slotNumber` và `pressDeadline = t + DISPENSE_PRESS_WINDOW_SEC`, và kiosk hiện "Mời bấm nút số N" cùng đồng hồ đếm ngược trong vòng `ORDER_STATUS_POLL_MAX_SEC` (FR-ORD-11).
+  * **AC2 (Đang chờ lượt):** Given đơn `O` đã `PAID` nhưng máy còn lệnh khác đang chờ bấm (FR-DSP-26),  
+    When kiosk hỏi trạng thái,  
+    Then `pressDeadline` là null và kiosk hiện "Đang chờ lượt".
+  * **AC3:** Given đơn chuyển `DISPENSED` hoặc `FORFEITED`,  
+    When kiosk hỏi trạng thái,  
+    Then kiosk hiện kết quả tương ứng rồi về màn hình chờ theo `KIOSK_IDLE_TIMEOUT_SEC`.
+* **Test:** `test_FR_ORD_26_prompt_press_with_countdown`
+
+---
+
+## FR-ORD-27 — Đơn bỏ lượt khi khách không bấm nút
+* **Statement:** Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn.
+* **Traces:** BR-002, BR-009 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given đơn `O` ở `DISPENSE_REQUESTED`,  
+    When nhận `command/result` với `stage = REJECT`, `failure_code = PRESS_TIMEOUT`,  
+    Then lệnh → `REJECTED`, đơn → `FORFEITED` với lịch sử ghi lý do `PRESS_TIMEOUT` (FR-ORD-18), `needs_manual_review` giữ `FALSE`.
+  * **AC2 (Không hoàn tiền):** Given đơn `O` ở `FORFEITED`,  
+    When Operations Staff cố khởi tạo hoàn tiền,  
+    Then hệ thống từ chối với HTTP 409 `ORDER_NOT_REFUNDABLE`.
+  * **AC3 (Doanh thu):** Given đơn `O` `FORFEITED` có `revenue_owner = BRAND`,  
+    When tính bảng đối soát kỳ (FR-SLT-18),  
+    Then số tiền của `O` được tính vào doanh thu thương hiệu như đơn đã xịt; báo cáo lượt xịt (FR-RPT-04) đếm `O` là khách bỏ lượt, không phải thất bại.
+  * **AC4 (Không phải lỗi của khách thì không FORFEITED):** Given thiết bị từ chối với mã khác `PRESS_TIMEOUT` hoặc lệnh thành `UNKNOWN`,  
+    When hệ thống xử lý,  
+    Then đơn **không** chuyển `FORFEITED` mà đi theo FR-ORD-19.
+* **Test:** `test_FR_ORD_27_forfeit_order_on_press_timeout`

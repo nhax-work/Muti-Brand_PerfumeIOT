@@ -26,10 +26,10 @@
 * **Statement:** Hệ thống phải xác định chủ sở hữu doanh thu là PLATFORM khi slot đang bán hàng đã thanh lý, và là BRAND trong các trường hợp còn lại.
 * **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given slot `S` có hợp đồng ở trạng thái `LIQUIDATED` (hàng thanh lý),  
+  * **AC1:** Given slot `S` có hóa đơn ở trạng thái `LIQUIDATED` (hàng thanh lý),  
     When đơn hàng `O` được tạo trên slot `S`,  
     Then `Order.revenue_owner` được gán chính xác là `'PLATFORM'`.
-  * **AC2:** Given slot `S` có hợp đồng ở trạng thái `ACTIVE`, `EXPIRING` hoặc `GRACE`,  
+  * **AC2:** Given slot `S` có hóa đơn ở trạng thái `ACTIVE`, `EXPIRING` hoặc `GRACE`,  
     When đơn hàng `O` được tạo trên slot `S`,  
     Then `Order.revenue_owner` được gán chính xác là `'BRAND'`.
 * **Test:** `test_FR_REV_02_determine_revenue_owner_rules`
@@ -40,7 +40,7 @@
 * **Statement:** Hệ thống phải giữ nguyên chủ sở hữu doanh thu của đơn hàng đã tạo, kể cả khi quyền sở hữu hàng tồn thay đổi sau đó.
 * **Traces:** BR-008, BR-013 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given đơn hàng `O` được tạo lúc 09:00 với `revenue_owner = 'BRAND'`, đến 10:00 hợp đồng của slot chuyển sang `LIQUIDATED`,  
+  * **AC1:** Given đơn hàng `O` được tạo lúc 09:00 với `revenue_owner = 'BRAND'`, đến 10:00 hóa đơn của slot chuyển sang `LIQUIDATED`,  
     When truy vấn lại đơn hàng `O` vào bất kỳ thời điểm nào sau đó,  
     Then giá trị `O.revenue_owner` vẫn bất biến là `'BRAND'`.
   * **AC2 (Bảo vệ dữ liệu):** Given có lệnh UPDATE cố tình thay đổi giá trị cột `revenue_owner` của đơn hàng đã tồn tại,  

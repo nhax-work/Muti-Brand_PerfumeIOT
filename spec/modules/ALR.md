@@ -121,14 +121,14 @@
 
 ## FR-ALR-09 — Xác định thương hiệu bị ảnh hưởng
 
-**Tuyên bố:** Hệ thống phải xác định danh sách thương hiệu bị ảnh hưởng bởi mỗi cảnh báo mức máy, dựa trên các slot đang có hợp đồng hiệu lực.
+**Tuyên bố:** Hệ thống phải xác định danh sách thương hiệu bị ảnh hưởng bởi mỗi cảnh báo mức máy, dựa trên các slot đang có hóa đơn hiệu lực.
 
 **Dấu vết:** BR-006, BR-012 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho máy có các slot đang có hợp đồng hiệu lực, Khi phát sinh cảnh báo mức máy, Thì hệ thống xác định các thương hiệu tương ứng là đối tượng bị ảnh hưởng.
-- AC2: Cho slot không có hợp đồng hiệu lực, Khi xác định thương hiệu bị ảnh hưởng, Thì slot đó không làm phát sinh thương hiệu bị ảnh hưởng.
+- AC1: Cho máy có các slot đang có hóa đơn hiệu lực, Khi phát sinh cảnh báo mức máy, Thì hệ thống xác định các thương hiệu tương ứng là đối tượng bị ảnh hưởng.
+- AC2: Cho slot không có hóa đơn hiệu lực, Khi xác định thương hiệu bị ảnh hưởng, Thì slot đó không làm phát sinh thương hiệu bị ảnh hưởng.
 
 **Kiểm tra:** `test_FR_ALR_09_affected_brands`
 
