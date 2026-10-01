@@ -52,4 +52,5 @@ export const slotRentalStatus = {
   TERMINATED: 'đã chấm dứt',
   CLOSED: 'đã đóng',
   LIQUIDATED: 'đã thanh lý',
+  CANCELLED: 'đã hủy',
 } as const;

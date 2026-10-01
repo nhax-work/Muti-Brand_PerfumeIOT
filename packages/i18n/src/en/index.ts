@@ -112,6 +112,7 @@ export const en: SameKeysAs<typeof vi> = {
     TERMINATED: 'terminated',
     CLOSED: 'closed',
     LIQUIDATED: 'liquidated',
+    CANCELLED: 'cancelled',
   },
 
   bnd: {
