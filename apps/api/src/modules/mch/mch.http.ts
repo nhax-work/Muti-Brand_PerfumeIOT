@@ -109,7 +109,7 @@ const MachineCreateBody = z.object({
   locationId: z.string().uuid(),
   serialNumber: z.string().min(1).max(100),
   displayName: z.string().min(1).max(200),
-  slotCount: z.coerce.number().int().min(1).default(4),
+  slotCount: z.coerce.number().int().min(1).default(5),
 });
 
 const MachineUpdateBody = z.object({

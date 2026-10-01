@@ -167,7 +167,7 @@ describe('SltService — Quản lý hợp đồng thuê slot', () => {
     const result = await service.create(adminUser, {
       slotId: SLOT_1,
       brandId: BRAND_A,
-      startsAt: '2026-10-01T00:00:00Z',
+      startsAt: '2026-11-01T00:00:00Z',
       endsAt: '2026-12-31T23:59:59Z',
       pricePerSpray: '25000',
     });
@@ -196,7 +196,7 @@ describe('SltService — Quản lý hợp đồng thuê slot', () => {
       service.create(adminUser, {
         slotId: SLOT_1,
         brandId: BRAND_A,
-        startsAt: '2026-10-01T00:00:00Z',
+        startsAt: '2026-11-01T00:00:00Z',
         endsAt: '2026-09-01T00:00:00Z',
         pricePerSpray: '25000',
       }),
@@ -208,7 +208,7 @@ describe('SltService — Quản lý hợp đồng thuê slot', () => {
       service.create(adminUser, {
         slotId: SLOT_1,
         brandId: BRAND_A,
-        startsAt: '2026-10-01T00:00:00Z',
+        startsAt: '2026-11-01T00:00:00Z',
         endsAt: '2026-12-31T23:59:59Z',
         pricePerSpray: '25000',
         revenueSharePercent: 150,
@@ -220,7 +220,7 @@ describe('SltService — Quản lý hợp đồng thuê slot', () => {
     const draft = await service.create(adminUser, {
       slotId: SLOT_1,
       brandId: BRAND_A,
-      startsAt: '2026-10-01T00:00:00Z',
+      startsAt: '2026-11-01T00:00:00Z',
       endsAt: '2026-12-31T23:59:59Z',
       pricePerSpray: '25000',
     });
@@ -236,7 +236,7 @@ describe('SltService — Quản lý hợp đồng thuê slot', () => {
     const draft1 = await service.create(adminUser, {
       slotId: SLOT_1,
       brandId: BRAND_A,
-      startsAt: '2026-10-01T00:00:00Z',
+      startsAt: '2026-11-01T00:00:00Z',
       endsAt: '2026-12-31T23:59:59Z',
       pricePerSpray: '25000',
     });
