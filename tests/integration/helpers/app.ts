@@ -13,11 +13,17 @@ import 'reflect-metadata';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { resolveTestDatabaseUrl } from './db.js';
 
+/** Bí mật ký webhook mock trong test tích hợp — test tự ký bằng `signMockPayload` với giá trị này. */
+export const TEST_PAYMENT_WEBHOOK_SECRET = 'integration-test-webhook-secret';
+
 export async function createTestApp(): Promise<NestFastifyApplication> {
   // `loadConfig()` đọc process.env NGAY lúc CoreModule khởi tạo, nên phải đặt trước khi import
   // AppModule — vì vậy các import dưới đây là import động, không phải import tĩnh ở đầu file.
   process.env['DATABASE_URL'] = resolveTestDatabaseUrl();
   process.env['JWT_SECRET'] ??= 'integration-test-secret-khong-dung-o-that';
+  // Gán đè, không `??=`: test tự ký webhook bằng đúng bí mật này, bất kể .env của máy đang có gì.
+  process.env['PAYMENT_PROVIDER'] = 'mock';
+  process.env['PAYMENT_WEBHOOK_SECRET'] = TEST_PAYMENT_WEBHOOK_SECRET;
 
   const { NestFactory } = await import('@nestjs/core');
   const { FastifyAdapter } = await import('@nestjs/platform-fastify');
@@ -25,6 +31,8 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
 
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
     logger: false,
+    // Khớp entrypoints/http.ts: webhook thanh toán cần body thô để kiểm chữ ký (FR-ORD-13).
+    rawBody: true,
   });
   app.setGlobalPrefix('api/v1');
   await app.init();

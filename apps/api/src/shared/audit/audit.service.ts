@@ -10,7 +10,8 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { DATABASE, type Database } from '../db/index.js';
+import type { Kysely } from 'kysely';
+import { DATABASE, type Database, type DB } from '../db/index.js';
 
 export type ActorType = 'SYSTEM' | 'USER' | 'DEVICE' | 'PAYMENT_PROVIDER' | 'ANONYMOUS';
 
@@ -34,8 +35,13 @@ export interface AuditEntry {
 export class AuditService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  async log(entry: AuditEntry): Promise<void> {
-    await this.db
+  /**
+   * @param executor transaction đang mở, khi bản ghi kiểm toán phải cùng số phận với thay đổi nó
+   *   mô tả — ví dụ webhook ghi nhận tiền (FR-AUD-06): rollback thì nhật ký cũng không được còn.
+   *   Bỏ trống thì ghi bằng kết nối riêng.
+   */
+  async log(entry: AuditEntry, executor: Kysely<DB> = this.db): Promise<void> {
+    await executor
       .insertInto('audit_logs')
       .values({
         actor_type: entry.actorType,

@@ -95,6 +95,10 @@ const PERMISSIONS = [
   ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
   ['refill.request', 'Gửi yêu cầu bổ sung nước hoa (FR-RFQ-01)'],
   ['refill.fulfill', 'Duyệt và lên lịch yêu cầu bổ sung (FR-RFQ-06/07)'],
+  [
+    'order.view',
+    'Tra cứu đơn hàng và lịch sử trạng thái trong phạm vi của mình (FR-ORD-18, FR-ORD-22)',
+  ],
   ['order.refund', 'Khởi tạo hoàn tiền (FR-ORD-20)'],
   ['dispense.diagnostic', 'Thực hiện lượt xịt chẩn đoán (FR-MNT-09)'],
   ['alert.handle', 'Tiếp nhận, phân công và đóng cảnh báo (FR-ALR-11)'],
@@ -115,11 +119,18 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'alert.handle',
     'maintenance.handle',
     'dispense.diagnostic',
+    'order.view',
     'order.refund',
     'report.platform',
   ],
   [ID.roleInventoryStaff]: ['inventory.manage', 'inventory.adjust', 'refill.fulfill'],
-  [ID.roleBrandAdmin]: ['product.manage', 'rental.request', 'refill.request', 'report.brand'],
+  [ID.roleBrandAdmin]: [
+    'product.manage',
+    'rental.request',
+    'refill.request',
+    'report.brand',
+    'order.view',
+  ],
 };
 
 async function main(): Promise<void> {

@@ -45,7 +45,7 @@
     Then giá trị `O.revenue_owner` vẫn bất biến là `'BRAND'`.
   * **AC2 (Bảo vệ dữ liệu):** Given có lệnh UPDATE cố tình thay đổi giá trị cột `revenue_owner` của đơn hàng đã tồn tại,  
     When thực thi,  
-    Then tầng ứng dụng và trigger CSDL từ chối cập nhật.
+    Then tầng ứng dụng và trigger CSDL từ chối cập nhật (`trg_orders_snapshot_immutable`, lỗi `chk_order_snapshot_immutable` — ADR-0009).
 * **Test:** `test_FR_REV_03_revenue_owner_immutable`
 
 ---

@@ -20,6 +20,13 @@ export interface AppConfig {
   readonly port: number;
   readonly databaseUrl: string;
   readonly jwtSecret: string;
+  /** Cổng thanh toán dùng cho đơn và phiên thuê slot mới, ví dụ `mock` (PAYMENT_PROVIDER). */
+  readonly paymentProvider: string;
+  /**
+   * Bí mật xác minh chữ ký webhook (PAYMENT_WEBHOOK_SECRET, FR-ORD-13). `null` khi chưa cấu hình ở
+   * máy dev: API vẫn chạy, nhưng mọi webhook bị từ chối vì không kiểm được chữ ký.
+   */
+  readonly paymentWebhookSecret: string | null;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -46,6 +53,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
+  const paymentProvider = env['PAYMENT_PROVIDER'] || 'mock';
+  const paymentWebhookSecret = env['PAYMENT_WEBHOOK_SECRET'] || null;
+  if (appEnv === 'production') {
+    if (paymentProvider === 'mock') {
+      throw new Error(
+        'PAYMENT_PROVIDER=mock không được dùng ở production — ai cũng tự ký được webhook.',
+      );
+    }
+    if (
+      !paymentWebhookSecret ||
+      paymentWebhookSecret === PLACEHOLDER_SECRET ||
+      paymentWebhookSecret.length < MIN_PRODUCTION_SECRET_LENGTH
+    ) {
+      throw new Error(
+        `PAYMENT_WEBHOOK_SECRET ở production phải có, khác giá trị mẫu và dài tối thiểu ${MIN_PRODUCTION_SECRET_LENGTH} ký tự.`,
+      );
+    }
+  }
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -63,6 +89,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     port: Number(env['PORT'] ?? 3000),
     databaseUrl,
     jwtSecret,
+    paymentProvider,
+    paymentWebhookSecret,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
