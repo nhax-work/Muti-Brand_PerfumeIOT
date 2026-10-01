@@ -1,8 +1,7 @@
-/** Hợp đồng thuê slot (FR-SLT-01..29). */
+/** Hóa đơn thuê slot và bảng giá (FR-SLT, ADR-0006). */
 export const slt = {
-  rentalNotFound: 'Không tìm thấy hợp đồng thuê slot',
-  invalidRentalPeriod: 'Ngày kết thúc phải sau ngày bắt đầu',
-  financialsInvalid: 'Phí cố định và tỷ lệ chia sẻ doanh thu không hợp lệ',
-  slotOccupied: 'Slot đã có hợp đồng thuê ở trạng thái hiệu lực',
-  invalidStatusTransition: 'Không thể chuyển trạng thái hợp đồng này',
+  packageNameTaken: 'Đã có gói thuê mang tên này',
+  storagePlanNameTaken: 'Đã có gói bảo quản mang tên này',
+  lastActiveStoragePlan:
+    'Không thể ngừng mở bán gói bảo quản cuối cùng — mỗi lượt thuê bắt buộc chọn một gói bảo quản',
 } as const;

@@ -80,6 +80,7 @@ function toSlotDto(r: MachineSlotRecord): MachineSlotDto {
     estimatedRemainingSprays: r.estimatedRemainingSprays,
     activeBottleId: r.activeBottleId,
     currentRentalId: r.currentRentalId,
+    monthlyRentPrice: r.monthlyRentPrice,
   };
 }
 
@@ -91,6 +92,7 @@ function toAvailableSlotDto(r: AvailableSlotRecord): AvailableSlotDto {
     slotNumber: r.slotNumber,
     locationId: r.locationId,
     locationName: r.locationName,
+    monthlyRentPrice: r.monthlyRentPrice,
   };
 }
 

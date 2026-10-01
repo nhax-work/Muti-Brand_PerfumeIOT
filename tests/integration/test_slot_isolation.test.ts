@@ -208,38 +208,74 @@ describe('endpoint cấp máy', () => {
 describe('slot trống chào thuê', () => {
   /**
    * FR-SLT-19 + BR-012: danh sách slot trống là thứ DUY NHẤT thương hiệu thấy về máy dùng chung.
-   * Nó chỉ được mang thông tin vị trí — không tên thương hiệu, không sản phẩm, không số liệu.
+   * Nó chỉ được mang vị trí và giá niêm yết (ADR-0006) — không tên thương hiệu, không sản phẩm,
+   * không số liệu.
+   *
+   * Viết lại 2026-10-01 theo ADR-0006 ("Việc còn lại" mục 2): 7 trường, chỉ slot đã có giá niêm
+   * yết, loại slot có hóa đơn DRAFT. Do agent viết theo yêu cầu TV1, TV1 review — ngoại lệ có chủ
+   * đích với quy định nhóm test người tự viết.
    */
   it('test_FR_AUTH_07_available_slots_expose_only_location_data', async () => {
-    const before = await brandA('GET', `/slots/available?machineId=${fx.machineId}`);
-    expect(before.statusCode).toBe(200);
-    expect(before.json<{ items: unknown[] }>().items).toHaveLength(0);
+    const list = async () => {
+      const res = await brandA('GET', `/slots/available?machineId=${fx.machineId}`);
+      expect(res.statusCode).toBe(200);
+      return { body: res.body, items: res.json<{ items: Record<string, unknown>[] }>().items };
+    };
 
-    // Nhả slot 3 của B: hợp đồng kết thúc thì slot quay lại thị trường.
+    // Mọi slot đều đang có hóa đơn hiệu lực → không slot nào trống.
+    expect((await list()).items).toHaveLength(0);
+
+    // Nhả slot 3 của B và mở nó cho thuê bằng giá niêm yết.
     await raw.query(`UPDATE slot_rentals SET status = 'CLOSED' WHERE id = $1`, [fx.rentals[2]]);
+    await raw.query(`UPDATE machine_slots SET monthly_rent_price = '1200000.0000' WHERE id = $1`, [
+      fx.slots[2],
+    ]);
+    let draftId: string | undefined;
     try {
-      const after = await brandA('GET', `/slots/available?machineId=${fx.machineId}`);
-      expect(after.statusCode).toBe(200);
-      const items = after.json<{ items: Record<string, unknown>[] }>().items;
-      expect(items).toHaveLength(1);
-
-      const slot = items[0] as Record<string, unknown>;
+      const after = await list();
+      expect(after.items).toHaveLength(1);
+      const slot = after.items[0] as Record<string, unknown>;
       expect(slot['slotId']).toBe(fx.slots[2]);
-      // Đúng sáu trường vị trí, không hơn — thêm trường nào cũng là một đường rò mới.
+      expect(slot['monthlyRentPrice']).toBe('1200000.0000');
+      // Đúng bảy trường: vị trí + giá niêm yết, không hơn — thêm trường nào cũng là một đường rò mới.
       expect(Object.keys(slot).sort()).toEqual(
         [
           'locationId',
           'locationName',
           'machineDisplayName',
           'machineId',
+          'monthlyRentPrice',
           'slotId',
           'slotNumber',
         ].sort(),
       );
+      // AC4: không gì tiết lộ thương hiệu từng thuê slot.
       for (const secret of [fx.brandB, ...fx.brandBProductNames]) {
         expect(after.body).not.toContain(secret);
       }
+
+      // AC2: slot đang bị giữ chỗ bằng hóa đơn DRAFT (của bất kỳ thương hiệu nào) không còn trống.
+      const draft = await raw.query<{ id: string }>(
+        `INSERT INTO slot_rentals (slot_id, brand_id, created_by, status, starts_at, ends_at)
+         VALUES ($1, $2, $3, 'DRAFT', now(), now() + interval '30 days')
+         RETURNING id`,
+        [fx.slots[2], fx.brandA, fx.superAdminId],
+      );
+      draftId = draft.rows[0]?.id;
+      expect((await list()).items).toHaveLength(0);
+      await raw.query(`DELETE FROM slot_rentals WHERE id = $1`, [draftId]);
+      draftId = undefined;
+
+      // AC3: slot trống nhưng chưa có giá niêm yết thì chưa mở cho thuê.
+      await raw.query(`UPDATE machine_slots SET monthly_rent_price = NULL WHERE id = $1`, [
+        fx.slots[2],
+      ]);
+      expect((await list()).items).toHaveLength(0);
     } finally {
+      if (draftId) await raw.query(`DELETE FROM slot_rentals WHERE id = $1`, [draftId]);
+      await raw.query(`UPDATE machine_slots SET monthly_rent_price = NULL WHERE id = $1`, [
+        fx.slots[2],
+      ]);
       await raw.query(`UPDATE slot_rentals SET status = 'ACTIVE' WHERE id = $1`, [fx.rentals[2]]);
     }
   });

@@ -150,6 +150,7 @@ class FakeMchQueries {
         estimatedRemainingSprays: 0,
         status: 'AVAILABLE',
         version: 1,
+        monthlyRentPrice: '1000000.0000',
         currentRentalId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -202,7 +203,10 @@ class FakeMchQueries {
 
   async listAvailableSlots(filter: AvailableSlotFilter) {
     const items = [...this.slots.values()]
-      .filter((s) => s.status === 'AVAILABLE' && s.currentRentalId === null)
+      // Khớp MchQueries.listAvailableSlots (FR-SLT-19): có giá niêm yết, chưa xóa, không bị thuê.
+      .filter(
+        (s) => s.status !== 'DISABLED' && s.monthlyRentPrice !== null && s.currentRentalId === null,
+      )
       .map((s) => ({ slot: s, machine: this.machines.get(s.machineId)! }))
       .filter(({ machine }) => machine.operatingMode !== 'DISABLED')
       .filter(({ machine }) => this.locations.get(machine.locationId)?.status === 'ACTIVE')
@@ -215,6 +219,7 @@ class FakeMchQueries {
         machineDisplayName: machine.displayName,
         locationId: machine.locationId,
         locationName: this.locations.get(machine.locationId)!.name,
+        monthlyRentPrice: slot.monthlyRentPrice as string,
       }));
     return { items, total: items.length };
   }
@@ -601,10 +606,19 @@ describe('MchService (Machine, Slot, Location)', () => {
           'locationName',
           'machineDisplayName',
           'machineId',
+          'monthlyRentPrice',
           'slotId',
           'slotNumber',
         ].sort(),
       );
+    });
+
+    it('slot chưa có giá niêm yết không xuất hiện (FR-SLT-19 AC3)', async () => {
+      const [first] = await service.listSlotsByMachine(machineA);
+      queries.slots.set(first!.id, { ...queries.slots.get(first!.id)!, monthlyRentPrice: null });
+      const { items, total } = await service.listAvailableSlots(page);
+      expect(total).toBe(3);
+      expect(items.some((s) => s.slotId === first!.id)).toBe(false);
     });
 
     it('lọc theo máy và địa điểm', async () => {

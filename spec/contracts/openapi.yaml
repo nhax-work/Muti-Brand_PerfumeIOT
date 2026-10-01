@@ -822,7 +822,7 @@ components:
         reason: { type: string, minLength: 1 }
     AvailableSlot:
       type: object
-      required: [slotId, machineId, slotNumber, locationName]
+      required: [slotId, machineId, slotNumber, locationName, monthlyRentPrice]
       description: >-
         Slot trống hiển thị cho Brand Admin. KHÔNG kèm bất kỳ thông tin nào về thương hiệu đã từng
         thuê trước đó (FR-SLT-19, BR-012).
@@ -836,8 +836,8 @@ components:
         monthlyRentPrice:
           $ref: '#/components/schemas/Money'
           description: >-
-            Giá thuê niêm yết mỗi tháng (FR-SLT-19, FR-SLT-32). Chưa nằm trong `required` chỉ vì
-            hiện thực và test cô lập mức slot (nhóm người tự viết) chưa cập nhật — ADR-0006.
+            Giá thuê niêm yết mỗi tháng (FR-SLT-19, FR-SLT-32). Slot chưa có giá không xuất hiện
+            trong danh sách, nên trường này luôn có giá trị (ADR-0006).
     SlotRentalRequest:
       type: object
       deprecated: true

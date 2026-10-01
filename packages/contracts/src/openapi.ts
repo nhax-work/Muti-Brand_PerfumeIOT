@@ -2889,8 +2889,8 @@ export interface components {
             /** Format: uuid */
             locationId?: string;
             locationName: string;
-            /** @description Giá thuê niêm yết mỗi tháng (FR-SLT-19, FR-SLT-32). Chưa nằm trong `required` chỉ vì hiện thực và test cô lập mức slot (nhóm người tự viết) chưa cập nhật — ADR-0006. */
-            monthlyRentPrice?: components["schemas"]["Money"];
+            /** @description Giá thuê niêm yết mỗi tháng (FR-SLT-19, FR-SLT-32). Slot chưa có giá không xuất hiện trong danh sách, nên trường này luôn có giá trị (ADR-0006). */
+            monthlyRentPrice: components["schemas"]["Money"];
         };
         /**
          * @deprecated
