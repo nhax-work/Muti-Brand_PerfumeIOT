@@ -16,6 +16,20 @@ export const router = createBrowserRouter([
         handle: {} satisfies KioskRouteHandle,
         lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
+      {
+        path: 'catalog',
+        handle: {} satisfies KioskRouteHandle,
+        lazy: () =>
+          import('@/screens/catalog/CatalogScreen').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: 'products/:slotNumber',
+        handle: {} satisfies KioskRouteHandle,
+        lazy: () =>
+          import('@/screens/product-detail/ProductDetailScreen').then((m) => ({
+            Component: m.default,
+          })),
+      },
     ],
   },
 ]);

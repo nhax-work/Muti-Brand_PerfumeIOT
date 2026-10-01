@@ -6,6 +6,7 @@ import { config } from '@/shared/config';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
 import { useI18n } from '@/shared/i18n';
+import { useKioskSession } from '@/shared/session';
 import type { KioskRouteHandle } from './route-handle';
 import styles from './KioskShell.module.css';
 
@@ -18,13 +19,15 @@ export function KioskShell() {
   const navigate = useNavigate();
   const matches = useMatches();
   const outOfService = useOutOfService();
+  const { startNewSession } = useKioskSession();
 
   const keepAwake = matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
 
   const resetSession = useCallback(() => {
     setLocale(DEFAULT_LOCALE);
+    startNewSession();
     void navigate('/', { replace: true });
-  }, [navigate, setLocale]);
+  }, [navigate, setLocale, startNewSession]);
 
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
 
