@@ -242,7 +242,12 @@ export default function HomeScreen() {
               <div className={styles.cardGlow} />
               <div className={styles.cardImageContainer}>
                 {p.imageUrl ? (
-                  <img src={p.imageUrl} alt={p.name} className={styles.productImage} draggable={false} />
+                  <img
+                    src={p.imageUrl}
+                    alt={p.name}
+                    className={styles.productImage}
+                    draggable={false}
+                  />
                 ) : (
                   <div className={styles.imagePlaceholder}>
                     <span className={styles.sparkleIcon}>✨</span>

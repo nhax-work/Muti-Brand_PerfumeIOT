@@ -54,7 +54,9 @@ export default function ProductDetailScreen() {
     const raw = product.fragranceNotes as Record<string, unknown>;
 
     const top = parseNoteValues(raw.top ?? raw.Top ?? raw.huongDau);
-    const heart = parseNoteValues(raw.heart ?? raw.Heart ?? raw.middle ?? raw.Middle ?? raw.huongGiua);
+    const heart = parseNoteValues(
+      raw.heart ?? raw.Heart ?? raw.middle ?? raw.Middle ?? raw.huongGiua,
+    );
     const base = parseNoteValues(raw.base ?? raw.Base ?? raw.huongCuoi);
 
     const standardKeys = new Set([
@@ -120,9 +122,7 @@ export default function ProductDetailScreen() {
                 <span>ScentStation</span>
               </div>
             )}
-            {!isAvailable && (
-              <span className={styles.soldOutBadge}>{t('kiosk.outOfStock')}</span>
-            )}
+            {!isAvailable && <span className={styles.soldOutBadge}>{t('kiosk.outOfStock')}</span>}
           </div>
         </div>
 

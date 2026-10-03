@@ -67,7 +67,9 @@
   overflow: hidden;
   background: #ffffff;
   border: 1.5px solid var(--color-border);
-  box-shadow: var(--shadow-md), 0 0 24px rgba(122, 62, 92, 0.06);
+  box-shadow:
+    var(--shadow-md),
+    0 0 24px rgba(122, 62, 92, 0.06);
 }
 
 .productImage {
@@ -271,7 +273,9 @@
   justify-content: center;
   gap: var(--space-2);
   box-shadow: var(--shadow-primary);
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s ease;
 }
 
 .actionButton:active {

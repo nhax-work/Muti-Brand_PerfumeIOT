@@ -116,7 +116,9 @@
   -webkit-backdrop-filter: blur(16px);
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-lg), 0 8px 24px rgba(26, 22, 20, 0.12);
+  box-shadow:
+    var(--shadow-lg),
+    0 8px 24px rgba(26, 22, 20, 0.12);
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -137,7 +139,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .langOption:hover {

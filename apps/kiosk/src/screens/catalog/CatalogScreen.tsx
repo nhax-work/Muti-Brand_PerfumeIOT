@@ -118,9 +118,7 @@ export default function CatalogScreen() {
 
                   <div className={styles.cardFooter}>
                     <span className={styles.priceTag}>
-                      {priceText
-                        ? t('kiosk.pricePerSpray', { price: priceText })
-                        : ''}
+                      {priceText ? t('kiosk.pricePerSpray', { price: priceText }) : ''}
                     </span>
                   </div>
                 </div>

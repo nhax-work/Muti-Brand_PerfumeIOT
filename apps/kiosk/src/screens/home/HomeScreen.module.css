@@ -74,13 +74,7 @@
   flex-shrink: 0;
   touch-action: pan-y;
   cursor: grab;
-  mask-image: linear-gradient(
-    to right,
-    transparent 0%,
-    black 7%,
-    black 93%,
-    transparent 100%
-  );
+  mask-image: linear-gradient(to right, transparent 0%, black 7%, black 93%, transparent 100%);
   -webkit-mask-image: linear-gradient(
     to right,
     transparent 0%,
@@ -109,12 +103,17 @@
   -webkit-backdrop-filter: blur(12px);
   border-radius: var(--radius);
   border: 1.5px solid rgba(196, 139, 94, 0.35);
-  box-shadow: 0 6px 20px rgba(122, 62, 92, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 6px 20px rgba(122, 62, 92, 0.08),
+    0 2px 6px rgba(0, 0, 0, 0.04);
   overflow: hidden;
   display: flex;
   flex-direction: column;
   text-align: left;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
   flex-shrink: 0;
 }
 
@@ -273,7 +272,9 @@
   gap: var(--space-2);
   box-shadow: 0 6px 20px rgba(122, 62, 92, 0.4);
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
   animation: pulseButton 2.5s infinite;
 }
 
@@ -347,7 +348,8 @@
 }
 
 @keyframes pulseButton {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 6px 20px rgba(122, 62, 92, 0.4);
   }
   50% {
@@ -359,7 +361,8 @@
   0% {
     left: -100%;
   }
-  20%, 100% {
+  20%,
+  100% {
     left: 100%;
   }
 }
