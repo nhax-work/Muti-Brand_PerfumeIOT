@@ -295,9 +295,7 @@ export class SltQueries {
 
     if (!checkoutRow) return null;
 
-    const rentalRows = await this.selectColumns(
-      this.base(scope).where('sr.checkout_id', '=', id),
-    )
+    const rentalRows = await this.selectColumns(this.base(scope).where('sr.checkout_id', '=', id))
       .orderBy('sr.created_at', 'asc')
       .execute();
 
@@ -412,7 +410,9 @@ export class SltQueries {
     });
   }
 
-  async findProductById(id: string): Promise<{ id: string; brandId: string; status: string } | null> {
+  async findProductById(
+    id: string,
+  ): Promise<{ id: string; brandId: string; status: string } | null> {
     const row = await this.db
       .selectFrom('fragrance_products')
       .select(['id', 'brand_id', 'status'])

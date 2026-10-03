@@ -387,11 +387,7 @@ export function toDto(r: SlotRentalRecord): SlotRental {
 }
 
 function toCheckoutDto(checkout: RentalCheckoutRecord, items: SlotRentalRecord[]): RentalCheckout {
-  const stage = checkout.paidAt
-    ? 'PAID'
-    : checkout.cancelledAt
-      ? 'CANCELLED'
-      : 'AWAITING_PAYMENT';
+  const stage = checkout.paidAt ? 'PAID' : checkout.cancelledAt ? 'CANCELLED' : 'AWAITING_PAYMENT';
 
   return {
     id: checkout.id,

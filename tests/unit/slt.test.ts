@@ -205,7 +205,11 @@ class FakeSltQueries {
     return this.products.find((p) => p.id === id) ?? null;
   }
 
-  async updateProduct(scope: BrandScope, id: string, fragranceProductId: string): Promise<SlotRentalRecord | null> {
+  async updateProduct(
+    scope: BrandScope,
+    id: string,
+    fragranceProductId: string,
+  ): Promise<SlotRentalRecord | null> {
     const index = this.rentals.findIndex((r) => r.id === id);
     if (index === -1) return null;
     const current = this.rentals[index]!;
@@ -218,7 +222,11 @@ class FakeSltQueries {
     return updated;
   }
 
-  async updatePricePerSpray(scope: BrandScope, id: string, pricePerSpray: string): Promise<SlotRentalRecord | null> {
+  async updatePricePerSpray(
+    scope: BrandScope,
+    id: string,
+    pricePerSpray: string,
+  ): Promise<SlotRentalRecord | null> {
     const index = this.rentals.findIndex((r) => r.id === id);
     if (index === -1) return null;
     const current = this.rentals[index]!;
@@ -268,7 +276,8 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     const mchQueries = {
       findSlotById: async (id: string) => {
         if (id === 'slot-closed') return { id, monthlyRentPrice: null, currentRentalId: null };
-        if (id === 'slot-occupied') return { id, monthlyRentPrice: '1000000.0000', currentRentalId: 'r-occ' };
+        if (id === 'slot-occupied')
+          return { id, monthlyRentPrice: '1000000.0000', currentRentalId: 'r-occ' };
         return { id, monthlyRentPrice: '1000000.0000', currentRentalId: null };
       },
     } as unknown as MchQueries;
@@ -405,24 +414,14 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
 
     // Sản phẩm của thương hiệu khác -> PRODUCT_NOT_OWNED (403)
     await expect(
-      service.assignProduct(
-        brandAdmin,
-        { kind: 'BRAND', brandId: BRAND_A },
-        'r-paid',
-        'p-other',
-      ),
+      service.assignProduct(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', 'p-other'),
     ).rejects.toMatchObject({ code: 'PRODUCT_NOT_OWNED' });
 
     // Hóa đơn chưa thanh toán -> RENTAL_NOT_ACTIVE (409)
     const rUnpaid = rental('r-unpaid', { paidAt: null, status: 'DRAFT' });
     queries.rentals.push(rUnpaid);
     await expect(
-      service.assignProduct(
-        brandAdmin,
-        { kind: 'BRAND', brandId: BRAND_A },
-        'r-unpaid',
-        'p-1',
-      ),
+      service.assignProduct(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-unpaid', 'p-1'),
     ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
   });
 
@@ -441,12 +440,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
 
     // Giá <= 0 -> VALIDATION_ERROR (400)
     await expect(
-      service.setPricePerSpray(
-        brandAdmin,
-        { kind: 'BRAND', brandId: BRAND_A },
-        'r-paid',
-        '0',
-      ),
+      service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '0'),
     ).rejects.toThrow();
   });
 });
