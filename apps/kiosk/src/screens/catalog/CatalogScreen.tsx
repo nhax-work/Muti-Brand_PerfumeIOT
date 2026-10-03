@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import type { components } from '@scentstation/contracts';
 import { recordKioskInteraction, useKioskCatalog } from '@/shared/api';
@@ -16,17 +16,16 @@ function formatPrice(amount: string | null | undefined, currency: string): strin
 }
 
 /**
- * Màn hình danh mục sản phẩm kiosk đa thương hiệu (FR-ORD-01, FR-ORD-03).
+ * Màn hình danh mục sản phẩm kiosk (FR-ORD-01).
  *
- * Hiển thị mọi slot khả dụng kèm thương hiệu và cho phép lọc theo thương hiệu.
- * Slot không khả dụng hiển thị mờ kèm nhãn Tạm hết (FR-ORD-01 AC2).
+ * Hiển thị trực tiếp danh sách 5 loại nước hoa trên máy.
+ * Sản phẩm đã bán hết hiển thị huy hiệu "Bán hết" góc trái và làm mờ nhẹ.
  */
 export default function CatalogScreen() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const catalog = useKioskCatalog();
   const { kioskSessionId } = useKioskSession();
-  const [selectedBrand, setSelectedBrand] = useState<string | null>(null);
 
   const reportedImpressionsRef = useRef<Set<string>>(new Set());
 
@@ -47,23 +46,6 @@ export default function CatalogScreen() {
     }
   }, [items, kioskSessionId]);
 
-  // Danh sách các thương hiệu có trên máy
-  const brandNames = useMemo(() => {
-    const brands = new Set<string>();
-    for (const item of items) {
-      if (item.brandName) {
-        brands.add(item.brandName);
-      }
-    }
-    return Array.from(brands).sort();
-  }, [items]);
-
-  // Danh sách hiển thị theo bộ lọc thương hiệu
-  const displayedItems = useMemo(() => {
-    if (!selectedBrand) return items;
-    return items.filter((item) => item.brandName === selectedBrand);
-  }, [items, selectedBrand]);
-
   const handleSelectItem = (item: KioskCatalogItem) => {
     if (!item.available) return;
     recordKioskInteraction({
@@ -76,53 +58,18 @@ export default function CatalogScreen() {
 
   return (
     <section className={styles.catalog} aria-label={t('kiosk.catalogTitle')}>
-      <div className={styles.topBar}>
-        <button
-          type="button"
-          className={styles.homeButton}
-          onClick={() => void navigate('/')}
-          aria-label={t('kiosk.backToHome')}
-        >
-          ← {t('kiosk.backToHome')}
-        </button>
-      </div>
-
       <div className={styles.headerText}>
         <h1 className={styles.title}>{t('kiosk.catalogTitle')}</h1>
         <p className={styles.subtitle}>{t('kiosk.catalogSubtitle')}</p>
       </div>
 
-      {brandNames.length > 0 && (
-        <nav className={styles.filterBar} aria-label={t('kiosk.brandLabel')}>
-          <button
-            type="button"
-            className={`${styles.brandChip} ${selectedBrand === null ? styles.brandChipActive : ''}`}
-            onClick={() => setSelectedBrand(null)}
-            aria-pressed={selectedBrand === null}
-          >
-            {t('kiosk.allBrands')}
-          </button>
-          {brandNames.map((brand) => (
-            <button
-              key={brand}
-              type="button"
-              className={`${styles.brandChip} ${selectedBrand === brand ? styles.brandChipActive : ''}`}
-              onClick={() => setSelectedBrand(brand)}
-              aria-pressed={selectedBrand === brand}
-            >
-              {brand}
-            </button>
-          ))}
-        </nav>
-      )}
-
-      {displayedItems.length === 0 ? (
+      {items.length === 0 ? (
         <div className={styles.emptyState}>
           <p>{t('kiosk.emptyCatalog')}</p>
         </div>
       ) : (
         <div className={styles.grid}>
-          {displayedItems.map((item) => {
+          {items.map((item) => {
             const isAvailable = item.available;
             const priceText = formatPrice(item.pricePerSpray, item.currency);
 
@@ -158,10 +105,6 @@ export default function CatalogScreen() {
                     </div>
                   )}
 
-                  <span className={styles.slotBadge}>
-                    {t('kiosk.slotNumber', { slot: item.slotNumber })}
-                  </span>
-
                   {!isAvailable && (
                     <span className={styles.outOfStockBadge}>{t('kiosk.outOfStock')}</span>
                   )}
@@ -175,9 +118,9 @@ export default function CatalogScreen() {
 
                   <div className={styles.cardFooter}>
                     <span className={styles.priceTag}>
-                      {isAvailable && priceText
+                      {priceText
                         ? t('kiosk.pricePerSpray', { price: priceText })
-                        : t('kiosk.outOfStock')}
+                        : ''}
                     </span>
                   </div>
                 </div>

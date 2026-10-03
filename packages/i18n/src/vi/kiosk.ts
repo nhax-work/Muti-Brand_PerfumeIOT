@@ -5,7 +5,11 @@
  */
 export const kiosk = {
   welcome: 'Chào mừng bạn đến với ScentStation',
+  homeSubtitle: 'Khám phá & trải nghiệm hương thơm cao cấp chỉ với một chạm',
   tapToStart: 'Chạm để chọn mùi hương',
+  featureAuthentic: 'Nước hoa chính hãng',
+  featureFineMist: 'Xịt sương vi hạt cao cấp',
+  featureQrPay: 'Thanh toán QR nhanh chóng',
   outOfServiceTitle: 'Máy đang tạm ngưng phục vụ',
   outOfServiceHint: 'Vui lòng quay lại sau ít phút hoặc liên hệ nhân viên tại điểm đặt máy.',
   catalogTitle: 'Danh mục nước hoa',
@@ -13,7 +17,7 @@ export const kiosk = {
   allBrands: 'Tất cả',
   slotNumber: 'Ngăn {slot}',
   pricePerSpray: '{price} / lượt xịt',
-  outOfStock: 'Tạm hết',
+  outOfStock: 'Bán hết',
   emptyCatalog: 'Hiện chưa có sản phẩm nào khả dụng trên máy này',
   backToHome: 'Trang chủ',
   backToCatalog: 'Quay lại danh mục',

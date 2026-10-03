@@ -29,7 +29,8 @@ function parseNoteValues(val: unknown): string[] {
  * Màn hình chi tiết sản phẩm khi chọn slot trên kiosk (FR-ORD-02).
  *
  * Hiển thị đầy đủ: tên nước hoa, thương hiệu, hình ảnh chất lượng cao,
- * mô tả mùi hương, các tầng nốt hương, và giá tiền một lượt xịt.
+ * mô tả mùi hương, các tầng nốt hương, và giá tiền một lượt xịt kể cả khi
+ * sản phẩm đã bán hết (hiển thị nhãn Bán hết góc trái).
  */
 export default function ProductDetailScreen() {
   const { t } = useI18n();
@@ -52,11 +53,9 @@ export default function ProductDetailScreen() {
     }
     const raw = product.fragranceNotes as Record<string, unknown>;
 
-    const top = parseNoteValues(raw['top'] ?? raw['Top'] ?? raw['huongDau']);
-    const heart = parseNoteValues(
-      raw['heart'] ?? raw['Heart'] ?? raw['middle'] ?? raw['Middle'] ?? raw['huongGiua'],
-    );
-    const base = parseNoteValues(raw['base'] ?? raw['Base'] ?? raw['huongCuoi']);
+    const top = parseNoteValues(raw.top ?? raw.Top ?? raw.huongDau);
+    const heart = parseNoteValues(raw.heart ?? raw.Heart ?? raw.middle ?? raw.Middle ?? raw.huongGiua);
+    const base = parseNoteValues(raw.base ?? raw.Base ?? raw.huongCuoi);
 
     const standardKeys = new Set([
       'top',
@@ -85,20 +84,10 @@ export default function ProductDetailScreen() {
     return { top, heart, base, others };
   }, [product?.fragranceNotes]);
 
-  if (!item || !isAvailable) {
+  // Chỉ hiển thị not found khi slotNumber hoàn toàn không tồn tại hoặc không có thông tin sản phẩm
+  if (!item || !product) {
     return (
       <section className={styles.detail}>
-        <div className={styles.topBar}>
-          <button
-            type="button"
-            className={styles.backButton}
-            onClick={() => void navigate('/catalog')}
-            aria-label={t('kiosk.backToCatalog')}
-          >
-            ← {t('kiosk.backToCatalog')}
-          </button>
-        </div>
-
         <div className={styles.emptyState}>
           <h1 className={styles.emptyTitle}>{t('kiosk.productNotFound')}</h1>
           <p className={styles.emptySubtitle}>{t('kiosk.productUnavailable')}</p>
@@ -117,22 +106,11 @@ export default function ProductDetailScreen() {
   const priceText = formatPrice(item.pricePerSpray, item.currency);
 
   return (
-    <section className={styles.detail} aria-label={product?.name ?? t('kiosk.productDetail')}>
-      <div className={styles.topBar}>
-        <button
-          type="button"
-          className={styles.backButton}
-          onClick={() => void navigate('/catalog')}
-          aria-label={t('kiosk.backToCatalog')}
-        >
-          ← {t('kiosk.backToCatalog')}
-        </button>
-      </div>
-
+    <section className={styles.detail} aria-label={product.name}>
       <div className={styles.content}>
         <div className={styles.imageColumn}>
           <div className={styles.imageWrapper}>
-            {product?.imageUrl ? (
+            {product.imageUrl ? (
               <img src={product.imageUrl} alt={product.name} className={styles.productImage} />
             ) : (
               <div className={styles.placeholderImage}>
@@ -142,26 +120,26 @@ export default function ProductDetailScreen() {
                 <span>ScentStation</span>
               </div>
             )}
-            <span className={styles.slotBadge}>
-              {t('kiosk.slotNumber', { slot: item.slotNumber })}
-            </span>
+            {!isAvailable && (
+              <span className={styles.soldOutBadge}>{t('kiosk.outOfStock')}</span>
+            )}
           </div>
         </div>
 
         <div className={styles.infoColumn}>
           <div className={styles.headerSection}>
             {item.brandName && <span className={styles.brandName}>{item.brandName}</span>}
-            <h1 className={styles.productName}>{product?.name}</h1>
+            <h1 className={styles.productName}>{product.name}</h1>
           </div>
 
           <div className={styles.priceBox}>
             <span className={styles.priceLabel}>{t('kiosk.priceLabel')}</span>
             <span className={styles.priceAmount}>
-              {t('kiosk.pricePerSpray', { price: priceText })}
+              {priceText ? t('kiosk.pricePerSpray', { price: priceText }) : ''}
             </span>
           </div>
 
-          {product?.description && (
+          {product.description && (
             <div className={styles.descriptionSection}>
               <p className={styles.descriptionText}>{product.description}</p>
             </div>
@@ -169,11 +147,14 @@ export default function ProductDetailScreen() {
 
           {notes && (
             <div className={styles.notesSection}>
-              <h2 className={styles.notesTitle}>{t('kiosk.fragranceNotes')}</h2>
+              <h2 className={styles.notesTitle}>
+                <span aria-hidden="true">🌿</span>
+                <span>{t('kiosk.fragranceNotes')}</span>
+              </h2>
               <div className={styles.notesList}>
                 {notes.top.length > 0 && (
                   <div className={styles.noteItem}>
-                    <span className={styles.noteLevel}>{t('kiosk.topNotes')}</span>
+                    <span className={styles.noteLevel}>🍋 {t('kiosk.topNotes')}</span>
                     <div className={styles.noteChips}>
                       {notes.top.map((n) => (
                         <span key={n} className={styles.noteChip}>
@@ -186,7 +167,7 @@ export default function ProductDetailScreen() {
 
                 {notes.heart.length > 0 && (
                   <div className={styles.noteItem}>
-                    <span className={styles.noteLevel}>{t('kiosk.heartNotes')}</span>
+                    <span className={styles.noteLevel}>🌹 {t('kiosk.heartNotes')}</span>
                     <div className={styles.noteChips}>
                       {notes.heart.map((n) => (
                         <span key={n} className={styles.noteChip}>
@@ -199,7 +180,7 @@ export default function ProductDetailScreen() {
 
                 {notes.base.length > 0 && (
                   <div className={styles.noteItem}>
-                    <span className={styles.noteLevel}>{t('kiosk.baseNotes')}</span>
+                    <span className={styles.noteLevel}>🪵 {t('kiosk.baseNotes')}</span>
                     <div className={styles.noteChips}>
                       {notes.base.map((n) => (
                         <span key={n} className={styles.noteChip}>
@@ -230,11 +211,16 @@ export default function ProductDetailScreen() {
             <button
               id="kiosk-spray-button"
               type="button"
-              className={styles.actionButton}
-              onClick={() => void navigate(`/checkout/${item.slotNumber}`)}
+              className={`${styles.actionButton} ${!isAvailable ? styles.actionButtonDisabled : ''}`}
+              onClick={() => {
+                if (isAvailable) {
+                  void navigate(`/checkout/${item.slotNumber}`);
+                }
+              }}
+              disabled={!isAvailable}
             >
-              <span>{t('kiosk.sprayExperience')}</span>
-              <span aria-hidden="true">→</span>
+              <span>{isAvailable ? t('kiosk.sprayExperience') : t('kiosk.outOfStock')}</span>
+              {isAvailable && <span aria-hidden="true">→</span>}
             </button>
           </div>
         </div>

@@ -87,9 +87,6 @@ describe('ProductDetailScreen (FR-ORD-02)', () => {
     expect(screen.getByText('Chanel')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 1, name: 'Chanel No 5' })).toBeTruthy();
 
-    // Vị trí ngăn
-    expect(screen.getByText('Ngăn 1')).toBeTruthy();
-
     // Mô tả
     expect(screen.getByText('Hương thơm quyến rũ vượt thời gian')).toBeTruthy();
 
@@ -97,28 +94,19 @@ describe('ProductDetailScreen (FR-ORD-02)', () => {
     expect(screen.getByText(/35\.000 VND \/ lượt xịt/i)).toBeTruthy();
 
     // Tầng hương
-    expect(screen.getByText('Các tầng hương')).toBeTruthy();
-    expect(screen.getByText('Hương đầu')).toBeTruthy();
+    expect(screen.getByText(/Các tầng hương/i)).toBeTruthy();
+    expect(screen.getByText(/Hương đầu/i)).toBeTruthy();
     expect(screen.getByText('Aldehydes')).toBeTruthy();
     expect(screen.getByText('Ylang-Ylang')).toBeTruthy();
-    expect(screen.getByText('Hương giữa')).toBeTruthy();
+    expect(screen.getByText(/Hương giữa/i)).toBeTruthy();
     expect(screen.getByText('Rose')).toBeTruthy();
     expect(screen.getByText('Jasmine')).toBeTruthy();
-    expect(screen.getByText('Hương cuối')).toBeTruthy();
+    expect(screen.getByText(/Hương cuối/i)).toBeTruthy();
     expect(screen.getByText('Vanilla')).toBeTruthy();
     expect(screen.getByText('Sandalwood')).toBeTruthy();
 
     // Nút xịt thử
     expect(screen.getByRole('button', { name: /Trải nghiệm xịt ngay/i })).toBeTruthy();
-  });
-
-  it('bấm nút quay lại danh mục điều hướng sang /catalog', () => {
-    renderDetail();
-
-    const backBtn = screen.getByRole('button', { name: /Quay lại danh mục/i });
-    fireEvent.click(backBtn);
-
-    expect(mockNavigate).toHaveBeenCalledWith('/catalog');
   });
 
   it('bấm nút trải nghiệm xịt ngay điều hướng sang checkout của slot đó', () => {

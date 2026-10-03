@@ -306,7 +306,11 @@ export const en: SameKeysAs<typeof vi> = {
 
   kiosk: {
     welcome: 'Welcome to ScentStation',
+    homeSubtitle: 'Discover & experience premium fragrances with a single tap',
     tapToStart: 'Tap to choose a scent',
+    featureAuthentic: '100% Authentic Fragrances',
+    featureFineMist: 'Ultra-Fine Micro Mist',
+    featureQrPay: 'Instant QR Payment',
     outOfServiceTitle: 'This machine is temporarily out of service',
     outOfServiceHint: 'Please come back in a few minutes or ask the staff at this location.',
     catalogTitle: 'Fragrance Collection',

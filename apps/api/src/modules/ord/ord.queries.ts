@@ -77,11 +77,11 @@ export class OrdQueries {
       const isAvailable =
         slot.status === 'AVAILABLE' && rental !== undefined && rental.price_per_spray !== null;
 
-      if (isAvailable && rental) {
+      if (rental) {
         items.push({
           slotId: slot.id,
           slotNumber: slot.slot_number,
-          available: true,
+          available: isAvailable,
           brandName: rental.brand_name,
           product: {
             id: rental.product_id,
@@ -95,7 +95,7 @@ export class OrdQueries {
           currency: rental.currency,
         });
       } else {
-        // Slot không khả dụng hiển thị available=false và KHÔNG kèm brandName/product (FR-RPT-12, BR-012)
+        // Slot hoàn toàn trống không có hợp đồng thuê
         items.push({
           slotId: slot.id,
           slotNumber: slot.slot_number,

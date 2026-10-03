@@ -108,8 +108,8 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Dior' })).toBeTruthy();
     expect(screen.getByText('Sauvage')).toBeTruthy();
 
-    // Slot 3 không khả dụng hiển thị "Tạm hết"
-    const outOfStockBadges = screen.getAllByText('Tạm hết');
+    // Slot 3 không khả dụng hiển thị "Bán hết"
+    const outOfStockBadges = screen.getAllByText('Bán hết');
     expect(outOfStockBadges.length).toBeGreaterThan(0);
   });
 
@@ -124,30 +124,6 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(target).toBeDefined();
     fireEvent.click(target!);
     expect(mockNavigate).not.toHaveBeenCalled();
-  });
-
-  it('test_FR_ORD_03_kiosk_filter_by_brand — lọc danh mục theo thương hiệu và trở lại Tất cả', () => {
-    renderCatalog();
-
-    // Ban đầu thấy cả hai sản phẩm
-    expect(screen.getByText('Chanel No 5')).toBeTruthy();
-    expect(screen.getByText('Sauvage')).toBeTruthy();
-
-    // Bấm vào chip lọc "Chanel"
-    const chanelChip = screen.getByRole('button', { name: 'Chanel' });
-    fireEvent.click(chanelChip);
-
-    // Chỉ còn Chanel No 5, không còn Sauvage
-    expect(screen.getByText('Chanel No 5')).toBeTruthy();
-    expect(screen.queryByText('Sauvage')).toBeNull();
-
-    // Bấm vào chip "Tất cả"
-    const allChip = screen.getByRole('button', { name: 'Tất cả' });
-    fireEvent.click(allChip);
-
-    // Cả hai sản phẩm xuất hiện trở lại
-    expect(screen.getByText('Chanel No 5')).toBeTruthy();
-    expect(screen.getByText('Sauvage')).toBeTruthy();
   });
 
   it('test_FR_RPT_06_record_interactions — ghi nhận impression và chuyển hướng khi chọn sản phẩm khả dụng', () => {
@@ -180,14 +156,5 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
       }),
     );
     expect(mockNavigate).toHaveBeenCalledWith('/products/1');
-  });
-
-  it('bấm nút Quay về trang chủ điều hướng sang /', () => {
-    renderCatalog();
-
-    const homeBtn = screen.getByRole('button', { name: /Trang chủ/i });
-    fireEvent.click(homeBtn);
-
-    expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 });
