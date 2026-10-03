@@ -130,6 +130,17 @@ export const en: SameKeysAs<typeof vi> = {
     storagePlanNameTaken: 'A storage plan with this name already exists',
     lastActiveStoragePlan:
       'Cannot stop selling the last storage plan — every rental must include one storage plan',
+    slotNotForRent: 'Slot is not open for rent or lacks listed price',
+    emptyCart: 'Cart cannot be empty',
+    duplicateSlotInCart: 'Cannot select the same slot multiple times in a single checkout',
+    storagePlanRequired: 'A storage plan is required for each slot in a checkout',
+    packageNotFoundOrInactive: 'Rental package does not exist or is no longer active',
+    planNotFoundOrInactive: 'Storage plan does not exist or is no longer active',
+    productDiscontinued: 'Product has been discontinued and cannot be assigned to a slot',
+    invalidPricePerSpray: 'Price per spray must be greater than 0',
+    slotOccupied: 'Slot is already rented or held',
+    rentalNotActive: 'Rental invoice is unpaid or ended',
+    productNotOwned: 'Product is not owned by the renting brand',
   },
 
   usr: {

@@ -7,7 +7,11 @@ import {
 } from './catalog.http.js';
 import { CatalogQueries } from './catalog.queries.js';
 import { CatalogService } from './catalog.service.js';
-import { SltController } from './slt.http.js';
+import {
+  RentalCheckoutsController,
+  SlotRentalQuoteController,
+  SltController,
+} from './slt.http.js';
 import { SltQueries } from './slt.queries.js';
 import { SltService } from './slt.service.js';
 
@@ -16,6 +20,8 @@ import { SltService } from './slt.service.js';
   imports: [MchModule],
   controllers: [
     SltController,
+    RentalCheckoutsController,
+    SlotRentalQuoteController,
     RentalPackagesController,
     StoragePlansController,
     SlotRentPriceController,
@@ -24,3 +30,4 @@ import { SltService } from './slt.service.js';
   exports: [SltService, CatalogService],
 })
 export class SltModule {}
+
