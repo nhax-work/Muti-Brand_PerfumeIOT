@@ -8,16 +8,18 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
+import type { AuditEntry, AuditService } from '../../apps/api/src/shared/audit/index.js';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
 import type { BrandScope } from '../../apps/api/src/shared/scoping/index.js';
 import { AppError } from '../../apps/api/src/shared/errors/index.js';
 import { SltService } from '../../apps/api/src/modules/slt/slt.service.js';
 import {
   stageOf,
+  type CheckoutCreateItemData,
   type SlotRentalFilter,
   type SlotRentalRecord,
   type SlotRentalStatus,
+  type SltQueries,
 } from '../../apps/api/src/modules/slt/slt.queries.js';
 import { CatalogService } from '../../apps/api/src/modules/slt/catalog.service.js';
 import type {
@@ -26,6 +28,7 @@ import type {
   StoragePlanRow,
 } from '../../apps/api/src/modules/slt/catalog.queries.js';
 import type { MchService } from '../../apps/api/src/modules/mch/index.js';
+import type { MchQueries } from '../../apps/api/src/modules/mch/mch.queries.js';
 
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
 const BRAND_B = '11111111-1111-4111-8111-000000000002';
