@@ -16,7 +16,7 @@ import type { KioskInteractionType, RevenueOwnerType } from '../../shared/db/typ
 import { AppError, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import { canTransition } from './order-status.js';
+import { canCreateDispenseCommand, canTransition } from './order-status.js';
 import {
   OrdQueries,
   type KioskMachineRecord,
@@ -60,6 +60,17 @@ export interface KioskInteractionInput {
   readonly slotId: string;
   readonly kioskSessionId: string;
   readonly occurredAt: Date;
+}
+
+/** Kết cục của đơn khi lệnh xịt kết thúc — spec/contracts/mqtt.md §6 "Ánh xạ". */
+export interface DispenseOrderOutcome {
+  readonly to: 'DISPENSED' | 'FAILED' | 'FORFEITED';
+  /** Mã trong spec/errors.md (`PRESS_TIMEOUT`, `ACTUATOR_FAULT`…); `null` khi thành công. */
+  readonly failureCode: string | null;
+  readonly manualReview: boolean;
+  readonly commandToken: string;
+  /** Thời điểm thiết bị kích hoạt cơ cấu (`executed_at`) — ghi vào `dispensed_at`. */
+  readonly at: Date;
 }
 
 /** Kết quả webhook thanh toán thành công cho một đơn — cùng hình dạng với phía phiên thuê slot. */
@@ -327,8 +338,8 @@ export class OrdService {
         },
         { paidAt },
       );
-      // Tuần 5 (DSP, FR-DSP-01, FR-DSP-26): tạo lệnh xịt CUSTOMER tại đây nếu máy không còn lệnh
-      // CUSTOMER hiệu lực; nếu còn, đơn giữ PAID ("chờ lượt").
+      // Lệnh xịt KHÔNG tạo ở đây: vòng điều phối DSP nhặt đơn PAID sau khi transaction này commit
+      // (outbox), máy còn lệnh CUSTOMER hiệu lực thì đơn giữ PAID "chờ lượt" (FR-DSP-01, 26).
       return { kind: 'PAID' };
     }
 
@@ -375,6 +386,69 @@ export class OrdService {
   /** FR-ORD-14 AC2: số tiền lệch thì cắm cờ kiểm tra thủ công, không đổi trạng thái. */
   async flagOrderForReview(tx: Executor, orderId: string): Promise<void> {
     await this.queries.flagManualReview(orderId, tx);
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Lệnh xịt — phần của đơn (gọi từ DSP trong transaction của DSP)
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * FR-ORD-17, FR-DSP-01: PAID → DISPENSE_REQUESTED khi DSP ghi lệnh xịt cho đơn.
+   *
+   * @returns đơn sau khi chuyển; `null` nếu đơn không còn ở PAID (người gọi bỏ qua, không ghi lệnh)
+   */
+  async startDispense(tx: Executor, orderId: string): Promise<OrderRecord | null> {
+    const order = await this.queries.lockOrder(orderId, tx);
+    if (!order || !canCreateDispenseCommand(order.status)) return null;
+    return this.transition(
+      tx,
+      {
+        orderId: order.id,
+        brandId: order.brandId,
+        from: 'PAID',
+        to: 'DISPENSE_REQUESTED',
+        reason: 'DISPENSE_REQUESTED',
+        actorType: 'SYSTEM',
+        at: this.clock.now(),
+      },
+      {},
+    );
+  }
+
+  /**
+   * FR-DSP-17, FR-ORD-19, FR-ORD-27: kết quả thiết bị cho đơn đang DISPENSE_REQUESTED.
+   *
+   * `DISPENSED` chỉ được gọi khi thiết bị báo `success = true` — không suy từ ACK hay timeout.
+   *
+   * @returns `false` nếu đơn đã rời DISPENSE_REQUESTED (bản tin đến trễ hoặc trùng) — không đổi gì
+   */
+  async finishDispense(
+    tx: Executor,
+    orderId: string,
+    outcome: DispenseOrderOutcome,
+  ): Promise<boolean> {
+    const order = await this.queries.lockOrder(orderId, tx);
+    if (!order || order.status !== 'DISPENSE_REQUESTED') return false;
+    await this.transition(
+      tx,
+      {
+        orderId: order.id,
+        brandId: order.brandId,
+        from: 'DISPENSE_REQUESTED',
+        to: outcome.to,
+        reason:
+          outcome.to === 'DISPENSED' ? 'DISPENSE_CONFIRMED' : (outcome.failureCode ?? outcome.to),
+        actorType: 'DEVICE',
+        metadata: { commandToken: outcome.commandToken },
+        at: this.clock.now(),
+      },
+      {
+        ...(outcome.to === 'DISPENSED' ? { dispensedAt: outcome.at } : {}),
+        ...(outcome.failureCode ? { failureCode: outcome.failureCode } : {}),
+        ...(outcome.manualReview ? { needsManualReview: true } : {}),
+      },
+    );
+    return true;
   }
 
   // -----------------------------------------------------------------------------------

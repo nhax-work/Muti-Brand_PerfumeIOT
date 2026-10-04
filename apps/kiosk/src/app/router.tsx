@@ -30,6 +30,13 @@ export const router = createBrowserRouter([
             Component: m.default,
           })),
       },
+      {
+        // Khách đang quét QR hoặc chờ bấm nút — không được bị đá về trang chủ giữa chừng.
+        path: 'checkout/:slotNumber',
+        handle: { keepAwake: true } satisfies KioskRouteHandle,
+        lazy: () =>
+          import('@/screens/checkout/CheckoutScreen').then((m) => ({ Component: m.default })),
+      },
     ],
   },
 ]);

@@ -1,6 +1,6 @@
 /**
- * Cửa vào HTTP (ADR-0003). Cửa vào MQTT và scheduler sẽ nằm cạnh file này và dùng chung các
- * service của từng module.
+ * Cửa vào HTTP (ADR-0003). Cửa vào MQTT (`mqtt.ts`) và scheduler (`scheduler.ts`) hiện chạy chung
+ * tiến trình này và dùng chung các service của từng module.
  */
 
 import 'reflect-metadata';
@@ -10,6 +10,8 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { AppModule } from '../app.module.js';
 import { APP_CONFIG, type AppConfig } from '../shared/config/index.js';
 import { loadEnvFile } from '../shared/config/env-file.js';
+import { startMqtt } from './mqtt.js';
+import { startScheduler } from './scheduler.js';
 import { registerSwagger, SWAGGER_ROUTE } from './swagger.js';
 
 // Phải chạy TRƯỚC khi Nest dựng CoreModule, vì loadConfig() đọc process.env lúc khởi tạo.
@@ -29,6 +31,14 @@ async function bootstrap(): Promise<void> {
   if (config.swaggerEnabled) await registerSwagger(app);
   await app.listen(config.port, '0.0.0.0');
 
+  if (config.mqttUrl) {
+    startMqtt(app, config.mqttUrl);
+  } else {
+    new Logger('Bootstrap').warn('MQTT_URL trống — không gửi lệnh xịt xuống máy (chỉ chạy HTTP).');
+  }
+  const stopScheduler = startScheduler(app, { dispense: config.mqttUrl !== null });
+  process.once('SIGTERM', stopScheduler);
+  process.once('SIGINT', stopScheduler);
   if (config.swaggerEnabled) {
     new Logger('Swagger').log(`Tài liệu API: http://localhost:${config.port}${SWAGGER_ROUTE}`);
   }
