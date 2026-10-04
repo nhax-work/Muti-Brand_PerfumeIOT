@@ -146,6 +146,16 @@ export class RentalCheckoutsController {
     const { id } = parseBody(IdParam, params);
     return this.service.getCheckout(actor, scope, id);
   }
+
+  @Post(':id/payments')
+  payCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.payCheckout(actor, scope, id);
+  }
 }
 
 @Controller('slots')

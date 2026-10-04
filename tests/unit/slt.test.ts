@@ -546,3 +546,22 @@ describe('CatalogService — bảng giá', () => {
     expect(queries.plans.find((p) => p.id === 'b')?.is_active).toBe(true);
   });
 });
+
+describe('newInvoiceNumber — sinh số hóa đơn thuê slot (FR-SLT-38)', () => {
+  it('sinh mã đúng định dạng HD-YYYYMMDD-XXXXXX', async () => {
+    const { newInvoiceNumber, INVOICE_NUMBER_PATTERN } =
+      await import('../../apps/api/src/modules/slt/invoice-number.js');
+    const date = new Date('2026-10-04T10:30:00Z');
+    const invoiceNum = newInvoiceNumber(date, 'Asia/Ho_Chi_Minh');
+    expect(invoiceNum).toMatch(INVOICE_NUMBER_PATTERN);
+    expect(invoiceNum.startsWith('HD-20261004-')).toBe(true);
+  });
+
+  it('dùng nguồn ngẫu nhiên được truyền vào', async () => {
+    const { newInvoiceNumber } = await import('../../apps/api/src/modules/slt/invoice-number.js');
+    const date = new Date('2026-10-04T10:30:00Z');
+    // ALPHABET[0] là '2'
+    const invoiceNum = newInvoiceNumber(date, 'Asia/Ho_Chi_Minh', () => 0);
+    expect(invoiceNum).toBe('HD-20261004-222222');
+  });
+});

@@ -8,12 +8,13 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { sql, type Expression, type SqlBool } from 'kysely';
-import { DATABASE, type Database } from '../../shared/db/index.js';
+import { sql, type Expression, type Kysely, type SqlBool, type Transaction } from 'kysely';
+import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
 export type { SlotRentalStatus };
+export type Executor = Kysely<DB> | Transaction<DB>;
 
 /**
  * Nhãn hiển thị cho Brand Admin (FR-SLT-41, openapi `RentalInvoiceStage`) — SUY RA từ `status` và
@@ -461,6 +462,161 @@ export class SltQueries {
       .execute();
 
     return this.findById(scope, id);
+  }
+
+  /** Khóa phiên thanh toán FOR UPDATE (dùng trong transaction thanh toán / webhook). */
+  async lockCheckoutById(
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<RentalCheckoutRecord | null> {
+    const row = await executor
+      .selectFrom('rental_checkouts')
+      .selectAll()
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return {
+      id: row.id,
+      brandId: row.brand_id,
+      currency: row.currency,
+      totalAmount: row.total_amount,
+      holdExpiresAt: row.hold_expires_at,
+      paidAt: row.paid_at,
+      cancelledAt: row.cancelled_at,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  /** Tra cứu phiên thanh toán không khóa (không lọc scope). */
+  async findCheckoutRecordById(
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<RentalCheckoutRecord | null> {
+    const row = await executor
+      .selectFrom('rental_checkouts')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return {
+      id: row.id,
+      brandId: row.brand_id,
+      currency: row.currency,
+      totalAmount: row.total_amount,
+      holdExpiresAt: row.hold_expires_at,
+      paidAt: row.paid_at,
+      cancelledAt: row.cancelled_at,
+      createdBy: row.created_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  /** Lấy danh sách mọi hóa đơn của một phiên thanh toán (có thể khóa FOR UPDATE). */
+  async findRentalsByCheckoutId(
+    checkoutId: string,
+    executor: Executor = this.db,
+    forUpdate = false,
+  ): Promise<SlotRentalRecord[]> {
+    let query = executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+      .selectAll('sr')
+      .select(['ms.machine_id', 'rc.hold_expires_at'])
+      .where('sr.checkout_id', '=', checkoutId)
+      .orderBy('sr.created_at', 'asc');
+
+    if (forUpdate) {
+      query = query.forUpdate();
+    }
+
+    const rows = await query.execute();
+    return rows.map(toRecord);
+  }
+
+  /** Cập nhật paid_at cho phiên thanh toán. */
+  async markCheckoutPaid(
+    checkoutId: string,
+    paidAt: Date,
+    executor: Executor = this.db,
+  ): Promise<void> {
+    await executor
+      .updateTable('rental_checkouts')
+      .set({ paid_at: paidAt, updated_at: new Date() })
+      .where('id', '=', checkoutId)
+      .execute();
+  }
+
+  /** Cập nhật paid_at và invoice_number cho từng hóa đơn của phiên. */
+  async markRentalPaid(
+    rentalId: string,
+    paidAt: Date,
+    invoiceNumber: string,
+    executor: Executor = this.db,
+  ): Promise<void> {
+    await executor
+      .updateTable('slot_rentals')
+      .set({
+        paid_at: paidAt,
+        invoice_number: invoiceNumber,
+        updated_at: new Date(),
+      })
+      .where('id', '=', rentalId)
+      .execute();
+  }
+
+  /** Tìm ID các Brand Admin đang hoạt động (ACTIVE) của thương hiệu. */
+  async findActiveBrandAdminIds(brandId: string, executor: Executor = this.db): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .select('u.id')
+      .where('u.brand_id', '=', brandId)
+      .where('u.status', '=', 'ACTIVE')
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('user_roles as ur')
+            .innerJoin('roles as r', 'r.id', 'ur.role_id')
+            .select('ur.id')
+            .whereRef('ur.user_id', '=', 'u.id')
+            .where('r.code', '=', 'BRAND_ADMIN'),
+        ),
+      )
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /** Chèn thông báo (FR-SLT-43). */
+  async insertNotification(
+    notification: {
+      readonly brandId: string;
+      readonly recipientUserId: string;
+      readonly type: string;
+      readonly channel: string;
+      readonly subject: string;
+      readonly content: string;
+      readonly status: 'PENDING';
+      readonly createdAt: Date;
+    },
+    executor: Executor = this.db,
+  ): Promise<void> {
+    await executor
+      .insertInto('notifications')
+      .values({
+        brand_id: notification.brandId,
+        recipient_user_id: notification.recipientUserId,
+        type: notification.type,
+        channel: notification.channel,
+        subject: notification.subject,
+        content: notification.content,
+        status: notification.status,
+        created_at: notification.createdAt,
+      })
+      .execute();
   }
 
   private base(scope: BrandScope) {
