@@ -116,6 +116,7 @@ export default function CheckoutDetailPage() {
   const isPaid = checkout.stage === 'PAID';
   const isCancelled = checkout.stage === 'CANCELLED';
   const holdDeadline = new Date(checkout.holdExpiresAt).getTime();
+  const isExpired = !isPaid && Date.now() >= holdDeadline;
 
   return (
     <RequireRole allow={['BRAND_ADMIN']}>
@@ -178,13 +179,24 @@ export default function CheckoutDetailPage() {
               </div>
             </Result>
           </Card>
-        ) : isCancelled ? (
-          <Alert
-            type="warning"
-            showIcon
-            message={t('ui.checkoutCancelled')}
-            style={{ marginBottom: 24 }}
-          />
+        ) : isCancelled || isExpired ? (
+          <Card style={{ marginBottom: 24, textAlign: 'center', padding: '24px 0' }}>
+            <Result
+              status="warning"
+              title={t('ui.checkoutCancelled')}
+              subTitle="Phiên thanh toán đã hết hạn hoặc bị hủy. Toàn bộ slot đã được giải phóng."
+              extra={[
+                <Button
+                  type="primary"
+                  key="available"
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => void navigate('/rentals/available')}
+                >
+                  {t('ui.availableRentals')}
+                </Button>,
+              ]}
+            />
+          </Card>
         ) : (
           <Row gutter={[24, 24]}>
             <Col xs={24} lg={16}>
@@ -250,7 +262,11 @@ export default function CheckoutDetailPage() {
                   }
                   value={holdDeadline}
                   format="mm:ss"
-                  onFinish={() => void refetch()}
+                  onFinish={() => {
+                    setShowPaymentModal(false);
+                    message.warning(t('ui.checkoutCancelled'));
+                    void navigate('/rentals/available');
+                  }}
                 />
 
                 <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
