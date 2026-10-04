@@ -78,6 +78,19 @@ export async function registerSwagger(app: NestFastifyApplication): Promise<stri
     transformSpecificationClone: true,
     transformSpecification: (spec, request) =>
       withCurrentServer(spec, `${request.protocol}://${request.headers.host ?? 'localhost'}`),
+    uiHooks: {
+      // @fastify/swagger-ui 4.x dựng đường dẫn CSS/JS tương đối `./api/docs/static/…` khi URL không có
+      // `/` cuối — trình duyệt đứng ở `/api/docs` hiểu thành `/api/api/docs/static/…` và trả 404 với
+      // routePrefix nhiều cấp. Có `/` cuối thì plugin dùng `./static/…`, đúng.
+      onRequest: (request, reply, done) => {
+        const [path, query] = request.url.split('?', 2);
+        if (path === SWAGGER_ROUTE) {
+          void reply.redirect(`${SWAGGER_ROUTE}/${query ? `?${query}` : ''}`);
+          return;
+        }
+        done();
+      },
+    },
   });
   return specPath;
 }

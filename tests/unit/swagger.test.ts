@@ -2,10 +2,23 @@
  * Swagger UI phục vụ nguyên văn spec/contracts/openapi.yaml (contract-first, ADR-0003).
  */
 
+import 'reflect-metadata';
 import { join } from 'node:path';
+import { Module } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { describe, expect, it } from 'vitest';
-import { findOpenApiSpec, withCurrentServer } from '../../apps/api/src/entrypoints/swagger.js';
+import {
+  findOpenApiSpec,
+  registerSwagger,
+  SWAGGER_ROUTE,
+  withCurrentServer,
+} from '../../apps/api/src/entrypoints/swagger.js';
 import { loadConfig } from '../../apps/api/src/shared/config/index.js';
+
+/** Swagger chỉ là plugin Fastify — không cần AppModule (và CSDL) để kiểm. */
+@Module({})
+class EmptyModule {}
 
 const BASE_ENV = { DATABASE_URL: 'postgres://unused', JWT_SECRET: 'unit-test-secret' };
 
@@ -33,6 +46,38 @@ describe('Swagger UI', () => {
       'http://localhost:3000/api/v1',
       'https://api.example/api/v1',
     ]);
+  });
+
+  it('mọi CSS/JS mà trang tải về đều tồn tại — /api/docs chuyển sang /api/docs/', async () => {
+    const app = await NestFactory.create<NestFastifyApplication>(
+      EmptyModule,
+      new FastifyAdapter(),
+      {
+        logger: false,
+      },
+    );
+    await registerSwagger(app);
+    await app.init();
+    await app.getHttpAdapter().getInstance().ready();
+    try {
+      const bare = await app.inject({ method: 'GET', url: SWAGGER_ROUTE });
+      expect(bare.statusCode).toBe(302);
+      expect(bare.headers.location).toBe(`${SWAGGER_ROUTE}/`);
+
+      const page = await app.inject({ method: 'GET', url: `${SWAGGER_ROUTE}/` });
+      expect(page.statusCode).toBe(200);
+      // Trình duyệt giải đường dẫn tương đối theo URL của trang — làm đúng như vậy rồi tải thử.
+      const assets = [...page.body.matchAll(/(?:href|src)="([^"]+)"/g)].map(
+        (m) => new URL(m[1] as string, `http://localhost${SWAGGER_ROUTE}/`).pathname,
+      );
+      expect(assets.length).toBeGreaterThan(0);
+      for (const asset of [...assets, `${SWAGGER_ROUTE}/json`]) {
+        const res = await app.inject({ method: 'GET', url: asset });
+        expect(res.statusCode, asset).toBe(200);
+      }
+    } finally {
+      await app.close();
+    }
   });
 
   it('mặc định bật ở development, tắt ở production; SWAGGER_ENABLED ghi đè', () => {
