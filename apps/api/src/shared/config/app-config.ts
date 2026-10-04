@@ -38,6 +38,12 @@ export interface AppConfig {
    * `DEV_ALLOW_UNSIGNED_COMMANDS`. Production bắt buộc có.
    */
   readonly dispenseSigningKey: string | null;
+  /**
+   * Bật Swagger UI tại `/api/docs` (SWAGGER_ENABLED). Mặc định bật ở development/test, tắt ở
+   * production — tài liệu liệt kê toàn bộ bề mặt API, không công khai ở môi trường thật trừ khi
+   * chủ động bật.
+   */
+  readonly swaggerEnabled: boolean;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -92,6 +98,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       'DISPENSE_SIGNING_KEY ở production phải là khóa riêng Ed25519 dạng PEM (FR-DSP-04).',
     );
   }
+  const rawSwagger = env['SWAGGER_ENABLED'];
+  if (rawSwagger !== undefined && rawSwagger !== '' && !['true', 'false'].includes(rawSwagger)) {
+    throw new Error(`SWAGGER_ENABLED phải là true hoặc false, nhận được: ${rawSwagger}`);
+  }
+  const swaggerEnabled =
+    rawSwagger === 'true' || ((rawSwagger ?? '') === '' && appEnv !== 'production');
 
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
@@ -114,6 +126,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     paymentWebhookSecret,
     mqttUrl,
     dispenseSigningKey,
+    swaggerEnabled,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },

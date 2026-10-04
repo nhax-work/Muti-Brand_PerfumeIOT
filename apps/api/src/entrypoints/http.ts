@@ -12,6 +12,7 @@ import { APP_CONFIG, type AppConfig } from '../shared/config/index.js';
 import { loadEnvFile } from '../shared/config/env-file.js';
 import { startMqtt } from './mqtt.js';
 import { startScheduler } from './scheduler.js';
+import { registerSwagger, SWAGGER_ROUTE } from './swagger.js';
 
 // Phải chạy TRƯỚC khi Nest dựng CoreModule, vì loadConfig() đọc process.env lúc khởi tạo.
 loadEnvFile();
@@ -26,6 +27,8 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const config = app.get<AppConfig>(APP_CONFIG);
+  // Plugin Fastify phải đăng ký TRƯỚC listen.
+  if (config.swaggerEnabled) await registerSwagger(app);
   await app.listen(config.port, '0.0.0.0');
 
   if (config.mqttUrl) {
@@ -36,6 +39,9 @@ async function bootstrap(): Promise<void> {
   const stopScheduler = startScheduler(app, { dispense: config.mqttUrl !== null });
   process.once('SIGTERM', stopScheduler);
   process.once('SIGINT', stopScheduler);
+  if (config.swaggerEnabled) {
+    new Logger('Swagger').log(`Tài liệu API: http://localhost:${config.port}${SWAGGER_ROUTE}`);
+  }
 }
 
 void bootstrap();
