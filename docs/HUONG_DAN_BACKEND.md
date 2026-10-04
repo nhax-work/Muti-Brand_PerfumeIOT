@@ -28,6 +28,12 @@ Tài khoản mẫu do `make seed` tạo, mật khẩu là `SEED_DEFAULT_PASSWORD
 | `admin@maison-aurore.local` | Brand Admin | Slot 1, 2 của máy M001 |
 | `admin@huong-viet.local` | Brand Admin | Slot 3, 4 **cùng máy** — dùng để thử cô lập dữ liệu |
 
+**Swagger UI:** <http://localhost:3000/api/docs> (contract JSON ở `/api/docs/json`, nhập vào Postman
+được). Trang hiển thị nguyên văn `spec/contracts/openapi.yaml` — **không** sinh từ code (ADR-0003),
+nên endpoint chưa cài đặt vẫn hiện và gọi thử sẽ 404. Gọi endpoint cần đăng nhập: chạy
+`POST /auth/login` trong trang, chép `accessToken`, bấm **Authorize** rồi dán vào (giữ qua lần tải
+lại trang). Tắt bằng `SWAGGER_ENABLED=false`; production mặc định tắt.
+
 Tài khoản bị khóa vì thử sai 5 lần sẽ tự mở sau `LOGIN_LOCKOUT_MIN` phút; muốn mở ngay thì
 `make reset && make migrate && make seed`.
 

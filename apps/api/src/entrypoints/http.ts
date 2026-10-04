@@ -4,11 +4,13 @@
  */
 
 import 'reflect-metadata';
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from '../app.module.js';
 import { APP_CONFIG, type AppConfig } from '../shared/config/index.js';
 import { loadEnvFile } from '../shared/config/env-file.js';
+import { registerSwagger, SWAGGER_ROUTE } from './swagger.js';
 
 // Phải chạy TRƯỚC khi Nest dựng CoreModule, vì loadConfig() đọc process.env lúc khởi tạo.
 loadEnvFile();
@@ -23,7 +25,13 @@ async function bootstrap(): Promise<void> {
   app.enableShutdownHooks();
 
   const config = app.get<AppConfig>(APP_CONFIG);
+  // Plugin Fastify phải đăng ký TRƯỚC listen.
+  if (config.swaggerEnabled) await registerSwagger(app);
   await app.listen(config.port, '0.0.0.0');
+
+  if (config.swaggerEnabled) {
+    new Logger('Swagger').log(`Tài liệu API: http://localhost:${config.port}${SWAGGER_ROUTE}`);
+  }
 }
 
 void bootstrap();
