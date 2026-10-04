@@ -44,7 +44,7 @@ export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
     // 4. Cập nhật paid_at cho phiên và mọi slot_rentals của phiên; mỗi hóa đơn một invoice_number riêng.
     await this.queries.markCheckoutPaid(event.checkoutId, event.paidAt, tx);
 
-    const rentals = await this.queries.findRentalsByCheckoutId(event.checkoutId, tx, true);
+    const rentals = await this.queries.findRentalsByCheckoutId(event.checkoutId, tx);
     if (rentals.length === 0) {
       throw new Error(`Phiên thanh toán ${event.checkoutId} không có hóa đơn nào`);
     }

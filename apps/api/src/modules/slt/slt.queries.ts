@@ -515,26 +515,21 @@ export class SltQueries {
     };
   }
 
-  /** Lấy danh sách mọi hóa đơn của một phiên thanh toán (có thể khóa FOR UPDATE). */
+  /** Lấy danh sách mọi hóa đơn của một phiên thanh toán. */
   async findRentalsByCheckoutId(
     checkoutId: string,
     executor: Executor = this.db,
-    forUpdate = false,
   ): Promise<SlotRentalRecord[]> {
-    let query = executor
+    const rows = await executor
       .selectFrom('slot_rentals as sr')
       .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
       .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
       .selectAll('sr')
       .select(['ms.machine_id', 'rc.hold_expires_at'])
       .where('sr.checkout_id', '=', checkoutId)
-      .orderBy('sr.created_at', 'asc');
+      .orderBy('sr.created_at', 'asc')
+      .execute();
 
-    if (forUpdate) {
-      query = query.forUpdate();
-    }
-
-    const rows = await query.execute();
     return rows.map(toRecord);
   }
 

@@ -279,12 +279,27 @@ export default function CheckoutDetailPage() {
               <Spin />
             )}
 
-            <Paragraph style={{ marginTop: 16 }}>
-              <Text strong>{t('ui.paymentCode')}: </Text>
-              <Text copyable code style={{ fontSize: 16 }}>
-                {paymentIntent?.paymentId ? paymentIntent.paymentId.slice(0, 8) : '...'}
-              </Text>
-            </Paragraph>
+            {(() => {
+              const displayReference = (() => {
+                if (!paymentIntent?.qrPayload) return paymentIntent?.paymentId?.slice(0, 8) ?? '...';
+                const parts = paymentIntent.qrPayload.split('|');
+                if (parts.length >= 2 && parts[1]?.startsWith('CHK-')) {
+                  return parts[1];
+                }
+                return paymentIntent.qrPayload.startsWith('CHK-')
+                  ? paymentIntent.qrPayload
+                  : paymentIntent.paymentId.slice(0, 8);
+              })();
+
+              return (
+                <Paragraph style={{ marginTop: 16 }}>
+                  <Text strong>{t('ui.paymentCode')}: </Text>
+                  <Text copyable code style={{ fontSize: 16, fontWeight: 'bold' }}>
+                    {displayReference}
+                  </Text>
+                </Paragraph>
+              );
+            })()}
 
             <Paragraph type="secondary">{t('ui.scanQrInstructions')}</Paragraph>
 
