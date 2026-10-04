@@ -8,6 +8,7 @@ import {
 import { CatalogQueries } from './catalog.queries.js';
 import { CatalogService } from './catalog.service.js';
 import { RentalCheckoutsController, SlotRentalQuoteController, SltController } from './slt.http.js';
+import { SltJobs } from './slt.jobs.js';
 import { SltQueries } from './slt.queries.js';
 import { SltService } from './slt.service.js';
 
@@ -22,7 +23,7 @@ import { SltService } from './slt.service.js';
     StoragePlansController,
     SlotRentPriceController,
   ],
-  providers: [SltService, SltQueries, CatalogService, CatalogQueries],
-  exports: [SltService, CatalogService],
+  providers: [SltService, SltQueries, CatalogService, CatalogQueries, SltJobs],
+  exports: [SltService, CatalogService, SltJobs],
 })
 export class SltModule {}

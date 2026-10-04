@@ -619,6 +619,55 @@ export class SltQueries {
       .execute();
   }
 
+  /**
+   * FR-SLT-39: Tìm danh sách ID các phiên quá hạn giữ chỗ chưa thanh toán.
+   * Dùng đúng partial index idx_checkouts_unpaid_hold (hold_expires_at).
+   */
+  async findExpiredCheckoutIds(
+    now: Date,
+    limit = 100,
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('rental_checkouts')
+      .select('id')
+      .where('paid_at', 'is', null)
+      .where('cancelled_at', 'is', null)
+      .where('hold_expires_at', '<=', now)
+      .orderBy('hold_expires_at', 'asc')
+      .limit(limit)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * FR-SLT-39: Hủy phiên thanh toán và toàn bộ hóa đơn của phiên trong cùng transaction.
+   */
+  async cancelCheckoutAndRentals(
+    checkoutId: string,
+    cancelledAt: Date,
+    executor: Executor = this.db,
+  ): Promise<void> {
+    await executor
+      .updateTable('rental_checkouts')
+      .set({
+        cancelled_at: cancelledAt,
+        updated_at: cancelledAt,
+      })
+      .where('id', '=', checkoutId)
+      .execute();
+
+    await executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'CANCELLED',
+        cancelled_at: cancelledAt,
+        updated_at: cancelledAt,
+      })
+      .where('checkout_id', '=', checkoutId)
+      .execute();
+  }
+
   private base(scope: BrandScope) {
     return this.db
       .selectFrom('slot_rentals as sr')

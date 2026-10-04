@@ -283,12 +283,20 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     } as unknown as MchQueries;
 
     const audit = { log: async () => {} } as unknown as AuditService;
+    const fakeConfig = {
+      constraint: (name: string) =>
+        name === 'RENTAL_MAX_STOCKING_DAYS' ? 30 : name === 'RENTAL_CHECKOUT_HOLD_MIN' ? 15 : 0,
+    };
 
     service = new SltService(
       queries as unknown as SltQueries,
       catalogQueries as unknown as CatalogQueries,
       mchQueries,
       audit,
+      {} as never,
+      { now: () => new Date() } as never,
+      {} as never,
+      fakeConfig as never,
     );
   });
 

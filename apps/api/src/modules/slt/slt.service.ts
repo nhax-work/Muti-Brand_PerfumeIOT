@@ -8,7 +8,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
-import { SPEC_CONSTRAINTS } from '../../shared/config/constraints.generated.js';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
@@ -42,6 +42,7 @@ export class SltService {
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   /** FR-SLT-41: Brand Admin chỉ thấy hóa đơn của mình (phạm vi qua `scope`, FR-BND-05). */
@@ -163,7 +164,7 @@ export class SltService {
       checkoutTotal += Number(itemTotal);
 
       const endsAt = new Date(t0);
-      endsAt.setDate(endsAt.getDate() + SPEC_CONSTRAINTS.RENTAL_MAX_STOCKING_DAYS);
+      endsAt.setDate(endsAt.getDate() + this.config.constraint('RENTAL_MAX_STOCKING_DAYS'));
       endsAt.setMonth(endsAt.getMonth() + duration);
 
       itemDatas.push({
@@ -185,7 +186,7 @@ export class SltService {
     }
 
     const holdExpiresAt = new Date(
-      t0.getTime() + SPEC_CONSTRAINTS.RENTAL_CHECKOUT_HOLD_MIN * 60 * 1000,
+      t0.getTime() + this.config.constraint('RENTAL_CHECKOUT_HOLD_MIN') * 60 * 1000,
     );
 
     const result = await this.queries.createCheckoutTx({
