@@ -156,6 +156,16 @@ export class RentalCheckoutsController {
     const { id } = parseBody(IdParam, params);
     return this.service.payCheckout(actor, scope, id);
   }
+
+  @Post(':id/cancel')
+  cancelCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.cancelCheckout(actor, scope, id);
+  }
 }
 
 @Controller('slots')

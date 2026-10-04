@@ -28,7 +28,7 @@ import {
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
-import { useCheckout, usePayCheckout, type RentalPaymentIntent } from './api';
+import { useCancelCheckout, useCheckout, usePayCheckout, type RentalPaymentIntent } from './api';
 
 const { Title, Text, Paragraph } = Typography;
 const { Countdown } = Statistic;
@@ -50,6 +50,7 @@ export default function CheckoutDetailPage() {
   } = useCheckout(id, paymentIntent ? 2000 : false);
 
   const payCheckout = usePayCheckout();
+  const cancelCheckout = useCancelCheckout();
 
   const handlePay = async () => {
     if (!id) return;
@@ -70,7 +71,14 @@ export default function CheckoutDetailPage() {
       okText: t('ui.confirm'),
       cancelText: t('ui.cancel'),
       okButtonProps: { danger: true },
-      onOk: () => {
+      onOk: async () => {
+        if (id) {
+          try {
+            await cancelCheckout.mutateAsync(id);
+          } catch {
+            // Bỏ qua nếu phiên đã bị hủy trước đó
+          }
+        }
         setShowPaymentModal(false);
         message.info(t('ui.checkoutCancelledNotice'));
         void navigate('/rentals/available');

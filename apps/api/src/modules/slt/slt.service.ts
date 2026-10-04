@@ -226,6 +226,49 @@ export class SltService {
     return toCheckoutDto(record.checkout, record.items);
   }
 
+  /** Chủ động hủy phiên thanh toán chưa trả và giải phóng slot ngay lập tức. */
+  async cancelCheckout(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalCheckout> {
+    const now = this.clock.now();
+    await this.db.transaction().execute(async (tx) => {
+      const checkout = await this.queries.lockCheckoutById(id, tx);
+      if (!checkout) throw notFoundFor(actor);
+
+      if (scope.kind === 'BRAND' && checkout.brandId !== scope.brandId) {
+        throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+      }
+
+      if (checkout.paidAt !== null) {
+        throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+      }
+
+      if (checkout.cancelledAt === null) {
+        await this.payments.expirePending({ rentalCheckoutId: checkout.id }, tx);
+        await this.queries.cancelCheckoutAndRentals(checkout.id, now, tx);
+
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: checkout.brandId,
+            action: 'slt.checkout.cancelled_by_user',
+            targetType: 'RentalCheckout',
+            targetId: checkout.id,
+            severity: 'INFO',
+            before: { status: 'AWAITING_PAYMENT' },
+            after: { status: 'CANCELLED', cancelledAt: now },
+          },
+          tx,
+        );
+      }
+    });
+
+    return this.getCheckout(actor, scope, id);
+  }
+
   /** FR-SLT-37: Thanh toán phiên thanh toán thuê slot. */
   async payCheckout(
     actor: AuthenticatedUser,
