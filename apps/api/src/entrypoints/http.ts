@@ -14,7 +14,10 @@ import { loadEnvFile } from '../shared/config/env-file.js';
 loadEnvFile();
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter());
+  // rawBody: webhook thanh toán kiểm chữ ký trên đúng byte nhận được (FR-ORD-13).
+  const app = await NestFactory.create<NestFastifyApplication>(AppModule, new FastifyAdapter(), {
+    rawBody: true,
+  });
   // Khớp `servers` trong spec/contracts/openapi.yaml.
   app.setGlobalPrefix('api/v1');
   app.enableShutdownHooks();

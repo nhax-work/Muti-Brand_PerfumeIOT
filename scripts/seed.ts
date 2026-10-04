@@ -100,6 +100,10 @@ const PERMISSIONS = [
   ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
   ['refill.request', 'Gửi yêu cầu bổ sung nước hoa (FR-RFQ-01)'],
   ['refill.fulfill', 'Duyệt và lên lịch yêu cầu bổ sung (FR-RFQ-06/07)'],
+  [
+    'order.view',
+    'Tra cứu đơn hàng và lịch sử trạng thái trong phạm vi của mình (FR-ORD-18, FR-ORD-22)',
+  ],
   ['order.refund', 'Khởi tạo hoàn tiền (FR-ORD-20)'],
   ['dispense.diagnostic', 'Thực hiện lượt xịt chẩn đoán (FR-MNT-09)'],
   ['alert.handle', 'Tiếp nhận, phân công và đóng cảnh báo (FR-ALR-11)'],
@@ -120,11 +124,18 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'alert.handle',
     'maintenance.handle',
     'dispense.diagnostic',
+    'order.view',
     'order.refund',
     'report.platform',
   ],
   [ID.roleInventoryStaff]: ['inventory.manage', 'inventory.adjust', 'refill.fulfill'],
-  [ID.roleBrandAdmin]: ['product.manage', 'rental.request', 'refill.request', 'report.brand'],
+  [ID.roleBrandAdmin]: [
+    'product.manage',
+    'rental.request',
+    'refill.request',
+    'report.brand',
+    'order.view',
+  ],
 };
 
 async function main(): Promise<void> {
@@ -157,6 +168,7 @@ async function main(): Promise<void> {
     await seedProducts(client);
     await seedInventory(client);
     await seedRentalsAndBottles(client);
+    await seedRentalCatalog(client);
 
     await client.query('COMMIT');
 
@@ -280,6 +292,54 @@ async function seedLocationAndMachine(client: pg.Client): Promise<void> {
        VALUES ($1, $2, $3, 0.1200, 5.0000, 48.0000, 400, 'AVAILABLE')
        ON CONFLICT (id) DO NOTHING`,
       [ID.slots[plan.slot], ID.machine, plan.slot + 1],
+    );
+  }
+}
+
+/**
+ * Bảng giá thuê slot (FR-SLT-30..32, ADR-0006): 3 gói thuê, 3 gói bảo quản, giá niêm yết 4 slot.
+ * Giá trị theo đề xuất của ADR-0006 — là DỮ LIỆU danh mục, Super Admin sửa được, không phải hằng
+ * ngưỡng (spec/constraints.md).
+ *
+ * Idempotent theo tên gói; giá slot chỉ đặt khi còn NULL để không ghi đè giá Super Admin đã sửa.
+ */
+async function seedRentalCatalog(client: pg.Client): Promise<void> {
+  const packages = [
+    ['Gói 3 tháng', 3, '0'],
+    ['Gói 6 tháng', 6, '5'],
+    ['Gói 12 tháng', 12, '10'],
+  ] as const;
+  for (const [name, months, discount] of packages) {
+    await client.query(
+      `INSERT INTO rental_packages (name, duration_months, discount_percent)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (name) DO NOTHING`,
+      [name, months, discount],
+    );
+  }
+
+  const plans = [
+    ['Cơ bản', 'Bồi thường 30% giá bán lẻ chai hư hỏng', '100000.0000', '30', '3000000.0000'],
+    ['Tiêu chuẩn', 'Bồi thường 60% giá bán lẻ chai hư hỏng', '200000.0000', '60', '6000000.0000'],
+    ['Toàn diện', 'Bồi thường 100% giá bán lẻ chai hư hỏng', '350000.0000', '100', '10000000.0000'],
+  ] as const;
+  for (const [name, description, monthlyPrice, coverage, cap] of plans) {
+    await client.query(
+      `INSERT INTO storage_plans (name, description, monthly_price, coverage_percent, coverage_cap)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (name) DO NOTHING`,
+      [name, description, monthlyPrice, coverage, cap],
+    );
+  }
+
+  // Bốn slot mẫu đang được thuê nên chưa hiện trong danh sách slot trống; giá có sẵn để khi một
+  // hóa đơn kết thúc thì slot quay lại thị trường ngay (FR-SLT-19).
+  const rentPrices = ['1500000.0000', '1500000.0000', '1200000.0000', '1200000.0000'];
+  for (const [index, price] of rentPrices.entries()) {
+    await client.query(
+      `UPDATE machine_slots SET monthly_rent_price = $2
+        WHERE id = $1 AND monthly_rent_price IS NULL`,
+      [ID.slots[index], price],
     );
   }
 }

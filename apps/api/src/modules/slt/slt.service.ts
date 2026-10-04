@@ -1,5 +1,5 @@
 /**
- * Quản lý Hợp đồng thuê Slot (FR-SLT-01..29).
+ * Đọc hóa đơn thuê slot (FR-SLT-15, FR-SLT-41; ADR-0006, ADR-0008).
  *
  * Tầng nghiệp vụ độc lập hoàn toàn với HTTP (QT2, ADR-0003).
  */
@@ -7,44 +7,38 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
-import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { SPEC_CONSTRAINTS } from '../../shared/config/constraints.generated.js';
+import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
+import { MchQueries } from '../mch/mch.queries.js';
+import { CatalogQueries } from './catalog.queries.js';
+import { toPlanDto } from './catalog.service.js';
 import {
   SltQueries,
+  stageOf,
+  type CheckoutCreateItemData,
+  type RentalCheckoutRecord,
   type SlotRentalFilter,
   type SlotRentalRecord,
-  type SlotRentalStatus,
 } from './slt.queries.js';
 
 type SlotRental = Schema<'SlotRental'>;
-
-export interface CreateSlotRentalInput {
-  readonly slotId: string;
-  readonly brandId: string;
-  readonly fragranceProductId?: string;
-  readonly requestId?: string;
-  readonly previousRentalId?: string;
-  readonly startsAt: string;
-  readonly endsAt: string;
-  readonly pricePerSpray: string;
-  readonly currency?: string;
-  readonly fixedFee?: string;
-  readonly revenueSharePercent?: number;
-}
-
-type Queries = Pick<SltQueries, 'list' | 'findById' | 'create' | 'updateStatus'>;
-type Audit = Pick<AuditService, 'log'>;
+type RentalCheckout = Schema<'RentalCheckout'>;
+type RentalQuote = Schema<'RentalQuote'>;
+type RentalInvoice = Schema<'RentalInvoice'>;
 
 @Injectable()
 export class SltService {
   constructor(
-    @Inject(SltQueries) private readonly queries: Queries,
-    @Inject(AuditService) private readonly audit: Audit,
+    @Inject(SltQueries) private readonly queries: SltQueries,
+    @Inject(CatalogQueries) private readonly catalogQueries: CatalogQueries,
+    @Inject(MchQueries) private readonly mchQueries: MchQueries,
+    @Inject(AuditService) private readonly audit: AuditService,
   ) {}
 
+  /** FR-SLT-41: Brand Admin chỉ thấy hóa đơn của mình (phạm vi qua `scope`, FR-BND-05). */
   async list(
-    actor: AuthenticatedUser,
     scope: BrandScope,
     filter: SlotRentalFilter,
   ): Promise<{ items: SlotRental[]; total: number }> {
@@ -58,120 +52,353 @@ export class SltService {
     return toDto(record);
   }
 
-  async create(actor: AuthenticatedUser, input: CreateSlotRentalInput): Promise<SlotRental> {
-    const startsAt = new Date(input.startsAt);
-    const endsAt = new Date(input.endsAt);
+  /** FR-SLT-34: Xem bảng giá các gói cho slot đã chọn. */
+  async getQuote(actor: AuthenticatedUser, slotId: string): Promise<RentalQuote> {
+    const slot = await this.mchQueries.findSlotById(slotId);
+    if (!slot) throw notFoundFor(actor);
 
-    if (isNaN(startsAt.getTime()) || isNaN(endsAt.getTime()) || endsAt <= startsAt) {
-      throw new AppError('INVALID_RENTAL_PERIOD', 'slt.invalidRentalPeriod');
+    if (!slot.monthlyRentPrice) {
+      throw invalidField('slotId', 'slt.slotNotForRent');
     }
 
-    const fixedFee = Number(input.fixedFee ?? 0);
-    const revShare = input.revenueSharePercent ?? 0;
-    if (fixedFee < 0 || revShare < 0 || revShare > 100) {
-      throw new AppError('VALIDATION_ERROR', 'slt.financialsInvalid');
+    if (slot.currentRentalId) {
+      throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
     }
 
-    const now = new Date();
-    // FR-SLT-01: DRAFT nếu startsAt > now, ACTIVE nếu startsAt <= now <= endsAt
-    const initialStatus: SlotRentalStatus = startsAt > now ? 'DRAFT' : 'ACTIVE';
+    const [packages, plans] = await Promise.all([
+      this.catalogQueries.listPackages(true),
+      this.catalogQueries.listPlans(true),
+    ]);
 
-    try {
-      const id = await this.queries.create({
-        slotId: input.slotId,
-        brandId: input.brandId,
-        fragranceProductId: input.fragranceProductId,
-        requestId: input.requestId,
-        previousRentalId: input.previousRentalId,
-        status: initialStatus,
-        startsAt,
+    const monthlyPrice = Number(slot.monthlyRentPrice);
+
+    return {
+      slotId: slot.id,
+      monthlyRentPrice: slot.monthlyRentPrice,
+      currency: 'VND',
+      packages: packages.map((pkg) => {
+        const duration = pkg.duration_months;
+        const discount = Number(pkg.discount_percent);
+        const listAmount = (monthlyPrice * duration).toFixed(4);
+        const rentAmount = (monthlyPrice * duration * (1 - discount / 100)).toFixed(4);
+
+        return {
+          rentalPackageId: pkg.id,
+          name: pkg.name,
+          durationMonths: duration,
+          discountPercent: discount,
+          listAmount,
+          rentAmount,
+        };
+      }),
+      storagePlans: plans.map(toPlanDto),
+    };
+  }
+
+  /** FR-SLT-35, FR-SLT-36, FR-SLT-33: Chọn dịch vụ và giữ chỗ một hoặc nhiều slot (ADR-0008). */
+  async createCheckout(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    input: { items: Array<{ slotId: string; rentalPackageId: string; storagePlanId: string }> },
+  ): Promise<RentalCheckout> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    if (!input.items || input.items.length === 0) {
+      throw invalidField('items', 'slt.emptyCart');
+    }
+
+    const slotIds = input.items.map((i) => i.slotId);
+    if (new Set(slotIds).size !== slotIds.length) {
+      throw invalidField('items', 'slt.duplicateSlotInCart');
+    }
+
+    const [packages, plans] = await Promise.all([
+      this.catalogQueries.listPackages(true),
+      this.catalogQueries.listPlans(true),
+    ]);
+
+    const packageMap = new Map(packages.map((p) => [p.id, p]));
+    const planMap = new Map(plans.map((p) => [p.id, p]));
+
+    const itemDatas: CheckoutCreateItemData[] = [];
+    let checkoutTotal = 0;
+    const t0 = new Date();
+
+    for (const item of input.items) {
+      if (!item.storagePlanId) {
+        throw invalidField('storagePlanId', 'slt.storagePlanRequired');
+      }
+
+      const pkg = packageMap.get(item.rentalPackageId);
+      if (!pkg) {
+        throw invalidField('rentalPackageId', 'slt.packageNotFoundOrInactive');
+      }
+
+      const plan = planMap.get(item.storagePlanId);
+      if (!plan) {
+        throw invalidField('storagePlanId', 'slt.planNotFoundOrInactive');
+      }
+
+      const slot = await this.mchQueries.findSlotById(item.slotId);
+      if (!slot || !slot.monthlyRentPrice) {
+        throw invalidField('slotId', 'slt.slotNotForRent');
+      }
+
+      const duration = pkg.duration_months;
+      const discount = Number(pkg.discount_percent);
+      const monthlyRent = Number(slot.monthlyRentPrice);
+
+      const rentAmount = (monthlyRent * duration * (1 - discount / 100)).toFixed(4);
+      const storageAmount = (Number(plan.monthly_price) * duration).toFixed(4);
+      const itemTotal = (Number(rentAmount) + Number(storageAmount)).toFixed(4);
+      checkoutTotal += Number(itemTotal);
+
+      const endsAt = new Date(t0);
+      endsAt.setDate(endsAt.getDate() + SPEC_CONSTRAINTS.RENTAL_MAX_STOCKING_DAYS);
+      endsAt.setMonth(endsAt.getMonth() + duration);
+
+      itemDatas.push({
+        slotId: slot.id,
+        rentalPackageId: pkg.id,
+        storagePlanId: plan.id,
+        durationMonths: duration,
+        monthlyRentPrice: slot.monthlyRentPrice,
+        discountPercent: String(discount),
+        storageMonthlyPrice: plan.monthly_price,
+        storageCoveragePercent: String(plan.coverage_percent),
+        storageCoverageCap: plan.coverage_cap,
+        rentAmount,
+        storageAmount,
+        totalAmount: itemTotal,
+        startsAt: t0,
         endsAt,
-        pricePerSpray: input.pricePerSpray,
-        currency: input.currency ?? 'VND',
-        fixedFee: input.fixedFee ?? '0',
-        revenueSharePercent: input.revenueSharePercent ?? 0,
-        createdBy: actor.userId,
       });
-
-      await this.audit.log({
-        actorType: 'USER',
-        actorId: actor.userId,
-        action: 'slt.rental.created',
-        targetType: 'SlotRental',
-        targetId: id,
-        after: { id, slotId: input.slotId, brandId: input.brandId, status: initialStatus },
-      });
-
-      const record = await this.queries.findById({ kind: 'UNRESTRICTED' }, id);
-      return toDto(record!);
-    } catch (error) {
-      if (isUniqueConstraintViolation(error)) {
-        throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
-      }
-      throw error;
     }
+
+    const holdExpiresAt = new Date(
+      t0.getTime() + SPEC_CONSTRAINTS.RENTAL_CHECKOUT_HOLD_MIN * 60 * 1000,
+    );
+
+    const result = await this.queries.createCheckoutTx({
+      brandId: scope.brandId,
+      createdBy: actor.userId,
+      holdExpiresAt,
+      totalAmount: checkoutTotal.toFixed(4),
+      items: itemDatas,
+    });
+
+    if ('occupied' in result) {
+      throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
+    }
+
+    const dto = toCheckoutDto(result.checkout, result.items);
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'slt.rental_checkout.created',
+      targetType: 'RentalCheckout',
+      targetId: dto.id,
+      after: dto,
+    });
+
+    return dto;
   }
 
-  async activate(actor: AuthenticatedUser, scope: BrandScope, id: string): Promise<SlotRental> {
-    const record = await this.queries.findById(scope, id);
+  /** GET /rental-checkouts/{id}: Chi tiết phiên thanh toán thuê slot. */
+  async getCheckout(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalCheckout> {
+    const record = await this.queries.findCheckoutById(scope, id);
     if (!record) throw notFoundFor(actor);
+    return toCheckoutDto(record.checkout, record.items);
+  }
 
-    if (record.status !== 'DRAFT') {
-      throw new AppError('VALIDATION_ERROR', 'slt.invalidStatusTransition');
+  /** FR-SLT-40: Xem hóa đơn thuê slot. */
+  async getInvoice(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalInvoice> {
+    const inv = await this.queries.findInvoiceDetailById(scope, id);
+    if (!inv) throw notFoundFor(actor);
+
+    return {
+      rentalId: inv.rentalId,
+      checkoutId: inv.checkoutId,
+      invoiceNumber: inv.invoiceNumber,
+      stage: stageOf(inv.status, inv.paidAt),
+      brandId: inv.brandId,
+      slotId: inv.slotId,
+      slotNumber: inv.slotNumber,
+      machineId: inv.machineId,
+      machineDisplayName: inv.machineDisplayName,
+      locationName: inv.locationName,
+      rentalPackage: {
+        name: inv.packageName ?? '',
+        durationMonths: inv.durationMonths ?? 0,
+        discountPercent: num(inv.discountPercent) ?? 0,
+      },
+      storagePlan: {
+        name: inv.planName ?? '',
+        monthlyPrice: inv.storageMonthlyPrice ?? '0.0000',
+        coveragePercent: num(inv.storageCoveragePercent) ?? 0,
+        coverageCap: inv.storageCoverageCap ?? '0.0000',
+      },
+      durationMonths: inv.durationMonths ?? 0,
+      monthlyRentPrice: inv.monthlyRentPrice ?? '0.0000',
+      discountPercent: num(inv.discountPercent) ?? 0,
+      rentAmount: inv.rentAmount ?? '0.0000',
+      storageAmount: inv.storageAmount ?? '0.0000',
+      graceFeeAmount: inv.graceFeeAmount ?? '0.0000',
+      totalAmount: inv.totalAmount ?? '0.0000',
+      currency: inv.currency,
+      holdExpiresAt: iso(inv.holdExpiresAt),
+      paidAt: iso(inv.paidAt),
+      startsAt: iso(inv.startsAt),
+      endsAt: iso(inv.endsAt),
+    };
+  }
+
+  /** FR-SLT-27, FR-SLT-28: Gán hoặc đổi sản phẩm cho slot. */
+  async assignProduct(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+    fragranceProductId: string,
+  ): Promise<SlotRental> {
+    const rental = await this.queries.findById(scope, id);
+    if (!rental) throw notFoundFor(actor);
+
+    if (!rental.paidAt || ['CLOSED', 'TERMINATED', 'CANCELLED'].includes(rental.status)) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
     }
 
-    try {
-      await this.queries.updateStatus(id, 'ACTIVE');
+    const product = await this.queries.findProductById(fragranceProductId);
+    if (!product) throw notFoundFor(actor);
 
-      await this.audit.log({
-        actorType: 'USER',
-        actorId: actor.userId,
-        action: 'slt.rental.activated',
-        targetType: 'SlotRental',
-        targetId: id,
-        before: { status: 'DRAFT' },
-        after: { status: 'ACTIVE' },
-      });
-
-      const updated = await this.queries.findById(scope, id);
-      return toDto(updated!);
-    } catch (error) {
-      if (isUniqueConstraintViolation(error)) {
-        throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
-      }
-      throw error;
+    if (product.brandId !== rental.brandId) {
+      throw new AppError('PRODUCT_NOT_OWNED', 'slt.productNotOwned');
     }
+
+    if (product.status === 'DISCONTINUED') {
+      throw invalidField('fragranceProductId', 'slt.productDiscontinued');
+    }
+
+    const updated = await this.queries.updateProduct(scope, id, fragranceProductId);
+    const dto = toDto(updated!);
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'slt.slot_rental.product_assigned',
+      targetType: 'SlotRental',
+      targetId: id,
+      before: { fragranceProductId: rental.fragranceProductId },
+      after: { fragranceProductId },
+    });
+
+    return dto;
+  }
+
+  /** FR-SLT-08: Đặt giá mỗi lượt xịt. */
+  async setPricePerSpray(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+    pricePerSpray: string,
+  ): Promise<SlotRental> {
+    const rental = await this.queries.findById(scope, id);
+    if (!rental) throw notFoundFor(actor);
+
+    if (!rental.paidAt || ['CLOSED', 'TERMINATED', 'CANCELLED'].includes(rental.status)) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    const numericPrice = Number(pricePerSpray);
+    if (isNaN(numericPrice) || numericPrice <= 0) {
+      throw invalidField('pricePerSpray', 'slt.invalidPricePerSpray');
+    }
+
+    const formattedPrice = numericPrice.toFixed(4);
+    const updated = await this.queries.updatePricePerSpray(scope, id, formattedPrice);
+    const dto = toDto(updated!);
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'slt.slot_rental.price_set',
+      targetType: 'SlotRental',
+      targetId: id,
+      before: { pricePerSpray: rental.pricePerSpray },
+      after: { pricePerSpray: formattedPrice },
+    });
+
+    return dto;
   }
 }
 
-function isUniqueConstraintViolation(error: unknown): boolean {
-  const e = error as { code?: string; constraint?: string; message?: string };
-  return (
-    e.code === '23505' ||
-    e.constraint === 'uq_slot_active_rental' ||
-    (typeof e.message === 'string' && e.message.includes('uq_slot_active_rental'))
-  );
+const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
+const num = (v: string | null): number | null => (v === null ? null : Number(v));
+
+export function toDto(r: SlotRentalRecord): SlotRental {
+  return {
+    id: r.id,
+    slotId: r.slotId,
+    machineId: r.machineId,
+    brandId: r.brandId,
+    fragranceProductId: r.fragranceProductId,
+    productAssignedAt: iso(r.productAssignedAt),
+    requestId: r.requestId,
+    previousRentalId: r.previousRentalId,
+    status: r.status,
+    stage: stageOf(r.status, r.paidAt),
+    startsAt: r.startsAt.toISOString(),
+    endsAt: r.endsAt.toISOString(),
+    graceEndsAt: iso(r.graceEndsAt),
+    pricePerSpray: r.pricePerSpray,
+    currency: r.currency,
+    fixedFee: r.fixedFee,
+    revenueSharePercent: Number(r.revenueSharePercent),
+    terminatedReason: r.terminatedReason,
+    checkoutId: r.checkoutId,
+    invoiceNumber: r.invoiceNumber,
+    rentalPackageId: r.rentalPackageId,
+    storagePlanId: r.storagePlanId,
+    durationMonths: r.durationMonths,
+    monthlyRentPrice: r.monthlyRentPrice,
+    discountPercent: num(r.discountPercent),
+    storageMonthlyPrice: r.storageMonthlyPrice,
+    storageCoveragePercent: num(r.storageCoveragePercent),
+    storageCoverageCap: r.storageCoverageCap,
+    rentAmount: r.rentAmount,
+    storageAmount: r.storageAmount,
+    graceFeeAmount: r.graceFeeAmount,
+    totalAmount: r.totalAmount,
+    holdExpiresAt: iso(r.holdExpiresAt),
+    paidAt: iso(r.paidAt),
+    cancelledAt: iso(r.cancelledAt),
+    createdAt: r.createdAt.toISOString(),
+  };
 }
 
-function toDto(record: SlotRentalRecord): SlotRental {
+function toCheckoutDto(checkout: RentalCheckoutRecord, items: SlotRentalRecord[]): RentalCheckout {
+  const stage = checkout.paidAt ? 'PAID' : checkout.cancelledAt ? 'CANCELLED' : 'AWAITING_PAYMENT';
+
   return {
-    id: record.id,
-    slotId: record.slotId,
-    machineId: record.machineId,
-    brandId: record.brandId,
-    fragranceProductId: record.fragranceProductId,
-    productAssignedAt: record.productAssignedAt ? record.productAssignedAt.toISOString() : null,
-    requestId: record.requestId,
-    previousRentalId: record.previousRentalId,
-    status: record.status,
-    startsAt: record.startsAt.toISOString(),
-    endsAt: record.endsAt.toISOString(),
-    graceEndsAt: record.graceEndsAt ? record.graceEndsAt.toISOString() : null,
-    pricePerSpray: record.pricePerSpray,
-    currency: record.currency,
-    fixedFee: record.fixedFee,
-    revenueSharePercent: record.revenueSharePercent,
-    terminatedReason: record.terminatedReason,
-    createdAt: record.createdAt.toISOString(),
+    id: checkout.id,
+    brandId: checkout.brandId,
+    stage,
+    currency: checkout.currency,
+    totalAmount: checkout.totalAmount,
+    holdExpiresAt: checkout.holdExpiresAt.toISOString(),
+    paidAt: iso(checkout.paidAt),
+    cancelledAt: iso(checkout.cancelledAt),
+    createdAt: checkout.createdAt.toISOString(),
+    invoices: items.map(toDto),
   };
 }

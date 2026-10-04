@@ -65,6 +65,8 @@ export interface MachineSlotRecord {
   readonly status: SlotStatus;
   readonly version: number;
   readonly currentRentalId: string | null;
+  /** Giá thuê niêm yết mỗi tháng (FR-SLT-32). NULL = chưa mở cho thuê. */
+  readonly monthlyRentPrice: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -83,6 +85,7 @@ export interface AvailableSlotRecord {
   readonly machineDisplayName: string;
   readonly locationId: string;
   readonly locationName: string;
+  readonly monthlyRentPrice: string;
 }
 
 export interface MachineStatusHistoryFilter {
@@ -119,6 +122,13 @@ export interface DeviceCredentialRecord {
 
 /** Hợp đồng đang giữ slot (spec/errors.md: SLOT_OCCUPIED). */
 const ACTIVE_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
+
+/**
+ * Hóa đơn làm slot KHÔNG còn trống để chào thuê (FR-SLT-19 AC2): bốn trạng thái chiếm dụng cộng
+ * DRAFT — đang giữ chỗ chờ thanh toán, hoặc đã thanh toán chờ nạp hàng (ADR-0006). Cùng tập với
+ * `excl_slot_rental_overlap`.
+ */
+const RENTAL_BLOCKING_STATUSES = ['DRAFT', ...ACTIVE_RENTAL_STATUSES] as const;
 
 @Injectable()
 export class MchQueries {
@@ -543,9 +553,13 @@ export class MchQueries {
   }
 
   /**
-   * Slot thuê được (FR-SLT-19): slot AVAILABLE, không có hợp đồng đang chạy, trên máy chưa bị
-   * DISABLED và ở địa điểm còn ACTIVE. Chỉ trả thông tin vị trí — KHÔNG kèm dữ liệu thương hiệu
-   * từng thuê (BR-012).
+   * Slot trống chào thuê (FR-SLT-19): đã có giá niêm yết, không có hóa đơn DRAFT/ACTIVE/EXPIRING/
+   * GRACE/LIQUIDATED, slot chưa bị xóa, máy chưa DISABLED, địa điểm còn ACTIVE. Chỉ trả vị trí và
+   * giá niêm yết — KHÔNG kèm dữ liệu thương hiệu từng thuê (BR-012).
+   *
+   * KHÔNG lọc `machine_slots.status = 'AVAILABLE'`: slot chỉ AVAILABLE khi đã có hóa đơn hiệu lực
+   * và chai đang lắp (FR-MCH-16), tức là đúng những slot KHÔNG còn trống — lọc theo cột đó làm danh
+   * sách luôn rỗng trên dữ liệu thật (ADR-0006, "Việc còn lại" mục 2). `DISABLED` là slot đã xóa.
    */
   async listAvailableSlots(
     filter: AvailableSlotFilter,
@@ -554,7 +568,8 @@ export class MchQueries {
       .selectFrom('machine_slots as s')
       .innerJoin('machines as m', 'm.id', 's.machine_id')
       .innerJoin('locations as l', 'l.id', 'm.location_id')
-      .where('s.status', '=', 'AVAILABLE')
+      .where('s.status', '<>', 'DISABLED')
+      .where('s.monthly_rent_price', 'is not', null)
       .where('m.operating_mode', '<>', 'DISABLED')
       .where('l.status', '=', 'ACTIVE')
       .where((eb) =>
@@ -564,7 +579,7 @@ export class MchQueries {
               .selectFrom('slot_rentals as r')
               .select('r.id')
               .whereRef('r.slot_id', '=', 's.id')
-              .where('r.status', 'in', ACTIVE_RENTAL_STATUSES),
+              .where('r.status', 'in', RENTAL_BLOCKING_STATUSES),
           ),
         ),
       );
@@ -583,6 +598,7 @@ export class MchQueries {
         'm.display_name as machine_display_name',
         'l.id as location_id',
         'l.name as location_name',
+        's.monthly_rent_price',
       ])
       .orderBy('l.name', 'asc')
       .orderBy('m.display_name', 'asc')
@@ -599,6 +615,8 @@ export class MchQueries {
         machineDisplayName: r.machine_display_name,
         locationId: r.location_id,
         locationName: r.location_name,
+        // Câu WHERE đã loại slot chưa có giá.
+        monthlyRentPrice: r.monthly_rent_price as string,
       })),
       total: Number(countRow.total),
     };
@@ -803,6 +821,7 @@ export class MchQueries {
     status: SlotStatus;
     version: number;
     current_rental_id?: string | null;
+    monthly_rent_price: string | null;
     created_at: Date;
     updated_at: Date;
   }): MachineSlotRecord {
@@ -819,6 +838,7 @@ export class MchQueries {
       status: r.status,
       version: r.version,
       currentRentalId: r.current_rental_id ?? null,
+      monthlyRentPrice: r.monthly_rent_price,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };

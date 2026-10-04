@@ -17,6 +17,8 @@
 --                  ADR-0008 (thanh toán nhiều slot một lần) — bảng rental_checkouts,
 --                  slot_rentals.checkout_id thay hold_expires_at, payments.rental_checkout_id thay
 --                  slot_rental_id, constraint trigger §10d; áp bằng migrations/1790757100000_*.
+--                  ADR-0009 (ảnh chụp đơn hàng bất biến, mã tham chiếu thanh toán duy nhất) —
+--                  trigger §10e, uq_payment_provider_reference; áp bằng migrations/1790760300000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -30,6 +32,7 @@
 --   §9  Khóa ngoại vòng (tách ra vì phụ thuộc hai chiều)
 --   §10 Index và ràng buộc bắt buộc (spec/contracts/README.md)
 --   §10b Ràng buộc cùng thương hiệu · §10c updated_at · §10d Bất biến phiên thanh toán (ADR-0008)
+--   §10e Ảnh chụp đơn hàng bất biến (ADR-0009)
 --   §11 Audit log append-only (FR-AUD-09, NFR-SEC-08)
 --   §12 Row-Level Security — mẫu, chưa bật
 --   §13 Ràng buộc thuộc tầng domain service, KHÔNG nằm ở CSDL
@@ -928,6 +931,10 @@ COMMENT ON COLUMN payments.order_id IS
 COMMENT ON COLUMN payments.rental_checkout_id IS
     'Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa '
     'đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending).';
+COMMENT ON COLUMN payments.provider_reference IS
+    'Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: '
+    'bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider '
+    '(uq_payment_provider_reference, ADR-0009).';
 
 CREATE TABLE payment_events (
     id                uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1316,6 +1323,11 @@ ALTER TABLE slot_rentals
 CREATE UNIQUE INDEX uq_payment_provider_txn ON payments (provider, provider_transaction_id)
     WHERE provider_transaction_id IS NOT NULL;
 
+-- Một mã tham chiếu gửi cổng thanh toán ứng với đúng một payment (FR-ORD-14, FR-SLT-38, ADR-0009).
+-- Webhook tìm payment bằng chính mã này; hai payment cùng mã thì không biết ghi nhận tiền cho cái nào.
+CREATE UNIQUE INDEX uq_payment_provider_reference ON payments (provider, provider_reference)
+    WHERE provider_reference IS NOT NULL;
+
 -- Không sinh cảnh báo mới cùng loại trên cùng đối tượng khi còn cảnh báo chưa xử lý (FR-ALR-07)
 CREATE UNIQUE INDEX uq_alert_dedup_unresolved ON alerts (deduplication_key)
     WHERE status IN ('OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS');
@@ -1571,6 +1583,45 @@ CREATE CONSTRAINT TRIGGER trg_slot_rentals_checkout_consistency
 
 
 -- =====================================================================================
+-- §10e. ẢNH CHỤP ĐƠN HÀNG BẤT BIẾN (ADR-0009)
+--
+-- FR-REV-03 AC2 đòi "tầng ứng dụng VÀ trigger CSDL từ chối cập nhật" revenue_owner. Trigger chặn mọi
+-- cột ảnh chụp chụp lúc tạo đơn (FR-ORD-05, FR-ORD-06, NFR-DAT-06), không riêng revenue_owner: đổi
+-- amount hay slot_rental_id cũng làm sai đối soát y như vậy. Cột trạng thái (status, paid_at,
+-- needs_manual_review…) vẫn cập nhật bình thường.
+-- =====================================================================================
+
+CREATE FUNCTION fn_orders_snapshot_immutable()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.brand_id              IS DISTINCT FROM OLD.brand_id
+       OR NEW.slot_rental_id        IS DISTINCT FROM OLD.slot_rental_id
+       OR NEW.revenue_owner         IS DISTINCT FROM OLD.revenue_owner
+       OR NEW.machine_id            IS DISTINCT FROM OLD.machine_id
+       OR NEW.slot_id               IS DISTINCT FROM OLD.slot_id
+       OR NEW.fragrance_product_id  IS DISTINCT FROM OLD.fragrance_product_id
+       OR NEW.product_name_snapshot IS DISTINCT FROM OLD.product_name_snapshot
+       OR NEW.amount                IS DISTINCT FROM OLD.amount
+       OR NEW.currency              IS DISTINCT FROM OLD.currency
+       OR NEW.payment_reference     IS DISTINCT FROM OLD.payment_reference
+       OR NEW.idempotency_key       IS DISTINCT FROM OLD.idempotency_key
+    THEN
+        RAISE EXCEPTION 'Đơn hàng %: cột ảnh chụp chỉ ghi một lần lúc tạo đơn (FR-REV-03, NFR-DAT-06)',
+            OLD.id
+            USING ERRCODE = 'check_violation', CONSTRAINT = 'chk_order_snapshot_immutable';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_orders_snapshot_immutable
+    BEFORE UPDATE ON orders
+    FOR EACH ROW EXECUTE FUNCTION fn_orders_snapshot_immutable();
+
+
+-- =====================================================================================
 -- §11. AUDIT LOG APPEND-ONLY (FR-AUD-09, NFR-SEC-08)
 --
 -- Hai lớp: quyền cho role ứng dụng, và trigger chặn kể cả khi chạy bằng superuser lúc dev.
@@ -1661,7 +1712,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --         nếu cần, nhưng chưa làm trong đợt này.
 --
 --  7. Các cột ảnh chụp trên orders (brand_id, slot_rental_id, revenue_owner, amount) không có
---     đường cập nhật sau khi tạo (NFR-DAT-06, spec/contracts/README.md).
+--     đường cập nhật sau khi tạo (NFR-DAT-06, spec/contracts/README.md). Từ ADR-0009, CSDL cũng chặn
+--     (trg_orders_snapshot_immutable, §10e) — tầng ứng dụng vẫn không được viết đường cập nhật.
 --
 --  8. Khi thanh lý theo FR-EXP-15: với mọi chai đang lắp hoặc còn giữ cho slot của hóa đơn đó,
 --     đặt bottles.owner = PLATFORM, bottles.status = LIQUIDATED, bottles.liquidated_at = now(),

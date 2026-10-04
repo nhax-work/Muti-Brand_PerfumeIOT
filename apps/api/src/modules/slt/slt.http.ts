@@ -1,22 +1,21 @@
 /**
- * Cửa vào HTTP của module SLT (Hợp đồng thuê slot - FR-SLT-01..29).
- * Mọi endpoint đòi quyền `rental.manage`.
- * Đường dẫn và dữ liệu theo spec/contracts/openapi.yaml, nhóm tag SLT.
+ * Cửa vào HTTP đọc hóa đơn thuê slot (FR-SLT-15, FR-SLT-41). Đường dẫn và tham số theo
+ * spec/contracts/openapi.yaml (`listSlotRentals`, `getSlotRental`).
+ *
+ * Không gắn quyền riêng: Brand Admin xem hóa đơn của mình, tài khoản nền tảng xem tất cả — phân biệt
+ * bằng phạm vi thương hiệu (`@CurrentBrandScope`), không bằng quyền.
+ *
+ * KHÔNG có `POST /slot-rentals` (FR-SLT-01 bãi bỏ, ADR-0006) hay đường kích hoạt tay: hóa đơn sinh
+ * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
-import {
-  CurrentBrandScope,
-  CurrentUser,
-  RequirePermissions,
-  type AuthenticatedUser,
-} from '../auth/index.js';
+import { CurrentBrandScope, CurrentUser, type AuthenticatedUser } from '../auth/index.js';
 import { SltService } from './slt.service.js';
 
-const RENTAL_MANAGE = 'rental.manage';
 const RENTAL_STATUSES = [
   'DRAFT',
   'ACTIVE',
@@ -26,75 +25,136 @@ const RENTAL_STATUSES = [
   'LIQUIDATED',
   'CLOSED',
   'TERMINATED',
+  'CANCELLED',
+] as const;
+
+const RENTAL_STAGES = [
+  'AWAITING_PAYMENT',
+  'AWAITING_STOCK',
+  'ACTIVE',
+  'EXPIRING',
+  'GRACE',
+  'LIQUIDATED',
+  'ENDED',
+  'CANCELLED',
 ] as const;
 
 const ListQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
-  slotId: z.string().uuid().optional(),
-  brandId: z.string().uuid().optional(),
   status: z.enum(RENTAL_STATUSES).optional(),
+  stage: z.enum(RENTAL_STAGES).optional(),
+  machineId: z.string().uuid().optional(),
 });
 
-const moneySchema = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Giá phải là chuỗi số thập phân');
+const IdParam = z.object({ id: z.string().uuid() });
 
-const CreateBody = z.object({
+const CheckoutItem = z.object({
   slotId: z.string().uuid(),
-  brandId: z.string().uuid(),
-  fragranceProductId: z.string().uuid().optional(),
-  requestId: z.string().uuid().optional(),
-  previousRentalId: z.string().uuid().optional(),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime(),
-  pricePerSpray: moneySchema,
-  currency: z.string().length(3).optional(),
-  fixedFee: moneySchema.optional(),
-  revenueSharePercent: z.coerce.number().min(0).max(100).optional(),
+  rentalPackageId: z.string().uuid(),
+  storagePlanId: z.string().uuid(),
 });
 
-const IdParam = z.string().uuid();
+const CreateCheckoutBody = z.object({
+  items: z.array(CheckoutItem).min(1),
+});
+
+const ProductAssignBody = z.object({
+  fragranceProductId: z.string().uuid(),
+});
+
+const PriceUpdateBody = z.object({
+  pricePerSpray: z.string().min(1),
+});
 
 @Controller('slot-rentals')
-@RequirePermissions(RENTAL_MANAGE)
 export class SltController {
   constructor(@Inject(SltService) private readonly service: SltService) {}
 
   @Get()
-  async list(
-    @CurrentUser() actor: AuthenticatedUser,
-    @CurrentBrandScope() scope: BrandScope,
-    @Query() rawQuery: unknown,
-  ) {
-    const query = ListQuery.parse(rawQuery);
-    const { items, total } = await this.service.list(actor, scope, query);
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const query = parseBody(ListQuery, rawQuery);
+    const { items, total } = await this.service.list(scope, query);
     return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
   @Get(':id')
-  async get(
+  get(
     @CurrentUser() actor: AuthenticatedUser,
     @CurrentBrandScope() scope: BrandScope,
-    @Param('id') idParam: unknown,
+    @Param() params: unknown,
   ) {
-    const id = IdParam.parse(idParam);
+    const { id } = parseBody(IdParam, params);
     return this.service.get(actor, scope, id);
   }
 
-  @Post()
-  @HttpCode(201)
-  async create(@CurrentUser() actor: AuthenticatedUser, @Body() rawBody: unknown) {
-    const body = parseBody(CreateBody, rawBody);
-    return this.service.create(actor, body);
-  }
-
-  @Post(':id/activate')
-  @HttpCode(200)
-  async activate(
+  @Get(':id/invoice')
+  getInvoice(
     @CurrentUser() actor: AuthenticatedUser,
     @CurrentBrandScope() scope: BrandScope,
-    @Param('id') idParam: unknown,
+    @Param() params: unknown,
   ) {
-    const id = IdParam.parse(idParam);
-    return this.service.activate(actor, scope, id);
+    const { id } = parseBody(IdParam, params);
+    return this.service.getInvoice(actor, scope, id);
+  }
+
+  @Put(':id/product')
+  assignProduct(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { fragranceProductId } = parseBody(ProductAssignBody, body);
+    return this.service.assignProduct(actor, scope, id, fragranceProductId);
+  }
+
+  @Put(':id/price')
+  setPricePerSpray(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { pricePerSpray } = parseBody(PriceUpdateBody, body);
+    return this.service.setPricePerSpray(actor, scope, id, pricePerSpray);
+  }
+}
+
+@Controller('rental-checkouts')
+export class RentalCheckoutsController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  @Post()
+  createCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Body() body: unknown,
+  ) {
+    const parsed = parseBody(CreateCheckoutBody, body);
+    return this.service.createCheckout(actor, scope, parsed);
+  }
+
+  @Get(':id')
+  getCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getCheckout(actor, scope, id);
+  }
+}
+
+@Controller('slots')
+export class SlotRentalQuoteController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  @Get(':id/rental-quote')
+  getQuote(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getQuote(actor, id);
   }
 }

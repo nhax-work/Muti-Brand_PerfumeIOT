@@ -1,19 +1,38 @@
 /**
- * Truy vấn của module SLT (Hợp đồng thuê slot - FR-SLT-01..29).
+ * Truy vấn hóa đơn thuê slot (FR-SLT-15, FR-SLT-41; ADR-0006, ADR-0008).
  * Chỉ module slt được import file này (QT3, ADR-0003).
+ *
+ * Chỉ ĐỌC. Hóa đơn sinh ra qua phiên thanh toán (`POST /rental-checkouts`, FR-SLT-35) và đổi trạng
+ * thái qua các luồng nghiệp vụ riêng (thanh toán, lắp chai đầu tiên, job hết hạn) — không có đường
+ * tạo tay hay kích hoạt tay (FR-SLT-01 đã bãi bỏ).
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import { sql, type Expression, type SqlBool } from 'kysely';
 import { DATABASE, type Database } from '../../shared/db/index.js';
+import type { SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
-export type SlotRentalStatus =
-  'DRAFT' | 'ACTIVE' | 'EXPIRING' | 'GRACE' | 'RENEWED' | 'LIQUIDATED' | 'CLOSED' | 'TERMINATED';
+export type { SlotRentalStatus };
+
+/**
+ * Nhãn hiển thị cho Brand Admin (FR-SLT-41, openapi `RentalInvoiceStage`) — SUY RA từ `status` và
+ * `paid_at`, không phải cột trong CSDL.
+ */
+export type RentalInvoiceStage =
+  | 'AWAITING_PAYMENT'
+  | 'AWAITING_STOCK'
+  | 'ACTIVE'
+  | 'EXPIRING'
+  | 'GRACE'
+  | 'LIQUIDATED'
+  | 'ENDED'
+  | 'CANCELLED';
 
 export interface SlotRentalRecord {
   readonly id: string;
   readonly slotId: string;
-  readonly machineId?: string;
+  readonly machineId: string;
   readonly brandId: string;
   readonly fragranceProductId: string | null;
   readonly productAssignedAt: Date | null;
@@ -26,37 +45,133 @@ export interface SlotRentalRecord {
   readonly pricePerSpray: string | null;
   readonly currency: string;
   readonly fixedFee: string;
-  readonly revenueSharePercent: number;
+  readonly revenueSharePercent: string;
   readonly terminatedReason: string | null;
-  readonly createdBy: string;
+  readonly checkoutId: string | null;
+  readonly invoiceNumber: string | null;
+  readonly rentalPackageId: string | null;
+  readonly storagePlanId: string | null;
+  readonly durationMonths: number | null;
+  readonly monthlyRentPrice: string | null;
+  readonly discountPercent: string | null;
+  readonly storageMonthlyPrice: string | null;
+  readonly storageCoveragePercent: string | null;
+  readonly storageCoverageCap: string | null;
+  readonly rentAmount: string | null;
+  readonly storageAmount: string | null;
+  readonly graceFeeAmount: string;
+  readonly totalAmount: string | null;
+  /** Hạn giữ chỗ của phiên thanh toán chứa hóa đơn (ADR-0008); null với hóa đơn mô hình cũ. */
+  readonly holdExpiresAt: Date | null;
+  readonly paidAt: Date | null;
+  readonly cancelledAt: Date | null;
   readonly createdAt: Date;
-  readonly updatedAt: Date;
 }
 
 export interface SlotRentalFilter {
-  readonly slotId?: string;
-  readonly brandId?: string;
-  readonly status?: SlotRentalStatus;
   readonly page: number;
   readonly pageSize: number;
+  readonly status?: SlotRentalStatus | undefined;
+  readonly stage?: RentalInvoiceStage | undefined;
+  /** Lọc máy chỉ để thu hẹp; phạm vi thương hiệu vẫn qua `slot_rentals.brand_id`. */
+  readonly machineId?: string | undefined;
 }
 
-export interface CreateSlotRentalData {
-  readonly slotId: string;
+/** Điều kiện SQL cho một nhãn — cùng quy tắc với `stageOf` bên dưới. */
+function stageCondition(stage: RentalInvoiceStage): Expression<SqlBool> {
+  switch (stage) {
+    case 'AWAITING_PAYMENT':
+      return sql<SqlBool>`sr.status = 'DRAFT' and sr.paid_at is null`;
+    case 'AWAITING_STOCK':
+      return sql<SqlBool>`sr.status = 'DRAFT' and sr.paid_at is not null`;
+    case 'ENDED':
+      return sql<SqlBool>`sr.status in ('RENEWED', 'CLOSED', 'TERMINATED')`;
+    default:
+      // ACTIVE, EXPIRING, GRACE, LIQUIDATED, CANCELLED: nhãn trùng tên trạng thái.
+      return sql<SqlBool>`sr.status::text = ${stage}`;
+  }
+}
+
+/** FR-SLT-41 AC1: mỗi hóa đơn đúng một nhãn. */
+export function stageOf(status: SlotRentalStatus, paidAt: Date | null): RentalInvoiceStage {
+  switch (status) {
+    case 'DRAFT':
+      return paidAt ? 'AWAITING_STOCK' : 'AWAITING_PAYMENT';
+    case 'RENEWED':
+    case 'CLOSED':
+    case 'TERMINATED':
+      return 'ENDED';
+    default:
+      return status;
+  }
+}
+
+export interface RentalCheckoutRecord {
+  readonly id: string;
   readonly brandId: string;
-  readonly fragranceProductId?: string | null;
-  readonly requestId?: string | null;
-  readonly previousRentalId?: string | null;
-  readonly status?: SlotRentalStatus;
+  readonly currency: string;
+  readonly totalAmount: string;
+  readonly holdExpiresAt: Date;
+  readonly paidAt: Date | null;
+  readonly cancelledAt: Date | null;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+export interface RentalInvoiceDetailRecord {
+  readonly rentalId: string;
+  readonly checkoutId: string | null;
+  readonly invoiceNumber: string | null;
+  readonly status: SlotRentalStatus;
+  readonly brandId: string;
+  readonly slotId: string;
+  readonly slotNumber: number;
+  readonly machineId: string;
+  readonly machineDisplayName: string;
+  readonly locationName: string;
+  readonly packageName: string | null;
+  readonly durationMonths: number | null;
+  readonly discountPercent: string | null;
+  readonly planName: string | null;
+  readonly storageMonthlyPrice: string | null;
+  readonly storageCoveragePercent: string | null;
+  readonly storageCoverageCap: string | null;
+  readonly monthlyRentPrice: string | null;
+  readonly rentAmount: string | null;
+  readonly storageAmount: string | null;
+  readonly graceFeeAmount: string;
+  readonly totalAmount: string | null;
+  readonly currency: string;
+  readonly holdExpiresAt: Date | null;
+  readonly paidAt: Date | null;
   readonly startsAt: Date;
   readonly endsAt: Date;
-  readonly graceEndsAt?: Date | null;
-  readonly pricePerSpray?: string | null;
-  readonly currency?: string;
-  readonly fixedFee?: string;
-  readonly revenueSharePercent?: number;
-  readonly createdBy: string;
 }
+
+export interface CheckoutCreateItemInput {
+  readonly slotId: string;
+  readonly rentalPackageId: string;
+  readonly storagePlanId: string;
+}
+
+export interface CheckoutCreateItemData {
+  readonly slotId: string;
+  readonly rentalPackageId: string;
+  readonly storagePlanId: string;
+  readonly durationMonths: number;
+  readonly monthlyRentPrice: string;
+  readonly discountPercent: string;
+  readonly storageMonthlyPrice: string;
+  readonly storageCoveragePercent: string;
+  readonly storageCoverageCap: string;
+  readonly rentAmount: string;
+  readonly storageAmount: string;
+  readonly totalAmount: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+}
+
+const BLOCKING_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
 
 @Injectable()
 export class SltQueries {
@@ -66,182 +181,339 @@ export class SltQueries {
     scope: BrandScope,
     filter: SlotRentalFilter,
   ): Promise<{ items: SlotRentalRecord[]; total: number }> {
-    let base = this.db
-      .selectFrom('slot_rentals')
-      .innerJoin('machine_slots', 'machine_slots.id', 'slot_rentals.slot_id')
-      .where(brandScopedByColumn(scope, 'slot_rentals.brand_id'));
+    let base = this.base(scope);
+    if (filter.machineId) base = base.where('ms.machine_id', '=', filter.machineId);
+    if (filter.status) base = base.where('sr.status', '=', filter.status);
+    if (filter.stage) base = base.where(stageCondition(filter.stage));
 
-    if (filter.slotId) {
-      base = base.where('slot_rentals.slot_id', '=', filter.slotId);
-    }
-    if (filter.brandId) {
-      base = base.where('slot_rentals.brand_id', '=', filter.brandId);
-    }
-    if (filter.status) {
-      base = base.where('slot_rentals.status', '=', filter.status);
-    }
+    const [rows, count] = await Promise.all([
+      this.selectColumns(base)
+        .orderBy('sr.created_at', 'desc')
+        .orderBy('sr.id')
+        .limit(filter.pageSize)
+        .offset((filter.page - 1) * filter.pageSize)
+        .execute(),
+      base.select((eb) => eb.fn.countAll<string>().as('total')).executeTakeFirstOrThrow(),
+    ]);
+    return { items: rows.map(toRecord), total: Number(count.total) };
+  }
 
-    const countRow = await base
-      .select((eb) => eb.fn.countAll<string>().as('total'))
-      .executeTakeFirstOrThrow();
+  async findById(scope: BrandScope, id: string): Promise<SlotRentalRecord | null> {
+    const row = await this.selectColumns(
+      this.base(scope).where('sr.id', '=', id),
+    ).executeTakeFirst();
+    return row ? toRecord(row) : null;
+  }
 
-    const rows = await base
+  async findInvoiceDetailById(
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalInvoiceDetailRecord | null> {
+    const row = await this.db
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .innerJoin('machines as m', 'm.id', 'ms.machine_id')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
+      .leftJoin('rental_packages as rp', 'rp.id', 'sr.rental_package_id')
+      .leftJoin('storage_plans as sp', 'sp.id', 'sr.storage_plan_id')
+      .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
       .select([
-        'slot_rentals.id',
-        'slot_rentals.slot_id',
-        'machine_slots.machine_id',
-        'slot_rentals.brand_id',
-        'slot_rentals.fragrance_product_id',
-        'slot_rentals.product_assigned_at',
-        'slot_rentals.request_id',
-        'slot_rentals.previous_rental_id',
-        'slot_rentals.status',
-        'slot_rentals.starts_at',
-        'slot_rentals.ends_at',
-        'slot_rentals.grace_ends_at',
-        'slot_rentals.price_per_spray',
-        'slot_rentals.currency',
-        'slot_rentals.fixed_fee',
-        'slot_rentals.revenue_share_percent',
-        'slot_rentals.terminated_reason',
-        'slot_rentals.created_by',
-        'slot_rentals.created_at',
-        'slot_rentals.updated_at',
+        'sr.id as rental_id',
+        'sr.checkout_id',
+        'sr.invoice_number',
+        'sr.status',
+        'sr.brand_id',
+        'sr.slot_id',
+        'ms.slot_number',
+        'ms.machine_id',
+        'm.display_name as machine_display_name',
+        'l.name as location_name',
+        'rp.name as package_name',
+        'sr.duration_months',
+        'sr.discount_percent',
+        'sp.name as plan_name',
+        'sr.storage_monthly_price',
+        'sr.storage_coverage_percent',
+        'sr.storage_coverage_cap',
+        'sr.monthly_rent_price',
+        'sr.rent_amount',
+        'sr.storage_amount',
+        'sr.grace_fee_amount',
+        'sr.total_amount',
+        'sr.currency',
+        'rc.hold_expires_at',
+        'sr.paid_at',
+        'sr.starts_at',
+        'sr.ends_at',
       ])
-      .orderBy('slot_rentals.created_at', 'desc')
-      .orderBy('slot_rentals.id')
-      .limit(filter.pageSize)
-      .offset((filter.page - 1) * filter.pageSize)
+      .where('sr.id', '=', id)
+      .where(brandScopedByColumn(scope, 'sr.brand_id'))
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return {
+      rentalId: row.rental_id,
+      checkoutId: row.checkout_id,
+      invoiceNumber: row.invoice_number,
+      status: row.status,
+      brandId: row.brand_id,
+      slotId: row.slot_id,
+      slotNumber: row.slot_number,
+      machineId: row.machine_id,
+      machineDisplayName: row.machine_display_name,
+      locationName: row.location_name,
+      packageName: row.package_name,
+      durationMonths: row.duration_months,
+      discountPercent: row.discount_percent,
+      planName: row.plan_name,
+      storageMonthlyPrice: row.storage_monthly_price,
+      storageCoveragePercent: row.storage_coverage_percent,
+      storageCoverageCap: row.storage_coverage_cap,
+      monthlyRentPrice: row.monthly_rent_price,
+      rentAmount: row.rent_amount,
+      storageAmount: row.storage_amount,
+      graceFeeAmount: row.grace_fee_amount,
+      totalAmount: row.total_amount,
+      currency: row.currency,
+      holdExpiresAt: row.hold_expires_at,
+      paidAt: row.paid_at,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+    };
+  }
+
+  async findCheckoutById(
+    scope: BrandScope,
+    id: string,
+  ): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | null> {
+    const checkoutRow = await this.db
+      .selectFrom('rental_checkouts')
+      .selectAll()
+      .where('id', '=', id)
+      .where(brandScopedByColumn(scope, 'brand_id'))
+      .executeTakeFirst();
+
+    if (!checkoutRow) return null;
+
+    const rentalRows = await this.selectColumns(this.base(scope).where('sr.checkout_id', '=', id))
+      .orderBy('sr.created_at', 'asc')
       .execute();
 
     return {
-      items: rows.map(toRecord),
-      total: Number(countRow.total),
+      checkout: {
+        id: checkoutRow.id,
+        brandId: checkoutRow.brand_id,
+        currency: checkoutRow.currency,
+        totalAmount: checkoutRow.total_amount,
+        holdExpiresAt: checkoutRow.hold_expires_at,
+        paidAt: checkoutRow.paid_at,
+        cancelledAt: checkoutRow.cancelled_at,
+        createdBy: checkoutRow.created_by,
+        createdAt: checkoutRow.created_at,
+      },
+      items: rentalRows.map(toRecord),
     };
   }
 
-  async findById(scope: BrandScope, id: string): Promise<SlotRentalRecord | undefined> {
+  /**
+   * Tạo phiên thanh toán và hóa đơn DRAFT trong một transaction.
+   * Tất cả hoặc không có gì: nếu bất kỳ slot nào đang bị giữ chỗ / đã có hóa đơn -> trả `occupied: true`.
+   */
+  async createCheckoutTx(params: {
+    readonly brandId: string;
+    readonly createdBy: string;
+    readonly holdExpiresAt: Date;
+    readonly totalAmount: string;
+    readonly items: CheckoutCreateItemData[];
+  }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
+    return this.db.transaction().execute(async (tx) => {
+      const slotIds = params.items.map((i) => i.slotId);
+
+      // Chống chồng lấn: Kiểm tra bất kỳ slot nào đã có rental blocking status
+      const existing = await tx
+        .selectFrom('slot_rentals')
+        .select('slot_id')
+        .where('slot_id', 'in', slotIds)
+        .where('status', 'in', BLOCKING_STATUSES)
+        .forUpdate()
+        .execute();
+
+      if (existing.length > 0) {
+        return { occupied: true };
+      }
+
+      const checkoutRow = await tx
+        .insertInto('rental_checkouts')
+        .values({
+          brand_id: params.brandId,
+          currency: 'VND',
+          total_amount: params.totalAmount,
+          hold_expires_at: params.holdExpiresAt,
+          created_by: params.createdBy,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      for (const item of params.items) {
+        await tx
+          .insertInto('slot_rentals')
+          .values({
+            slot_id: item.slotId,
+            brand_id: params.brandId,
+            checkout_id: checkoutRow.id,
+            created_by: params.createdBy,
+            status: 'DRAFT',
+            starts_at: item.startsAt,
+            ends_at: item.endsAt,
+            currency: 'VND',
+            rental_package_id: item.rentalPackageId,
+            storage_plan_id: item.storagePlanId,
+            duration_months: item.durationMonths,
+            monthly_rent_price: item.monthlyRentPrice,
+            discount_percent: item.discountPercent,
+            storage_monthly_price: item.storageMonthlyPrice,
+            storage_coverage_percent: item.storageCoveragePercent,
+            storage_coverage_cap: item.storageCoverageCap,
+            rent_amount: item.rentAmount,
+            storage_amount: item.storageAmount,
+            grace_fee_amount: '0.0000',
+            total_amount: item.totalAmount,
+          })
+          .execute();
+      }
+
+      // Read back all created rentals with machine_id and hold_expires_at
+      const rentalRows = await tx
+        .selectFrom('slot_rentals as sr')
+        .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+        .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+        .selectAll('sr')
+        .select(['ms.machine_id', 'rc.hold_expires_at'])
+        .where('sr.checkout_id', '=', checkoutRow.id)
+        .orderBy('sr.created_at', 'asc')
+        .execute();
+
+      return {
+        checkout: {
+          id: checkoutRow.id,
+          brandId: checkoutRow.brand_id,
+          currency: checkoutRow.currency,
+          totalAmount: checkoutRow.total_amount,
+          holdExpiresAt: checkoutRow.hold_expires_at,
+          paidAt: checkoutRow.paid_at,
+          cancelledAt: checkoutRow.cancelled_at,
+          createdBy: checkoutRow.created_by,
+          createdAt: checkoutRow.created_at,
+        },
+        items: rentalRows.map(toRecord),
+      };
+    });
+  }
+
+  async findProductById(
+    id: string,
+  ): Promise<{ id: string; brandId: string; status: string } | null> {
     const row = await this.db
-      .selectFrom('slot_rentals')
-      .innerJoin('machine_slots', 'machine_slots.id', 'slot_rentals.slot_id')
-      .select([
-        'slot_rentals.id',
-        'slot_rentals.slot_id',
-        'machine_slots.machine_id',
-        'slot_rentals.brand_id',
-        'slot_rentals.fragrance_product_id',
-        'slot_rentals.product_assigned_at',
-        'slot_rentals.request_id',
-        'slot_rentals.previous_rental_id',
-        'slot_rentals.status',
-        'slot_rentals.starts_at',
-        'slot_rentals.ends_at',
-        'slot_rentals.grace_ends_at',
-        'slot_rentals.price_per_spray',
-        'slot_rentals.currency',
-        'slot_rentals.fixed_fee',
-        'slot_rentals.revenue_share_percent',
-        'slot_rentals.terminated_reason',
-        'slot_rentals.created_by',
-        'slot_rentals.created_at',
-        'slot_rentals.updated_at',
-      ])
-      .where('slot_rentals.id', '=', id)
-      .where(brandScopedByColumn(scope, 'slot_rentals.brand_id'))
+      .selectFrom('fragrance_products')
+      .select(['id', 'brand_id', 'status'])
+      .where('id', '=', id)
+      .where('deleted_at', 'is', null)
       .executeTakeFirst();
 
-    return row ? toRecord(row) : undefined;
+    if (!row) return null;
+    return { id: row.id, brandId: row.brand_id, status: row.status };
   }
 
-  async create(data: CreateSlotRentalData): Promise<string> {
-    const row = await this.db
-      .insertInto('slot_rentals')
-      .values({
-        slot_id: data.slotId,
-        brand_id: data.brandId,
-        fragrance_product_id: data.fragranceProductId ?? null,
-        product_assigned_at: data.fragranceProductId ? new Date() : null,
-        request_id: data.requestId ?? null,
-        previous_rental_id: data.previousRentalId ?? null,
-        status: data.status ?? 'DRAFT',
-        starts_at: data.startsAt,
-        ends_at: data.endsAt,
-        grace_ends_at: data.graceEndsAt ?? null,
-        price_per_spray: data.pricePerSpray ?? null,
-        currency: data.currency ?? 'VND',
-        fixed_fee: data.fixedFee ?? '0',
-        revenue_share_percent:
-          data.revenueSharePercent !== undefined ? String(data.revenueSharePercent) : '0',
-        created_by: data.createdBy,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-
-    return row.id;
-  }
-
-  async updateStatus(
+  async updateProduct(
+    scope: BrandScope,
     id: string,
-    status: SlotRentalStatus,
-    extra?: { terminatedReason?: string | null; graceEndsAt?: Date | null },
-  ): Promise<void> {
-    const values: Record<string, unknown> = {
-      status,
-      updated_at: new Date(),
-    };
-    if (extra?.terminatedReason !== undefined) {
-      values['terminated_reason'] = extra.terminatedReason;
-    }
-    if (extra?.graceEndsAt !== undefined) {
-      values['grace_ends_at'] = extra.graceEndsAt;
-    }
+    fragranceProductId: string,
+  ): Promise<SlotRentalRecord | null> {
+    const now = new Date();
+    await this.db
+      .updateTable('slot_rentals')
+      .set({
+        fragrance_product_id: fragranceProductId,
+        product_assigned_at: now,
+        updated_at: now,
+      })
+      .where('id', '=', id)
+      .where(brandScopedByColumn(scope, 'brand_id'))
+      .execute();
 
-    await this.db.updateTable('slot_rentals').set(values).where('id', '=', id).execute();
+    return this.findById(scope, id);
+  }
+
+  async updatePricePerSpray(
+    scope: BrandScope,
+    id: string,
+    pricePerSpray: string,
+  ): Promise<SlotRentalRecord | null> {
+    const now = new Date();
+    await this.db
+      .updateTable('slot_rentals')
+      .set({
+        price_per_spray: pricePerSpray,
+        updated_at: now,
+      })
+      .where('id', '=', id)
+      .where(brandScopedByColumn(scope, 'brand_id'))
+      .execute();
+
+    return this.findById(scope, id);
+  }
+
+  private base(scope: BrandScope) {
+    return this.db
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+      .where(brandScopedByColumn(scope, 'sr.brand_id'));
+  }
+
+  private selectColumns(query: ReturnType<SltQueries['base']>) {
+    return query.selectAll('sr').select(['ms.machine_id', 'rc.hold_expires_at']);
   }
 }
 
-function toRecord(row: {
-  id: string;
-  slot_id: string;
-  machine_id?: string;
-  brand_id: string;
-  fragrance_product_id: string | null;
-  product_assigned_at: Date | null;
-  request_id: string | null;
-  previous_rental_id: string | null;
-  status: string;
-  starts_at: Date;
-  ends_at: Date;
-  grace_ends_at: Date | null;
-  price_per_spray: string | number | null;
-  currency: string;
-  fixed_fee: string | number;
-  revenue_share_percent: string | number;
-  terminated_reason: string | null;
-  created_by: string;
-  created_at: Date;
-  updated_at: Date;
-}): SlotRentalRecord {
+function toRecord(
+  row: Awaited<ReturnType<ReturnType<SltQueries['selectColumns']>['executeTakeFirstOrThrow']>>,
+): SlotRentalRecord {
   return {
     id: row.id,
     slotId: row.slot_id,
     machineId: row.machine_id,
     brandId: row.brand_id,
     fragranceProductId: row.fragrance_product_id,
-    productAssignedAt: row.product_assigned_at ? new Date(row.product_assigned_at) : null,
+    productAssignedAt: row.product_assigned_at,
     requestId: row.request_id,
     previousRentalId: row.previous_rental_id,
-    status: row.status as SlotRentalStatus,
-    startsAt: new Date(row.starts_at),
-    endsAt: new Date(row.ends_at),
-    graceEndsAt: row.grace_ends_at ? new Date(row.grace_ends_at) : null,
-    pricePerSpray: row.price_per_spray != null ? String(row.price_per_spray) : null,
+    status: row.status,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    graceEndsAt: row.grace_ends_at,
+    pricePerSpray: row.price_per_spray,
     currency: row.currency,
-    fixedFee: String(row.fixed_fee),
-    revenueSharePercent: Number(row.revenue_share_percent),
+    fixedFee: row.fixed_fee,
+    revenueSharePercent: row.revenue_share_percent,
     terminatedReason: row.terminated_reason,
-    createdBy: row.created_by,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    checkoutId: row.checkout_id,
+    invoiceNumber: row.invoice_number,
+    rentalPackageId: row.rental_package_id,
+    storagePlanId: row.storage_plan_id,
+    durationMonths: row.duration_months,
+    monthlyRentPrice: row.monthly_rent_price,
+    discountPercent: row.discount_percent,
+    storageMonthlyPrice: row.storage_monthly_price,
+    storageCoveragePercent: row.storage_coverage_percent,
+    storageCoverageCap: row.storage_coverage_cap,
+    rentAmount: row.rent_amount,
+    storageAmount: row.storage_amount,
+    graceFeeAmount: row.grace_fee_amount,
+    totalAmount: row.total_amount,
+    holdExpiresAt: row.hold_expires_at,
+    paidAt: row.paid_at,
+    cancelledAt: row.cancelled_at,
+    createdAt: row.created_at,
   };
 }

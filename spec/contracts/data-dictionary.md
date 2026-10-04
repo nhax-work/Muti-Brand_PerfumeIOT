@@ -892,7 +892,7 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 | `order_id` | `uuid` | có |  | Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị (chk_payment_single_target). |
 | `provider` | `character varying(50)` | — |  |  |
 | `provider_transaction_id` | `character varying(200)` | có |  |  |
-| `provider_reference` | `character varying(200)` | có |  |  |
+| `provider_reference` | `character varying(200)` | có |  | Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009). |
 | `amount` | `numeric(19,4)` | — |  |  |
 | `currency` | `character(3)` | — |  |  |
 | `status` | `payment_status` | — | `'PENDING'::payment_status` |  |
@@ -920,6 +920,7 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 - `idx_payments_order` — `USING btree (order_id)`
 - `payments_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_checkout_payment_pending` (UNIQUE) — `USING btree (rental_checkout_id) WHERE ((rental_checkout_id IS NOT NULL) AND (status = 'PENDING'::payment_status))`
+- `uq_payment_provider_reference` (UNIQUE) — `USING btree (provider, provider_reference) WHERE (provider_reference IS NOT NULL)`
 - `uq_payment_provider_txn` (UNIQUE) — `USING btree (provider, provider_transaction_id) WHERE (provider_transaction_id IS NOT NULL)`
 
 ### `payment_events`
