@@ -185,6 +185,7 @@ export const en: SameKeysAs<typeof vi> = {
     backHome: 'Back to home',
     confirm: 'Confirm',
     cancel: 'Cancel',
+    close: 'Close',
     reauthTitle: 'Confirm your password',
     reauthDescription: 'Re-enter your password to continue with this action.',
     networkError: 'Cannot reach the server. Check your connection and try again.',
@@ -384,6 +385,12 @@ export const en: SameKeysAs<typeof vi> = {
     storageFee: 'Storage Fee',
     graceFee: 'Grace Fee',
     totalFee: 'Total Fee',
+    cancelCheckout: 'Cancel Checkout',
+    cancelCheckoutConfirm:
+      'Are you sure you want to cancel this checkout session and choose other slots?',
+    checkoutCancelledNotice: 'Checkout session cancelled. You can select other slots.',
+    slotsOverlappedNotice:
+      'Some selected slots were just held by another brand. The available slots list has been refreshed.',
   },
 
   kiosk: {

@@ -20,6 +20,7 @@ import {
 import {
   ArrowLeftOutlined,
   ClockCircleOutlined,
+  CloseCircleOutlined,
   CreditCardOutlined,
   FileTextOutlined,
   QrcodeOutlined,
@@ -60,6 +61,21 @@ export default function CheckoutDetailPage() {
     } catch (err: unknown) {
       message.error(errorMessage(err, t));
     }
+  };
+
+  const handleCancelCheckout = () => {
+    Modal.confirm({
+      title: t('ui.cancelCheckout'),
+      content: t('ui.cancelCheckoutConfirm'),
+      okText: t('ui.confirm'),
+      cancelText: t('ui.cancel'),
+      okButtonProps: { danger: true },
+      onOk: () => {
+        setShowPaymentModal(false);
+        message.info(t('ui.checkoutCancelledNotice'));
+        void navigate('/rentals/available');
+      },
+    });
   };
 
   if (isLoading) {
@@ -229,7 +245,7 @@ export default function CheckoutDetailPage() {
                   onFinish={() => void refetch()}
                 />
 
-                <div style={{ marginTop: 24 }}>
+                <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <Button
                     type="primary"
                     size="large"
@@ -239,6 +255,14 @@ export default function CheckoutDetailPage() {
                     onClick={handlePay}
                   >
                     {t('ui.payNow')}
+                  </Button>
+                  <Button
+                    danger
+                    block
+                    icon={<CloseCircleOutlined />}
+                    onClick={handleCancelCheckout}
+                  >
+                    {t('ui.cancelCheckout')}
                   </Button>
                 </div>
               </Card>
@@ -257,8 +281,16 @@ export default function CheckoutDetailPage() {
           open={showPaymentModal && !isPaid}
           onCancel={() => setShowPaymentModal(false)}
           footer={[
+            <Button
+              key="cancel"
+              danger
+              icon={<CloseCircleOutlined />}
+              onClick={handleCancelCheckout}
+            >
+              {t('ui.cancelCheckout')}
+            </Button>,
             <Button key="close" onClick={() => setShowPaymentModal(false)}>
-              {t('ui.confirm')}
+              {t('ui.close')}
             </Button>,
           ]}
         >

@@ -122,7 +122,7 @@ function SlotQuoteSelector({
 export default function AvailableSlotsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { data, isLoading, error } = useAvailableSlots({ pageSize: 50 });
+  const { data, isLoading, error, refetch } = useAvailableSlots({ pageSize: 50 });
   const createCheckout = useCreateCheckout();
 
   const [selectedConfigs, setSelectedConfigs] = useState<Map<string, SelectedSlotConfig>>(
@@ -173,6 +173,27 @@ export default function AvailableSlotsPage() {
       void navigate(`/rentals/checkouts/${checkout.id}`);
     } catch (err: unknown) {
       message.error(errorMessage(err, t));
+
+      // Tự động tải lại danh sách slot khả dụng từ server
+      const updated = await refetch();
+      const availableIds = new Set((updated.data?.items ?? []).map((s) => s.slotId));
+
+      let hadRemoved = false;
+      setSelectedConfigs((prev) => {
+        const next = new Map<string, SelectedSlotConfig>();
+        for (const [id, cfg] of prev.entries()) {
+          if (availableIds.has(id)) {
+            next.set(id, cfg);
+          } else {
+            hadRemoved = true;
+          }
+        }
+        return next;
+      });
+
+      if (hadRemoved) {
+        message.warning(t('ui.slotsOverlappedNotice'));
+      }
     }
   };
 

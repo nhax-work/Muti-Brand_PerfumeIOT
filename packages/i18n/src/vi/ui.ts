@@ -22,6 +22,7 @@ export const ui = {
   backHome: 'Về trang chủ',
   confirm: 'Xác nhận',
   cancel: 'Hủy',
+  close: 'Đóng',
   reauthTitle: 'Xác thực lại mật khẩu',
   reauthDescription: 'Thao tác này cần nhập lại mật khẩu để tiếp tục.',
   networkError: 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.',
@@ -221,4 +222,9 @@ export const ui = {
   storageFee: 'Phí bảo quản',
   graceFee: 'Phí ân hạn',
   totalFee: 'Tổng cộng',
+  cancelCheckout: 'Hủy phiên thanh toán',
+  cancelCheckoutConfirm: 'Bạn có chắc chắn muốn hủy phiên thanh toán này và chọn lại slot khác?',
+  checkoutCancelledNotice: 'Đã hủy phiên thanh toán. Bạn có thể chọn slot khác.',
+  slotsOverlappedNotice:
+    'Một số slot bạn chọn vừa bị giữ chỗ bởi thương hiệu khác. Hệ thống đã cập nhật lại danh sách slot khả dụng.',
 } as const;
