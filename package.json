@@ -61,6 +61,7 @@
     "jsdom": "^29.1.1",
     "kysely": "^0.27.6",
     "kysely-codegen": "^0.17.0",
+    "mqtt": "^5.16.0",
     "node-pg-migrate": "^9.0.0",
     "prettier": "^3.4.2",
     "tsx": "^4.19.2",

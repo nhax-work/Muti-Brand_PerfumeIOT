@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
+import { DspModule } from './modules/dsp/index.js';
 import { MchModule } from './modules/mch/index.js';
 import { OrdModule, PaymentModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
@@ -25,6 +27,9 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     PaymentModule,
     SltCheckoutPaymentModule,
     OrdModule,
+    // Kết nối broker dùng chung (@Global) — chỉ kết nối khi entrypoints/mqtt.ts gọi connect().
+    MqttModule,
+    DspModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })

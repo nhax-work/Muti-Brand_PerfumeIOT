@@ -2,7 +2,8 @@
  * Mặt tiền của module ORD. Module khác CHỈ import từ file này (QT3, ADR-0003).
  */
 export { OrdModule } from './ord.module.js';
-export { OrdService, type OrderPaymentOutcome } from './ord.service.js';
+export { OrdService, type DispenseOrderOutcome, type OrderPaymentOutcome } from './ord.service.js';
+export type { OrderRecord } from './ord.queries.js';
 export { canCreateDispenseCommand, canTransition, isTerminal } from './order-status.js';
 export { revenueOwnerFor } from './revenue-owner.js';
 
