@@ -116,7 +116,6 @@ export default function CheckoutDetailPage() {
   const isPaid = checkout.stage === 'PAID';
   const isCancelled = checkout.stage === 'CANCELLED';
   const holdDeadline = new Date(checkout.holdExpiresAt).getTime();
-  const isExpired = !isPaid && Date.now() >= holdDeadline;
 
   return (
     <RequireRole allow={['BRAND_ADMIN']}>
@@ -179,7 +178,7 @@ export default function CheckoutDetailPage() {
               </div>
             </Result>
           </Card>
-        ) : isCancelled || isExpired ? (
+        ) : isCancelled ? (
           <Card style={{ marginBottom: 24, textAlign: 'center', padding: '24px 0' }}>
             <Result
               status="warning"

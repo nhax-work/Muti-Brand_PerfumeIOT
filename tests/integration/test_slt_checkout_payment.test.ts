@@ -61,9 +61,9 @@ beforeAll(async () => {
   vacantSlot1 = randomUUID();
   vacantSlot2 = randomUUID();
   await raw.query(
-    `INSERT INTO machine_slots (id, machine_id, slot_number, status, monthly_rent_price, capacity_ml)
-     VALUES ($1, $2, 6, 'AVAILABLE', 1000000.0000, 100),
-            ($3, $2, 7, 'AVAILABLE', 1200000.0000, 100)`,
+    `INSERT INTO machine_slots (id, machine_id, slot_number, status, monthly_rent_price, calibrated_dosage_ml, low_stock_threshold_ml)
+     VALUES ($1, $2, 6, 'AVAILABLE', 1000000.0000, 0.1200, 5.0000),
+            ($3, $2, 7, 'AVAILABLE', 1200000.0000, 0.1200, 5.0000)`,
     [vacantSlot1, fx.machineId, vacantSlot2],
   );
 }, 120_000);
