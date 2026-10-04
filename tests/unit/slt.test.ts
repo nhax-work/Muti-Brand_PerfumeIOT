@@ -8,16 +8,18 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
+import type { AuditEntry, AuditService } from '../../apps/api/src/shared/audit/index.js';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
 import type { BrandScope } from '../../apps/api/src/shared/scoping/index.js';
 import { AppError } from '../../apps/api/src/shared/errors/index.js';
 import { SltService } from '../../apps/api/src/modules/slt/slt.service.js';
 import {
   stageOf,
+  type CheckoutCreateItemData,
   type SlotRentalFilter,
   type SlotRentalRecord,
   type SlotRentalStatus,
+  type SltQueries,
 } from '../../apps/api/src/modules/slt/slt.queries.js';
 import { CatalogService } from '../../apps/api/src/modules/slt/catalog.service.js';
 import type {
@@ -26,6 +28,7 @@ import type {
   StoragePlanRow,
 } from '../../apps/api/src/modules/slt/catalog.queries.js';
 import type { MchService } from '../../apps/api/src/modules/mch/index.js';
+import type { MchQueries } from '../../apps/api/src/modules/mch/mch.queries.js';
 
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
 const BRAND_B = '11111111-1111-4111-8111-000000000002';
@@ -73,6 +76,7 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
 
 class FakeSltQueries {
   rentals: SlotRentalRecord[] = [];
+  products: Array<{ id: string; brandId: string; status: string }> = [];
   lastFilter: SlotRentalFilter | null = null;
 
   async list(scope: BrandScope, filter: SlotRentalFilter) {
@@ -89,6 +93,149 @@ class FakeSltQueries {
         (r) => r.id === id && (scope.kind === 'UNRESTRICTED' || r.brandId === scope.brandId),
       ) ?? null
     );
+  }
+
+  async findInvoiceDetailById(scope: BrandScope, id: string) {
+    const r = await this.findById(scope, id);
+    if (!r) return null;
+    return {
+      rentalId: r.id,
+      checkoutId: r.checkoutId,
+      invoiceNumber: r.invoiceNumber,
+      status: r.status,
+      brandId: r.brandId,
+      slotId: r.slotId,
+      slotNumber: 1,
+      machineId: r.machineId,
+      machineDisplayName: 'Máy Test',
+      locationName: 'Địa Điểm Test',
+      packageName: 'Gói 3 tháng',
+      durationMonths: r.durationMonths,
+      discountPercent: r.discountPercent,
+      planName: 'Bảo quản Tiêu Chuẩn',
+      storageMonthlyPrice: r.storageMonthlyPrice,
+      storageCoveragePercent: r.storageCoveragePercent,
+      storageCoverageCap: r.storageCoverageCap,
+      monthlyRentPrice: r.monthlyRentPrice,
+      rentAmount: r.rentAmount,
+      storageAmount: r.storageAmount,
+      graceFeeAmount: r.graceFeeAmount,
+      totalAmount: r.totalAmount,
+      currency: r.currency,
+      holdExpiresAt: r.holdExpiresAt,
+      paidAt: r.paidAt,
+      startsAt: r.startsAt,
+      endsAt: r.endsAt,
+    };
+  }
+
+  async findCheckoutById(scope: BrandScope, id: string) {
+    const items = this.rentals.filter(
+      (r) => r.checkoutId === id && (scope.kind === 'UNRESTRICTED' || r.brandId === scope.brandId),
+    );
+    if (items.length === 0) return null;
+    const first = items[0]!;
+    return {
+      checkout: {
+        id,
+        brandId: first.brandId,
+        currency: 'VND',
+        totalAmount: '3300000.0000',
+        holdExpiresAt: first.holdExpiresAt ?? new Date(),
+        paidAt: first.paidAt,
+        cancelledAt: first.cancelledAt,
+        createdBy: 'user-1',
+        createdAt: first.createdAt,
+      },
+      items,
+    };
+  }
+
+  async createCheckoutTx(params: {
+    brandId: string;
+    createdBy: string;
+    holdExpiresAt: Date;
+    totalAmount: string;
+    items: CheckoutCreateItemData[];
+  }) {
+    const checkoutId = `co-${Date.now()}`;
+    const newRentals: SlotRentalRecord[] = params.items.map((item, index) => {
+      const rec = rental(`r-${Date.now()}-${index}`, {
+        slotId: item.slotId,
+        brandId: params.brandId,
+        checkoutId,
+        status: 'DRAFT',
+        startsAt: item.startsAt,
+        endsAt: item.endsAt,
+        rentalPackageId: item.rentalPackageId,
+        storagePlanId: item.storagePlanId,
+        durationMonths: item.durationMonths,
+        monthlyRentPrice: item.monthlyRentPrice,
+        discountPercent: item.discountPercent,
+        storageMonthlyPrice: item.storageMonthlyPrice,
+        storageCoveragePercent: item.storageCoveragePercent,
+        storageCoverageCap: item.storageCoverageCap,
+        rentAmount: item.rentAmount,
+        storageAmount: item.storageAmount,
+        totalAmount: item.totalAmount,
+        holdExpiresAt: params.holdExpiresAt,
+      });
+      return rec;
+    });
+
+    this.rentals.push(...newRentals);
+
+    return {
+      checkout: {
+        id: checkoutId,
+        brandId: params.brandId,
+        currency: 'VND',
+        totalAmount: params.totalAmount,
+        holdExpiresAt: params.holdExpiresAt,
+        paidAt: null,
+        cancelledAt: null,
+        createdBy: params.createdBy,
+        createdAt: new Date(),
+      },
+      items: newRentals,
+    };
+  }
+
+  async findProductById(id: string) {
+    return this.products.find((p) => p.id === id) ?? null;
+  }
+
+  async updateProduct(
+    scope: BrandScope,
+    id: string,
+    fragranceProductId: string,
+  ): Promise<SlotRentalRecord | null> {
+    const index = this.rentals.findIndex((r) => r.id === id);
+    if (index === -1) return null;
+    const current = this.rentals[index]!;
+    const updated: SlotRentalRecord = {
+      ...current,
+      fragranceProductId,
+      productAssignedAt: new Date(),
+    };
+    this.rentals[index] = updated;
+    return updated;
+  }
+
+  async updatePricePerSpray(
+    scope: BrandScope,
+    id: string,
+    pricePerSpray: string,
+  ): Promise<SlotRentalRecord | null> {
+    const index = this.rentals.findIndex((r) => r.id === id);
+    if (index === -1) return null;
+    const current = this.rentals[index]!;
+    const updated: SlotRentalRecord = {
+      ...current,
+      pricePerSpray,
+    };
+    this.rentals[index] = updated;
+    return updated;
   }
 }
 
@@ -115,13 +262,34 @@ const brandAdmin = user({
   scope: { type: 'BRAND', brandId: BRAND_A } as AuthenticatedUser['scope'],
 });
 
-describe('SltService — đọc hóa đơn thuê slot', () => {
+describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
   let queries: FakeSltQueries;
+  let catalogQueries: FakeCatalogQueries;
   let service: SltService;
 
   beforeEach(() => {
     queries = new FakeSltQueries();
-    service = new SltService(queries);
+    catalogQueries = new FakeCatalogQueries();
+    catalogQueries.packages = [pkg('pkg-1', true)];
+    catalogQueries.plans = [plan('plan-1', true)];
+
+    const mchQueries = {
+      findSlotById: async (id: string) => {
+        if (id === 'slot-closed') return { id, monthlyRentPrice: null, currentRentalId: null };
+        if (id === 'slot-occupied')
+          return { id, monthlyRentPrice: '1000000.0000', currentRentalId: 'r-occ' };
+        return { id, monthlyRentPrice: '1000000.0000', currentRentalId: null };
+      },
+    } as unknown as MchQueries;
+
+    const audit = { log: async () => {} } as unknown as AuditService;
+
+    service = new SltService(
+      queries as unknown as SltQueries,
+      catalogQueries as unknown as CatalogQueries,
+      mchQueries,
+      audit,
+    );
   });
 
   it('test_FR_SLT_41_list_brand_invoices', async () => {
@@ -173,6 +341,108 @@ describe('SltService — đọc hóa đơn thuê slot', () => {
       .catch((e: unknown) => e);
     expect((error as AppError).code).toBe('FORBIDDEN_SCOPE');
   });
+
+  it('test_FR_SLT_34_show_package_quotes', async () => {
+    const quote = await service.getQuote(brandAdmin, 'slot-1');
+    expect(quote.slotId).toBe('slot-1');
+    expect(quote.monthlyRentPrice).toBe('1000000.0000');
+    expect(quote.packages.length).toBe(1);
+    expect(quote.packages[0]).toMatchObject({
+      rentalPackageId: 'pkg-1',
+      durationMonths: 3,
+      discountPercent: 0,
+      rentAmount: '3000000.0000',
+    });
+    expect(quote.storagePlans.length).toBe(1);
+
+    // Slot chưa có giá niêm yết
+    await expect(service.getQuote(brandAdmin, 'slot-closed')).rejects.toThrow();
+
+    // Slot đang bị chiếm dụng
+    await expect(service.getQuote(brandAdmin, 'slot-occupied')).rejects.toThrow();
+  });
+
+  it('test_FR_SLT_35_checkout_holds_slot', async () => {
+    const checkout = await service.createCheckout(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      {
+        items: [
+          { slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+          { slotId: 'slot-2', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+        ],
+      },
+    );
+
+    expect(checkout.brandId).toBe(BRAND_A);
+    expect(checkout.stage).toBe('AWAITING_PAYMENT');
+    expect(checkout.invoices.length).toBe(2);
+    expect(checkout.invoices[0]!.status).toBe('DRAFT');
+
+    // Chặn trùng slot trong items
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [
+            { slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+            { slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+          ],
+        },
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('test_FR_SLT_27_assign_product_to_slot', async () => {
+    const rPaid = rental('r-paid', { paidAt: new Date(), status: 'DRAFT' });
+    queries.rentals = [rPaid];
+    queries.products = [
+      { id: 'p-1', brandId: BRAND_A, status: 'ACTIVE' },
+      { id: 'p-other', brandId: BRAND_B, status: 'ACTIVE' },
+      { id: 'p-discontinued', brandId: BRAND_A, status: 'DISCONTINUED' },
+    ];
+
+    // Gán thành công
+    const updated = await service.assignProduct(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-paid',
+      'p-1',
+    );
+    expect(updated.fragranceProductId).toBe('p-1');
+
+    // Sản phẩm của thương hiệu khác -> PRODUCT_NOT_OWNED (403)
+    await expect(
+      service.assignProduct(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', 'p-other'),
+    ).rejects.toMatchObject({ code: 'PRODUCT_NOT_OWNED' });
+
+    // Hóa đơn chưa thanh toán -> RENTAL_NOT_ACTIVE (409)
+    const rUnpaid = rental('r-unpaid', { paidAt: null, status: 'DRAFT' });
+    queries.rentals.push(rUnpaid);
+    await expect(
+      service.assignProduct(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-unpaid', 'p-1'),
+    ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
+  });
+
+  it('test_FR_SLT_08_free_pricing', async () => {
+    const rPaid = rental('r-paid', { paidAt: new Date(), status: 'DRAFT' });
+    queries.rentals = [rPaid];
+
+    // Đặt giá tự do > 0 -> Thành công
+    const updated = await service.setPricePerSpray(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-paid',
+      '25000',
+    );
+    expect(updated.pricePerSpray).toBe('25000.0000');
+
+    // Giá <= 0 -> VALIDATION_ERROR (400)
+    await expect(
+      service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '0'),
+    ).rejects.toThrow();
+  });
 });
 
 // -------------------------------------------------------------------------------------
@@ -190,6 +460,9 @@ class FakeCatalogQueries {
   async listPackages(isActive?: boolean) {
     this.lastPackageFilter = isActive;
     return this.packages.filter((p) => isActive === undefined || p.is_active === isActive);
+  }
+  async listPlans(isActive?: boolean) {
+    return this.plans.filter((p) => isActive === undefined || p.is_active === isActive);
   }
   async lockPlan(id: string) {
     return this.plans.find((p) => p.id === id);

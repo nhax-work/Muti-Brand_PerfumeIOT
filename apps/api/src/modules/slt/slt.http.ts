@@ -9,7 +9,7 @@
  * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
@@ -49,6 +49,24 @@ const ListQuery = z.object({
 
 const IdParam = z.object({ id: z.string().uuid() });
 
+const CheckoutItem = z.object({
+  slotId: z.string().uuid(),
+  rentalPackageId: z.string().uuid(),
+  storagePlanId: z.string().uuid(),
+});
+
+const CreateCheckoutBody = z.object({
+  items: z.array(CheckoutItem).min(1),
+});
+
+const ProductAssignBody = z.object({
+  fragranceProductId: z.string().uuid(),
+});
+
+const PriceUpdateBody = z.object({
+  pricePerSpray: z.string().min(1),
+});
+
 @Controller('slot-rentals')
 export class SltController {
   constructor(@Inject(SltService) private readonly service: SltService) {}
@@ -68,5 +86,75 @@ export class SltController {
   ) {
     const { id } = parseBody(IdParam, params);
     return this.service.get(actor, scope, id);
+  }
+
+  @Get(':id/invoice')
+  getInvoice(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getInvoice(actor, scope, id);
+  }
+
+  @Put(':id/product')
+  assignProduct(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { fragranceProductId } = parseBody(ProductAssignBody, body);
+    return this.service.assignProduct(actor, scope, id, fragranceProductId);
+  }
+
+  @Put(':id/price')
+  setPricePerSpray(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { pricePerSpray } = parseBody(PriceUpdateBody, body);
+    return this.service.setPricePerSpray(actor, scope, id, pricePerSpray);
+  }
+}
+
+@Controller('rental-checkouts')
+export class RentalCheckoutsController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  @Post()
+  createCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Body() body: unknown,
+  ) {
+    const parsed = parseBody(CreateCheckoutBody, body);
+    return this.service.createCheckout(actor, scope, parsed);
+  }
+
+  @Get(':id')
+  getCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getCheckout(actor, scope, id);
+  }
+}
+
+@Controller('slots')
+export class SlotRentalQuoteController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  @Get(':id/rental-quote')
+  getQuote(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getQuote(actor, id);
   }
 }
