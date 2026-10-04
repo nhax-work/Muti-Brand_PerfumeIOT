@@ -31,6 +31,7 @@ const ALL_PERMISSIONS = [
   'inventory.adjust',
   'refill.request',
   'refill.fulfill',
+  'order.view',
   'order.refund',
   'dispense.diagnostic',
   'alert.handle',
@@ -46,6 +47,7 @@ const BRAND_ADMIN_PERMISSIONS = [
   'rental.request',
   'refill.request',
   'report.brand',
+  'order.view',
 ] as const;
 
 export interface SeededOrder {

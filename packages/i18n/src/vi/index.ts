@@ -11,6 +11,7 @@ import { bnd } from './bnd.js';
 import { common } from './common.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { slt } from './slt.js';
 import { ui } from './ui.js';
@@ -29,6 +30,7 @@ export const vi = {
   bnd,
   prd,
   slt,
+  ord,
   usr,
   ui,
   kiosk,

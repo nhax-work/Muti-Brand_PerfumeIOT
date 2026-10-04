@@ -132,6 +132,22 @@ export const en: SameKeysAs<typeof vi> = {
       'Cannot stop selling the last storage plan — every rental must include one storage plan',
   },
 
+  ord: {
+    machineNotFound: 'Machine not found',
+    slotNotFound: 'This slot was not found on the machine',
+    machineOffline: 'The machine is offline. Please try again in a few minutes.',
+    machineInMaintenance: 'The machine is under maintenance. Please come back later.',
+    slotUnavailable: 'This scent is currently unavailable. Please choose another one.',
+    machineBusy: 'The machine is serving another customer. Please wait a moment.',
+    orderNotFound: 'Order not found',
+    idempotencyKeyReused: 'This request key was already used for a different selection',
+    paymentProviderUnknown: 'Unsupported payment provider',
+    webhookMalformed: 'The payment notification could not be read',
+    webhookSignatureInvalid: 'The payment notification signature is invalid',
+    paymentReferenceUnknown: 'No payment matches this reference',
+    amountMismatch: 'The paid amount does not match the order',
+  },
+
   usr: {
     brandAdminNeedsBrand: 'A Brand Admin must be attached to exactly one brand',
     platformRoleNoBrand: 'Platform roles must not be attached to a brand',

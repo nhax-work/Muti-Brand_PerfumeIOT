@@ -54,9 +54,15 @@ Constraint trigger `trg_rental_checkouts_consistency` / `trg_slot_rentals_checko
 (`schema.sql` §10d) kiểm lúc COMMIT: phiên có ít nhất một hóa đơn, tổng phiên = tổng các hóa đơn,
 phiên và mọi hóa đơn cùng đã/chưa thanh toán và cùng đã/chưa hủy (ADR-0008).
 
+`uq_payment_provider_reference ON payments (provider, provider_reference)` — webhook tìm đúng một
+payment theo mã tham chiếu cổng gửi lại (FR-ORD-14, ADR-0009).
+
 ## Cột không được NULL và không được sửa sau khi tạo
 
 `order.brand_id` · `order.slot_rental_id` · `order.revenue_owner` · `order.price`
+
+Từ ADR-0009, CSDL chặn cả UPDATE viết tay trên mọi cột ảnh chụp của `orders`
+(`trg_orders_snapshot_immutable`, lỗi `chk_order_snapshot_immutable` — FR-REV-03 AC2).
 
 Ảnh chụp giá trên hóa đơn thuê slot (ADR-0006, FR-SLT-33) — không bắt buộc NOT NULL vì hóa đơn tạo
 theo mô hình cũ không có gói, nhưng đã ghi thì không sửa: `slot_rentals.duration_months` ·

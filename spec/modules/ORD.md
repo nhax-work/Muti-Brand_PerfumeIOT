@@ -166,7 +166,7 @@
 * **Statement:** Hệ thống phải tiếp nhận thông báo kết quả thanh toán từ nhà cung cấp qua webhook.
 * **Traces:** BR-002 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given cổng thanh toán gửi HTTP POST request đến endpoint webhook `/api/v1/payments/webhook`,  
+  * **AC1:** Given cổng thanh toán gửi HTTP POST request đến endpoint webhook `POST /api/v1/webhooks/payments/{provider}` (`openapi.yaml`, `handlePaymentWebhook`),  
     When request có payload JSON hợp lệ,  
     Then hệ thống tiếp nhận payload, kích hoạt quy trình xử lý và phản hồi HTTP 200/204 cho cổng thanh toán.
   * **AC2:** Given request gửi đến endpoint webhook bị lỗi định dạng hoặc không thể phân giải JSON,  

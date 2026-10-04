@@ -542,6 +542,8 @@ thấy trên hình — đọc §10 và §13 của `spec/contracts/schema.sql`:
 - 4 partial unique index bắt buộc + exclusion constraint chống chồng lấn kỳ hạn thuê.
 - Trigger append-only cho `audit_logs`.
 - Constraint trigger giữ phiên thanh toán và các hóa đơn của nó nhất quán (§10d, ADR-0008).
+- Trigger chặn sửa cột ảnh chụp của `orders` (§10e, ADR-0009) và unique
+  `payments (provider, provider_reference)` cho webhook tra đúng một payment.
 - Các ràng buộc thuộc tầng domain service: chuyển trạng thái hợp lệ, ràng buộc same-brand
   (sản phẩm/chai phải thuộc thương hiệu đang thuê slot), tính bất biến của các cột ảnh chụp trên
   `orders`.

@@ -731,7 +731,7 @@ Table payments {
   order_id uuid [ref: > orders.id, note: 'Kiosk order being paid. Exactly one of order_id / rental_checkout_id is set (chk_payment_single_target)']
   provider varchar(50) [not null]
   provider_transaction_id varchar(200)
-  provider_reference varchar(200)
+  provider_reference varchar(200) [note: 'Reference sent to the gateway and echoed in the webhook. Unique per provider (uq_payment_provider_reference, ADR-0009)']
   amount numeric(19,4) [not null]
   currency char(3) [not null]
   status payment_status [not null, default: 'PENDING']
@@ -1059,5 +1059,6 @@ Note implementation_notes {
   21. Enforce in the domain service: storage_compensations.amount must not exceed slot_rentals.storage_coverage_cap minus the sum of existing amounts for the same slot_rental_id (FR-SLT-44).
   22. ADR-0007 — physical button per slot. For CUSTOMER commands, ACKNOWLEDGED means the slot button is lit and waiting; the device dispenses only when the customer presses it within DISPENSE_PRESS_WINDOW_SEC, otherwise it rejects with PRESS_TIMEOUT and the order becomes FORFEITED without manual review or refund. Other rejections after ACK make the order FAILED with needs_manual_review. After ACK the UNKNOWN deadline is acknowledged_at + DISPENSE_PRESS_WINDOW_SEC + DISPENSE_RESULT_TIMEOUT_SEC. A paid order waits in PAID while the machine has another active CUSTOMER command; order creation on such a machine fails with MACHINE_BUSY.
   23. ADR-0008 — one payment for several slots. A checkout and all its invoices are created in ONE transaction; excl_slot_rental_overlap rejecting any slot rolls back the whole cart (all or nothing, FR-SLT-35). Deferred constraint triggers (schema.sql §10d) check at COMMIT that a checkout has at least one invoice, that rental_checkouts.total_amount = sum of its invoices total_amount, and that the checkout and every invoice agree on paid (paid_at null or not) and cancelled (cancelled_at null or not). On webhook success each invoice gets its own invoice_number (FR-SLT-38).
+  24. ADR-0009 — BEFORE UPDATE trigger trg_orders_snapshot_immutable rejects any change to the order snapshot columns (brand_id, slot_rental_id, revenue_owner, machine_id, slot_id, fragrance_product_id, product_name_snapshot, amount, currency, payment_reference, idempotency_key) with constraint name chk_order_snapshot_immutable (FR-REV-03 AC2). Partial unique index uq_payment_provider_reference on payments (provider, provider_reference) WHERE provider_reference IS NOT NULL so the webhook resolves exactly one payment per reference.
   '''
 }

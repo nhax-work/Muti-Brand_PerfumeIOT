@@ -61,7 +61,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > bản sao nguyên văn của `schema.sql` **lúc đóng băng**, còn `data-dictionary.md` do
 > `scripts/gen-data-dictionary.ts` sinh từ CSDL đã áp migration. Sửa tay một trong hai là làm chúng
 > lệch khỏi chính lược đồ mà chúng mô tả. Từ ADR-0006, `schema.sql` mô tả trạng thái sau **mọi**
-> migration (ban đầu + `1790665900000_*` + `1790665960000_*` + `1790752000000_*` + `1790752060000_*` + `1790757100000_*`); `pg_dump --schema-only` của DB nạp
+> migration (ban đầu + `1790665900000_*` + `1790665960000_*` + `1790752000000_*` + `1790752060000_*` + `1790757100000_*` + `1790760300000_*`); `pg_dump --schema-only` của DB nạp
 > `schema.sql` phải trùng với DB chạy hết migration.
 
 > Trạng thái acceptance criteria trong `spec/modules/` (188/286 FR hiệu lực, đếm lại ngày 2026-09-29
