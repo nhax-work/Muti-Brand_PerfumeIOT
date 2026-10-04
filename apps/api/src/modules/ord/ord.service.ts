@@ -12,7 +12,7 @@ import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
-import type { RevenueOwnerType } from '../../shared/db/types.generated.js';
+import type { KioskInteractionType, RevenueOwnerType } from '../../shared/db/types.generated.js';
 import { AppError, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
@@ -51,6 +51,15 @@ export interface CreateOrderInput {
   readonly kioskSessionId?: string | undefined;
   /** Header Idempotency-Key — `orders.idempotency_key`. */
   readonly idempotencyKey: string;
+}
+
+export interface KioskInteractionInput {
+  /** Khóa idempotency do kiosk sinh — `kiosk_interaction_events.event_id`. */
+  readonly eventId: string;
+  readonly eventType: KioskInteractionType;
+  readonly slotId: string;
+  readonly kioskSessionId: string;
+  readonly occurredAt: Date;
 }
 
 /** Kết quả webhook thanh toán thành công cho một đơn — cùng hình dạng với phía phiên thuê slot. */
@@ -113,6 +122,33 @@ export class OrdService {
             },
       ),
     };
+  }
+
+  /**
+   * FR-RPT-06, BR-007: ghi lượt xem / lượt chọn sản phẩm. Brand, hóa đơn và sản phẩm lấy từ hóa đơn
+   * đang chiếm dụng slot phía server — không tin dữ liệu kiosk gửi. Sự kiện của slot không có hóa
+   * đơn gắn sản phẩm bị bỏ qua (endpoint vẫn 202): thống kê không được chặn trải nghiệm khách.
+   */
+  async recordKioskInteractions(events: readonly KioskInteractionInput[]): Promise<void> {
+    const slotIds = [...new Set(events.map((e) => e.slotId))];
+    const targets = new Map(
+      (await this.queries.listInteractionTargets(slotIds)).map((t) => [t.slotId, t]),
+    );
+    const rows = events.flatMap((e) => {
+      const target = targets.get(e.slotId);
+      return target
+        ? [
+            {
+              ...target,
+              eventId: e.eventId,
+              eventType: e.eventType,
+              kioskSessionId: e.kioskSessionId,
+              occurredAt: e.occurredAt,
+            },
+          ]
+        : [];
+    });
+    await this.queries.insertInteractionEvents(rows);
   }
 
   /**

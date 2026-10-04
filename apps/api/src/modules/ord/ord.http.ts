@@ -5,7 +5,18 @@
  *   /orders/* — web quản trị, quyền `order.view`, phạm vi qua brandScopedOrders.
  */
 
-import { Body, Controller, Get, Headers, Inject, Param, Post, Query, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  Res,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
@@ -53,6 +64,24 @@ const SearchQuery = z.object({
   status: z.enum(ORDER_STATUSES).optional(),
 });
 
+/** openapi `KioskInteractionCreate`. */
+const InteractionCreateBody = z.object({
+  events: z
+    .array(
+      z.object({
+        eventId: z.string().min(1).max(150),
+        eventType: z.enum(['PRODUCT_IMPRESSION', 'PRODUCT_SELECTED']),
+        slotId: z.string().uuid(),
+        kioskSessionId: z.string().uuid(),
+        occurredAt: z
+          .string()
+          .datetime({ offset: true })
+          .transform((s) => new Date(s)),
+      }),
+    )
+    .min(1),
+});
+
 const IdParam = z.object({ id: z.string().uuid() });
 const SerialParam = z.object({ serialNumber: z.string().min(1).max(100) });
 
@@ -92,6 +121,14 @@ export class KioskController {
   status(@Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
     return this.service.getKioskOrderStatus(id);
+  }
+
+  /** FR-RPT-06: 202 — đã tiếp nhận, không trả nội dung. */
+  @Post('interactions')
+  @HttpCode(202)
+  async recordInteractions(@Body() body: unknown): Promise<void> {
+    const { events } = parseBody(InteractionCreateBody, body);
+    await this.service.recordKioskInteractions(events);
   }
 }
 

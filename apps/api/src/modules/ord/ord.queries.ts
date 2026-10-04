@@ -13,6 +13,7 @@ import type {
   BrandStatus,
   CommandStatus,
   Json,
+  KioskInteractionType,
   MachineConnectionStatus,
   MachineOperatingMode,
   OrderStatus,
@@ -78,6 +79,22 @@ export interface SlotOfferRecord {
   readonly productFragranceNotes: Json | null;
   readonly productStatus: string | null;
   readonly productDeletedAt: Date | null;
+}
+
+/** Hóa đơn đang chiếm dụng một slot và đã gắn sản phẩm — đích ghi sự kiện tương tác kiosk. */
+export interface InteractionTarget {
+  readonly slotId: string;
+  readonly machineId: string;
+  readonly slotRentalId: string;
+  readonly brandId: string;
+  readonly fragranceProductId: string;
+}
+
+export interface NewInteractionEvent extends InteractionTarget {
+  readonly eventId: string;
+  readonly eventType: KioskInteractionType;
+  readonly kioskSessionId: string;
+  readonly occurredAt: Date;
 }
 
 export interface KioskOrderRecord extends OrderRecord {
@@ -252,6 +269,61 @@ export class OrdQueries {
       .where('status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
       .executeTakeFirst();
     return row !== undefined;
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Kiosk: tương tác (FR-RPT-06)
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Hóa đơn đang chiếm dụng từng slot và đã gắn sản phẩm — nguồn brand/rental/product cho sự kiện
+   * tương tác. Slot không có hóa đơn như vậy không xuất hiện trong kết quả.
+   */
+  async listInteractionTargets(slotIds: readonly string[]): Promise<InteractionTarget[]> {
+    if (slotIds.length === 0) return [];
+    const rows = await this.db
+      .selectFrom('machine_slots as ms')
+      .innerJoin('slot_rentals as sr', 'sr.slot_id', 'ms.id')
+      .select([
+        'ms.id as slot_id',
+        'ms.machine_id',
+        'sr.id as rental_id',
+        'sr.brand_id',
+        'sr.fragrance_product_id',
+      ])
+      .where('ms.id', 'in', [...slotIds])
+      .where('sr.status', 'in', [...OCCUPYING_RENTAL_STATUSES])
+      .where('sr.fragrance_product_id', 'is not', null)
+      .execute();
+    return rows.map((r) => ({
+      slotId: r.slot_id,
+      machineId: r.machine_id,
+      slotRentalId: r.rental_id,
+      brandId: r.brand_id,
+      fragranceProductId: r.fragrance_product_id as string,
+    }));
+  }
+
+  /** `event_id` là khóa idempotency — gửi lại cùng eventId không tạo bản ghi mới. */
+  async insertInteractionEvents(events: readonly NewInteractionEvent[]): Promise<void> {
+    if (events.length === 0) return;
+    await this.db
+      .insertInto('kiosk_interaction_events')
+      .values(
+        events.map((e) => ({
+          event_id: e.eventId,
+          event_type: e.eventType,
+          brand_id: e.brandId,
+          slot_rental_id: e.slotRentalId,
+          machine_id: e.machineId,
+          slot_id: e.slotId,
+          fragrance_product_id: e.fragranceProductId,
+          kiosk_session_id: e.kioskSessionId,
+          occurred_at: e.occurredAt,
+        })),
+      )
+      .onConflict((oc) => oc.column('event_id').doNothing())
+      .execute();
   }
 
   // -----------------------------------------------------------------------------------

@@ -3,23 +3,39 @@
  * NFR-USA-04) nên không chữ nào nhỏ hơn mức đọc được ở 60cm.
  */
 :root {
-  --font-body: calc(var(--kiosk-min-font) * 1.25);
-  --font-title: calc(var(--kiosk-min-font) * 2.5);
+  --font-body: 15px;
+  --font-title: 22px;
+  --font-hero: 28px;
 
-  --color-bg: #faf7f2;
-  --color-text: #1f1a17;
-  --color-muted: #5c534d;
-  --color-border: #d6cec6;
+  --color-bg: #fcf9f5;
+  --color-bg-alt: #f4ede3;
+  --color-card-bg: rgba(255, 255, 255, 0.95);
+  --color-text: #1a1614;
+  --color-muted: #6b615b;
+  --color-border: #e2d9cf;
+  --color-border-subtle: #ece5dc;
   --color-primary: #7a3e5c;
+  --color-primary-hover: #632f48;
+  --color-primary-light: #f6eef2;
+  --color-accent: #c48b5e;
   --color-on-primary: #ffffff;
 
+  --shadow-sm: 0 2px 8px rgba(26, 22, 20, 0.04);
+  --shadow-md: 0 4px 14px rgba(26, 22, 20, 0.07);
+  --shadow-lg: 0 8px 24px rgba(26, 22, 20, 0.1);
+  --shadow-primary: 0 6px 18px rgba(122, 62, 92, 0.28);
+
+  --space-1: 4px;
   --space-2: 8px;
-  --space-3: 16px;
-  --space-4: 24px;
-  --space-6: 48px;
-  --radius: 16px;
-  /* Vùng chạm đủ lớn cho ngón tay trên màn hình đứng. */
-  --touch-target: 64px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 28px;
+  --space-7: 36px;
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --touch-target: 44px;
 }
 
 * {
@@ -29,17 +45,35 @@
 html,
 body {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
   background: var(--color-bg);
+  background-image:
+    radial-gradient(at 10% 15%, rgba(122, 62, 92, 0.05) 0px, transparent 55%),
+    radial-gradient(at 90% 85%, rgba(196, 139, 94, 0.08) 0px, transparent 55%);
+  background-attachment: fixed;
   color: var(--color-text);
-  font-family: system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: var(--font-body);
+  line-height: 1.45;
   /* Kiosk cảm ứng: không chọn chữ, không menu chuột phải. */
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 button {
   font: inherit;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }

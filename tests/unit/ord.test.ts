@@ -20,8 +20,13 @@ import {
   isTerminal,
   ORDER_TRANSITIONS,
 } from '../../apps/api/src/modules/ord/order-status.js';
-import { isSellable } from '../../apps/api/src/modules/ord/ord.service.js';
-import type { SlotOfferRecord } from '../../apps/api/src/modules/ord/ord.queries.js';
+import { isSellable, OrdService } from '../../apps/api/src/modules/ord/ord.service.js';
+import type {
+  InteractionTarget,
+  NewInteractionEvent,
+  OrdQueries,
+  SlotOfferRecord,
+} from '../../apps/api/src/modules/ord/ord.queries.js';
 import { sameAmount, toMinorUnits } from '../../apps/api/src/modules/ord/payment/money.js';
 import {
   buildMockWebhook,
@@ -44,7 +49,6 @@ import type {
   CheckoutPaymentSucceeded,
   RentalCheckoutPaymentHandler,
 } from '../../apps/api/src/modules/ord/payment/rental-checkout-payment.port.js';
-import type { OrdService } from '../../apps/api/src/modules/ord/ord.service.js';
 
 const ALL_STATUSES = Object.keys(ORDER_TRANSITIONS) as OrderStatus[];
 
@@ -144,6 +148,71 @@ describe('ORD — danh mục kiosk', () => {
     expect(isSellable({ ...sellable, productId: null, productName: null })).toBe(false);
     expect(isSellable({ ...sellable, productDeletedAt: new Date() })).toBe(false);
     expect(isSellable({ ...sellable, brandStatus: 'SUSPENDED' })).toBe(false);
+  });
+});
+
+class FakeInteractionQueries {
+  readonly inserted: NewInteractionEvent[] = [];
+  requestedSlotIds: readonly string[] = [];
+
+  constructor(private readonly targets: InteractionTarget[]) {}
+
+  listInteractionTargets(slotIds: readonly string[]): Promise<InteractionTarget[]> {
+    this.requestedSlotIds = slotIds;
+    return Promise.resolve(this.targets.filter((t) => slotIds.includes(t.slotId)));
+  }
+
+  insertInteractionEvents(events: readonly NewInteractionEvent[]): Promise<void> {
+    this.inserted.push(...events);
+    return Promise.resolve();
+  }
+}
+
+/** OrdService chỉ với OrdQueries — recordKioskInteractions không chạm phụ thuộc khác. */
+function interactionService(queries: FakeInteractionQueries): OrdService {
+  const unused = undefined as never;
+  return new OrdService(queries as unknown as OrdQueries, unused, unused, unused, unused, unused);
+}
+
+describe('ORD — tương tác kiosk (FR-RPT-06)', () => {
+  const target: InteractionTarget = {
+    slotId: '11111111-1111-4111-8111-111111111111',
+    machineId: 'machine-1',
+    slotRentalId: 'rental-1',
+    brandId: 'brand-1',
+    fragranceProductId: 'product-1',
+  };
+  const event = {
+    eventId: 'evt-1',
+    eventType: 'PRODUCT_SELECTED' as const,
+    slotId: target.slotId,
+    kioskSessionId: '22222222-2222-4222-8222-222222222222',
+    occurredAt: new Date('2026-10-04T03:00:00Z'),
+  };
+
+  it('test_FR_RPT_06_record_kiosk_interaction — brand/hóa đơn/sản phẩm lấy từ hóa đơn chiếm dụng slot', async () => {
+    const queries = new FakeInteractionQueries([target]);
+    await interactionService(queries).recordKioskInteractions([
+      event,
+      { ...event, eventId: 'evt-2', eventType: 'PRODUCT_IMPRESSION' },
+    ]);
+
+    expect(queries.requestedSlotIds).toEqual([target.slotId]);
+    expect(queries.inserted).toEqual([
+      { ...target, ...event },
+      { ...target, ...event, eventId: 'evt-2', eventType: 'PRODUCT_IMPRESSION' },
+    ]);
+  });
+
+  it('slot không có hóa đơn gắn sản phẩm thì bỏ qua sự kiện, không lỗi', async () => {
+    const queries = new FakeInteractionQueries([target]);
+    const emptySlot = '33333333-3333-4333-8333-333333333333';
+    await interactionService(queries).recordKioskInteractions([
+      { ...event, eventId: 'evt-empty', slotId: emptySlot },
+      event,
+    ]);
+
+    expect(queries.inserted.map((e) => e.eventId)).toEqual(['evt-1']);
   });
 });
 
