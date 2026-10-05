@@ -346,20 +346,60 @@ async function seedRentalCatalog(client: pg.Client): Promise<void> {
 
 async function seedProducts(client: pg.Client): Promise<void> {
   const products = [
-    [ID.products[0], ID.brandA, 'MA-001', 'Aurore Matinale', '35000.0000', '2400000.0000'],
-    [ID.products[1], ID.brandA, 'MA-002', 'Aurore Nocturne', '42000.0000', '2900000.0000'],
-    [ID.products[2], ID.brandB, 'HV-001', 'Hương Sen Đồng Tháp', '28000.0000', '1500000.0000'],
-    [ID.products[3], ID.brandB, 'HV-002', 'Hương Quế Trà Bồng', '50000.0000', '3200000.0000'],
-    [ID.products[4], ID.brandB, 'HV-003', 'Trầm Hương Khánh Hòa', '55000.0000', '3500000.0000'],
+    [
+      ID.products[0],
+      ID.brandA,
+      'MA-001',
+      'Aurore Matinale',
+      '35000.0000',
+      '2400000.0000',
+      'Hương thơm sớm mai thanh khiết kết hợp cam bergamote và hoa cỏ Grasse, mang lại nguồn năng lượng tươi mới.',
+    ],
+    [
+      ID.products[1],
+      ID.brandA,
+      'MA-002',
+      'Aurore Nocturne',
+      '42000.0000',
+      '2900000.0000',
+      'Hòa quyện tinh tế giữa hổ phách phương Đông và da thuộc đen sang trọng, gợi mở chiều sâu bí ẩn đầy lôi cuốn.',
+    ],
+    [
+      ID.products[2],
+      ID.brandB,
+      'HV-001',
+      'Hương Sen Đồng Tháp',
+      '28000.0000',
+      '1500000.0000',
+      'Nốt hương hoa sen thanh tao thuần khiết buổi sớm, hòa quyện hương phù sa mộc mạc và sương mai dịu nhẹ, mang lại cảm giác an yên, thoát tục.',
+    ],
+    [
+      ID.products[3],
+      ID.brandB,
+      'HV-002',
+      'Hương Quế Trà Bồng',
+      '50000.0000',
+      '3200000.0000',
+      'Hương quế cay ấm nồng nàn đặc trưng của đại ngàn Trà Bồng, đan xen thảo mộc núi rừng tạo nên chiều sâu nồng ấm và lôi cuốn.',
+    ],
+    [
+      ID.products[4],
+      ID.brandB,
+      'HV-003',
+      'Trầm Hương Khánh Hòa',
+      '55000.0000',
+      '3500000.0000',
+      'Tuyệt tác trầm hương thượng hạng từ xứ Trầm Khánh Hòa, lắng đọng khói sương huyền ảo mang lại sự tĩnh tại, tôn quý.',
+    ],
   ] as const;
 
-  for (const [id, brandId, sku, name, defaultPrice, retailPrice] of products) {
+  for (const [id, brandId, sku, name, defaultPrice, retailPrice, description] of products) {
     await client.query(
       `INSERT INTO fragrance_products (id, brand_id, sku, name, default_price, currency,
-                                       full_bottle_retail_price, full_bottle_volume_ml, status)
-       VALUES ($1, $2, $3, $4, $5, 'VND', $6, 50.0000, 'ACTIVE')
-       ON CONFLICT (id) DO NOTHING`,
-      [id, brandId, sku, name, defaultPrice, retailPrice],
+                                       full_bottle_retail_price, full_bottle_volume_ml, description, status)
+       VALUES ($1, $2, $3, $4, $5, 'VND', $6, 50.0000, $7, 'ACTIVE')
+       ON CONFLICT (id) DO UPDATE SET description = EXCLUDED.description`,
+      [id, brandId, sku, name, defaultPrice, retailPrice, description],
     );
   }
 }

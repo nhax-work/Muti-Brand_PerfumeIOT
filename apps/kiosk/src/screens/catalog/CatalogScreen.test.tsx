@@ -8,6 +8,8 @@ import CatalogScreen from './CatalogScreen';
 const mockNavigate = vi.fn();
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
+  useParams: () => ({}),
+  useLocation: () => ({ pathname: '/' }),
 }));
 
 vi.mock('@/shared/api', async (importOriginal) => {

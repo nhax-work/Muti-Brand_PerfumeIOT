@@ -12,6 +12,7 @@
     "db:migrate": "node-pg-migrate up -m migrations -t pgmigrations",
     "db:migrate:down": "node-pg-migrate down -m migrations -t pgmigrations",
     "db:migrate:create": "node-pg-migrate create -m migrations -j sql",
+    "db:migrate:test": "node-pg-migrate -d DATABASE_URL_TEST up -m migrations -t pgmigrations",
     "db:reset": "docker compose down -v && docker compose up -d && sleep 5 && npm run db:migrate && npm run db:seed",
     "db:seed": "tsx scripts/seed.ts",
     "test": "npm run test:unit && npm run test:integration && npm run test:contract && npm run test:web",

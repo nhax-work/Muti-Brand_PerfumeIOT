@@ -13,7 +13,7 @@ export const config = {
   machineSerial:
     new URLSearchParams(window.location.search).get('serial') ??
     import.meta.env.VITE_MACHINE_SERIAL ??
-    '',
+    'M001',
 
   /** NFR-USA-02: không thao tác quá chừng này thì về màn hình chính. */
   idleTimeoutMs: SPEC_CONSTRAINTS.KIOSK_IDLE_TIMEOUT_SEC * 1000,

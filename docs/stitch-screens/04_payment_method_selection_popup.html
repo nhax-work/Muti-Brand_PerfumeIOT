@@ -1,0 +1,738 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0" name="viewport"><meta content="web_standard" name="shell-type"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&amp;family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400;1,700&amp;display=swap" rel="stylesheet"><style>*, body, [class*='font-'] { font-family: 'Lato', sans-serif !important; }</style>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base { html, body { margin: 0; padding: 0; } body { overscroll-behavior: none; } } ::-webkit-scrollbar { display: none; }</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+          "on-background": "#1b1c1a",
+          "surface-dim": "#dbdad6",
+          "on-tertiary": "#ffffff",
+          "secondary": "#645d59",
+          "on-surface": "#1b1c1a",
+          "surface-container-highest": "#e4e2de",
+          "error-container": "#ffdad6",
+          "on-primary-fixed": "#281800",
+          "tertiary": "#76593b",
+          "surface-bright": "#fbf9f5",
+          "surface-container-high": "#eae8e4",
+          "tertiary-fixed": "#ffdcbd",
+          "on-error": "#ffffff",
+          "surface-container": "#efeeea",
+          "on-secondary-fixed-variant": "#4c4642",
+          "on-tertiary-fixed-variant": "#5c4125",
+          "secondary-container": "#ebe0db",
+          "on-tertiary-fixed": "#2b1702",
+          "error": "#ba1a1a",
+          "tertiary-container": "#cba683",
+          "on-tertiary-container": "#553b20",
+          "surface-variant": "#e4e2de",
+          "inverse-on-surface": "#f2f0ed",
+          "on-secondary-fixed": "#1f1b18",
+          "primary-fixed-dim": "#e0c298",
+          "on-secondary": "#ffffff",
+          "on-primary-container": "#513d1d",
+          "surface": "#fbf9f5",
+          "primary-container": "#c5a880",
+          "inverse-primary": "#e0c298",
+          "primary": "#725b38",
+          "secondary-fixed-dim": "#cec5c0",
+          "on-error-container": "#93000a",
+          "surface-container-low": "#f5f3ef",
+          "inverse-surface": "#30312e",
+          "surface-container-lowest": "#ffffff",
+          "primary-fixed": "#fedeb2",
+          "on-secondary-container": "#6a635f",
+          "background": "#fbf9f5",
+          "surface-tint": "#725b38",
+          "on-primary-fixed-variant": "#584323",
+          "secondary-fixed": "#ebe0db",
+          "outline": "#7f766a",
+          "outline-variant": "#d1c5b8",
+          "on-primary": "#ffffff",
+          "tertiary-fixed-dim": "#e6bf9b",
+          "on-surface-variant": "#4d463c"
+        },
+        "borderRadius": {
+          "DEFAULT": "0.125rem",
+          "lg": "0.25rem",
+          "xl": "0.5rem",
+          "full": "0.75rem"
+        },
+        "spacing": {
+          "space-md": "1.25rem",
+          "gutter-mobile": "1rem",
+          "margin": "3rem",
+          "space-sm": "0.75rem",
+          "space-lg": "2rem",
+          "gutter": "1.5rem",
+          "space-xl": "3.5rem",
+          "space-xs": "0.375rem",
+          "margin-mobile": "1.25rem",
+          "margin-kiosk-landscape": "4rem"
+        },
+        "fontFamily": {
+          "headline-sm": ["Playfair Display"],
+          "headline-md": ["Playfair Display"],
+          "headline-lg": ["Playfair Display"],
+          "display": ["Playfair Display"],
+          "body-lg": ["Plus Jakarta Sans"],
+          "label-lg": ["Plus Jakarta Sans"],
+          "body-md": ["Plus Jakarta Sans"],
+          "body-sm": ["Plus Jakarta Sans"],
+          "title": ["Plus Jakarta Sans"],
+          "label-sm": ["Plus Jakarta Sans"]
+        }
+      }
+    }
+  };</script></head><body class="bg-surface font-body-md text-on-surface antialiased select-none min-h-screen flex flex-col justify-between overflow-x-hidden relative" style="font-family: Lato, sans-serif;">
+<!-- Minimal Header -->
+<header class="w-full z-40 bg-[#fbf9f5]/95 backdrop-blur-md border-b border-[#e8e2d8]/80 py-4 px-6 md:px-12 flex-shrink-0 sticky top-0">
+<div class="max-w-7xl mx-auto flex items-center justify-between">
+<div class="w-32 hidden md:block"></div>
+<div class="flex flex-col items-center justify-center text-center mx-auto">
+<span class="font-headline-sm text-2xl tracking-[0.3em] uppercase text-primary font-serif font-medium">SCENTATION</span>
+<span class="font-label-sm text-[10px] tracking-[0.35em] uppercase text-[#c5a880] font-medium mt-0.5">HAUTE PARFUMERIE • PARIS</span>
+</div>
+<div class="w-auto md:w-32 flex items-center justify-end gap-3">
+<!-- Cart Button with Count Badge -->
+
+<!-- Language Toggle -->
+<button class="text-xs uppercase tracking-widest text-primary border border-primary/30 px-3 py-1.5 rounded-full hover:bg-primary hover:text-white transition-all">FR / EN</button>
+</div>
+</div>
+</header>
+<!-- Main Carousel Center Viewport -->
+<main class="flex-1 w-full flex items-center justify-center relative py-6 px-4 md:px-8">
+<!-- Soft Ambient Glows -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-primary-container/10 rounded-full blur-[130px] pointer-events-none"></div>
+<div class="absolute top-1/3 left-1/4 w-[350px] h-[350px] bg-[#ebe0db]/40 rounded-full blur-[100px] pointer-events-none"></div>
+<!-- Carousel Viewport & Controls Container -->
+<div class="relative w-full max-w-[1500px] flex items-center justify-center">
+<!-- Left Navigation Button -->
+<button aria-label="Cuộn sang trái" class="absolute -left-2 md:left-2 lg:left-4 z-30 w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/95 text-primary border border-[#e8e2d8] hover:bg-primary hover:text-white transition-all duration-300 flex items-center justify-center shadow-[0_6px_20px_rgba(44,38,35,0.08)] active:scale-95 group focus:outline-none" id="scrollLeftBtn">
+<span class="material-symbols-outlined text-[26px] md:text-[28px] transition-transform group-hover:-translate-x-0.5">west</span>
+</button>
+<!-- Horizontal Carousel Container Centered -->
+<div class="flex items-stretch gap-6 md:gap-7 overflow-x-auto scrollbar-none py-4 px-12 md:px-16 scroll-smooth snap-x snap-mandatory mx-auto w-full justify-start lg:justify-center" id="parfumCarousel">
+<!-- Chai 1: NUIT D'OR -->
+<div class="product-card flex-shrink-0 w-[290px] md:w-[320px] snap-center group cursor-pointer transition-all duration-300 hover:-translate-y-1.5 flex flex-col" data-product-id="1">
+<div class="relative flex flex-col h-full bg-white rounded-xl p-5 shadow-[0_8px_25px_rgba(44,38,35,0.05)] hover:shadow-[0_16px_36px_rgba(114,91,56,0.12)] border border-[#e8e2d8] transition-all duration-300">
+<!-- Card Header -->
+<div class="flex items-center justify-between z-10 mb-2">
+<span class="font-label-sm text-[11px] uppercase tracking-widest text-primary font-semibold">N° 01 • HAUTE SILLAGE</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant tracking-wider font-medium">100 ML</span>
+</div>
+<!-- Product Bottle Presentation -->
+<div class="relative w-full h-64 flex items-center justify-center my-2 bg-gradient-to-b from-[#fbf9f5] to-[#f5f3ef] rounded-lg p-2 overflow-hidden border border-[#efeeea]">
+<div class="absolute bottom-4 w-36 h-6 bg-primary/20 rounded-full blur-md group-hover:bg-primary/30 transition-all"></div>
+<div class="absolute bottom-3 w-40 h-1 bg-gradient-to-r from-transparent via-primary-container to-transparent rounded-full opacity-70"></div>
+<img alt="Nuit d'Or" class="relative z-10 max-h-56 w-auto object-contain drop-shadow-[0_12px_16px_rgba(44,38,35,0.18)] group-hover:scale-105 transition-transform duration-500 ease-out" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBjHLKHQ-e9v8rbVauKmO7a4XdFgitH2PX04adOLTIDcdpPwTMgj-ABCxgZT3y1iVk4EkVCclPnFJrm2AP7heA3adEYnqsJsWfuHluEESKmnpcpMphfmLkxdj5oTKVTETo2E8JdzRMpvqTaHozpF27TbIsqMhy3BEIWgUjwP0FNUks_8sX00O_fphckeGjDYOqtj7WxsNLAxCBLfThMPkP3xN9K3q-NAOeoySXLnRZdVHO09viZHUTm">
+</div>
+<!-- Perfume Details -->
+<div class="flex flex-col mt-auto pt-2 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-[11px] uppercase tracking-wider text-primary font-semibold">ORIENTAL OUD</span>
+<span class="font-headline-sm text-lg text-primary font-serif font-semibold">€ 380</span>
+</div>
+<h3 class="font-headline-md text-2xl text-[#1b1c1a] font-serif group-hover:text-primary transition-colors">
+              Nuit d’Or
+            </h3>
+<p class="font-body-md text-xs text-on-surface-variant line-clamp-2 mt-1.5 leading-relaxed">
+              Infusion d'ambre précieux, safran d'Orient et accords de fumée de bois de oud impérial.
+            </p>
+<!-- Touch CTA Action -->
+<div class="mt-4 pt-3 flex items-center justify-between border-t border-[#e8e2d8] text-primary group-hover:text-primary transition-colors">
+<span class="font-label-sm text-[11px] uppercase tracking-widest flex items-center gap-2 font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+                CHẠM ĐỂ THỬ HƯƠNG &amp; CHI TIẾT
+              </span>
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Chai 2: AMBRE IMPÉRIAL (SOLD OUT) -->
+<div class="product-card flex-shrink-0 w-[290px] md:w-[320px] snap-center cursor-pointer flex flex-col" data-product-id="2">
+<div class="relative flex flex-col h-full bg-[#f5f2ec]/85 grayscale opacity-75 rounded-xl p-5 shadow-[0_4px_16px_rgba(44,38,35,0.03)] border border-[#ddd7ce]">
+<!-- SOLD OUT BADGE PINNED TOP-RIGHT -->
+<div class="absolute top-4 right-4 z-30 flex items-center gap-1.5 px-3 py-1 text-white rounded-full shadow-sm bg-tertiary">
+<span class="w-1.5 h-1.5 rounded-full bg-[#e6bf9b]"></span>
+<span class="font-label-sm text-[10px] font-semibold uppercase tracking-[0.18em]">SOLD OUT</span>
+</div>
+<!-- Card Header -->
+<div class="flex items-center justify-between z-10 mb-2">
+<span class="font-label-sm text-[11px] uppercase tracking-widest text-[#7f766a] font-semibold">N° 02 • RARE BATCH</span>
+</div>
+<!-- Product Bottle Presentation -->
+<div class="relative w-full h-64 flex items-center justify-center my-2 bg-[#ece7df] rounded-lg p-2 border border-[#ddd7ce]">
+<div class="absolute bottom-3 w-36 h-1 bg-[#cec5c0] rounded-full"></div>
+<img alt="Ambre Impérial" class="relative z-10 max-h-56 w-auto object-contain filter contrast-85 opacity-75" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCi8kgz8yWcTDwPznpLifDSV9mqx5f3T3sYLxfM6aJ_dbkYiY_UC6j3hY7txxWfnMG_isJJ_WxlMdGt86bRV0k5TcAN7LhxMhSljyTmn-S0JL3tHi7E5tKCO0o1rDcYx1bUoCUByKyl285EKIYD9FVctJyP40qzusM13xM7ejEW6CiqwAJQ0giQD8CVUL1YFtP4SrXTwDlazB_1IZIdSpdY4fOXGMnYaHb0jli_1Dxeu02TDqO-E1Ce">
+</div>
+<!-- Perfume Details -->
+<div class="flex flex-col mt-auto pt-2 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-[11px] uppercase tracking-wider text-[#7f766a] font-semibold">AMBRE &amp; CUIR</span>
+<span class="font-headline-sm text-lg text-[#7f766a] line-through font-serif">€ 420</span>
+</div>
+<h3 class="font-headline-md text-2xl text-[#645d59] font-serif">
+              Ambre Impérial
+            </h3>
+<p class="font-body-md text-xs text-[#7f766a] line-clamp-2 mt-1.5 leading-relaxed">
+              Ciste labdanum d'Andalousie, vanille Bourbon et velours de cuir noir.
+            </p>
+<!-- Touch CTA Action (Disabled) -->
+<div class="mt-4 pt-3 flex items-center justify-between border-t border-[#ddd7ce] text-[#7f766a]">
+<span class="font-label-sm text-[11px] uppercase tracking-wider font-medium">
+                TẠM HẾT HÀNG • XEM THÔNG TIN
+              </span>
+<span class="material-symbols-outlined text-[18px]">info</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Chai 3: FLEUR BLANCHE -->
+<div class="product-card flex-shrink-0 w-[290px] md:w-[320px] snap-center group cursor-pointer transition-all duration-300 hover:-translate-y-1.5 flex flex-col" data-product-id="3">
+<div class="relative flex flex-col h-full bg-white rounded-xl p-5 shadow-[0_8px_25px_rgba(44,38,35,0.05)] hover:shadow-[0_16px_36px_rgba(114,91,56,0.12)] border border-[#e8e2d8] transition-all duration-300">
+<div class="flex items-center justify-between z-10 mb-2">
+<span class="font-label-sm text-[11px] uppercase tracking-widest text-primary font-semibold">N° 03 • LUMINESCENCE</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant tracking-wider font-medium">100 ML</span>
+</div>
+<div class="relative w-full h-64 flex items-center justify-center my-2 bg-gradient-to-b from-[#fbf9f5] to-[#f5f3ef] rounded-lg p-2 overflow-hidden border border-[#efeeea]">
+<div class="absolute bottom-4 w-36 h-6 bg-primary/20 rounded-full blur-md group-hover:bg-primary/30 transition-all"></div>
+<div class="absolute bottom-3 w-40 h-1 bg-gradient-to-r from-transparent via-primary-container to-transparent rounded-full opacity-70"></div>
+<img alt="Fleur Blanche" class="relative z-10 max-h-56 w-auto object-contain drop-shadow-[0_12px_16px_rgba(44,38,35,0.18)] group-hover:scale-105 transition-transform duration-500 ease-out" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrwnlACE74MpP3ze5UCHx_2MWHdGE2a8EZ9tRcjojME_0ZFCpdnP8jrPGBhM6K1Mgy7p_XSRWJLkdJ_wej47ts_3-MrYMHDU42ZQVo25IJO2lIXI8_BCcJ5IMtnb3uL-ftOT32o5Bvy9EoQXsQvhVifruPsELMB_uIfnTopfCgYTTWWVGV1kCOGuW8ZvwdU1C3JUXQZcGEjkAzJriCenzlJFxWW23Nk5LJXIhwJ_DJu1i9vd1buJsL">
+</div>
+<div class="flex flex-col mt-auto pt-2 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-[11px] uppercase tracking-wider text-primary font-semibold">SOLAR FLORAL</span>
+<span class="font-headline-sm text-lg text-primary font-serif font-semibold">€ 340</span>
+</div>
+<h3 class="font-headline-md text-2xl text-[#1b1c1a] font-serif group-hover:text-primary transition-colors">
+              Fleur Blanche
+            </h3>
+<p class="font-body-md text-xs text-on-surface-variant line-clamp-2 mt-1.5 leading-relaxed">
+              Tubéreuse nocturne de Grasse, jasmin sambac et sève de néroli solaire.
+            </p>
+<div class="mt-4 pt-3 flex items-center justify-between border-t border-[#e8e2d8] text-primary group-hover:text-primary transition-colors">
+<span class="font-label-sm text-[11px] uppercase tracking-widest flex items-center gap-2 font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+                CHẠM ĐỂ THỬ HƯƠNG &amp; CHI TIẾT
+              </span>
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Chai 4: BOIS MYSTIQUE -->
+<div class="product-card flex-shrink-0 w-[290px] md:w-[320px] snap-center group cursor-pointer transition-all duration-300 hover:-translate-y-1.5 flex flex-col" data-product-id="4">
+<div class="relative flex flex-col h-full bg-white rounded-xl p-5 shadow-[0_8px_25px_rgba(44,38,35,0.05)] hover:shadow-[0_16px_36px_rgba(114,91,56,0.12)] border border-[#e8e2d8] transition-all duration-300">
+<div class="flex items-center justify-between z-10 mb-2">
+<span class="font-label-sm text-[11px] uppercase tracking-widest text-primary font-semibold">N° 04 • SILENCIEUX</span>
+<span class="font-label-sm text-[11px] text-on-surface-variant tracking-wider font-medium">100 ML</span>
+</div>
+<div class="relative w-full h-64 flex items-center justify-center my-2 bg-gradient-to-b from-[#fbf9f5] to-[#f5f3ef] rounded-lg p-2 overflow-hidden border border-[#efeeea]">
+<div class="absolute bottom-4 w-36 h-6 bg-primary/20 rounded-full blur-md group-hover:bg-primary/30 transition-all"></div>
+<div class="absolute bottom-3 w-40 h-1 bg-gradient-to-r from-transparent via-primary-container to-transparent rounded-full opacity-70"></div>
+<img alt="Bois Mystique" class="relative z-10 max-h-56 w-auto object-contain drop-shadow-[0_12px_16px_rgba(44,38,35,0.18)] group-hover:scale-105 transition-transform duration-500 ease-out" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhEcCtoyj-KiT2weL0jXt1iCyGCvxYPjrqSQ1hyqIdMsULOb2OpvFNcrpU-Oaz7Qd-fcogDGELsRPoK2ByYreFQ6wn7Z3PdFRLDz9DKjfQ9vllHdOZ-0K7e9Frpr_7mvKpGnpz1lQUl-NcssHIf8GV4tORcyBPSyLHP1uvMBw8U0nv4wa9oreMxMhsc28LTVNijTDmfP30P5J3ZboqBmEG9RPa935bwAEgRRe-XEJAGJVrtJg-_BwT">
+</div>
+<div class="flex flex-col mt-auto pt-2 z-10">
+<div class="flex items-center justify-between mb-1">
+<span class="font-label-sm text-[11px] uppercase tracking-wider text-primary font-semibold">ORIENTAL WOOD</span>
+<span class="font-headline-sm text-lg text-primary font-serif font-semibold">€ 360</span>
+</div>
+<h3 class="font-headline-md text-2xl text-[#1b1c1a] font-serif group-hover:text-primary transition-colors">
+              Bois Mystique
+            </h3>
+<p class="font-body-md text-xs text-on-surface-variant line-clamp-2 mt-1.5 leading-relaxed">
+              Cèdre de l'Atlas fumé, encens sacré d'Oman et vétiver racine d'Haïti.
+            </p>
+<div class="mt-4 pt-3 flex items-center justify-between border-t border-[#e8e2d8] text-primary group-hover:text-primary transition-colors">
+<span class="font-label-sm text-[11px] uppercase tracking-widest flex items-center gap-2 font-semibold">
+<span class="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+                CHẠM ĐỂ THỬ HƯƠNG &amp; CHI TIẾT
+              </span>
+<span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Navigation Button -->
+<button aria-label="Cuộn sang phải" class="absolute -right-2 md:right-2 lg:right-4 z-30 w-12 h-12 md:w-14 md:h-14 rounded-full bg-white/95 text-primary border border-[#e8e2d8] hover:bg-primary hover:text-white transition-all duration-300 flex items-center justify-center shadow-[0_6px_20px_rgba(44,38,35,0.08)] active:scale-95 group focus:outline-none" id="scrollRightBtn">
+<span class="material-symbols-outlined text-[26px] md:text-[28px] transition-transform group-hover:translate-x-0.5">east</span>
+</button>
+</div>
+</main>
+<!-- Minimal Footer -->
+<footer class="w-full border-t border-[#e8e2d8]/80 py-4 px-6 md:px-12 bg-[#fbf9f5]/90 flex-shrink-0">
+<div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-2 text-center md:text-left">
+<div class="flex items-center gap-2 text-[#7f766a] font-label-sm text-[11px] tracking-widest uppercase">
+<span class="material-symbols-outlined text-base text-primary">support_agent</span>
+      TOUCH 'CALL SOMMELIER' FOR IN-PERSON FRAGRANCE GUIDANCE
+    </div>
+<div class="text-[#7f766a] font-label-sm text-[10px] tracking-wider uppercase">
+      © SCENTATION PARIS • HAPTIC TOUCH INTERFACE V4.2
+    </div>
+</div>
+</footer>
+<!-- ================= PRODUCT QUICK VIEW MODAL ================= -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300" id="productModal">
+<div class="relative w-full max-w-4xl bg-surface-bright rounded-2xl border border-outline-variant shadow-2xl overflow-hidden transform scale-95 transition-transform duration-300 flex flex-col md:flex-row max-h-[90vh]" id="modalBox">
+<!-- Close Button -->
+<button class="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-white/80 border border-outline-variant text-on-surface flex items-center justify-center hover:bg-primary hover:text-white transition-colors" id="closeModalBtn">
+<span class="material-symbols-outlined text-xl">close</span>
+</button>
+<!-- Left: Product Image Column -->
+<div class="md:w-5/12 bg-gradient-to-b from-[#fbf9f5] to-[#f5f3ef] p-8 flex flex-col items-center justify-center relative border-b md:border-b-0 md:border-r border-outline-variant">
+<div class="absolute top-5 left-5 font-label-sm text-[10px] uppercase tracking-[0.2em] text-primary bg-primary-fixed/40 px-2.5 py-1 rounded" id="modalBatchBadge">
+        N° 01 • HAUTE SILLAGE
+      </div>
+<div class="relative w-full h-64 md:h-72 flex items-center justify-center my-4">
+<div class="absolute bottom-2 w-48 h-6 bg-primary/20 rounded-full blur-md"></div>
+<img alt="Parfum" class="relative z-10 max-h-60 w-auto object-contain drop-shadow-[0_14px_20px_rgba(44,38,35,0.2)]" id="modalImg" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0MDAiIGhlaWdodD0iMzAwIj48cmVjdCB3aWR0aD0iNDAwIiBoZWlnaHQ9IjMwMCIgcng9IjgiIGZpbGw9IiNlOGVhZWQiLz48cGF0aCBkPSJNMTcwIDEzMCBsMzAgNDAgbDIwLTE1IGw0MCA1NSBIMTQweiIgZmlsbD0iI2JkYzFjNiIvPjxjaXJjbGUgY3g9IjI1MCIgY3k9IjEyMCIgcj0iMTgiIGZpbGw9IiNiZGMxYzYiLz48L3N2Zz4=">
+</div>
+<div class="flex items-center gap-2 text-on-surface-variant font-label-sm text-[11px] tracking-widest uppercase">
+<span class="material-symbols-outlined text-[16px] text-primary">verified</span>
+<span class="">Flacon Cristal Fait Main • Grasse</span>
+</div>
+</div>
+<!-- Right: Details & Haute Specs -->
+<div class="md:w-7/12 p-6 md:p-8 flex flex-col justify-between overflow-y-auto">
+<div>
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-xs uppercase tracking-widest text-[#c5a880] font-semibold" id="modalFamily">ORIENTAL OUD</span>
+<span class="font-headline-sm text-2xl text-primary font-serif font-semibold" id="modalPrice">€ 380</span>
+</div>
+<h2 class="font-headline-lg text-3xl font-serif text-on-surface mt-1" id="modalTitle">Nuit d’Or</h2>
+<p class="font-label-sm text-xs text-on-surface-variant uppercase tracking-wider mt-1" id="modalVolume">100 ML • Extrait de Parfum (28% Concentration)</p>
+<p class="font-body-md text-sm text-on-surface-variant mt-4 leading-relaxed" id="modalDesc">
+          Infusion d'ambre précieux, safran d'Orient et accords de fumée de bois de oud impérial. Une signature envoûtante aux facettes veloutées et intemporelles.
+        </p>
+<!-- Perfumery Details Table -->
+<div class="mt-5 space-y-2.5 pt-4 border-t border-outline-variant/60 font-body-md text-xs">
+<div class="flex justify-between py-1 border-b border-outline-variant/40">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">science</span> Nhà Chế Tác (Master Perfumer)
+            </span>
+<span class="font-semibold text-on-surface">Jean-Claude Ellena • Grasse, France</span>
+</div>
+<div class="flex justify-between py-1 border-b border-outline-variant/40">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">spa</span> Tầng Hương Chính
+            </span>
+<span class="font-medium text-right text-on-surface max-w-[240px]" id="modalNotes">Oud hoàng gia, Safran, Ambregris, Vanille Bourbon</span>
+</div>
+<div class="flex justify-between py-1 border-b border-outline-variant/40">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[14px] text-primary">verified_user</span> Tiêu Chuẩn &amp; Độ Tinh Khiết
+            </span>
+<span class="font-medium text-on-surface">IFRA Certified 100% Pure Origin</span>
+</div>
+</div>
+</div>
+<!-- Actions CTA -->
+<div class="mt-8 pt-4 flex flex-col sm:flex-row items-center gap-3">
+<!-- Spray Test Button on Kiosk -->
+<button class="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl border border-primary text-primary hover:bg-primary-container/20 transition-all font-label-lg text-xs uppercase tracking-wider" id="modalSprayBtn">
+<span class="material-symbols-outlined text-[18px]">air</span>
+<span class="">Phun Mùi Thử Tại Quầy</span>
+</button>
+<!-- Add To Cart -->
+<button class="w-full sm:w-auto flex-1 flex items-center justify-center gap-2 py-3 px-5 rounded-xl bg-primary text-white hover:bg-primary/90 transition-all shadow-md active:scale-95 font-label-lg text-xs uppercase tracking-wider font-semibold" id="modalAddToCartBtn">
+<span class="material-symbols-outlined text-[18px]">add_shopping_cart</span>
+<span class="">Thêm Vào Giỏ Hàng</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- ================= CART SIDE DRAWER ================= -->
+
+
+<!-- Scent Spray Notification Toast -->
+<!-- Payment Method Selection Modal Overlay -->
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-6 bg-black/40 backdrop-blur-sm transition-opacity duration-300" id="checkoutPaymentModal">
+<div class="relative w-full max-w-2xl bg-white rounded-2xl border border-black shadow-2xl p-6 md:p-8 flex flex-col max-h-[92vh] overflow-y-auto transform transition-all text-black">
+<!-- Close Button -->
+<button aria-label="Đóng" class="absolute top-5 right-5 w-9 h-9 rounded-full border border-black/20 bg-white text-black flex items-center justify-center hover:bg-black hover:text-white transition-colors cursor-pointer shadow-xs" onclick="document.getElementById('checkoutPaymentModal').classList.add('hidden')"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+<!-- Header -->
+<div class="text-center pr-6 pl-6 pt-2 pb-4">
+<span class="font-label-sm text-[10px] tracking-[0.3em] uppercase text-black/60 font-semibold block mb-1">SCENTATION PARIS • KIOSK CHECKOUT</span>
+<h2 class="font-headline-md text-2xl md:text-[26px] font-serif tracking-wide text-black font-medium uppercase">CHỌN PHƯƠNG THỨC THANH TOÁN</h2>
+<p class="font-body-md text-xs text-black/60 mt-1.5 leading-relaxed">Vui lòng chọn hình thức thanh toán thuận tiện cho bạn tại quầy trải nghiệm</p>
+<!-- Total amount summary banner -->
+<div class="mt-4 py-2.5 px-4 rounded-xl bg-surface-container-low border border-black/20 flex items-center justify-between"><div class="flex items-center gap-2"><span class="font-label-sm text-xs tracking-wider uppercase text-black/60 font-semibold">Thanh toán:</span><span class="font-title text-xs text-black font-semibold">Nuit d’Or (100ml)</span></div><div class="text-right"><span class="font-headline-sm text-xl font-serif text-black font-bold">€ 380</span><span class="text-[11px] text-black/60 ml-2 font-medium">(~ 10.260.000 ₫)</span></div></div>
+</div>
+<!-- Payment Options Grid -->
+<div class="space-y-4 my-2">
+<!-- Option 1: Card / POS Contactless (Selected State) -->
+<label class="relative flex items-start gap-4 p-4 md:p-5 rounded-xl border-2 border-black bg-white shadow-md cursor-pointer group transition-all duration-200">
+<input checked="" class="mt-1 text-black focus:ring-black w-4 h-4 cursor-pointer accent-black" name="payment_method" type="radio" value="card">
+<div class="flex-1">
+<div class="flex items-center justify-between mb-1.5">
+<div class="flex items-center gap-2">
+<svg class="w-5 h-5 text-black flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"></rect><line x1="2" x2="22" y1="10" y2="10"></line></svg>
+<span class="font-title text-[15px] font-semibold text-black">Thẻ Visa / Mastercard / Thẻ Quốc Tế</span>
+</div>
+<svg class="w-5 h-5 text-black animate-pulse flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" title="Hỗ trợ NFC chạm"><path stroke-linecap="round" d="M8.5 16.5a5 5 0 0 1 0-9"></path><path stroke-linecap="round" d="M12 19a8.5 8.5 0 0 1 0-14"></path><path stroke-linecap="round" d="M15.5 21.5a12 12 0 0 1 0-19"></path><circle cx="5" cy="12" r="1" fill="currentColor"></circle></svg>
+</div>
+<p class="font-body-md text-xs text-black/70 leading-relaxed">
+            Chạm NFC hoặc cắm thẻ vào khe đọc POS tích hợp ngay bên dưới màn hình kiosk salon.
+          </p>
+<div class="flex items-center gap-2 mt-2.5">
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">VISA</span>
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">MASTERCARD</span>
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">JCB</span>
+<span class="text-[10px] font-medium tracking-wide text-black text-[11px] ml-auto">Miễn phí quẹt thẻ</span>
+</div>
+</div>
+</label>
+<!-- Option 2: VietQR / E-wallet / Banking App -->
+<label class="relative flex items-start gap-4 p-4 md:p-5 rounded-xl border border-black/40 bg-white hover:border-black transition-all duration-200 cursor-pointer group shadow-xs">
+<input class="mt-1 text-black focus:ring-black w-4 h-4 cursor-pointer accent-black" name="payment_method" type="radio" value="qr">
+<div class="flex-1">
+<div class="flex items-center justify-between mb-1.5">
+<div class="flex items-center gap-2">
+<svg class="w-5 h-5 text-black flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7V5a2 2 0 0 1 2-2h2m10 0h2a2 2 0 0 1 2 2v2m0 10v2a2 2 0 0 1-2 2h-2m-10 0H5a2 2 0 0 1-2-2v-2"></path><rect width="6" height="6" x="6" y="6" rx="1" stroke-width="1.5"></rect><rect width="4" height="4" x="14" y="7" stroke-width="1.5"></rect><path stroke-linecap="round" d="M14 14h3m-3 3h1m2 0h.01M7 14h.01M7 17h3"></path></svg>
+<span class="font-title text-[15px] font-semibold text-black">Quét Mã QR (VietQR / Ngân Hàng / Ví Điện Tử)</span>
+</div>
+<span class="font-label-sm text-[10px] tracking-wider uppercase text-white bg-black px-2 py-0.5 rounded font-semibold">Tức thì</span>
+</div>
+<p class="font-body-md text-xs text-black/70 leading-relaxed">
+            Quét mã thanh toán tức thì qua bất kỳ ứng dụng ngân hàng hoặc ví điện tử (MoMo, ZaloPay, VNPay).
+          </p>
+<div class="flex items-center gap-2 mt-2.5">
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">VIETQR</span>
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">MOMO</span>
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">ZALOPAY</span>
+<span class="text-[10px] font-bold tracking-wider px-2 py-0.5 rounded border border-black/30 bg-surface-container-low text-black">VNPAY</span>
+</div>
+</div>
+</label>
+</div>
+<!-- Actions Footer -->
+<div class="mt-6 pt-4 border-t border-black/20 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+<button class="w-full sm:w-auto px-5 py-3 rounded-xl border border-black text-black hover:bg-black hover:text-white font-label-lg text-xs uppercase tracking-wider transition-all cursor-pointer bg-white" onclick="document.getElementById('checkoutPaymentModal').classList.add('hidden')"><span class="flex items-center justify-center gap-2"><svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18"></path></svg><span class="">HỦY / QUAY LẠI</span></span></button>
+<button class="w-full sm:w-auto px-6 py-3 rounded-xl bg-black text-white flex items-center justify-center gap-2 hover:bg-neutral-800 transition-all shadow-md active:scale-95 font-label-lg text-xs uppercase tracking-[0.18em] font-semibold cursor-pointer" onclick="alert('Đang kết nối thiết bị thanh toán POS... Xin quý khách thực hiện theo hướng dẫn trên máy đọc thẻ.');"><span class="">Xác nhận &amp; Tiếp tục</span><svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"></path></svg></button>
+</div>
+</div>
+</div><div class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 bg-[#1b1c1a]/90 text-white backdrop-blur-md px-6 py-3 rounded-full shadow-xl flex items-center gap-3 pointer-events-none opacity-0 transition-opacity duration-300" id="sprayToast">
+<span class="material-symbols-outlined text-[#c5a880] text-xl animate-pulse">air</span>
+<span class="font-body-md text-xs tracking-wider" id="toastMessage">Đang phun làn sương thử hương tại vòi salon... Xin mời thưởng thức!</span>
+</div>
+<!-- Interactive Carousel, Modal & Cart Script -->
+<script>
+  // Product Database
+  const products = {
+    1: {
+      id: 1,
+      name: "Nuit d’Or",
+      batch: "N° 01 • HAUTE SILLAGE",
+      family: "ORIENTAL OUD",
+      price: 380,
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuBjHLKHQ-e9v8rbVauKmO7a4XdFgitH2PX04adOLTIDcdpPwTMgj-ABCxgZT3y1iVk4EkVCclPnFJrm2AP7heA3adEYnqsJsWfuHluEESKmnpcpMphfmLkxdj5oTKVTETo2E8JdzRMpvqTaHozpF27TbIsqMhy3BEIWgUjwP0FNUks_8sX00O_fphckeGjDYOqtj7WxsNLAxCBLfThMPkP3xN9K3q-NAOeoySXLnRZdVHO09viZHUTm",
+      desc: "Infusion d'ambre précieux, safran d'Orient et accords de fumée de bois de oud impérial. Một sự pha trộn mê hoặc đưa giác quan vào cung điện phương Đông dưới ánh trăng vàng.",
+      notes: "Oud Hoàng Gia, Safran Iran, Hổ phách xám, Khói trầm hương",
+      soldOut: false
+    },
+    2: {
+      id: 2,
+      name: "Ambre Impérial",
+      batch: "N° 02 • RARE BATCH (TẠM HẾT HÀNG)",
+      family: "AMBRE & CUIR",
+      price: 420,
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuCi8kgz8yWcTDwPznpLifDSV9mqx5f3T3sYLxfM6aJ_dbkYiY_UC6j3hY7txxWfnMG_isJJ_WxlMdGt86bRV0k5TcAN7LhxMhSljyTmn-S0JL3tHi7E5tKCO0o1rDcYx1bUoCUByKyl285EKIYD9FVctJyP40qzusM13xM7ejEW6CiqwAJQ0giQD8CVUL1YFtP4SrXTwDlazB_1IZIdSpdY4fOXGMnYaHb0jli_1Dxeu02TDqO-E1Ce",
+      desc: "Ciste labdanum d'Andalousie, vanille Bourbon et velours de cuir noir. Phiên bản giới hạn đắt đỏ đang trong đợt thu hoạch mẻ ủ nguyên liệu mới tại Grasse.",
+      notes: "Ciste Labdanum, Da thuộc đen, Vanille Bourbon, Đậu Tonka",
+      soldOut: true
+    },
+    3: {
+      id: 3,
+      name: "Fleur Blanche",
+      batch: "N° 03 • LUMINESCENCE",
+      family: "SOLAR FLORAL",
+      price: 340,
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDrwnlACE74MpP3ze5UCHx_2MWHdGE2a8EZ9tRcjojME_0ZFCpdnP8jrPGBhM6K1Mgy7p_XSRWJLkdJ_wej47ts_3-MrYMHDU42ZQVo25IJO2lIXI8_BCcJ5IMtnb3uL-ftOT32o5Bvy9EoQXsQvhVifruPsELMB_uIfnTopfCgYTTWWVGV1kCOGuW8ZvwdU1C3JUXQZcGEjkAzJriCenzlJFxWW23Nk5LJXIhwJ_DJu1i9vd1buJsL",
+      desc: "Tubéreuse nocturne de Grasse, jasmin sambac et sève de néroli solaire. Nốt hương hoa trắng thanh khiết ngập tràn ánh nắng bình minh Côte d'Azur.",
+      notes: "Huệ trắng Grasse, Hoa nhài Sambac, Néroli, Xạ hương trắng",
+      soldOut: false
+    },
+    4: {
+      id: 4,
+      name: "Bois Mystique",
+      batch: "N° 04 • SILENCIEUX",
+      family: "ORIENTAL WOOD",
+      price: 360,
+      image: "https://lh3.googleusercontent.com/aida-public/AB6AXuDhEcCtoyj-KiT2weL0jXt1iCyGCvxYPjrqSQ1hyqIdMsULOb2OpvFNcrpU-Oaz7Qd-fcogDGELsRPoK2ByYreFQ6wn7Z3PdFRLDz9DKjfQ9vllHdOZ-0K7e9Frpr_7mvKpGnpz1lQUl-NcssHIf8GV4tORcyBPSyLHP1uvMBw8U0nv4wa9oreMxMhsc28LTVNijTDmfP30P5J3ZboqBmEG9RPa935bwAEgRRe-XEJAGJVrtJg-_BwT",
+      desc: "Cèdre de l'Atlas fumé, encens sacré d'Oman et vétiver racine d'Haïti. Nốt gỗ rừng cổ thụ tĩnh lặng mang lại chiều sâu tâm hồn tĩnh tại thiêng liêng.",
+      notes: "Tuyết tùng Atlas, Hương trầm Oman, Cỏ hương bài Haiti",
+      soldOut: false
+    }
+  };
+
+  // Cart State (Pre-filled with 2 items as demo)
+  let cart = [
+    { productId: 1, quantity: 1 },
+    { productId: 3, quantity: 1 }
+  ];
+
+  let currentModalProductId = null;
+
+  // Carousel Drag & Buttons
+  (function initKioskCarousel() {
+    const carousel = document.getElementById('parfumCarousel');
+    const leftBtn = document.getElementById('scrollLeftBtn');
+    const rightBtn = document.getElementById('scrollRightBtn');
+    const scrollStep = 340;
+
+    if (carousel && leftBtn && rightBtn) {
+      leftBtn.addEventListener('click', () => {
+        carousel.scrollBy({ left: -scrollStep, behavior: 'smooth' });
+      });
+
+      rightBtn.addEventListener('click', () => {
+        carousel.scrollBy({ left: scrollStep, behavior: 'smooth' });
+      });
+
+      let isDown = false;
+      let startX;
+      let scrollLeft;
+
+      carousel.addEventListener('mousedown', (e) => {
+        isDown = true;
+        carousel.classList.add('cursor-grabbing');
+        startX = e.pageX - carousel.offsetLeft;
+        scrollLeft = carousel.scrollLeft;
+      });
+
+      carousel.addEventListener('mouseleave', () => {
+        isDown = false;
+        carousel.classList.remove('cursor-grabbing');
+      });
+
+      carousel.addEventListener('mouseup', () => {
+        isDown = false;
+        carousel.classList.remove('cursor-grabbing');
+      });
+
+      carousel.addEventListener('mousemove', (e) => {
+        if (!isDown) return;
+        e.preventDefault();
+        const x = e.pageX - carousel.offsetLeft;
+        const walk = (x - startX) * 1.5;
+        carousel.scrollLeft = scrollLeft - walk;
+      });
+    }
+  })();
+
+  // Toast Function
+  function showToast(msg) {
+    const toast = document.getElementById('sprayToast');
+    const toastMsg = document.getElementById('toastMessage');
+    toastMsg.innerText = msg;
+    toast.classList.remove('opacity-0', 'pointer-events-none');
+    setTimeout(() => {
+      toast.classList.add('opacity-0', 'pointer-events-none');
+    }, 3200);
+  }
+
+  // Cart UI Helpers
+  function updateCartBadge() {
+    const totalCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+    const badge = document.getElementById('cartBadge');
+    badge.innerText = totalCount;
+    if (totalCount === 0) {
+      badge.classList.add('hidden');
+    } else {
+      badge.classList.remove('hidden');
+    }
+  }
+
+  function renderCartDrawer() {
+    const container = document.getElementById('cartItemsList');
+    if (cart.length === 0) {
+      container.innerHTML = `
+        <div class="h-64 flex flex-col items-center justify-center text-center text-on-surface-variant">
+          <span class="material-symbols-outlined text-5xl text-[#d1c5b8] mb-3">shopping_bag</span>
+          <p class="font-headline-sm text-lg font-serif">Giỏ hàng đang trống</p>
+          <p class="text-xs mt-1">Xin mời chạm vào chai nước hoa để chọn thêm vào giỏ.</p>
+        </div>
+      `;
+      document.getElementById('cartSubtotal').innerText = '€ 0';
+      document.getElementById('cartTotal').innerText = '€ 0';
+      return;
+    }
+
+    let subtotal = 0;
+    container.innerHTML = cart.map(item => {
+      const p = products[item.productId];
+      const itemTotal = p.price * item.quantity;
+      subtotal += itemTotal;
+      return `
+        <div class="flex items-center gap-3.5 p-3.5 rounded-xl bg-white border border-outline-variant/70 shadow-xs">
+          <div class="w-16 h-20 bg-surface-container-low rounded-lg p-1 flex items-center justify-center border border-outline-variant/50 flex-shrink-0">
+            <img src="${p.image}" alt="${p.name}" class="max-h-16 w-auto object-contain">
+          </div>
+          <div class="flex-1 min-w-0">
+            <h4 class="font-headline-sm text-base font-serif text-on-surface truncate">${p.name}</h4>
+            <p class="font-label-sm text-[10px] text-[#7f766a] uppercase">100 ML • Extrait</p>
+            <div class="text-primary font-semibold text-sm mt-1">€ ${p.price}</div>
+          </div>
+          <div class="flex flex-col items-end justify-between h-20">
+            <button onclick="removeFromCart(${p.id})" class="text-[#7f766a] hover:text-error transition-colors p-1">
+              <span class="material-symbols-outlined text-base">delete</span>
+            </button>
+            <div class="flex items-center border border-outline-variant rounded-md bg-surface">
+              <button onclick="changeQuantity(${p.id}, -1)" class="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-outline-variant/50 font-bold">-</button>
+              <span class="w-6 text-center text-xs font-semibold">${item.quantity}</span>
+              <button onclick="changeQuantity(${p.id}, 1)" class="w-6 h-6 flex items-center justify-center text-on-surface hover:bg-outline-variant/50 font-bold">+</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    document.getElementById('cartSubtotal').innerText = `€ ${subtotal}`;
+    document.getElementById('cartTotal').innerText = `€ ${subtotal}`;
+    updateCartBadge();
+  }
+
+  window.changeQuantity = function(productId, delta) {
+    const item = cart.find(i => i.productId === productId);
+    if (!item) return;
+    item.quantity += delta;
+    if (item.quantity <= 0) {
+      cart = cart.filter(i => i.productId !== productId);
+    }
+    renderCartDrawer();
+  };
+
+  window.removeFromCart = function(productId) {
+    cart = cart.filter(i => i.productId !== productId);
+    renderCartDrawer();
+  };
+
+  // Open & Close Cart Drawer
+  const openCartBtn = document.getElementById('openCartBtn');
+  const closeCartBtn = document.getElementById('closeCartBtn');
+  const continueShoppingBtn = document.getElementById('continueShoppingBtn');
+  const cartDrawer = document.getElementById('cartDrawer');
+  const cartBackdrop = document.getElementById('cartBackdrop');
+
+  function openCart() {
+    renderCartDrawer();
+    cartBackdrop.classList.remove('opacity-0', 'pointer-events-none');
+    cartDrawer.classList.remove('translate-x-full');
+  }
+
+  function closeCart() {
+    cartBackdrop.classList.add('opacity-0', 'pointer-events-none');
+    cartDrawer.classList.add('translate-x-full');
+  }
+
+  openCartBtn.addEventListener('click', openCart);
+  closeCartBtn.addEventListener('click', closeCart);
+  continueShoppingBtn.addEventListener('click', closeCart);
+  cartBackdrop.addEventListener('click', closeCart);
+
+  // Modal logic
+  const productModal = document.getElementById('productModal');
+  const modalBox = document.getElementById('modalBox');
+  const closeModalBtn = document.getElementById('closeModalBtn');
+
+  function openProductDetail(productId) {
+    const p = products[productId];
+    if (!p) return;
+    currentModalProductId = productId;
+
+    document.getElementById('modalTitle').innerText = p.name;
+    document.getElementById('modalBatchBadge').innerText = p.batch;
+    document.getElementById('modalFamily').innerText = p.family;
+    document.getElementById('modalPrice').innerText = p.soldOut ? `€ ${p.price} (Hết hàng)` : `€ ${p.price}`;
+    document.getElementById('modalImg').src = p.image;
+    document.getElementById('modalImg').alt = p.name;
+    document.getElementById('modalDesc').innerText = p.desc;
+    document.getElementById('modalNotes').innerText = p.notes;
+
+    const addBtn = document.getElementById('modalAddToCartBtn');
+    if (p.soldOut) {
+      addBtn.disabled = true;
+      addBtn.classList.add('opacity-50', 'cursor-not-allowed', 'bg-tertiary');
+      addBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">lock</span><span>Sản phẩm Tạm Hết Hàng</span>`;
+    } else {
+      addBtn.disabled = false;
+      addBtn.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-tertiary');
+      addBtn.innerHTML = `<span class="material-symbols-outlined text-[18px]">add_shopping_cart</span><span>Thêm Vào Giỏ Hàng</span>`;
+    }
+
+    productModal.classList.remove('opacity-0', 'pointer-events-none');
+    modalBox.classList.remove('scale-95');
+    modalBox.classList.add('scale-100');
+  }
+
+  function closeProductDetail() {
+    productModal.classList.add('opacity-0', 'pointer-events-none');
+    modalBox.classList.remove('scale-100');
+    modalBox.classList.add('scale-95');
+  }
+
+  closeModalBtn.addEventListener('click', closeProductDetail);
+  productModal.addEventListener('click', (e) => {
+    if (e.target === productModal) {
+      closeProductDetail();
+    }
+  });
+
+  // Attach card click handlers
+  document.querySelectorAll('.product-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const pid = card.getAttribute('data-product-id');
+      openProductDetail(pid);
+    });
+  });
+
+  // Modal actions
+  document.getElementById('modalSprayBtn').addEventListener('click', () => {
+    const p = products[currentModalProductId];
+    showToast(`Đang kích hoạt vòi xịt thử hương: "${p.name}". Xin mời đưa cổ tay vào khuếch tán!`);
+  });
+
+  document.getElementById('modalAddToCartBtn').addEventListener('click', () => {
+    const p = products[currentModalProductId];
+    if (p.soldOut) {
+      showToast('Sản phẩm hiện đang trong đợt bổ sung nguyên liệu, chưa thể đặt hàng!');
+      return;
+    }
+    const exist = cart.find(i => i.productId == p.id);
+    if (exist) {
+      exist.quantity += 1;
+    } else {
+      cart.push({ productId: p.id, quantity: 1 });
+    }
+    closeProductDetail();
+    updateCartBadge();
+    showToast(`Đã thêm kiệt tác "${p.name}" vào giỏ hàng!`);
+    setTimeout(openCart, 400);
+  });
+
+  // Checkout trigger
+  document.getElementById('checkoutBtn').addEventListener('click', () => {
+    if (cart.length === 0) {
+      showToast('Giỏ hàng trống. Vui lòng chọn kiệt tác nước hoa trước khi thanh toán!');
+      return;
+    }
+    showToast('Đang kết nối cổng thanh toán thẻ & QR không tiếp xúc của Kiosk...');
+  });
+
+  // Initial Cart sync
+  updateCartBadge();
+</script>
+
+
+
+
+
+
+
+
+</body></html>
