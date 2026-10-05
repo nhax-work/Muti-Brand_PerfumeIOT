@@ -1,490 +1,201 @@
-.checkoutContainer {
+.checkout {
   flex: 1;
-  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
-  background-color: rgba(0, 0, 0, 0.03);
+  padding: var(--space-4);
+  width: 100%;
+  height: 100%;
 }
 
-.modalCard {
-  position: relative;
+.card {
   width: 100%;
-  max-width: 680px;
-  background: #ffffff;
-  border-radius: var(--radius-xl);
-  border: 1px solid #000000;
-  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.14);
-  padding: 32px 36px;
+  max-width: 640px;
   display: flex;
   flex-direction: column;
-  max-height: 92vh;
-  overflow-y: auto;
-}
-
-.closeButton {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  background: #ffffff;
-  color: #000000;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.closeButton:hover {
-  background: #000000;
-  color: #ffffff;
-}
-
-.headerArea {
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   text-align: center;
-  padding: 0 16px 16px;
 }
 
-.brandKioskTag {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.28em;
-  color: var(--color-text-secondary);
-  display: block;
-  margin-bottom: 6px;
-}
-
-.modalTitle {
-  font-family: var(--font-serif);
-  font-size: 24px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #000000;
+.product {
   margin: 0;
-}
-
-.modalSubtitle {
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-  margin-top: 6px;
-  line-height: 1.45;
-}
-
-/* Tóm tắt sản phẩm */
-.summaryBanner {
-  margin: 16px 0;
-  padding: 12px 18px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-dim);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.summaryLeft {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.summaryThumb {
-  width: 44px;
-  height: 52px;
-  object-fit: contain;
-  background: #ffffff;
-  border-radius: var(--radius-xs);
-  padding: 2px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-
-.summaryInfo {
-  display: flex;
-  flex-direction: column;
-}
-
-.summaryLabel {
-  font-size: 10px;
+  color: var(--color-primary);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
 }
 
-.summaryName {
-  font-family: var(--font-serif);
-  font-size: 16px;
+.title {
+  margin: 0;
+  font-size: var(--font-hero);
+  line-height: 1.25;
+  color: var(--color-text);
+}
+
+.body {
+  margin: 0;
+  font-size: calc(var(--font-body) + 2px);
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.status {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: #fdecec;
+  color: #a12828;
   font-weight: 600;
-  color: #000000;
 }
 
-.summaryRight {
+.actions {
+  display: flex;
+  gap: var(--space-3);
+  width: 100%;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.primary,
+.secondary {
+  min-height: calc(var(--touch-target) + 12px);
+  min-width: 180px;
+  padding: 0 var(--space-6);
+  border-radius: var(--radius);
+  font-size: calc(var(--font-body) + 1px);
+  font-weight: 700;
+  transition: transform 0.15s ease;
+}
+
+.primary {
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: var(--shadow-primary);
+}
+
+.secondary {
+  border: 1.5px solid var(--color-border);
+  background: #fff;
+  color: var(--color-text);
+}
+
+.primary:active,
+.secondary:active {
+  transform: scale(0.97);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.55;
+}
+
+.qrBox {
+  width: 240px;
+  min-height: 160px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.qrPayload {
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--color-muted);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  align-items: baseline;
+}
+
+.facts dt {
+  color: var(--color-muted);
   text-align: right;
 }
 
-.summaryPrice {
-  font-family: var(--font-sans);
-  font-size: 22px;
+.facts dd {
+  margin: 0;
   font-weight: 700;
-  color: #000000;
-  letter-spacing: -0.01em;
+  text-align: left;
 }
 
-.summaryNote {
-  font-size: 11px;
-  color: var(--color-text-secondary);
+.reference {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--font-title);
+  letter-spacing: 0.04em;
+  color: var(--color-primary);
 }
 
-/* Các phương thức thanh toán */
-.methodsList {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin: 12px 0 20px;
-}
-
-.methodItem {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  background: #ffffff;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: var(--shadow-sm);
-}
-
-.methodItem:hover {
-  border-color: #000000;
-  box-shadow: var(--shadow-md);
-}
-
-.methodItemSelected {
-  border: 2px solid #000000;
-  box-shadow: var(--shadow-md);
-}
-
-.radioInput {
-  margin-top: 3px;
-  width: 18px;
-  height: 18px;
-  accent-color: #000000;
-  cursor: pointer;
-}
-
-.methodContent {
-  flex: 1;
-}
-
-.methodHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 4px;
-}
-
-.methodTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.methodTitle {
-  font-size: 14px;
-  font-weight: 700;
-  color: #000000;
-}
-
-.methodDesc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.45;
-  margin: 4px 0 10px;
-}
-
-.tagsRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.badgeTag {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 7px;
-  border-radius: var(--radius-xs);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  background: var(--color-surface-dim);
-  color: #000000;
-}
-
-.badgeTagDark {
-  background: #000000;
-  color: #ffffff;
-  border-color: #000000;
-}
-
-/* Phần hiển thị VietQR */
-.qrDisplayBox {
+.press {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 24px;
-  background: #ffffff;
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  margin: 10px 0;
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-3);
 }
 
-.qrWrapper {
-  padding: 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid #000000;
-  background: #ffffff;
-  margin-bottom: 16px;
-}
-
-.qrSvg {
-  width: 170px;
-  height: 170px;
-}
-
-.timerRow {
+.pressBadge {
+  width: 120px;
+  height: 120px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-  flex-wrap: wrap;
   justify-content: center;
-}
-
-.timerPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  background: #000000;
-  color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.waitingPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 14px;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  background: #ffffff;
-  font-size: 12px;
-  color: #000000;
-}
-
-.waitingPulse {
-  width: 8px;
-  height: 8px;
   border-radius: 50%;
-  background: #000000;
-  animation: pulseDot 1.4s infinite;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 56px;
+  font-weight: 800;
+  box-shadow: 0 0 0 0 rgba(122, 62, 92, 0.5);
+  animation: pulse 1.4s ease-out infinite;
 }
 
-@keyframes pulseDot {
+.pressTitle {
+  margin: 0;
+  font-size: calc(var(--font-hero) + 6px);
+}
+
+.countdown {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+@keyframes pulse {
   0% {
-    transform: scale(0.9);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(122, 62, 92, 0.5);
   }
   100% {
-    transform: scale(0.9);
-    opacity: 0.6;
+    box-shadow: 0 0 0 28px rgba(122, 62, 92, 0);
   }
 }
 
-/* Phần hiển thị POS / NFC */
-.nfcDisplayBox {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 28px 20px;
-  background: #ffffff;
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(0, 0, 0, 0.16);
-  margin: 10px 0;
-  text-align: center;
-}
-
-.nfcRadar {
-  position: relative;
-  width: 72px;
-  height: 72px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-}
-
-.radarRing {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.06);
-  animation: radarExpand 2s infinite ease-out;
-}
-
-@keyframes radarExpand {
-  0% {
-    transform: scale(0.8);
-    opacity: 0.8;
+@media (prefers-reduced-motion: reduce) {
+  .pressBadge {
+    animation: none;
   }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-
-.nfcIconCore {
-  position: relative;
-  z-index: 10;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: #000000;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow-md);
-}
-
-.nfcStatusPill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  border-radius: var(--radius-full);
-  background: #000000;
-  color: #ffffff;
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  margin-bottom: 14px;
-}
-
-.stepsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  width: 100%;
-  margin-top: 14px;
-}
-
-.stepCard {
-  position: relative;
-  background: #ffffff;
-  border-radius: var(--radius-md);
-  padding: 14px 10px;
-  border: 1px solid rgba(0, 0, 0, 0.14);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.stepBadge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: #000000;
-  color: #ffffff;
-  font-size: 10px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stepIcon {
-  font-size: 26px;
-  margin: 4px 0;
-  color: #000000;
-}
-
-.stepTitle {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: #000000;
-  margin: 4px 0 0;
-}
-
-/* Nút hành động ở đáy popup */
-.footerButtons {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.12);
-}
-
-.actionButtonSecondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: var(--radius-md);
-  border: 1px solid #000000;
-  background: #ffffff;
-  color: #000000;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  transition: all 0.2s ease;
-}
-
-.actionButtonSecondary:hover {
-  background: #000000;
-  color: #ffffff;
-}
-
-.actionButtonPrimary {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  border-radius: var(--radius-md);
-  background: #000000;
-  color: #ffffff;
-  border: 1px solid #000000;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  box-shadow: var(--shadow-md);
-  transition: all 0.2s ease;
-}
-
-.actionButtonPrimary:hover {
-  background: #222222;
-  box-shadow: var(--shadow-lg);
 }

@@ -27,6 +27,23 @@ export interface AppConfig {
    * máy dev: API vẫn chạy, nhưng mọi webhook bị từ chối vì không kiểm được chữ ký.
    */
   readonly paymentWebhookSecret: string | null;
+  /**
+   * Địa chỉ broker MQTT (MQTT_URL), ví dụ `mqtt://localhost:1883`. `null` thì cửa vào MQTT và vòng
+   * điều phối lệnh xịt không chạy — API vẫn phục vụ HTTP bình thường (test tích hợp chạy kiểu này).
+   */
+  readonly mqttUrl: string | null;
+  /**
+   * Khóa riêng Ed25519 dạng PEM để ký lệnh xịt (DISPENSE_SIGNING_KEY, FR-DSP-04). `null` khi chưa
+   * cấu hình ở máy dev: lệnh mang chữ ký giả `dev-unsigned`, firmware phải bật
+   * `DEV_ALLOW_UNSIGNED_COMMANDS`. Production bắt buộc có.
+   */
+  readonly dispenseSigningKey: string | null;
+  /**
+   * Bật Swagger UI tại `/api/docs` (SWAGGER_ENABLED). Mặc định bật ở development/test, tắt ở
+   * production — tài liệu liệt kê toàn bộ bề mặt API, không công khai ở môi trường thật trừ khi
+   * chủ động bật.
+   */
+  readonly swaggerEnabled: boolean;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -72,6 +89,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
+  const mqttUrl = env['MQTT_URL'] || null;
+  const rawSigningKey = env['DISPENSE_SIGNING_KEY'];
+  const dispenseSigningKey =
+    rawSigningKey && rawSigningKey !== PLACEHOLDER_SECRET ? rawSigningKey : null;
+  if (appEnv === 'production' && !dispenseSigningKey) {
+    throw new Error(
+      'DISPENSE_SIGNING_KEY ở production phải là khóa riêng Ed25519 dạng PEM (FR-DSP-04).',
+    );
+  }
+  const rawSwagger = env['SWAGGER_ENABLED'];
+  if (rawSwagger !== undefined && rawSwagger !== '' && !['true', 'false'].includes(rawSwagger)) {
+    throw new Error(`SWAGGER_ENABLED phải là true hoặc false, nhận được: ${rawSwagger}`);
+  }
+  const swaggerEnabled =
+    rawSwagger === 'true' || ((rawSwagger ?? '') === '' && appEnv !== 'production');
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -91,6 +124,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jwtSecret,
     paymentProvider,
     paymentWebhookSecret,
+    mqttUrl,
+    dispenseSigningKey,
+    swaggerEnabled,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },

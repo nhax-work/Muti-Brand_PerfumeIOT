@@ -1,448 +1,226 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { useKioskCatalog } from '@/shared/api';
+import { errorMessage, useCreateOrder, useKioskCatalog, useOrderStatus } from '@/shared/api';
+import { config } from '@/shared/config';
+import { useI18n } from '@/shared/i18n';
+import { useKioskSession } from '@/shared/session';
+import { phaseOf, secondsUntil, type CheckoutPhase } from './checkout-phase';
 import styles from './CheckoutScreen.module.css';
 
-const FALLBACK_BOTTLES: Record<number, string> = {
-  1: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBjHLKHQ-e9v8rbVauKmO7a4XdFgitH2PX04adOLTIDcdpPwTMgj-ABCxgZT3y1iVk4EkVCclPnFJrm2AP7heA3adEYnqsJsWfuHluEESKmnpcpMphfmLkxdj5oTKVTETo2E8JdzRMpvqTaHozpF27TbIsqMhy3BEIWgUjwP0FNUks_8sX00O_fphckeGjDYOqtj7WxsNLAxCBLfThMPkP3xN9K3q-NAOeoySXLnRZdVHO09viZHUTm',
-  2: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCi8kgz8yWcTDwPznpLifDSV9mqx5f3T3sYLxfM6aJ_dbkYiY_UC6j3hY7txxWfnMG_isJJ_WxlMdGt86bRV0k5TcAN7LhxMhSljyTmn-S0JL3tHi7E5tKCO0o1rDcYx1bUoCUByKyl285EKIYD9FVctJyP40qzusM13xM7ejEW6CiqwAJQ0giQD8CVUL1YFtP4SrXTwDlazB_1IZIdSpdY4fOXGMnYaHb0jli_1Dxeu02TDqO-E1Ce',
-  3: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDrwnlACE74MpP3ze5UCHx_2MWHdGE2a8EZ9tRcjojME_0ZFCpdnP8jrPGBhM6K1Mgy7p_XSRWJLkdJ_wej47ts_3-MrYMHDU42ZQVo25IJO2lIXI8_BCcJ5IMtnb3uL-ftOT32o5Bvy9EoQXsQvhVifruPsELMB_uIfnTopfCgYTTWWVGV1kCOGuW8ZvwdU1C3JUXQZcGEjkAzJriCenzlJFxWW23Nk5LJXIhwJ_DJu1i9vd1buJsL',
-  4: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDhEcCtoyj-KiT2weL0jXt1iCyGCvxYPjrqSQ1hyqIdMsULOb2OpvFNcrpU-Oaz7Qd-fcogDGELsRPoK2ByYreFQ6wn7Z3PdFRLDz9DKjfQ9vllHdOZ-0K7e9Frpr_7mvKpGnpz1lQUl-NcssHIf8GV4tORcyBPSyLHP1uvMBw8U0nv4wa9oreMxMhsc28LTVNijTDmfP30P5J3ZboqBmEG9RPa935bwAEgRRe-XEJAGJVrtJg-_BwT',
-};
+/** Về trang chủ sau khi đơn kết thúc — khách tiếp theo không thấy kết quả của người trước. */
+const RETURN_HOME_AFTER_MS = 15_000;
+const SETTLED_PHASES = new Set<CheckoutPhase>(['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM']);
 
-function formatPrice(amount: string | null | undefined, currency: string): string {
-  if (!amount) return '';
+function formatAmount(amount: string, currency: string): string {
   const num = Number(amount);
-  if (Number.isNaN(num)) return `${amount} ${currency}`;
-  return `${new Intl.NumberFormat('vi-VN').format(num)} ${currency}`;
+  return Number.isNaN(num)
+    ? `${amount} ${currency}`
+    : `${new Intl.NumberFormat('vi-VN').format(num)} ${currency}`;
 }
 
-type PaymentStep = 'select_method' | 'qr_instructions' | 'pos_instructions';
+function newIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
+}
+
+/**
+ * Thanh toán và nhận lượt xịt cho một slot (FR-ORD-04..11, FR-ORD-21, FR-ORD-25÷27, ADR-0007).
+ *
+ * điều khoản bấm nút → tạo đơn → mã thanh toán → (webhook) → "Mời bấm nút số N" → kết quả.
+ */
 export default function CheckoutScreen() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const { slotNumber } = useParams<{ slotNumber: string }>();
   const catalog = useKioskCatalog();
+  const { kioskSessionId, startNewSession } = useKioskSession();
+  const [idempotencyKey] = useState(newIdempotencyKey);
+  const createOrder = useCreateOrder();
+  const created = createOrder.data;
+  const statusQuery = useOrderStatus(created?.order.id ?? null);
+  const view = statusQuery.data;
+  const now = useNow(500);
 
-  const [selectedMethod, setSelectedMethod] = useState<'card' | 'qr'>('card');
-  const [currentStep, setCurrentStep] = useState<PaymentStep>('select_method');
-  const [countdown, setCountdown] = useState(299); // 04:59
+  const item = useMemo(
+    () => catalog.data?.items.find((i) => String(i.slotNumber) === slotNumber),
+    [catalog.data?.items, slotNumber],
+  );
 
-  const item = useMemo(() => {
-    const items = catalog.data?.items ?? [];
-    return items.find((i) => String(i.slotNumber) === slotNumber);
-  }, [catalog.data?.items, slotNumber]);
+  // Đo thời gian đơn nằm ở PAID để biết máy đang bận khách trước (FR-DSP-26).
+  const [paidSince, setPaidSince] = useState<number | null>(null);
+  const isPaid = view?.status === 'PAID';
+  if (isPaid && paidSince === null) setPaidSince(now);
+  if (!isPaid && paidSince !== null) setPaidSince(null);
+  const phase = phaseOf(view, paidSince === null ? 0 : now - paidSince);
 
-  const product = item?.product;
-  const priceFormatted = formatPrice(item?.pricePerSpray, item?.currency ?? 'VND');
-  const bottleImg =
-    product?.imageUrl ||
-    (slotNumber ? FALLBACK_BOTTLES[Number(slotNumber)] : undefined) ||
-    FALLBACK_BOTTLES[1];
+  const goHome = useCallback(() => {
+    startNewSession();
+    void navigate('/');
+  }, [navigate, startNewSession]);
 
-  // Đếm ngược thời gian thanh toán khi mở popup VietQR
+  const settled = created !== undefined && SETTLED_PHASES.has(phase);
   useEffect(() => {
-    if (currentStep !== 'qr_instructions') return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [currentStep]);
+    if (!settled) return;
+    const timer = setTimeout(goHome, RETURN_HOME_AFTER_MS);
+    return () => clearTimeout(timer);
+  }, [settled, goHome]);
 
-  const formatCountdown = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
+  if (!created && (!item || !item.product || !item.available)) {
+    return (
+      <section className={styles.checkout}>
+        <div className={styles.card}>
+          <h1 className={styles.title}>{t('kiosk.productUnavailable')}</h1>
+          <button
+            type="button"
+            className={styles.secondary}
+            onClick={() => void navigate('/catalog')}
+          >
+            {t('kiosk.backToCatalog')}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
-  const handleProceed = () => {
-    if (selectedMethod === 'qr') {
-      setCurrentStep('qr_instructions');
-    } else {
-      setCurrentStep('pos_instructions');
-    }
-  };
+  const slot = item?.slotNumber ?? Number(slotNumber);
 
-  const handleCancel = () => {
-    void navigate('/catalog');
-  };
+  // FR-ORD-25: điều khoản bấm nút hiện TRƯỚC mã thanh toán.
+  if (!created) {
+    return (
+      <section className={styles.checkout} aria-label={t('kiosk.checkoutTitle')}>
+        <div className={styles.card}>
+          {item?.product && <p className={styles.product}>{item.product.name}</p>}
+          <h1 className={styles.title}>{t('kiosk.pressTermsTitle')}</h1>
+          <p className={styles.body}>
+            {t('kiosk.pressTerms', { slot, seconds: config.pressWindowSec })}
+          </p>
+          {createOrder.isError && (
+            <p className={styles.error} role="alert">
+              {errorMessage(createOrder.error, t)}
+            </p>
+          )}
+          <div className={styles.actions}>
+            <button
+              type="button"
+              className={styles.secondary}
+              onClick={() => void navigate(`/products/${slot}`)}
+              disabled={createOrder.isPending}
+            >
+              {t('kiosk.cancel')}
+            </button>
+            <button
+              id="kiosk-agree-pay-button"
+              type="button"
+              className={styles.primary}
+              disabled={createOrder.isPending || !item}
+              onClick={() =>
+                item && createOrder.mutate({ slotId: item.slotId, kioskSessionId, idempotencyKey })
+              }
+            >
+              {createOrder.isPending ? t('kiosk.creatingOrder') : t('kiosk.agreeAndPay')}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const order = created.order;
+  const support = view?.supportReference ?? null;
 
   return (
-    <section className={styles.checkoutContainer}>
-      <div className={styles.modalCard}>
-        {/* Nút đóng */}
-        <button
-          type="button"
-          className={styles.closeButton}
-          onClick={handleCancel}
-          aria-label="Đóng popup"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-            close
-          </span>
-        </button>
-
-        {/* ================= BƯỚC 1: CHỌN PHƯƠNG THỨC THANH TOÁN (Screen 4) ================= */}
-        {currentStep === 'select_method' && (
+    <section className={styles.checkout} aria-label={t('kiosk.checkoutTitle')} data-phase={phase}>
+      <div className={styles.card}>
+        {phase === 'PAYING' && (
           <>
-            <div className={styles.headerArea}>
-              <h2 className={styles.modalTitle}>CHỌN PHƯƠNG THỨC THANH TOÁN</h2>
-
-              {/* Banner tóm tắt đơn hàng */}
-              <div className={styles.summaryBanner}>
-                <div className={styles.summaryLeft}>
-                  <img
-                    src={bottleImg}
-                    alt={product?.name ?? 'Nước hoa'}
-                    className={styles.summaryThumb}
-                  />
-                  <div className={styles.summaryInfo}>
-                    <span className={styles.summaryLabel}>
-                      Thanh toán lượt xịt • Ngăn 0{slotNumber}
-                    </span>
-                    <span className={styles.summaryName}>
-                      {product?.name ?? "Nuit d'Or"}
-                    </span>
-                  </div>
-                </div>
-                <div className={styles.summaryRight}>
-                  <div className={styles.summaryPrice}>{priceFormatted || '35.000 VND'}</div>
-                </div>
-              </div>
+            <h1 className={styles.title}>{t('kiosk.scanToPay')}</h1>
+            <div className={styles.qrBox} aria-label={t('kiosk.scanToPay')}>
+              <code className={styles.qrPayload}>{created.qrPayload}</code>
             </div>
-
-            {/* Danh sách phương thức thanh toán */}
-            <div className={styles.methodsList}>
-              {/* Lựa chọn 1: Thẻ POS / NFC */}
-              <label
-                className={`${styles.methodItem} ${selectedMethod === 'card' ? styles.methodItemSelected : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="kiosk_payment_method"
-                  value="card"
-                  checked={selectedMethod === 'card'}
-                  onChange={() => setSelectedMethod('card')}
-                  className={styles.radioInput}
-                />
-                <div className={styles.methodContent}>
-                  <div className={styles.methodHeader}>
-                    <div className={styles.methodTitleRow}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                        credit_card
-                      </span>
-                      <span className={styles.methodTitle}>
-                        Thẻ Visa / Mastercard / Thẻ Quốc Tế
-                      </span>
-                    </div>
-                  </div>
-                  <p className={styles.methodDesc}>
-                    Chạm NFC hoặc cắm thẻ chip vào khe đọc POS tích hợp ngay bên dưới màn hình.
-                  </p>
-                  <div className={styles.tagsRow}>
-                    <span className={styles.badgeTag}>VISA</span>
-                    <span className={styles.badgeTag}>MASTERCARD</span>
-                    <span className={styles.badgeTag}>JCB</span>
-                    <span className={styles.badgeTag}>Apple Pay</span>
-                    <span className={styles.badgeTag}>Google Pay</span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--color-text-secondary)',
-                        marginLeft: 'auto',
-                      }}
-                    >
-                      Miễn phí quẹt thẻ
-                    </span>
-                  </div>
-                </div>
-              </label>
-
-              {/* Lựa chọn 2: VietQR / Ví điện tử */}
-              <label
-                className={`${styles.methodItem} ${selectedMethod === 'qr' ? styles.methodItemSelected : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="kiosk_payment_method"
-                  value="qr"
-                  checked={selectedMethod === 'qr'}
-                  onChange={() => setSelectedMethod('qr')}
-                  className={styles.radioInput}
-                />
-                <div className={styles.methodContent}>
-                  <div className={styles.methodHeader}>
-                    <div className={styles.methodTitleRow}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                        qr_code_scanner
-                      </span>
-                      <span className={styles.methodTitle}>
-                        Quét Mã QR (VietQR / Ngân Hàng / Ví Điện Tử)
-                      </span>
-                    </div>
-                  </div>
-                  <p className={styles.methodDesc}>
-                    Quét mã qua app Mobile Banking hoặc ví MoMo, ZaloPay, VNPay.
-                  </p>
-                  <div className={styles.tagsRow}>
-                    <span className={styles.badgeTag}>VIETQR</span>
-                    <span className={styles.badgeTag}>MOMO</span>
-                    <span className={styles.badgeTag}>ZALOPAY</span>
-                    <span className={styles.badgeTag}>VNPAY</span>
-                    <span className={styles.badgeTag}>NAPAS 247</span>
-                  </div>
-                </div>
-              </label>
-            </div>
-
-            <div className={styles.footerButtons}>
-              <button
-                type="button"
-                className={styles.actionButtonSecondary}
-                onClick={handleCancel}
-              >
-                ← Quay lại danh mục
-              </button>
-              <button
-                type="button"
-                className={styles.actionButtonPrimary}
-                onClick={handleProceed}
-              >
-                Tiếp tục thanh toán →
-              </button>
-            </div>
+            <dl className={styles.facts}>
+              <dt>{t('kiosk.paymentReference')}</dt>
+              <dd className={styles.reference}>{order.paymentReference}</dd>
+              <dt>{t('kiosk.amountLabel')}</dt>
+              <dd>{formatAmount(order.amount, order.currency)}</dd>
+            </dl>
+            <p className={styles.muted}>
+              {t('kiosk.paymentExpiresIn', { seconds: secondsUntil(order.expiresAt, now) ?? 0 })}
+            </p>
+            <p className={styles.muted}>{t('kiosk.waitingForPayment')}</p>
           </>
         )}
 
-        {/* ================= BƯỚC 2A: POPUP HƯỚNG DẪN VIETQR (Screen 5) ================= */}
-        {currentStep === 'qr_instructions' && (
+        {phase === 'PREPARING' && <p className={styles.status}>{t('kiosk.preparingMachine')}</p>}
+        {phase === 'WAITING_TURN' && <p className={styles.status}>{t('kiosk.waitingForTurn')}</p>}
+
+        {phase === 'PRESS' && (
+          <div className={styles.press} role="status">
+            <span className={styles.pressBadge} aria-hidden="true">
+              {view?.slotNumber ?? slot}
+            </span>
+            <h1 className={styles.pressTitle}>
+              {t('kiosk.pressButtonNow', { slot: view?.slotNumber ?? slot })}
+            </h1>
+            <p className={styles.countdown}>
+              {t('kiosk.pressCountdown', {
+                seconds: secondsUntil(view?.pressDeadline, now) ?? config.pressWindowSec,
+              })}
+            </p>
+          </div>
+        )}
+
+        {phase === 'CHECKING' && (
           <>
-            <div className={styles.headerArea}>
-              <h2 className={styles.modalTitle}>QUÉT MÃ QR ĐỂ THANH TOÁN</h2>
-
-              {/* Tóm tắt */}
-              <div className={styles.summaryBanner}>
-                <div className={styles.summaryLeft}>
-                  <img
-                    src={bottleImg}
-                    alt={product?.name ?? 'Nước hoa'}
-                    className={styles.summaryThumb}
-                  />
-                  <div className={styles.summaryInfo}>
-                    <span className={styles.summaryLabel}>
-                      Mã đơn: <strong style={{ color: '#000000' }}>#SCT-8842</strong>
-                    </span>
-                    <span className={styles.summaryName}>
-                      {product?.name ?? "Nuit d'Or"}
-                    </span>
-                  </div>
-                </div>
-                <div className={styles.summaryRight}>
-                  <div className={styles.summaryPrice}>{priceFormatted || '35.000 VND'}</div>
-                  <div className={styles.summaryNote}>1 lượt xịt cao cấp</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Hộp hiển thị mã QR */}
-            <div className={styles.qrDisplayBox}>
-              <div className={styles.qrWrapper}>
-                <svg
-                  className={styles.qrSvg}
-                  fill="none"
-                  viewBox="0 0 160 160"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <rect fill="#000000" height="40" rx="6" width="40" x="10" y="10" />
-                  <rect fill="white" height="24" rx="3" width="24" x="18" y="18" />
-                  <rect fill="#000000" height="14" rx="2" width="14" x="23" y="23" />
-                  <rect fill="#000000" height="40" rx="6" width="40" x="110" y="10" />
-                  <rect fill="white" height="24" rx="3" width="24" x="118" y="18" />
-                  <rect fill="#000000" height="14" rx="2" width="14" x="123" y="23" />
-                  <rect fill="#000000" height="40" rx="6" width="40" x="10" y="110" />
-                  <rect fill="white" height="24" rx="3" width="24" x="18" y="118" />
-                  <rect fill="#000000" height="14" rx="2" width="14" x="23" y="123" />
-                  <rect fill="#000000" height="8" width="8" x="60" y="15" />
-                  <rect fill="#000000" height="8" width="12" x="75" y="15" />
-                  <rect fill="#000000" height="8" width="8" x="92" y="15" />
-                  <rect fill="#000000" height="8" width="14" x="60" y="30" />
-                  <rect fill="#000000" height="8" width="18" x="82" y="28" />
-                  <rect fill="#000000" height="15" width="8" x="60" y="45" />
-                  <rect fill="#000000" height="12" width="12" x="75" y="42" />
-                  <rect fill="#000000" height="10" width="10" x="95" y="45" />
-                  <rect fill="#000000" height="8" width="10" x="15" y="60" />
-                  <rect fill="#000000" height="8" width="12" x="32" y="60" />
-                  <rect fill="#000000" height="8" width="18" x="15" y="75" />
-                  <rect fill="#000000" height="12" width="14" x="38" y="75" />
-                  <rect fill="#000000" height="8" width="12" x="15" y="92" />
-                  <rect fill="#000000" height="10" width="10" x="35" y="92" />
-                  <rect fill="#000000" height="10" width="10" x="60" y="65" />
-                  <rect fill="#000000" height="10" width="10" x="78" y="65" />
-                  <rect fill="#000000" height="8" width="15" x="95" y="65" />
-                  <rect fill="#000000" height="10" width="12" x="115" y="60" />
-                  <rect fill="#000000" height="8" width="15" x="135" y="60" />
-                  <rect fill="#000000" height="15" width="8" x="115" y="75" />
-                  <rect fill="#000000" height="8" width="18" x="130" y="78" />
-                  <rect fill="#000000" height="8" width="14" x="115" y="95" />
-                  <rect fill="#000000" height="12" width="12" x="135" y="92" />
-                  <rect fill="#000000" height="8" width="12" x="60" y="85" />
-                  <rect fill="#000000" height="14" width="10" x="80" y="82" />
-                  <rect fill="#000000" height="10" width="8" x="98" y="85" />
-                  <rect fill="#000000" height="8" width="18" x="60" y="105" />
-                  <rect fill="#000000" height="14" width="8" x="85" y="102" />
-                  <rect fill="#000000" height="8" width="12" x="100" y="105" />
-                  <rect fill="#000000" height="12" width="10" x="60" y="120" />
-                  <rect fill="#000000" height="8" width="14" x="78" y="122" />
-                  <rect fill="#000000" height="10" width="12" x="98" y="120" />
-                  <rect fill="#000000" height="8" width="15" x="60" y="138" />
-                  <rect fill="#000000" height="12" width="10" x="82" y="135" />
-                  <rect fill="#000000" height="8" width="14" x="98" y="138" />
-                  <rect fill="#000000" height="10" width="12" x="118" y="115" />
-                  <rect fill="#000000" height="8" width="14" x="135" y="115" />
-                  <rect fill="#000000" height="14" width="10" x="118" y="132" />
-                  <rect fill="#000000" height="8" width="15" x="135" y="130" />
-                  <rect fill="#000000" height="24" rx="6" width="24" x="68" y="68" />
-                  <path d="M74 80L78 74H86L82 86H74L78 80Z" fill="#ffffff" />
-                </svg>
-              </div>
-
-              <div className={styles.timerRow}>
-                <div className={styles.timerPill}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                    schedule
-                  </span>
-                  <span>Thời gian hiệu lực: {formatCountdown(countdown)}</span>
-                </div>
-                <div className={styles.waitingPill}>
-                  <span className={styles.waitingPulse} />
-                  <span>Đang chờ nhận diện giao dịch tự động...</span>
-                </div>
-              </div>
-
-              <div className={styles.tagsRow}>
-                <span className={styles.badgeTag}>VIETQR</span>
-                <span className={styles.badgeTag}>MOMO</span>
-                <span className={styles.badgeTag}>ZALOPAY</span>
-                <span className={styles.badgeTag}>VNPAY</span>
-                <span className={styles.badgeTag}>NAPAS 247</span>
-              </div>
-            </div>
-
-            <div className={styles.footerButtons}>
-              <button
-                type="button"
-                className={styles.actionButtonSecondary}
-                onClick={() => setCurrentStep('select_method')}
-              >
-                ← Đổi phương thức thanh toán
-              </button>
-              <button
-                type="button"
-                className={styles.actionButtonPrimary}
-                onClick={handleCancel}
-              >
-                Hủy giao dịch
-              </button>
-            </div>
+            <p className={styles.status}>{t('kiosk.checkingResult')}</p>
+            {support && (
+              <p className={styles.muted}>{t('kiosk.supportHint', { reference: support })}</p>
+            )}
           </>
         )}
 
-        {/* ================= BƯỚC 2B: POPUP HƯỚNG DẪN POS / NFC (Screen 6) ================= */}
-        {currentStep === 'pos_instructions' && (
+        {phase === 'DISPENSED' && (
           <>
-            <div className={styles.headerArea}>
-              <h2 className={styles.modalTitle}>THANH TOÁN THẺ QUỐC TẾ / NFC</h2>
-
-              <div className={styles.summaryBanner}>
-                <div className={styles.summaryLeft}>
-                  <img
-                    src={bottleImg}
-                    alt={product?.name ?? 'Nước hoa'}
-                    className={styles.summaryThumb}
-                  />
-                  <div className={styles.summaryInfo}>
-                    <span className={styles.summaryLabel}>Mã đơn: #SCT-8842</span>
-                    <span className={styles.summaryName}>
-                      {product?.name ?? "Nuit d'Or"}
-                    </span>
-                  </div>
-                </div>
-                <div className={styles.summaryRight}>
-                  <div className={styles.summaryPrice}>{priceFormatted || '35.000 VND'}</div>
-                  <div className={styles.summaryNote}>Chạm thẻ hoặc cắm chip</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Radar animation chạm thẻ NFC */}
-            <div className={styles.nfcDisplayBox}>
-              <div className={styles.nfcRadar}>
-                <div className={styles.radarRing} />
-                <div className={styles.nfcIconCore}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
-                    contactless
-                  </span>
-                </div>
-              </div>
-
-              <div className={styles.nfcStatusPill}>
-                <span className={styles.waitingPulse} style={{ background: '#ffffff' }} />
-                <span>ĐANG CHỜ CHẠM THẺ HOẶC CẮM CHIP...</span>
-              </div>
-
-              <div className={styles.tagsRow} style={{ justifyContent: 'center' }}>
-                <span className={styles.badgeTag}>VISA</span>
-                <span className={styles.badgeTag}>MASTERCARD</span>
-                <span className={styles.badgeTag}>JCB</span>
-                <span className={styles.badgeTag}>Apple Pay</span>
-                <span className={styles.badgeTag}>Google Pay</span>
-              </div>
-            </div>
-
-            {/* 3 Bước hướng dẫn trực quan */}
-            <div className={styles.stepsGrid}>
-              <div className={styles.stepCard}>
-                <span className={styles.stepBadge}>1</span>
-                <span className={`material-symbols-outlined ${styles.stepIcon}`}>
-                  contactless
-                </span>
-                <span className={styles.stepTitle}>Chạm thẻ</span>
-              </div>
-
-              <div className={styles.stepCard}>
-                <span className={styles.stepBadge}>2</span>
-                <span className={`material-symbols-outlined ${styles.stepIcon}`}>
-                  pin
-                </span>
-                <span className={styles.stepTitle}>Nhập mã PIN (nếu có)</span>
-              </div>
-
-              <div className={styles.stepCard}>
-                <span className={styles.stepBadge}>3</span>
-                <span className={`material-symbols-outlined ${styles.stepIcon}`}>
-                  receipt_long
-                </span>
-                <span className={styles.stepTitle}>Nhận lượt xịt tại vòi</span>
-              </div>
-            </div>
-
-            <div className={styles.footerButtons}>
-              <button
-                type="button"
-                className={styles.actionButtonSecondary}
-                onClick={() => setCurrentStep('select_method')}
-              >
-                ← Đổi phương thức thanh toán
-              </button>
-              <button
-                type="button"
-                className={styles.actionButtonPrimary}
-                onClick={handleCancel}
-              >
-                Hủy giao dịch
-              </button>
-            </div>
+            <h1 className={styles.title}>{t('kiosk.dispensedTitle')}</h1>
+            <p className={styles.body}>{t('kiosk.dispensedHint')}</p>
           </>
+        )}
+        {phase === 'FORFEITED' && (
+          <>
+            <h1 className={styles.title}>{t('kiosk.pressTimeoutTitle')}</h1>
+            <p className={styles.body}>{t('kiosk.pressTimeoutHint')}</p>
+          </>
+        )}
+        {phase === 'EXPIRED' && (
+          <>
+            <h1 className={styles.title}>{t('kiosk.paymentExpiredTitle')}</h1>
+            <p className={styles.body}>{t('kiosk.paymentExpiredHint')}</p>
+          </>
+        )}
+        {phase === 'PROBLEM' && (
+          <>
+            <h1 className={styles.title}>{t('kiosk.orderProblemTitle')}</h1>
+            <p className={styles.body}>
+              {t('kiosk.supportHint', { reference: support ?? order.paymentReference })}
+            </p>
+          </>
+        )}
+
+        {settled && (
+          <div className={styles.actions}>
+            <button type="button" className={styles.primary} onClick={goHome}>
+              {t('kiosk.backToHome')}
+            </button>
+          </div>
         )}
       </div>
     </section>

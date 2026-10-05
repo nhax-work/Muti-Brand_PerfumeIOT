@@ -25,6 +25,15 @@ export const config = {
    */
   catalogPollMs: SPEC_CONSTRAINTS.HEARTBEAT_INTERVAL_SEC * 1000,
 
+  /**
+   * FR-ORD-11: trạng thái đơn phải hiện trên kiosk trong ORDER_STATUS_POLL_MAX_SEC. Poll dày gấp ba
+   * để còn biên cho độ trễ mạng.
+   */
+  orderStatusPollMs: (SPEC_CONSTRAINTS.ORDER_STATUS_POLL_MAX_SEC * 1000) / 3,
+
+  /** FR-ORD-25: thời gian khách có để bấm nút — hiện trong điều khoản trước khi trả tiền. */
+  pressWindowSec: SPEC_CONSTRAINTS.DISPENSE_PRESS_WINDOW_SEC,
+
   /** NFR-USA-04: cỡ chữ tối thiểu, áp vào biến CSS `--kiosk-min-font` lúc khởi động. */
   minFontPx: SPEC_CONSTRAINTS.KIOSK_MIN_FONT_PX,
 } as const;
