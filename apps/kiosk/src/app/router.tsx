@@ -19,26 +19,22 @@ export const router = createBrowserRouter([
       {
         path: 'catalog',
         handle: {} satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: 'products/:slotNumber',
         handle: {} satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: 'checkout/:slotNumber',
         handle: { keepAwake: true } satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: '*',
         handle: {} satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
     ],
   },

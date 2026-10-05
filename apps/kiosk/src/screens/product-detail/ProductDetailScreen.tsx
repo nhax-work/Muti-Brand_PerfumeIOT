@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useKioskCatalog } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
@@ -51,8 +51,6 @@ export default function ProductDetailScreen() {
   const { slotNumber } = useParams<{ slotNumber: string }>();
   const catalog = useKioskCatalog();
 
-  const [isSpraying, setIsSpraying] = useState(false);
-
   const item = useMemo(() => {
     const items = catalog.data?.items ?? [];
     return items.find((i) => String(i.slotNumber) === slotNumber);
@@ -101,13 +99,6 @@ export default function ProductDetailScreen() {
     return { top, heart, base, others };
   }, [product?.fragranceNotes]);
 
-  const handleSprayTest = () => {
-    setIsSpraying(true);
-    setTimeout(() => {
-      setIsSpraying(false);
-    }, 3200);
-  };
-
   // Hiển thị thông báo không tìm thấy khi slot không tồn tại hoặc không khả dụng
   if (!item || !product) {
     return (
@@ -128,19 +119,14 @@ export default function ProductDetailScreen() {
   }
 
   const priceText = formatPrice(item.pricePerSpray, item.currency);
-  const bottleImg =
-    product.imageUrl ||
-    FALLBACK_BOTTLES[item.slotNumber] ||
-    FALLBACK_BOTTLES[1];
+  const bottleImg = product.imageUrl || FALLBACK_BOTTLES[item.slotNumber] || FALLBACK_BOTTLES[1];
 
   return (
     <section className={styles.detailContainer} aria-label={product.name}>
       <div className={styles.modalBox}>
         {/* Cột trái: Chai nước hoa & chứng nhận nguồn gốc */}
         <div className={styles.bottleColumn}>
-          <div className={styles.batchBadge}>
-            N° 0{item.slotNumber} • HAUTE SILLAGE
-          </div>
+          <div className={styles.batchBadge}>N° 0{item.slotNumber} • HAUTE SILLAGE</div>
 
           <div className={styles.imageFrame}>
             <div className={styles.pedestalShadow} />
@@ -153,17 +139,13 @@ export default function ProductDetailScreen() {
           <div>
             <div className={styles.headerMeta}>
               <span className={styles.familyTag}>ORIENTAL SILLAGE</span>
-              {item.brandName && (
-                <span className={styles.brandLabel}>{item.brandName}</span>
-              )}
+              {item.brandName && <span className={styles.brandLabel}>{item.brandName}</span>}
             </div>
 
             <h1 className={styles.productName}>{product.name}</h1>
 
             <div className={styles.priceRow}>
-              <span className={styles.priceTag}>
-                {priceText ? `${priceText} / lượt xịt` : ''}
-              </span>
+              <span className={styles.priceTag}>{priceText ? `${priceText} / lượt xịt` : ''}</span>
             </div>
 
             {(product.description || (slotNumber ? PRODUCT_INTROS[slotNumber] : '')) && (
@@ -194,7 +176,14 @@ export default function ProductDetailScreen() {
                     {t('kiosk.fragranceNotes')}
                   </span>
                   <div className={styles.detailValue}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        alignItems: 'flex-end',
+                      }}
+                    >
                       {notes.top.length > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
@@ -274,16 +263,6 @@ export default function ProductDetailScreen() {
           </div>
         </div>
       </div>
-
-      {/* Scent Spray Toast Notification */}
-      {isSpraying && (
-        <div className={styles.sprayToast} role="alert">
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-            air
-          </span>
-          <span>Đang phun làn sương thử hương tại vòi salon... Xin mời thưởng thức!</span>
-        </div>
-      )}
     </section>
   );
 }

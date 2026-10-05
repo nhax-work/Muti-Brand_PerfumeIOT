@@ -7,7 +7,7 @@ import { useKioskSession } from '@/shared/session';
 import styles from './CatalogScreen.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
- 
+
 const FALLBACK_BOTTLES: Record<number, string> = {
   1: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBjHLKHQ-e9v8rbVauKmO7a4XdFgitH2PX04adOLTIDcdpPwTMgj-ABCxgZT3y1iVk4EkVCclPnFJrm2AP7heA3adEYnqsJsWfuHluEESKmnpcpMphfmLkxdj5oTKVTETo2E8JdzRMpvqTaHozpF27TbIsqMhy3BEIWgUjwP0FNUks_8sX00O_fphckeGjDYOqtj7WxsNLAxCBLfThMPkP3xN9K3q-NAOeoySXLnRZdVHO09viZHUTm',
   2: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCi8kgz8yWcTDwPznpLifDSV9mqx5f3T3sYLxfM6aJ_dbkYiY_UC6j3hY7txxWfnMG_isJJ_WxlMdGt86bRV0k5TcAN7LhxMhSljyTmn-S0JL3tHi7E5tKCO0o1rDcYx1bUoCUByKyl285EKIYD9FVctJyP40qzusM13xM7ejEW6CiqwAJQ0giQD8CVUL1YFtP4SrXTwDlazB_1IZIdSpdY4fOXGMnYaHb0jli_1Dxeu02TDqO-E1Ce',
@@ -84,7 +84,6 @@ export default function CatalogScreen() {
   const [selectedDetailItem, setSelectedDetailItem] = useState<KioskCatalogItem | null>(null);
   const [customPaymentStep, setCustomPaymentStep] = useState<PaymentStep | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'card' | 'qr'>('card');
-  const [isSpraying, setIsSpraying] = useState(false);
   const [countdown, setCountdown] = useState(299); // 04:59
 
   const items = useMemo(() => catalog.data?.items ?? [], [catalog.data?.items]);
@@ -387,13 +386,6 @@ export default function CatalogScreen() {
     }
   };
 
-  const handleSprayTest = () => {
-    setIsSpraying(true);
-    setTimeout(() => {
-      setIsSpraying(false);
-    }, 3200);
-  };
-
   // Phân tích nốt hương cho modal chi tiết
   const notes = useMemo(() => {
     const rawNotes = detailItem?.product?.fragranceNotes;
@@ -453,18 +445,12 @@ export default function CatalogScreen() {
           </button>
 
           {/* Dải băng chuyền sản phẩm chuyển động chu kỳ liên tục từ trái sang phải */}
-          <div
-            ref={trackRef}
-            className={styles.carouselTrack}
-            id="parfumCarousel"
-          >
+          <div ref={trackRef} className={styles.carouselTrack} id="parfumCarousel">
             {loopItems.map((item) => {
               const isAvailable = item.available;
               const priceText = formatPrice(item.pricePerSpray, item.currency);
               const bottleImg =
-                item.product?.imageUrl ||
-                FALLBACK_BOTTLES[item.slotNumber] ||
-                FALLBACK_BOTTLES[1];
+                item.product?.imageUrl || FALLBACK_BOTTLES[item.slotNumber] || FALLBACK_BOTTLES[1];
               const familyName = FAMILIES[item.slotNumber] || 'HAUTE SILLAGE';
 
               return (
@@ -576,10 +562,7 @@ export default function CatalogScreen() {
           role="dialog"
           aria-modal="true"
         >
-          <div
-            className={styles.productDetailBox}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className={styles.productDetailBox} onClick={(e) => e.stopPropagation()}>
             {/* Nút đóng */}
             <button
               type="button"
@@ -625,11 +608,7 @@ export default function CatalogScreen() {
                   </span>
                 </div>
 
-                {detailIntro && (
-                  <p className={styles.modalDesc}>
-                    {detailIntro}
-                  </p>
-                )}
+                {detailIntro && <p className={styles.modalDesc}>{detailIntro}</p>}
 
                 <div className={styles.modalDetailsTable}>
                   <div className={styles.modalDetailRow}>
@@ -653,33 +632,52 @@ export default function CatalogScreen() {
                         Tầng Hương Chính
                       </span>
                       <div className={styles.modalDetailValue}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6,
+                            alignItems: 'flex-end',
+                          }}
+                        >
                           {notes.top.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Hương đầu:</span>
+                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                Hương đầu:
+                              </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.top.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>{n}</span>
+                                  <span key={n} className={styles.modalNoteChip}>
+                                    {n}
+                                  </span>
                                 ))}
                               </div>
                             </div>
                           )}
                           {notes.heart.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Hương giữa:</span>
+                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                Hương giữa:
+                              </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.heart.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>{n}</span>
+                                  <span key={n} className={styles.modalNoteChip}>
+                                    {n}
+                                  </span>
                                 ))}
                               </div>
                             </div>
                           )}
                           {notes.base.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>Hương cuối:</span>
+                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
+                                Hương cuối:
+                              </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.base.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>{n}</span>
+                                  <span key={n} className={styles.modalNoteChip}>
+                                    {n}
+                                  </span>
                                 ))}
                               </div>
                             </div>
@@ -730,10 +728,7 @@ export default function CatalogScreen() {
           role="dialog"
           aria-modal="true"
         >
-          <div
-            className={styles.checkoutModalBox}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className={styles.checkoutModalBox} onClick={(e) => e.stopPropagation()}>
             {/* Nút đóng */}
             <button
               type="button"
@@ -760,16 +755,34 @@ export default function CatalogScreen() {
                         className={styles.checkoutSummaryThumb}
                       />
                       <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.14em', color: 'var(--color-text-secondary)' }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.14em',
+                            color: 'var(--color-text-secondary)',
+                          }}
+                        >
                           Thanh toán 1 lượt xịt • Ngăn 0{detailItem?.slotNumber}
                         </div>
-                        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600 }}>
+                        <div
+                          style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600 }}
+                        >
                           {detailItem?.product?.name ?? "Nuit d'Or"}
                         </div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 22, fontWeight: 700, color: '#000000', letterSpacing: '-0.01em' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 22,
+                          fontWeight: 700,
+                          color: '#000000',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
                         {detailPriceFormatted || '35.000 VND'}
                       </div>
                     </div>
@@ -791,12 +804,28 @@ export default function CatalogScreen() {
                     />
                     <div style={{ flex: 1, textAlign: 'left' }}>
                       <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13.5 }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>credit_card</span>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontWeight: 700,
+                            fontSize: 13.5,
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            credit_card
+                          </span>
                           Thẻ Visa / Mastercard / Thẻ Quốc Tế
                         </div>
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--color-text-secondary)',
+                          margin: '4px 0 8px',
+                        }}
+                      >
                         Chạm NFC hoặc cắm thẻ chip vào khe đọc POS tích hợp ngay bên dưới màn hình.
                       </div>
                       <div className={styles.tagsRow} style={{ justifyContent: 'flex-start' }}>
@@ -822,13 +851,35 @@ export default function CatalogScreen() {
                       className={styles.checkoutRadio}
                     />
                     <div style={{ flex: 1, textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13.5 }}>
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>qr_code_scanner</span>
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontWeight: 700,
+                            fontSize: 13.5,
+                          }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                            qr_code_scanner
+                          </span>
                           Quét Mã QR (VietQR / Ngân Hàng / Ví Điện Tử)
                         </div>
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', margin: '4px 0 8px' }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--color-text-secondary)',
+                          margin: '4px 0 8px',
+                        }}
+                      >
                         Quét mã qua app Mobile Banking hoặc ví MoMo, ZaloPay, VNPay.
                       </div>
                       <div className={styles.tagsRow} style={{ justifyContent: 'flex-start' }}>
@@ -875,16 +926,33 @@ export default function CatalogScreen() {
                         className={styles.checkoutSummaryThumb}
                       />
                       <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            color: 'var(--color-text-secondary)',
+                          }}
+                        >
                           Mã đơn: <strong style={{ color: '#000000' }}>#SCT-8842</strong>
                         </div>
-                        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}>
+                        <div
+                          style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}
+                        >
                           {detailItem?.product?.name ?? "Nuit d'Or"}
                         </div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 20, fontWeight: 700, color: '#000000', letterSpacing: '-0.01em' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          color: '#000000',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
                         {detailPriceFormatted || '35.000 VND'}
                       </div>
                     </div>
@@ -1007,16 +1075,33 @@ export default function CatalogScreen() {
                         className={styles.checkoutSummaryThumb}
                       />
                       <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            color: 'var(--color-text-secondary)',
+                          }}
+                        >
                           Mã đơn: #SCT-8842
                         </div>
-                        <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}>
+                        <div
+                          style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}
+                        >
                           {detailItem?.product?.name ?? "Nuit d'Or"}
                         </div>
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontFamily: 'var(--font-sans)', fontSize: 20, fontWeight: 700, color: '#000000', letterSpacing: '-0.01em' }}>
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-sans)',
+                          fontSize: 20,
+                          fontWeight: 700,
+                          color: '#000000',
+                          letterSpacing: '-0.01em',
+                        }}
+                      >
                         {detailPriceFormatted || '35.000 VND'}
                       </div>
                     </div>
@@ -1050,7 +1135,9 @@ export default function CatalogScreen() {
                 <div className={styles.stepsGrid}>
                   <div className={styles.stepCard}>
                     <span className={styles.stepBadge}>1</span>
-                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>contactless</span>
+                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>
+                      contactless
+                    </span>
                     <span className={styles.stepTitle}>Chạm thẻ</span>
                   </div>
                   <div className={styles.stepCard}>
@@ -1060,7 +1147,9 @@ export default function CatalogScreen() {
                   </div>
                   <div className={styles.stepCard}>
                     <span className={styles.stepBadge}>3</span>
-                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>receipt_long</span>
+                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>
+                      receipt_long
+                    </span>
                     <span className={styles.stepTitle}>Nhận lượt xịt tại vòi</span>
                   </div>
                 </div>
@@ -1084,16 +1173,6 @@ export default function CatalogScreen() {
               </>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Scent Spray Toast Notification */}
-      {isSpraying && (
-        <div className={styles.sprayToast} role="alert">
-          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-            air
-          </span>
-          <span>Đang phun làn sương thử hương tại vòi salon... Xin mời thưởng thức!</span>
         </div>
       )}
     </section>

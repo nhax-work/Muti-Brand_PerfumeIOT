@@ -18,7 +18,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       brandName: 'SCENTATION PARIS',
       product: {
         id: 'prod-1',
-        name: "Nuit d’Or",
+        name: 'Nuit d’Or',
         description:
           "Infusion d'ambre précieux, safran d'Orient et accords de fumée de bois de oud impérial. Một sự pha trộn mê hoặc đưa giác quan vào cung điện phương Đông dưới ánh trăng vàng.",
         imageUrl:
