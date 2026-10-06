@@ -116,7 +116,9 @@ async function main(): Promise<void> {
     }
 
     await client.query('COMMIT');
-    console.log('✅ Đã tạo thêm 2 máy mới (M002 Landmark 81, M003 Vincom Đồng Khởi) với tổng cộng 8 slot trống mở cho thuê!');
+    console.log(
+      '✅ Đã tạo thêm 2 máy mới (M002 Landmark 81, M003 Vincom Đồng Khởi) với tổng cộng 8 slot trống mở cho thuê!',
+    );
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

@@ -336,7 +336,8 @@ export default function CheckoutDetailPage() {
 
             {(() => {
               const displayReference = (() => {
-                if (!paymentIntent?.qrPayload) return paymentIntent?.paymentId?.slice(0, 8) ?? '...';
+                if (!paymentIntent?.qrPayload)
+                  return paymentIntent?.paymentId?.slice(0, 8) ?? '...';
                 const parts = paymentIntent.qrPayload.split('|');
                 if (parts.length >= 2 && parts[1]?.startsWith('CHK-')) {
                   return parts[1];

@@ -70,21 +70,12 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Dọn payments, events, checkouts, rentals tạo thêm
-  const checkouts = `SELECT id FROM rental_checkouts WHERE brand_id IN ($1, $2)`;
-  await raw.query(
-    `DELETE FROM payment_events WHERE payment_id IN (SELECT id FROM payments WHERE rental_checkout_id IN (${checkouts}))`,
+  await raw.query(`DELETE FROM notifications WHERE brand_id IN ($1, $2)`, [fx.brandA, fx.brandB]);
+  const leftover = await raw.query<{ id: string }>(
+    `SELECT id FROM rental_checkouts WHERE brand_id IN ($1, $2)`,
     [fx.brandA, fx.brandB],
   );
-  await raw.query(`DELETE FROM payments WHERE rental_checkout_id IN (${checkouts})`, [
-    fx.brandA,
-    fx.brandB,
-  ]);
-  await raw.query(`DELETE FROM notifications WHERE brand_id IN ($1, $2)`, [fx.brandA, fx.brandB]);
-  await raw.query(`DELETE FROM slot_rentals WHERE slot_id IN ($1, $2)`, [vacantSlot1, vacantSlot2]);
-  await raw.query(`DELETE FROM rental_checkouts WHERE brand_id IN ($1, $2)`, [
-    fx.brandA,
-    fx.brandB,
-  ]);
+  await deleteCheckouts(leftover.rows.map((r) => r.id));
   await raw.query(`DELETE FROM machine_slots WHERE id IN ($1, $2)`, [vacantSlot1, vacantSlot2]);
   await raw.query(`DELETE FROM rental_packages WHERE id = $1`, [packageId]);
   await raw.query(`DELETE FROM storage_plans WHERE id = $1`, [storagePlanId]);
@@ -93,6 +84,51 @@ afterAll(async () => {
   await app?.close();
   await raw?.end();
 });
+
+/**
+ * Bất biến phiên ↔ hóa đơn là constraint trigger HOÃN tới COMMIT (ADR-0008,
+ * migrations/1790757100000_rental-checkouts.sql). `raw` chạy autocommit, nên mọi thao tác sửa cả
+ * phiên lẫn hóa đơn phải gói chung một transaction — tách lệnh thì trigger thấy trạng thái dở dang.
+ */
+async function inTransaction(fn: () => Promise<void>): Promise<void> {
+  await raw.query('BEGIN');
+  try {
+    await fn();
+    await raw.query('COMMIT');
+  } catch (err) {
+    await raw.query('ROLLBACK');
+    throw err;
+  }
+}
+
+async function deleteCheckouts(checkoutIds: readonly string[]): Promise<void> {
+  if (checkoutIds.length === 0) return;
+  const ids = [...checkoutIds];
+  await inTransaction(async () => {
+    await raw.query(
+      `DELETE FROM payment_events WHERE payment_id IN
+         (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
+      [ids],
+    );
+    await raw.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
+    await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
+    await raw.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
+  });
+}
+
+/** Giả lập job hủy phiên (FR-SLT-39): phiên và mọi hóa đơn cùng bị hủy trong một transaction. */
+async function cancelCheckoutDirectly(checkoutId: string, at: Date = new Date()): Promise<void> {
+  await inTransaction(async () => {
+    await raw.query(`UPDATE rental_checkouts SET cancelled_at = $1 WHERE id = $2`, [
+      at,
+      checkoutId,
+    ]);
+    await raw.query(
+      `UPDATE slot_rentals SET status = 'CANCELLED', cancelled_at = $1 WHERE checkout_id = $2`,
+      [at, checkoutId],
+    );
+  });
+}
 
 async function sendWebhook(payload: MockWebhookBody, secret = TEST_PAYMENT_WEBHOOK_SECRET) {
   const body = JSON.stringify(payload);
@@ -164,9 +200,7 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     expect(cancelCheckoutRes.statusCode).toBe(201);
     const cancelledCheckout = cancelCheckoutRes.json<{ id: string }>();
 
-    await raw.query(`UPDATE rental_checkouts SET cancelled_at = now() WHERE id = $1`, [
-      cancelledCheckout.id,
-    ]);
+    await cancelCheckoutDirectly(cancelledCheckout.id);
     const payCancelledRes = await brandA(
       'POST',
       `/rental-checkouts/${cancelledCheckout.id}/payments`,
@@ -174,18 +208,7 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     expect(payCancelledRes.statusCode).toBe(409);
 
     // Dọn dẹp checkout tạm
-    await raw.query(`DELETE FROM payments WHERE rental_checkout_id IN ($1, $2)`, [
-      checkout.id,
-      cancelledCheckout.id,
-    ]);
-    await raw.query(`DELETE FROM slot_rentals WHERE checkout_id IN ($1, $2)`, [
-      checkout.id,
-      cancelledCheckout.id,
-    ]);
-    await raw.query(`DELETE FROM rental_checkouts WHERE id IN ($1, $2)`, [
-      checkout.id,
-      cancelledCheckout.id,
-    ]);
+    await deleteCheckouts([checkout.id, cancelledCheckout.id]);
   });
 });
 
@@ -247,10 +270,7 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(updatedRentals.rows[0].invoice_number).not.toBe(updatedRentals.rows[1].invoice_number);
 
     // Dọn dẹp
-    await raw.query(`DELETE FROM payment_events WHERE payment_id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM payments WHERE id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = $1`, [checkout.id]);
-    await raw.query(`DELETE FROM rental_checkouts WHERE id = $1`, [checkout.id]);
+    await deleteCheckouts([checkout.id]);
   });
 
   it('test_FR_SLT_38_confirm_invoice_payment_webhook — AC5 phiên đã hủy', async () => {
@@ -276,15 +296,7 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     const currency = paymentRow.rows[0].currency;
 
     // Giả lập job hủy đã chạy: phiên cancelled_at, hóa đơn CANCELLED, payment EXPIRED
-    const now = new Date();
-    await raw.query(`UPDATE rental_checkouts SET cancelled_at = $1 WHERE id = $2`, [
-      now,
-      checkout.id,
-    ]);
-    await raw.query(
-      `UPDATE slot_rentals SET status = 'CANCELLED', cancelled_at = $1 WHERE checkout_id = $2`,
-      [now, checkout.id],
-    );
+    await cancelCheckoutDirectly(checkout.id);
     await raw.query(`UPDATE payments SET status = 'EXPIRED' WHERE id = $1`, [payment.paymentId]);
 
     // Webhook gửi về báo thành công
@@ -313,10 +325,7 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(afterCheckout.rows[0].cancelled_at).not.toBeNull();
 
     // Dọn dẹp
-    await raw.query(`DELETE FROM payment_events WHERE payment_id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM payments WHERE id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = $1`, [checkout.id]);
-    await raw.query(`DELETE FROM rental_checkouts WHERE id = $1`, [checkout.id]);
+    await deleteCheckouts([checkout.id]);
   });
 
   it('test_FR_SLT_43_notify_paid_and_active_invoice', async () => {
@@ -370,9 +379,6 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
 
     // Dọn dẹp
     await raw.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
-    await raw.query(`DELETE FROM payment_events WHERE payment_id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM payments WHERE id = $1`, [payment.paymentId]);
-    await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = $1`, [checkout.id]);
-    await raw.query(`DELETE FROM rental_checkouts WHERE id = $1`, [checkout.id]);
+    await deleteCheckouts([checkout.id]);
   });
 });

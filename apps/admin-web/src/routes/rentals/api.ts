@@ -111,9 +111,12 @@ export function useCancelCheckout() {
   return useMutation({
     mutationFn: (checkoutId: string) =>
       unwrap(
-        api.POST('/rental-checkouts/{id}/cancel' as never, {
-          params: { path: { id: checkoutId } },
-        } as never),
+        api.POST(
+          '/rental-checkouts/{id}/cancel' as never,
+          {
+            params: { path: { id: checkoutId } },
+          } as never,
+        ),
       ),
     onSuccess: (_, checkoutId) => {
       void queryClient.invalidateQueries({ queryKey: ['rental-checkout', checkoutId] });
