@@ -93,6 +93,11 @@ export class PaymentService {
     const record = await this.queries.findLatestForOrder(orderId);
     return record ? intentOf(record) : null;
   }
+
+  /** FR-SLT-39 AC1: payment PENDING của phiên → EXPIRED, trong transaction của người gọi. */
+  async expirePending(target: PaymentTarget, tx: Kysely<DB>): Promise<void> {
+    await this.queries.closePending(target, 'EXPIRED', tx);
+  }
 }
 
 function intentOf(record: PaymentRecord): PaymentIntent {

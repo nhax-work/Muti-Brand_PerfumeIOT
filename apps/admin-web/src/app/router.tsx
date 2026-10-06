@@ -39,6 +39,25 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/machines/MachineDetailPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/rentals',
+        lazy: () => import('@/routes/rentals/RentalsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/rentals/available',
+        lazy: () =>
+          import('@/routes/rentals/AvailableSlotsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/rentals/checkouts/:id',
+        lazy: () =>
+          import('@/routes/rentals/CheckoutDetailPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/rentals/:id',
+        lazy: () =>
+          import('@/routes/rentals/RentalDetailPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
   {

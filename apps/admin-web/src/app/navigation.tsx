@@ -1,4 +1,4 @@
-import { AppstoreOutlined, DashboardOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, DashboardOutlined, ShopOutlined } from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
 import type { ReactNode } from 'react';
@@ -22,5 +22,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.machines',
     icon: <AppstoreOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
+  {
+    path: '/rentals',
+    label: 'ui.rentals',
+    icon: <ShopOutlined />,
+    roles: ['BRAND_ADMIN'],
   },
 ];
