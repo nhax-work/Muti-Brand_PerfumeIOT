@@ -20,9 +20,12 @@ function getLanguageLabel(l: string): string {
 }
 
 /**
- * Khung bao mọi màn hình kiosk: Header chứa điều hướng (Trang chủ / Quay lại)
- * cùng hàng với Dropdown chọn ngôn ngữ thu gọn, tự về trang chủ khi rảnh (NFR-USA-02),
- * và thay toàn bộ nội dung bằng màn hình tạm ngưng khi mất liên lạc (FR-IOT-13).
+ * Khung bao mọi màn hình kiosk:
+ * - Header tối giản cao cấp thương hiệu SCENTATION PARIS (Haute Parfumerie).
+ * - Điều hướng linh hoạt (Trang chủ / Quay lại danh mục).
+ * - Dropdown chuyển đổi ngôn ngữ tương tác mượt mà.
+ * - Footer thông tin hỗ trợ sommelier và chuẩn giao diện haptic touch.
+ * - Cơ chế tự động reset phiên khi rảnh (NFR-USA-02) và màn hình bảo trì (FR-IOT-13).
  */
 export function KioskShell() {
   const { locale, setLocale, t } = useI18n();
@@ -46,7 +49,7 @@ export function KioskShell() {
 
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
 
-  // Đóng dropdown khi click ngoài
+  // Đóng dropdown khi click ra ngoài
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (langDropdownRef.current && !langDropdownRef.current.contains(e.target as Node)) {
@@ -65,6 +68,7 @@ export function KioskShell() {
 
   const isCatalog = location.pathname === '/catalog';
   const isProductDetail = location.pathname.startsWith('/products/');
+  const isCheckout = location.pathname.startsWith('/checkout/');
 
   return (
     <div className={styles.shell}>
@@ -80,7 +84,7 @@ export function KioskShell() {
               ← {t('kiosk.backToHome')}
             </button>
           )}
-          {isProductDetail && (
+          {(isProductDetail || isCheckout) && (
             <button
               type="button"
               className={styles.backButton}
@@ -90,11 +94,13 @@ export function KioskShell() {
               ← {t('kiosk.backToCatalog')}
             </button>
           )}
-          {!isCatalog && !isProductDetail && (
-            <div className={styles.brandTitle}>
-              <span className={styles.brandIcon}>✦</span> ScentStation
-            </div>
+          {!isCatalog && !isProductDetail && !isCheckout && (
+            <span className={styles.srOnly}>ScentStation Kiosk</span>
           )}
+        </div>
+
+        <div className={styles.brandCenter}>
+          <span className={styles.brandTitle}>SCENTATION</span>
         </div>
 
         <div className={styles.navRight} ref={langDropdownRef}>
@@ -107,7 +113,7 @@ export function KioskShell() {
             aria-label="Chọn ngôn ngữ"
           >
             <span className={styles.langGlobe}>🌐</span>
-            <span className={styles.langName}>{getLanguageLabel(locale)}</span>
+            <span>{getLanguageLabel(locale)}</span>
             <span className={styles.langChevron}>{isLangOpen ? '▲' : '▼'}</span>
           </button>
 

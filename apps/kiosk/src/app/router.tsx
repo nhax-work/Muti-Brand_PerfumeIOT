@@ -19,23 +19,22 @@ export const router = createBrowserRouter([
       {
         path: 'catalog',
         handle: {} satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/catalog/CatalogScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: 'products/:slotNumber',
         handle: {} satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/product-detail/ProductDetailScreen').then((m) => ({
-            Component: m.default,
-          })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
-        // Khách đang quét QR hoặc chờ bấm nút — không được bị đá về trang chủ giữa chừng.
         path: 'checkout/:slotNumber',
         handle: { keepAwake: true } satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/checkout/CheckoutScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '*',
+        handle: {} satisfies KioskRouteHandle,
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
     ],
   },
