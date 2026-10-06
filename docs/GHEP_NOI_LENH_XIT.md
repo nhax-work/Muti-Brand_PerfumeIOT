@@ -31,9 +31,21 @@ Trong ≤ 1 giây đèn nút sáng, kiosk hiện "Mời bấm nút số N" và �
 ```powershell
 npm run sim                              # M001, tự bấm nút sau 2 giây → đơn DISPENSED
 npm run sim -- --no-press                # không bấm → sau 60 giây PRESS_TIMEOUT → FORFEITED
+npm run sim -- --wrong-slot 3            # bấm nhầm nút slot 3 (bị bỏ qua, FR-DSP-22) rồi bấm đúng → DISPENSED
+npm run sim -- --wrong-slot 3 --no-press # chỉ bấm nhầm → sau 60 giây PRESS_TIMEOUT → FORFEITED
 npm run sim -- --fail ACTUATOR_FAULT     # bấm nhưng cơ cấu hỏng → FAILED + cần kiểm tra
 npm run sim -- --reject DOOR_OPEN        # từ chối ngay khi nhận lệnh
+npm run sim -- --public-key device.pub.pem  # kiểm chữ ký bằng khóa công khai chỉ định
 ```
+
+Simulator kiểm chữ ký Ed25519 trước mọi bước khác (`spec/contracts/mqtt.md` §5.1, FR-DSP-07):
+
+- Có `--public-key`, hoặc `DISPENSE_SIGNING_KEY` trong `.env` là khóa thật → kiểm chặt; chữ ký sai,
+  thiếu hay `dev-unsigned` đều bị `REJECT` với `CMD_INVALID_SIGNATURE` (đơn `FAILED`).
+- Không có khóa (`DISPENSE_SIGNING_KEY` còn giá trị mẫu) → chế độ dev như firmware bật
+  `DEV_ALLOW_UNSIGNED_COMMANDS`: chỉ đòi lệnh có trường `signature`.
+
+Muốn thử lệnh bị từ chối vì chữ ký: chạy backend với khóa A, simulator với `--public-key` của khóa B.
 
 **Không** chạy simulator cùng lúc với ESP32 thật mang cùng serial `M001`.
 
