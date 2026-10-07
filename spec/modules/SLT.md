@@ -600,8 +600,8 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_SLT_35_checkout_holds_slot`
 
-> AC3 và AC4 thuộc nhóm "unique constraint slot" trong 7 nhóm test người tự viết (`spec/testing.md`)
-> — agent không sinh test cho hai ca này. Không giới hạn số slot mỗi phiên (ADR-0008).
+> AC3 và AC4 thuộc nhóm test trọng yếu "unique constraint slot" (`spec/testing.md`) — test phải chạy
+> trên CSDL thật, hai phiên giữ chỗ đồng thời. Không giới hạn số slot mỗi phiên (ADR-0008).
 
 ---
 
@@ -686,8 +686,9 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then CSDL từ chối (`chk_checkout_invoice_state_sync`, ADR-0008) — không có phiên đã trả tiền mà còn hóa đơn "chờ thanh toán".
 * **Test:** `test_FR_SLT_38_confirm_invoice_payment_webhook`
 
-> AC4 thuộc nhóm "idempotency webhook" trong 7 nhóm test người tự viết (`spec/testing.md`) — agent
-> không sinh test cho ca này.
+> AC4 thuộc nhóm test trọng yếu "idempotency webhook" (`spec/testing.md`) — nghiệm thu bằng
+> `test_FR_SLT_38_duplicate_invoice_webhook_recorded_once` trong
+> `tests/integration/test_webhook_idempotency.test.ts`.
 
 ---
 
@@ -712,8 +713,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then CSDL từ chối (`chk_checkout_invoice_state_sync`, ADR-0008).
 * **Test:** `test_FR_SLT_39_cancel_unpaid_invoice_after_hold`
 
-> Thuộc nhóm "job chuyển trạng thái hóa đơn" trong 7 nhóm test người tự viết (`spec/testing.md`) —
-> agent không sinh test cho FR này.
+> Thuộc nhóm test trọng yếu "job chuyển trạng thái hóa đơn" (`spec/testing.md`).
 
 ---
 
@@ -771,8 +771,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then không làm gì với `H` (đã kích hoạt theo FR-SLT-24).
 * **Test:** `test_FR_SLT_42_auto_activate_after_stocking_window`
 
-> Thuộc nhóm "job chuyển trạng thái hóa đơn" trong 7 nhóm test người tự viết (`spec/testing.md`) —
-> agent không sinh test cho FR này.
+> Thuộc nhóm test trọng yếu "job chuyển trạng thái hóa đơn" (`spec/testing.md`).
 
 ---
 

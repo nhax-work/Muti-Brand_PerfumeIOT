@@ -98,8 +98,8 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
     Then dùng timer phần cứng (`esp_timer`), không dùng `delay` — cùng nguyên tắc với `ACTUATOR_MAX_MS`.
 * **Test:** `test_FR_DSP_24_press_timeout_rejects_command`
 
-> Ca "bấm sau khi hết thời gian" thuộc nhóm "TTL lệnh xịt" trong các test người tự viết
-> (`spec/testing.md`) — agent không sinh test cho ca đó.
+> Ca "bấm sau khi hết thời gian" thuộc nhóm test trọng yếu "TTL lệnh xịt" (`spec/testing.md`) —
+> nghiệm thu bằng `tests/e2e/test_command_ttl.test.ts`.
 
 ---
 
@@ -115,7 +115,8 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
     Then nền tảng chuyển lệnh `UNKNOWN` và đơn vào kiểm tra thủ công (FR-ORD-19) — không phải `FORFEITED`.
 * **Test:** `test_FR_DSP_25_no_armed_state_after_reboot`
 
-> Thuộc nhóm "Mất điện giữa lúc xịt" trong các test người tự viết — agent không sinh test cho FR này.
+> Thuộc nhóm test trọng yếu "TTL lệnh xịt" (`spec/testing.md`). Phía nền tảng và simulator nghiệm
+> thu bằng `tests/e2e/test_command_ttl.test.ts`; mất điện thật trên ESP32 kiểm trên phần cứng.
 
 ---
 

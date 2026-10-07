@@ -244,10 +244,11 @@ it('test_FR_SLT_02_reject_occupied_slot', async () => { ... });
 ở `tests/unit/auth.test.ts` (`FakeQueries`, `FakeClock`) và `tests/unit/usr.test.ts`. Luật phụ thuộc
 thời gian thì dùng `FakeClock` và tua đồng hồ, đừng `setTimeout` chờ thật.
 
-**Bảy nhóm test người tự viết** — agent không sinh, và đừng đặt mã FR tương ứng vào unit test của
-mình, vì script truy vết sẽ tưởng FR đó đã có test: idempotency webhook, cô lập mức slot, quy kết
-`revenue_owner`, unique constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái
-hóa đơn (`spec/testing.md`).
+**Bảy nhóm test trọng yếu** — idempotency webhook, cô lập mức slot, quy kết `revenue_owner`, unique
+constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái hóa đơn (`spec/testing.md`).
+Agent được viết (ADR-0010), nhưng test phải đi qua chính cơ chế cần chứng minh — CSDL thật, webhook
+có chữ ký, simulator — và PR cần người review riêng phần test. Đừng đặt mã FR của các nhóm này vào
+unit test chỉ kiểm logic thuần: script truy vết sẽ tưởng FR đã được nghiệm thu.
 
 ---
 

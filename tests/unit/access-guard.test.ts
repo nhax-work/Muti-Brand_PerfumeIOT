@@ -5,7 +5,7 @@
  * kiểm đúng cơ chế mà các thành viên khác sẽ dựa vào.
  *
  * Không đặt mã FR-AUTH-08 dù guard trả FORBIDDEN_SCOPE: FR-AUTH-08 nghiệm thu bằng
- * tests/integration/test_slot_isolation.ts (test người tự viết).
+ * tests/integration/test_slot_isolation.test.ts (nhóm test trọng yếu).
  */
 
 import 'reflect-metadata';

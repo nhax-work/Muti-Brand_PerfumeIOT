@@ -20,17 +20,29 @@ chưa có test và CI fail.
 | `tests/contract/` | Hiện thực khớp `openapi.yaml` và `mqtt.md` |
 | `tests/e2e/` | Luồng đầu-cuối với Device Simulator |
 
-## Bảy nhóm test người tự viết, không giao agent
+Test integration và e2e chạy **tuần tự từng file** (`--no-file-parallelism`). Các file dùng chung
+một CSDL test, và job DSP (`armQueuedOrders`, `sweepTimeouts`) quét mọi máy, nên chạy song song thì
+file này sẽ ghi lệnh lên đơn của file kia.
 
-| Nhóm | File |
-|---|---|
-| Idempotency webhook | `tests/integration/test_webhook_idempotency.ts` |
-| Cô lập mức slot | `tests/integration/test_slot_isolation.ts` |
-| `revenue_owner` | `tests/integration/test_revenue_attribution.ts` |
-| Unique constraint slot | `tests/integration/test_slot_constraint.ts` |
-| TTL lệnh xịt | `tests/e2e/test_command_ttl.ts` |
-| Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report |
-| Job chuyển trạng thái | `tests/integration/test_rental_scheduler.ts` |
+## Bảy nhóm test trọng yếu
+
+Đây là những bất biến dễ sai nhất và tốn kém nhất nếu sai. Agent **được** viết và sửa test của cả bảy
+nhóm (ADR-0010 bỏ quy định "người tự viết" trước đây). Đổi lại:
+
+- test mang đúng mã FR của ca nó chứng minh, theo quy ước đặt tên ở trên;
+- test phải đi qua chính cơ chế cần chứng minh: ràng buộc CSDL thật, webhook có chữ ký, simulator
+  kiểm chữ ký/TTL. Mock đúng chỗ đó thì test vô nghĩa;
+- PR thêm hoặc sửa test trọng yếu phải có người review riêng phần test, đối chiếu từng assert với AC.
+
+| Nhóm | File | Trạng thái |
+|---|---|---|
+| Idempotency webhook | `tests/integration/test_webhook_idempotency.test.ts` | có |
+| Cô lập mức slot | `tests/integration/test_slot_isolation.test.ts` | có |
+| `revenue_owner` | `tests/integration/test_revenue_attribution.test.ts` | chưa có |
+| Unique constraint slot | `tests/integration/test_slot_constraint.test.ts` | có |
+| TTL lệnh xịt | `tests/e2e/test_command_ttl.test.ts` | có |
+| Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report | — |
+| Job chuyển trạng thái | `tests/integration/test_rental_scheduler.test.ts` | chưa có |
 
 ## Cổng CI
 

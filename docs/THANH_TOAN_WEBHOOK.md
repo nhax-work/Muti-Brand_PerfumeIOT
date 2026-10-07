@@ -144,15 +144,13 @@ Thử: tạo phiên → tạo payment → `npm run pay:mock -- CHK-…`.
 
 ---
 
-## 5. Test người tự viết — chưa có, là của TV1
+## 5. Nhóm test trọng yếu (ADR-0010)
 
-Agent không sinh các test này (`spec/testing.md`):
-
-- **Idempotency webhook** (`tests/integration/test_webhook_idempotency.ts`): 2 webhook cùng `eventId`
+- **Idempotency webhook** (`tests/integration/test_webhook_idempotency.test.ts`, **đã có**): 2 webhook cùng `eventId`
   gửi SONG SONG → đúng một lần chuyển PAID, cái còn lại `WEBHOOK_ALREADY_PROCESSED`; chứng minh chỗ chặn
   là `uq_payment_event` (thử bỏ `onConflict` trong `PaymentQueries.claimEvent` thì test phải đỏ). Ca
   ADR-0008: phiên nhiều hóa đơn không được cấp số hóa đơn lần hai. `npm run pay:mock -- <mã> --repeat 5`
   là phiên bản tuần tự để thử tay.
-- **Quy kết `revenue_owner`** (`tests/integration/test_revenue_attribution.ts`): slot LIQUIDATED →
+- **Quy kết `revenue_owner`** (`tests/integration/test_revenue_attribution.test.ts`, **chưa có**): slot LIQUIDATED →
   PLATFORM, còn lại BRAND (FR-REV-02); tạo đơn → thanh lý → đơn cũ vẫn BRAND (FR-REV-03 AC1);
   `UPDATE orders SET revenue_owner` bị từ chối với `chk_order_snapshot_immutable` (AC2, ADR-0009).
