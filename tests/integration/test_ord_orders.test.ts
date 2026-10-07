@@ -2,10 +2,10 @@
  * Integration test cho luồng đơn kiosk và webhook thanh toán (tuần 4, TV1): HTTP thật → guard →
  * service → PostgreSQL thật, cổng thanh toán mock với webhook tự ký.
  *
- * KHÔNG có ở đây — thuộc nhóm người tự viết (spec/testing.md):
- *   - Idempotency webhook: 2 webhook song song, unique constraint ở CSDL (FR-ORD-15)
- *   - Quy kết revenue_owner (FR-REV-01..03)
- *   - Cô lập mức slot của tìm kiếm đơn (FR-ORD-22 AC3)
+ * KHÔNG có ở đây — thuộc nhóm test trọng yếu (spec/testing.md), file riêng:
+ *   - Idempotency webhook (FR-ORD-15) — test_webhook_idempotency.test.ts
+ *   - Quy kết revenue_owner (FR-REV-01..03) — test_revenue_attribution.test.ts, chưa có
+ *   - Cô lập mức slot của tìm kiếm đơn (FR-ORD-22 AC3) — test_slot_isolation.test.ts
  */
 
 import { randomUUID } from 'node:crypto';

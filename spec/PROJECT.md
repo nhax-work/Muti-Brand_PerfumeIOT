@@ -39,7 +39,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 3 | `spec/constraints.md` | Tên mọi hằng ngưỡng số | Cần một timeout, TTL, giới hạn hay tỷ lệ — không bao giờ hardcode |
 | 4 | `spec/errors.md` | Danh mục mã lỗi đầy đủ | Cần trả về hoặc kiểm tra một mã lỗi |
 | 5 | `spec/contracts/README.md` | Quy tắc đóng băng và quy trình đổi contract | Trước khi đụng bất cứ thứ gì trong `spec/contracts/` |
-| 6 | `spec/testing.md` | Quy ước đặt tên test, phân tầng test, cổng CI, test người tự viết | Trước khi viết hoặc đặt tên bất kỳ test nào |
+| 6 | `spec/testing.md` | Quy ước đặt tên test, phân tầng test, cổng CI, bảy nhóm test trọng yếu | Trước khi viết hoặc đặt tên bất kỳ test nào |
 | 7 | `spec/modules/*.md` | FR theo module kèm acceptance criteria | Cần AC dạng Given/When/Then của một module |
 | 8 | `spec/decisions/` | Nhật ký ADR cho các thay đổi contract | Đang đề xuất hoặc rà soát một thay đổi contract |
 | 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
@@ -143,7 +143,6 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 
 | Trường hợp | Lý do |
 |---|---|
-| Viết bất kỳ test nào trong 7 nhóm test người tự viết (idempotency webhook, cô lập mức slot, quy kết `revenue_owner`, unique constraint slot, TTL lệnh xịt, hard timeout firmware, job chuyển trạng thái hóa đơn) | Dành cho người viết, không giao agent (`spec/testing.md`) |
 | Sửa một file contract đã đóng băng trong `spec/contracts/` | Cần ADR trong `spec/decisions/` và TV1 duyệt trước (`spec/contracts/README.md`) |
 | Đổi hoặc gộp công cụ migration | Ảnh hưởng `make migrate` của mọi người và cả CI. Đã chốt — node-pg-migrate với SQL thuần (`spec/decisions/0002-*.md`); đổi thì cần ADR mới |
 | Thêm một mã lỗi mới | `spec/errors.md` là nguồn duy nhất; agent không được tự nghĩ mã |
@@ -172,7 +171,7 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 - Coi `orders.brand_id`, `orders.slot_rental_id`, `orders.revenue_owner`, `orders.amount` là chỉ ghi một lần lúc tạo (`spec/contracts/README.md`, NFR-DAT-06) — không có đường cập nhật cho các cột này.
 - Không bao giờ sửa file trong `spec/contracts/` từ một thay đổi code; việc đó cần quy trình ADR ở Mục 3.
 - Khi task cần đổi lược đồ, thêm đúng một file migration mới — không sửa, không xóa migration cũ — và kiểm bằng `make reset && make migrate` trên CSDL sạch trước khi coi là xong.
-- Webhook thanh toán đơn kiosk **không** kích hoạt xịt: tạo lệnh `CUSTOMER` chỉ khi máy không còn lệnh `CUSTOMER` hiệu lực (nếu còn, đơn giữ `PAID` — chờ lượt); `ACK` từ thiết bị nghĩa là đèn nút đã sáng; `REJECT` với `PRESS_TIMEOUT` → đơn `FORFEITED`, không đặt `needs_manual_review`; mọi mã từ chối khác sau `ACK` → `FAILED` + `needs_manual_review` (ADR-0007, `spec/contracts/mqtt.md` §5.2, §6).
+- Webhook thanh toán đơn kiosk **không** kích hoạt xịt: tạo lệnh `CUSTOMER` chỉ khi máy không còn lệnh `CUSTOMER` hiệu lực (nếu còn, đơn giữ `PAID` — chờ lượt); `ACK` từ thiết bị nghĩa là đèn nút đã sáng; `REJECT` với `PRESS_TIMEOUT` → đơn `FORFEITED`, không đặt `needs_manual_review`; `REJECT` với `CMD_DUPLICATE` là từ chối một bản sao broker gửi lại → bỏ qua, không đổi lệnh hay đơn (ADR-0011); mọi mã từ chối khác sau `ACK` → `FAILED` + `needs_manual_review` (ADR-0007, `spec/contracts/mqtt.md` §5.2, §6).
 - Coi các cột ảnh chụp giá trên `slot_rentals` (`duration_months` … `total_amount`, `invoice_number`) là chỉ ghi một lần, như cột ảnh chụp trên `orders` (ADR-0006, FR-SLT-33).
 
 ### 🔍 Review Agent
@@ -183,12 +182,13 @@ Các persona dưới đây khớp khối `agents` trong `harness.config.json` (c
 - Từ chối mọi PR có truy vấn hướng thương hiệu lọc qua `Machine` thay vì qua quyền sở hữu ở `Order`/`SlotRental`.
 - Từ chối PR có chuỗi hướng người dùng viết thẳng tại chỗ dùng, hoặc thêm khóa vào `vi` mà quên `en`.
 - Nêu cờ đỏ với mọi PR sửa file trong `spec/contracts/` mà không kèm ADR trong `spec/decisions/`.
+- Với test thuộc 7 nhóm trọng yếu (`spec/testing.md`), đối chiếu từng assert với AC và từ chối test xanh nhờ mock bỏ qua đúng cơ chế cần chứng minh (ADR-0010).
 - Yêu cầu kiểm tra xác thực lại ở các endpoint hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý và đổi cấu hình máy (FR-AUTH-09).
 
 ### 🧪 Test Agent
 
 - Đặt tên mọi test sinh ra đúng dạng `test_FR_<MODULE>_<số>_<mô_tả_ngắn>`; `scripts/check-traceability.mjs` dựa vào đó để tính một FR là đã có test.
-- Không sinh 7 nhóm test người tự viết liệt kê ở Mục 4 — để dành cho người và nói rõ điều đó. ADR-0006 và ADR-0007 thêm ca vào các nhóm này (giữ chỗ slot đồng thời, webhook trùng cho hóa đơn, job hủy giữ chỗ và tự kích hoạt, bấm sau khi hết thời gian chờ, reset khi đèn đang sáng) — các ca đó cũng là của người. `spec/modules/*.md` đánh dấu từng ca bằng ghi chú "agent không sinh test".
+- Được viết cả 7 nhóm test trọng yếu (`spec/testing.md`; ADR-0010 bỏ quy định "người tự viết" trước đây). Các ADR khác bổ sung ca vào những nhóm này, ví dụ giữ chỗ slot đồng thời, webhook trùng cho hóa đơn, job hủy giữ chỗ và tự kích hoạt, bấm sau khi hết thời gian chờ, reset khi đèn đang sáng. Test trọng yếu phải đi qua chính cơ chế cần chứng minh (ràng buộc CSDL thật, webhook có chữ ký, simulator kiểm chữ ký/TTL), không mock bỏ qua nó. Ghi rõ trong PR rằng có test trọng yếu để người review riêng phần đó.
 - Đặt test đúng tầng: `tests/unit/` (logic thuần), `tests/integration/` (CSDL thật, ràng buộc, tranh chấp đồng thời), `tests/contract/` (khớp `openapi.yaml`/`mqtt.md`), `tests/e2e/` (luồng đầy đủ với Device Simulator).
 - Nhắm độ phủ ≥60% cho `ORD`, `DSP`, `SLT`, `EXP`, `REV`, `INV` — cổng coverage của CI (`spec/testing.md`, NFR-MTN-01).
 

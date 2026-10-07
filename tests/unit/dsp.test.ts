@@ -2,8 +2,8 @@
  * Unit test cho DSP: bảng ánh xạ `command/result` → trạng thái lệnh/đơn (spec/contracts/mqtt.md §6),
  * ký lệnh (§5.1) và topic (§1).
  *
- * KHÔNG có ở đây — thuộc nhóm người tự viết (docs/LO_TRINH_AI_HARNESS_13_TUAN.md "Chín chỗ"):
- *   - TTL lệnh xịt phía thiết bị, bấm nút sau DISPENSE_PRESS_WINDOW_SEC
+ * Luồng trên CSDL thật: tests/integration/test_dsp_dispatch.test.ts. TTL lệnh xịt phía thiết bị và
+ * bấm nút sau DISPENSE_PRESS_WINDOW_SEC: tests/e2e/test_command_ttl.test.ts.
  */
 
 import { generateKeyPairSync, verify } from 'node:crypto';
@@ -66,6 +66,14 @@ describe('DSP — ánh xạ kết quả thiết bị (mqtt.md §6)', () => {
     expect(outcomeOf({ stage: 'REJECT', failureCode: 'PRESS_TIMEOUT' }, false)).toMatchObject({
       order: { to: 'FAILED' },
     });
+  });
+
+  it('CMD_DUPLICATE nói về bản sao broker gửi lại — không khép lệnh gốc (FR-DSP-10)', () => {
+    for (const acknowledged of [true, false]) {
+      expect(outcomeOf({ stage: 'REJECT', failureCode: 'CMD_DUPLICATE' }, acknowledged)).toEqual({
+        kind: 'IGNORED',
+      });
+    }
   });
 });
 

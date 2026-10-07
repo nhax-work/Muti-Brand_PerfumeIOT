@@ -34,6 +34,7 @@ npm run sim -- --no-press                # không bấm → sau 60 giây PRESS_T
 npm run sim -- --wrong-slot 3            # bấm nhầm nút slot 3 (bị bỏ qua, FR-DSP-22) rồi bấm đúng → DISPENSED
 npm run sim -- --wrong-slot 3 --no-press # chỉ bấm nhầm → sau 60 giây PRESS_TIMEOUT → FORFEITED
 npm run sim -- --fail ACTUATOR_FAULT     # bấm nhưng cơ cấu hỏng → FAILED + cần kiểm tra
+npm run sim -- --fail-on-press DOOR_OPEN # bấm nhưng kiểm an toàn lần hai không đạt (FR-DSP-23) → FAILED + cần kiểm tra
 npm run sim -- --reject DOOR_OPEN        # từ chối ngay khi nhận lệnh
 npm run sim -- --public-key device.pub.pem  # kiểm chữ ký bằng khóa công khai chỉ định
 ```

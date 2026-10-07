@@ -187,8 +187,8 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
     Then điều kiện lọc đi qua `orders.brand_id` hoặc `slot_rentals.brand_id`, **không bao giờ** qua `machines` — cột `machines.brand_id` không tồn tại.
 * **Test:** `tests/integration/test_slot_isolation.ts`
 
-> **Test người tự viết — agent KHÔNG sinh test cho FR này** (`spec/testing.md`, `spec/PROJECT.md`
-> Mục 4). NFR-SEC-04 yêu cầu 100% endpoint có dữ liệu thương hiệu vượt được bộ test truy cập chéo,
+> **Nhóm test trọng yếu "cô lập mức slot"** (`spec/testing.md`) — PR sửa test này cần người review
+> riêng phần test (ADR-0010). NFR-SEC-04 yêu cầu 100% endpoint có dữ liệu thương hiệu vượt được bộ test truy cập chéo,
 > bao gồm trường hợp hai thương hiệu trên cùng một máy. Dữ liệu `make seed` đã dựng sẵn đúng kịch
 > bản đó: 1 máy, 4 slot, 2 thương hiệu mỗi bên 2 slot.
 
@@ -216,7 +216,7 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
     Then mọi động từ đều bị từ chối như nhau — không chỉ chặn ở luồng đọc.
 * **Test:** `tests/integration/test_slot_isolation.ts`
 
-> Cùng thuộc nhóm test người tự viết với FR-AUTH-07.
+> Cùng thuộc nhóm test trọng yếu "cô lập mức slot" với FR-AUTH-07.
 
 ---
 

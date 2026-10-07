@@ -3,8 +3,8 @@
  *
  * CỐ Ý KHÔNG đặt tên theo `test_FR_AUTH_07_*` hay `test_FR_AUTH_08_*`.
  *
- * Hai FR đó được nghiệm thu bằng `tests/integration/test_slot_isolation.py` — một trong 7 nhóm
- * test người tự viết (`spec/testing.md`), chạy trên CSDL thật với hai thương hiệu cùng một máy.
+ * Hai FR đó được nghiệm thu bằng `tests/integration/test_slot_isolation.test.ts` — một trong 7
+ * nhóm test trọng yếu (`spec/testing.md`), chạy trên CSDL thật với hai thương hiệu cùng một máy.
  * Nếu đặt tên theo mã FR ở đây, `check_traceability.py` sẽ báo FR-AUTH-07/08 "đã có test" và che
  * mất việc test tích hợp thật sự chưa được viết. Test dưới đây chỉ kiểm logic thuần của chốt chặn,
  * không chứng minh được endpoint nào cô lập đúng.

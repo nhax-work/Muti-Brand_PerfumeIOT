@@ -16,7 +16,7 @@
  *   Lỗi giữa chừng → rollback cả bản ghi chống trùng → cổng gửi lại sau và được xử lý lại từ đầu.
  *
  * Idempotency là ràng buộc CSDL (uq_payment_event), không phải một câu SELECT "đã có chưa" — test
- * chứng minh điều đó thuộc nhóm người tự viết (spec/testing.md), không nằm trong mã này.
+ * chứng minh điều đó: tests/integration/test_webhook_idempotency.test.ts.
  */
 
 import { createHash, randomUUID } from 'node:crypto';

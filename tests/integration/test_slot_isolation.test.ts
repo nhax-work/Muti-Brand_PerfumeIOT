@@ -212,8 +212,8 @@ describe('slot trống chào thuê', () => {
    * không số liệu.
    *
    * Viết lại 2026-10-01 theo ADR-0006 ("Việc còn lại" mục 2): 7 trường, chỉ slot đã có giá niêm
-   * yết, loại slot có hóa đơn DRAFT. Do agent viết theo yêu cầu TV1, TV1 review — ngoại lệ có chủ
-   * đích với quy định nhóm test người tự viết.
+   * yết, loại slot có hóa đơn DRAFT. Do agent viết theo yêu cầu TV1, TV1 review (từ ADR-0010 đây là
+   * quy trình chung cho nhóm test trọng yếu).
    */
   it('test_FR_AUTH_07_available_slots_expose_only_location_data', async () => {
     const list = async () => {

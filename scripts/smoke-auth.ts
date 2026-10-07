@@ -12,7 +12,7 @@
  *   5. Chạy chốt chặn cô lập dữ liệu trên Postgres thật với 2 thương hiệu cùng một máy.
  *   6. Tắt API. Exit 1 nếu có ca nào sai.
  *
- * Đây KHÔNG phải test nghiệm thu thay cho 7 nhóm test người tự viết (spec/testing.md) — nó là cách
+ * Đây KHÔNG phải test nghiệm thu thay cho 7 nhóm test trọng yếu (spec/testing.md) — nó là cách
  * nhanh để tự xác nhận hệ thống đang chạy đúng.
  */
 

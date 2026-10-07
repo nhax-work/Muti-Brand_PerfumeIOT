@@ -2,9 +2,9 @@
  * Unit test cho ORD: state machine, mã tham chiếu, so tiền, cổng mock, và phân nhánh webhook sang
  * phiên thuê slot (ADR-0008).
  *
- * KHÔNG có ở đây — thuộc nhóm người tự viết (spec/testing.md, docs/HUONG_DAN_BACKEND.md Mục 6):
- *   - idempotency webhook (FR-ORD-15, FR-SLT-38 AC4)
- *   - quy kết revenue_owner (FR-REV-01..03)
+ * Cần CSDL thật nên KHÔNG ở đây:
+ *   - idempotency webhook (FR-ORD-15, FR-SLT-38 AC4) — tests/integration/test_webhook_idempotency.test.ts
+ *   - quy kết revenue_owner (FR-REV-01..03) — nhóm test trọng yếu, chưa viết (spec/testing.md)
  */
 
 import 'reflect-metadata';
@@ -136,6 +136,7 @@ describe('ORD — danh mục kiosk', () => {
     productFragranceNotes: null,
     productStatus: 'ACTIVE',
     productDeletedAt: null,
+    calibratedDosageMl: '0.1200',
   };
 
   it('slot chỉ bán được khi đủ mọi điều kiện (FR-ORD-04, FR-SLT-29, FR-BND-04)', () => {
@@ -148,6 +149,8 @@ describe('ORD — danh mục kiosk', () => {
     expect(isSellable({ ...sellable, productId: null, productName: null })).toBe(false);
     expect(isSellable({ ...sellable, productDeletedAt: new Date() })).toBe(false);
     expect(isSellable({ ...sellable, brandStatus: 'SUSPENDED' })).toBe(false);
+    // Chưa hiệu chuẩn thì lệnh xịt không có liều để gửi (FR-MCH-06).
+    expect(isSellable({ ...sellable, calibratedDosageMl: null })).toBe(false);
   });
 });
 

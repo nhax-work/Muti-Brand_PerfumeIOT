@@ -4,8 +4,7 @@
  * Ký bằng chính `createCommandSigner` của backend rồi kiểm bằng verifier của simulator: hai bên phải
  * chuẩn hóa payload giống hệt nhau, lệch là mọi lệnh thật bị từ chối.
  *
- * KHÔNG có ở đây — thuộc nhóm người tự viết (docs/LO_TRINH_AI_HARNESS_13_TUAN.md "Chín chỗ"):
- *   - TTL lệnh xịt phía thiết bị, bấm nút sau DISPENSE_PRESS_WINDOW_SEC
+ * TTL lệnh xịt phía thiết bị và bấm nút sau DISPENSE_PRESS_WINDOW_SEC: tests/e2e/test_command_ttl.test.ts.
  */
 
 import { generateKeyPairSync } from 'node:crypto';
