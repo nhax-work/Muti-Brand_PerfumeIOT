@@ -155,7 +155,35 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByText('Đã hết thời gian bấm nút')).toBeTruthy();
     expect(screen.queryByText(/báo mã/)).toBeNull();
   });
+
+  it('sau khi thanh toán thành công, hiển thị giao diện hướng dẫn nhận lượt xịt (Stitch UI)', () => {
+    mockOrder(
+      created,
+      view({
+        status: 'DISPENSE_REQUESTED',
+        dispenseStatus: 'ACKNOWLEDGED',
+        pressDeadline: new Date(Date.now() + 45_000).toISOString(),
+      }),
+    );
+    renderScreen();
+
+    expect(screen.getByText('Thanh toán thành công')).toBeTruthy();
+    expect(screen.getByText('Hướng dẫn nhận lượt xịt')).toBeTruthy();
+    expect(screen.getByText('1. Đưa cổ tay lại gần vòi')).toBeTruthy();
+    expect(screen.getByText('3. Thưởng thức hương thơm')).toBeTruthy();
+    expect(screen.getByText(/10–15 cm/)).toBeTruthy();
+  });
+
+  it('khi đã xịt xong (DISPENSED), hiển thị thông điệp cảm ơn và nút quay về trang chủ', () => {
+    mockOrder(created, view({ status: 'DISPENSED' }));
+    renderScreen();
+
+    expect(screen.getByText('Cảm ơn bạn!')).toBeTruthy();
+    expect(screen.getByText('Chúc bạn một ngày thơm tho.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Trang chủ' })).toBeTruthy();
+  });
 });
+
 
 describe('phaseOf', () => {
   it('ánh xạ trạng thái đơn + lệnh sang màn hình', () => {

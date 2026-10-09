@@ -1,0 +1,530 @@
+/*
+ * Scentation Paris — Màn hình Thanh Toán Thành Công & Hướng Dẫn Nhận Lượt Xịt
+ * Haute Parfumerie Minimalist Luxury Aesthetic
+ */
+
+.container {
+  width: 100%;
+  max-width: 1120px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0 auto;
+}
+
+/* --- Header Banner --- */
+.headerBanner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(180deg, rgba(212, 175, 55, 0.08) 0%, rgba(212, 175, 55, 0.02) 100%);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+}
+
+.headerBanner::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #d4af37, #ffe088, #d4af37, transparent);
+}
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.successBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #554300;
+  background: #fff3dc;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  border-radius: var(--radius-full);
+}
+
+.successIcon {
+  width: 16px;
+  height: 16px;
+  color: #725b38;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: calc(var(--font-hero) + 4px);
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  margin: 0;
+  font-size: var(--font-body);
+  color: var(--color-text-secondary);
+  max-width: 680px;
+}
+
+/* --- Main Grid --- */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+@media (min-width: 880px) {
+  .grid {
+    grid-template-columns: 1fr 1.15fr;
+  }
+}
+
+/* --- Column 1: Slot & Dispenser Card --- */
+.dispenserCard {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-md);
+  position: relative;
+}
+
+.productHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.bottleThumbWrapper {
+  width: 84px;
+  height: 96px;
+  flex-shrink: 0;
+  background: radial-gradient(circle at center, rgba(212, 175, 55, 0.12) 0%, transparent 70%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+}
+
+.bottleThumb {
+  max-width: 70px;
+  max-height: 84px;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.15));
+}
+
+.productMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.productBrand {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+.productName {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: calc(var(--font-title) - 2px);
+  color: var(--color-text);
+  line-height: 1.25;
+}
+
+.slotTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: #000000;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: var(--radius-xs);
+  width: fit-content;
+  margin-top: 2px;
+}
+
+/* --- Action Area (Press Button / Spinner / Status) --- */
+.actionArea {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-4);
+  background: var(--color-bg-alt);
+  border: 1px dashed rgba(212, 175, 55, 0.4);
+  border-radius: var(--radius-lg);
+  min-height: 240px;
+  gap: var(--space-3);
+}
+
+/* PRESS state */
+.pressWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.pressButtonHalo {
+  position: relative;
+  width: 130px;
+  height: 130px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pressBadge {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe088 0%, #d4af37 60%, #a27b16 100%);
+  color: #1a1400;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 52px;
+  font-weight: 800;
+  box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.6), 0 8px 24px rgba(0, 0, 0, 0.18);
+  animation: goldPulse 1.6s ease-out infinite;
+  border: 3px solid #ffffff;
+  position: relative;
+  z-index: 2;
+}
+
+.pressBadgeLabel {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  margin-top: -6px;
+  color: #3d2f00;
+}
+
+.pressPrompt {
+  margin: 0;
+  font-size: var(--font-title);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.countdownBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  background: #fdecec;
+  color: #a12828;
+  border: 1px solid rgba(161, 40, 40, 0.25);
+  border-radius: var(--radius-full);
+  font-weight: 700;
+  font-size: calc(var(--font-body) + 1px);
+}
+
+.countdownBarTrack {
+  width: 100%;
+  max-width: 260px;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.countdownBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #d4af37, #a12828);
+  border-radius: 3px;
+  transition: width 0.5s linear;
+}
+
+.pressHint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  max-width: 280px;
+}
+
+/* PREPARING & WAITING states */
+.loadingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.spinner {
+  width: 56px;
+  height: 56px;
+  border: 4px solid rgba(212, 175, 55, 0.2);
+  border-top-color: #d4af37;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.statusTitle {
+  margin: 0;
+  font-size: calc(var(--font-title) - 2px);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.statusMuted {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* DISPENSED state */
+.dispensedWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sparkleIcon {
+  width: 64px;
+  height: 64px;
+  color: #d4af37;
+  animation: float 2s ease-in-out infinite;
+}
+
+/* Order Footer Summary */
+.orderFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-3);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.orderRef {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  color: #000000;
+}
+
+/* --- Column 2: 3-Step Guide --- */
+.guideCard {
+  background: #ffffff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  box-shadow: var(--shadow-md);
+}
+
+.guideHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.guideTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: #725b38;
+}
+
+.stepsList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stepItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: var(--radius-md);
+  background: #fbf9f5;
+  transition: all 0.2s ease;
+}
+
+.stepItemActive {
+  background: #fffdf9;
+  border-color: rgba(212, 175, 55, 0.45);
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.12);
+}
+
+.stepIconFrame {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #725b38;
+}
+
+.stepBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.stepNumber {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #d4af37;
+}
+
+.stepItemTitle {
+  margin: 0;
+  font-size: calc(var(--font-body) + 1px);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stepItemDesc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.stepItemDesc strong {
+  color: #000000;
+  font-weight: 700;
+}
+
+/* Safety Callout */
+.safetyBox {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(212, 175, 55, 0.06);
+  border: 1px solid rgba(212, 175, 55, 0.25);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.safetyIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #d4af37;
+  margin-top: 1px;
+}
+
+/* Settled Actions */
+.settledActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.homeButton {
+  min-height: 52px;
+  min-width: 220px;
+  padding: 0 var(--space-6);
+  background: #000000;
+  color: #ffffff;
+  border: 1px solid #000000;
+  border-radius: var(--radius);
+  font-size: calc(var(--font-body) + 1px);
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+
+.homeButton:active {
+  transform: scale(0.97);
+}
+
+.autoHomeHint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+/* --- Animations --- */
+@keyframes goldPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.65), 0 8px 24px rgba(0, 0, 0, 0.18);
+  }
+  70% {
+    box-shadow: 0 0 0 24px rgba(212, 175, 55, 0), 0 8px 24px rgba(0, 0, 0, 0.18);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 175, 55, 0), 0 8px 24px rgba(0, 0, 0, 0.18);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pressBadge,
+  .spinner,
+  .sparkleIcon {
+    animation: none;
+  }
+}

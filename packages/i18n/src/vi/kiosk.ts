@@ -58,4 +58,20 @@ export const kiosk = {
   orderProblemTitle: 'Lượt xịt gặp sự cố',
   checkingResult: 'Đang xác nhận kết quả với máy…',
   supportHint: 'Vui lòng báo mã {reference} cho nhân viên tại điểm đặt máy để được hỗ trợ.',
+  // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (Stitch UI)
+  paymentSuccessTitle: 'Thanh toán thành công',
+  paymentSuccessSubtitle: 'Vui lòng làm theo hướng dẫn dưới đây để nhận lượt xịt nước hoa',
+  paymentSuccessBadge: 'THANH TOÁN THÀNH CÔNG',
+  dispenseGuideTitle: 'Hướng dẫn nhận lượt xịt',
+  step1Title: '1. Đưa cổ tay lại gần vòi',
+  step1Desc: 'Đặt cổ tay hoặc điểm mạch cách đầu phun số {slot} từ 10–15 cm.',
+  step2Title: '2. Bấm nút số {slot} trên máy',
+  step2Desc: 'Nhấn nút tròn có đèn LED sáng tương ứng ngăn số {slot} trên thân máy.',
+  step3Title: '3. Thưởng thức hương thơm',
+  step3Desc: 'Giữ yên 2–3 giây để làn sương vi hạt phủ đều và cảm nhận trọn vẹn tầng hương.',
+  safetyNote: 'Công nghệ sương vi hạt siêu mịn an toàn cho da. Tránh xịt trực tiếp vào mắt.',
+  preparingSlotHint: 'Hệ thống đang chuẩn bị đầu phun số {slot}. Đèn nút sẽ sáng ngay sau giây lát…',
+  pressSlotHint: 'Đèn LED nút số {slot} trên máy đang sáng. Hãy nhấn nút để nhận lượt xịt.',
+  forfeitNote: 'Lượt xịt sẽ tự hủy nếu không bấm nút trước khi hết thời gian đếm ngược.',
 } as const;
+

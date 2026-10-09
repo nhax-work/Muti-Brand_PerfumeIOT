@@ -4,7 +4,10 @@ import { config } from '@/shared/config';
 import { api } from './client';
 import { unwrap } from './errors';
 
+export type CatalogItem = components['schemas']['KioskCatalog']['items'][number];
+
 export const catalogQueryKey = ['kiosk', 'catalog', config.machineSerial] as const;
+
 
 export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
   machineSerial: config.machineSerial || 'SCENTATION-PARIS-01',

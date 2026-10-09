@@ -5,6 +5,7 @@ import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
 import { phaseOf, secondsUntil, type CheckoutPhase } from './checkout-phase';
+import DispenseSuccessGuide from './DispenseSuccessGuide';
 import styles from './CheckoutScreen.module.css';
 
 /** Về trang chủ sau khi đơn kết thúc — khách tiếp theo không thấy kết quả của người trước. */
@@ -36,7 +37,7 @@ function useNow(intervalMs: number): number {
 /**
  * Thanh toán và nhận lượt xịt cho một slot (FR-ORD-04..11, FR-ORD-21, FR-ORD-25÷27, ADR-0007).
  *
- * điều khoản bấm nút → tạo đơn → mã thanh toán → (webhook) → "Mời bấm nút số N" → kết quả.
+ * điều khoản bấm nút → tạo đơn → mã thanh toán QR / Thẻ → (thanh toán thành công) → "Thanh Toán Thành Công & Hướng Dẫn Nhận Lượt Xịt"
  */
 export default function CheckoutScreen() {
   const { t } = useI18n();
@@ -136,8 +137,34 @@ export default function CheckoutScreen() {
   }
 
   const order = created.order;
-  const support = view?.supportReference ?? null;
 
+  // Giao diện sau khi thanh toán thành công (Stitch screen d0590f7ae4954294b26d2f0d2b83b28f)
+  // Hiển thị ngay sau khi đơn chuyển khỏi trạng thái chờ thanh toán
+  const isPostPayment = phase !== 'PAYING' && phase !== 'EXPIRED';
+
+  if (isPostPayment) {
+    return (
+      <section
+        className={styles.checkout}
+        aria-label={t('kiosk.paymentSuccessTitle')}
+        data-phase={phase}
+      >
+        <DispenseSuccessGuide
+          item={item}
+          slot={slot}
+          order={order}
+          view={view}
+          phase={phase}
+          now={now}
+          settled={settled}
+          pressWindowSec={config.pressWindowSec}
+          goHome={goHome}
+        />
+      </section>
+    );
+  }
+
+  // Màn hình quét mã QR thanh toán hoặc khi mã hết hạn
   return (
     <section className={styles.checkout} aria-label={t('kiosk.checkoutTitle')} data-phase={phase}>
       <div className={styles.card}>
@@ -160,58 +187,10 @@ export default function CheckoutScreen() {
           </>
         )}
 
-        {phase === 'PREPARING' && <p className={styles.status}>{t('kiosk.preparingMachine')}</p>}
-        {phase === 'WAITING_TURN' && <p className={styles.status}>{t('kiosk.waitingForTurn')}</p>}
-
-        {phase === 'PRESS' && (
-          <div className={styles.press} role="status">
-            <span className={styles.pressBadge} aria-hidden="true">
-              {view?.slotNumber ?? slot}
-            </span>
-            <h1 className={styles.pressTitle}>
-              {t('kiosk.pressButtonNow', { slot: view?.slotNumber ?? slot })}
-            </h1>
-            <p className={styles.countdown}>
-              {t('kiosk.pressCountdown', {
-                seconds: secondsUntil(view?.pressDeadline, now) ?? config.pressWindowSec,
-              })}
-            </p>
-          </div>
-        )}
-
-        {phase === 'CHECKING' && (
-          <>
-            <p className={styles.status}>{t('kiosk.checkingResult')}</p>
-            {support && (
-              <p className={styles.muted}>{t('kiosk.supportHint', { reference: support })}</p>
-            )}
-          </>
-        )}
-
-        {phase === 'DISPENSED' && (
-          <>
-            <h1 className={styles.title}>{t('kiosk.dispensedTitle')}</h1>
-            <p className={styles.body}>{t('kiosk.dispensedHint')}</p>
-          </>
-        )}
-        {phase === 'FORFEITED' && (
-          <>
-            <h1 className={styles.title}>{t('kiosk.pressTimeoutTitle')}</h1>
-            <p className={styles.body}>{t('kiosk.pressTimeoutHint')}</p>
-          </>
-        )}
         {phase === 'EXPIRED' && (
           <>
             <h1 className={styles.title}>{t('kiosk.paymentExpiredTitle')}</h1>
             <p className={styles.body}>{t('kiosk.paymentExpiredHint')}</p>
-          </>
-        )}
-        {phase === 'PROBLEM' && (
-          <>
-            <h1 className={styles.title}>{t('kiosk.orderProblemTitle')}</h1>
-            <p className={styles.body}>
-              {t('kiosk.supportHint', { reference: support ?? order.paymentReference })}
-            </p>
           </>
         )}
 
@@ -226,3 +205,4 @@ export default function CheckoutScreen() {
     </section>
   );
 }
+
