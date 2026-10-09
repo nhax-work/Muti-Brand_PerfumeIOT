@@ -24,6 +24,7 @@ import {
   CreditCardOutlined,
   FileTextOutlined,
   QrcodeOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
@@ -145,7 +146,7 @@ export default function CheckoutDetailPage() {
                 </Button>,
               ]}
             >
-              <div style={{ textAlign: 'left', maxWidth: 600, margin: '0 auto' }}>
+              <div style={{ textAlign: 'left', maxWidth: 650, margin: '0 auto' }}>
                 <Title level={4}>{t('ui.invoicesInCheckout')}</Title>
                 <List
                   bordered
@@ -153,6 +154,14 @@ export default function CheckoutDetailPage() {
                   renderItem={(item) => (
                     <List.Item
                       actions={[
+                        <Button
+                          type="primary"
+                          key="config"
+                          icon={<SettingOutlined />}
+                          onClick={() => void navigate(`/rentals/${item.id}`)}
+                        >
+                          {t('ui.configSlot')}
+                        </Button>,
                         <Button
                           type="link"
                           key="view"
