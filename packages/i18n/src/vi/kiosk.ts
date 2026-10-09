@@ -70,7 +70,8 @@ export const kiosk = {
   step3Title: '3. Thưởng thức hương thơm',
   step3Desc: 'Giữ yên 2–3 giây để làn sương vi hạt phủ đều và cảm nhận trọn vẹn tầng hương.',
   safetyNote: 'Công nghệ sương vi hạt siêu mịn an toàn cho da. Tránh xịt trực tiếp vào mắt.',
-  preparingSlotHint: 'Hệ thống đang chuẩn bị đầu phun số {slot}. Đèn nút sẽ sáng ngay sau giây lát…',
+  preparingSlotHint:
+    'Hệ thống đang chuẩn bị đầu phun số {slot}. Đèn nút sẽ sáng ngay sau giây lát…',
   pressSlotHint: 'Đèn LED nút số {slot} trên máy đang sáng. Hãy nhấn nút để nhận lượt xịt.',
   forfeitNote: 'Lượt xịt sẽ tự hủy nếu không bấm nút trước khi hết thời gian đếm ngược.',
   copyCode: 'Sao chép mã',
@@ -80,4 +81,3 @@ export const kiosk = {
   waitingPaymentDesc: 'Đang chờ xác nhận từ ngân hàng / ví điện tử…',
   cancelOrder: 'Hủy thanh toán',
 } as const;
-

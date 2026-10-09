@@ -276,8 +276,22 @@ export default function CheckoutScreen() {
                   </g>
 
                   {/* Logo Center */}
-                  <rect x="72" y="72" width="36" height="36" rx="8" fill="#131315" stroke="#D4AF37" strokeWidth="2" />
-                  <path d="M84 90C84 86 96 86 96 90C96 94 84 94 84 98C84 102 96 102 96 98" stroke="#D4AF37" strokeWidth="2.5" strokeLinecap="round" />
+                  <rect
+                    x="72"
+                    y="72"
+                    width="36"
+                    height="36"
+                    rx="8"
+                    fill="#131315"
+                    stroke="#D4AF37"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M84 90C84 86 96 86 96 90C96 94 84 94 84 98C84 102 96 102 96 98"
+                    stroke="#D4AF37"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </div>
               <code className={styles.qrPayload}>{created.qrPayload}</code>
@@ -358,4 +372,3 @@ export default function CheckoutScreen() {
     </section>
   );
 }
-

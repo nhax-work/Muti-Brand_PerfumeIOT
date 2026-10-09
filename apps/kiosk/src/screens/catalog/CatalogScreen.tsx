@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import type { components } from '@scentstation/contracts';
-import { recordKioskInteraction, useCreateOrder, useKioskCatalog, useOrderStatus } from '@/shared/api';
+import {
+  recordKioskInteraction,
+  useCreateOrder,
+  useKioskCatalog,
+  useOrderStatus,
+} from '@/shared/api';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';

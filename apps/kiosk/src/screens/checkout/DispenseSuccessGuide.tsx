@@ -84,7 +84,14 @@ export default function DispenseSuccessGuide({
 
         <div className={styles.navActions}>
           <span>VI / EN</span>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+          >
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
@@ -96,23 +103,29 @@ export default function DispenseSuccessGuide({
         {/* Checkmark Circle & Heading */}
         <section className={styles.statusHeader}>
           <div className={styles.checkCircle} aria-hidden="true">
-            <svg className={styles.checkIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              className={styles.checkIcon}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
 
-          <span className={styles.badgeSuccess}>
-            {t('kiosk.paymentSuccessTitle')}
-          </span>
+          <span className={styles.badgeSuccess}>{t('kiosk.paymentSuccessTitle')}</span>
 
           <h1 className={styles.mainTitle}>
             {phase === 'FORFEITED'
               ? t('kiosk.pressTimeoutTitle')
               : phase === 'DISPENSED'
-              ? t('kiosk.dispensedTitle')
-              : phase === 'PROBLEM'
-              ? t('kiosk.orderProblemTitle')
-              : 'KHOẢNH KHẮC HƯƠNG SẴN SÀNG'}
+                ? t('kiosk.dispensedTitle')
+                : phase === 'PROBLEM'
+                  ? t('kiosk.orderProblemTitle')
+                  : 'KHOẢNH KHẮC HƯƠNG SẴN SÀNG'}
           </h1>
 
           <div className={styles.metaSubtitle}>
@@ -124,7 +137,8 @@ export default function DispenseSuccessGuide({
               <p>{t('kiosk.supportHint', { reference: order.paymentReference })}</p>
             ) : (
               <p>
-                MÃ GIAO DỊCH: #{order.paymentReference} / {productName.toUpperCase()} / 1 LƯỢT TRẢI NGHIỆM
+                MÃ GIAO DỊCH: #{order.paymentReference} / {productName.toUpperCase()} / 1 LƯỢT TRẢI
+                NGHIỆM
               </p>
             )}
           </div>
@@ -154,7 +168,14 @@ export default function DispenseSuccessGuide({
             </div>
           </div>
           <div className={styles.statusBarRight}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
             <span>SIÊU ÂM VI HẠT</span>
@@ -187,12 +208,20 @@ export default function DispenseSuccessGuide({
             <div className={styles.cardBody}>
               <h3 className={styles.cardTitle}>Đứng trước vòi xịt để xịt vào người</h3>
               <p className={styles.cardDesc}>
-                Đứng cách vòi phun khoảng 30 - 40 cm. Giữ tư thế thoải mái để màn sương mịn lan tỏa đều lên cổ tay, cổ hoặc trang phục.
+                Đứng cách vòi phun khoảng 30 - 40 cm. Giữ tư thế thoải mái để màn sương mịn lan tỏa
+                đều lên cổ tay, cổ hoặc trang phục.
               </p>
             </div>
 
             <div className={styles.cardFooter}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <circle cx="12" cy="12" r="10" />
                 <path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24" />
               </svg>
@@ -219,7 +248,9 @@ export default function DispenseSuccessGuide({
             <div className={styles.cardBody}>
               <h3 className={styles.cardTitle}>{t('kiosk.step1Title')}</h3>
               <p className={styles.cardDesc}>
-                Đưa phần cổ tay hoặc mu bàn tay cách vòi xịt khoảng 10–15 cm. {t('kiosk.step2Title', { slot: view?.slotNumber ?? slot })}. Giữ yên tư thế để màn sương nước hoa phủ đều trực tiếp lên vùng da mạch đập.
+                Đưa phần cổ tay hoặc mu bàn tay cách vòi xịt khoảng 10–15 cm.{' '}
+                {t('kiosk.step2Title', { slot: view?.slotNumber ?? slot })}. Giữ yên tư thế để màn
+                sương nước hoa phủ đều trực tiếp lên vùng da mạch đập.
               </p>
               <div className={styles.cardSubStep}>
                 <span>{t('kiosk.step3Title')}</span>
@@ -227,7 +258,14 @@ export default function DispenseSuccessGuide({
             </div>
 
             <div className={styles.cardFooter}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
                 <path d="M12 21a9 9 0 0 0 9-9c0-4.97-4.03-9-9-9s-9 4.03-9 9 4.03 9 9 9Z" />
                 <path d="m9 12 2 2 4-4" />
               </svg>
@@ -238,17 +276,21 @@ export default function DispenseSuccessGuide({
 
         {/* Ultrasonic System Countdown Notice */}
         <p className={styles.ultrasonicNotice}>
-          HỆ THỐNG VÒI PHUN SIÊU ÂM ĐANG TỰ ĐỘNG ĐẾM NGƯỢC. CHU KỲ PHUN HOÀN TOÀN TỰ ĐỘNG SAU KHI SẴN SÀNG.
+          HỆ THỐNG VÒI PHUN SIÊU ÂM ĐANG TỰ ĐỘNG ĐẾM NGƯỢC. CHU KỲ PHUN HOÀN TOÀN TỰ ĐỘNG SAU KHI
+          SẴN SÀNG.
         </p>
 
         {/* 3. Action Buttons */}
         <div className={styles.actionButtonsRow}>
-          <button
-            type="button"
-            className={styles.primaryActionBtn}
-            onClick={goHome}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+          <button type="button" className={styles.primaryActionBtn} onClick={goHome}>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+            >
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
             </svg>
             <span>ĐÃ HOÀN TẤT LƯỢT XỊT</span>

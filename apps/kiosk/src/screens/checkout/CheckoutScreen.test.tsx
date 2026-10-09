@@ -187,7 +187,6 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
   });
 });
 
-
 describe('phaseOf', () => {
   it('ánh xạ trạng thái đơn + lệnh sang màn hình', () => {
     expect(phaseOf(undefined)).toBe('PAYING');

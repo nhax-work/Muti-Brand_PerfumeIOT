@@ -457,7 +457,8 @@ export const en: SameKeysAs<typeof vi> = {
     step2Desc: 'Press the illuminated circular button {slot} on the kiosk panel.',
     step3Title: '3. Enjoy the fragrance',
     step3Desc: 'Hold still for 2–3 seconds as the fine mist settles on your skin.',
-    safetyNote: 'Micro-mist technology is dermatologically safe. Avoid spraying directly into eyes.',
+    safetyNote:
+      'Micro-mist technology is dermatologically safe. Avoid spraying directly into eyes.',
     preparingSlotHint: 'Preparing nozzle {slot}. The button light will turn on shortly…',
     pressSlotHint: 'LED button {slot} is illuminated. Press it now to dispense your fragrance.',
     forfeitNote: 'The spray will be cancelled if the button is not pressed in time.',
@@ -469,4 +470,3 @@ export const en: SameKeysAs<typeof vi> = {
     cancelOrder: 'Cancel payment',
   },
 };
-
