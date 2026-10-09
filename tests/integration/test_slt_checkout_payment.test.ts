@@ -210,6 +210,39 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     // Dọn dẹp checkout tạm
     await deleteCheckouts([checkout.id, cancelledCheckout.id]);
   });
+
+  it('test_FR_SLT_37_concurrent_payments_single_pending — AC3 hai yêu cầu đồng thời', async () => {
+    // AC3: Hai yêu cầu thanh toán cho cùng phiên đến đồng thời
+    const checkoutRes = await brandA('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    expect(checkoutRes.statusCode).toBe(201);
+    const checkout = checkoutRes.json<{ id: string }>();
+
+    // Bấm thanh toán đồng thời
+    const [res1, res2] = await Promise.all([
+      brandA('POST', `/rental-checkouts/${checkout.id}/payments`),
+      brandA('POST', `/rental-checkouts/${checkout.id}/payments`),
+    ]);
+
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
+
+    const pay1 = res1.json<{ paymentId: string }>();
+    const pay2 = res2.json<{ paymentId: string }>();
+    expect(pay1.paymentId).toBe(pay2.paymentId);
+
+    // CSDL chỉ có đúng 1 payment PENDING cho checkout
+    const paymentsCount = await raw.query(
+      `SELECT count(*) as count FROM payments WHERE rental_checkout_id = $1 AND status = 'PENDING'`,
+      [checkout.id],
+    );
+    expect(Number(paymentsCount.rows[0].count)).toBe(1);
+
+    await deleteCheckouts([checkout.id]);
+  });
 });
 
 describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => {
@@ -325,6 +358,66 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(afterCheckout.rows[0].cancelled_at).not.toBeNull();
 
     // Dọn dẹp
+    await deleteCheckouts([checkout.id]);
+  });
+
+  it('test_FR_SLT_38_amount_mismatch_and_invalid_signature', async () => {
+    // AC2: Số tiền lệch → HTTP 400 AMOUNT_MISMATCH
+    const checkoutRes = await brandA('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    expect(checkoutRes.statusCode).toBe(201);
+    const checkout = checkoutRes.json<{ id: string }>();
+
+    const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
+    expect(payRes.statusCode).toBe(200);
+    const payment = payRes.json<{ paymentId: string }>();
+
+    const paymentRow = await raw.query(
+      `SELECT provider_reference, amount, currency FROM payments WHERE id = $1`,
+      [payment.paymentId],
+    );
+    const ref = paymentRow.rows[0].provider_reference;
+    const amount = paymentRow.rows[0].amount;
+    const currency = paymentRow.rows[0].currency;
+
+    // AC3: Chữ ký không hợp lệ → HTTP 401 INVALID_WEBHOOK_SIGNATURE
+    const invalidSigRes = await sendWebhook(
+      buildMockWebhook({
+        reference: ref,
+        amount,
+        currency,
+        status: 'SUCCEEDED',
+      }),
+      'wrong_webhook_secret',
+    );
+    expect(invalidSigRes.statusCode).toBe(401);
+
+    // AC2: Số tiền khác tổng phiên → HTTP 400 AMOUNT_MISMATCH
+    const mismatchAmount = (Number(amount) + 50000).toFixed(4);
+    const mismatchRes = await sendWebhook(
+      buildMockWebhook({
+        reference: ref,
+        amount: mismatchAmount,
+        currency,
+        status: 'SUCCEEDED',
+      }),
+    );
+    expect(mismatchRes.statusCode).toBe(400);
+
+    // Trạng thái payment và checkout giữ nguyên PENDING và chưa thanh toán
+    const paymentAfter = await raw.query(`SELECT status FROM payments WHERE id = $1`, [
+      payment.paymentId,
+    ]);
+    expect(paymentAfter.rows[0].status).toBe('PENDING');
+
+    const checkoutAfter = await raw.query(`SELECT paid_at FROM rental_checkouts WHERE id = $1`, [
+      checkout.id,
+    ]);
+    expect(checkoutAfter.rows[0].paid_at).toBeNull();
+
     await deleteCheckouts([checkout.id]);
   });
 
