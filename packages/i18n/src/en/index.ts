@@ -401,7 +401,8 @@ export const en: SameKeysAs<typeof vi> = {
     featureFineMist: 'Ultra-Fine Micro Mist',
     featureQrPay: 'Instant QR Payment',
     outOfServiceTitle: 'This machine is temporarily out of service',
-    outOfServiceHint: 'Please come back in a few minutes or ask the staff at this location.',
+    outOfServiceHint: 'Please come back in a few minutes.',
+    outOfServiceContact: 'Need help? Contact {contact}.',
     catalogTitle: 'Fragrance Collection',
     catalogSubtitle: 'Discover premium fragrances and tap to experience',
     allBrands: 'All Brands',
@@ -441,11 +442,16 @@ export const en: SameKeysAs<typeof vi> = {
     dispensedTitle: 'Thank you!',
     dispensedHint: 'Have a fragrant day.',
     pressTimeoutTitle: 'Time to press the button has run out',
-    pressTimeoutHint: 'The spray was cancelled under the terms you accepted.',
+    pressTimeoutHint:
+      'The {seconds}-second window to press the button has ended. Next time, stand by the machine and watch for the lit button right after paying.',
     paymentExpiredTitle: 'The payment code has expired',
-    paymentExpiredHint: 'You have not been charged. Please choose a scent again to retry.',
+    paymentExpiredHint: 'If you have not paid yet, just choose a scent again to retry.',
+    paymentExpiredLatePayment:
+      "If you already paid, don't worry: the payment is still recorded for a refund. Please keep code {reference}.",
     orderProblemTitle: 'Something went wrong with your spray',
     checkingResult: 'Confirming the result with the machine…',
-    supportHint: 'Please give code {reference} to the staff at this location for help.',
+    supportHint: 'Please keep code {reference} and contact {contact} for help.',
+    supportHintNoContact:
+      'We have recorded the problem. Please take a photo of code {reference} in case you need help.',
   },
 };

@@ -137,6 +137,11 @@ export default function CheckoutScreen() {
 
   const order = created.order;
   const support = view?.supportReference ?? null;
+  // FR-ORD-21: chỉ dẫn khách tới kênh hỗ trợ thật; máy không có nhân viên (BR-001).
+  const supportText = (reference: string) =>
+    config.supportContact
+      ? t('kiosk.supportHint', { reference, contact: config.supportContact })
+      : t('kiosk.supportHintNoContact', { reference });
 
   return (
     <section className={styles.checkout} aria-label={t('kiosk.checkoutTitle')} data-phase={phase}>
@@ -182,9 +187,7 @@ export default function CheckoutScreen() {
         {phase === 'CHECKING' && (
           <>
             <p className={styles.status}>{t('kiosk.checkingResult')}</p>
-            {support && (
-              <p className={styles.muted}>{t('kiosk.supportHint', { reference: support })}</p>
-            )}
+            {support && <p className={styles.muted}>{supportText(support)}</p>}
           </>
         )}
 
@@ -197,21 +200,25 @@ export default function CheckoutScreen() {
         {phase === 'FORFEITED' && (
           <>
             <h1 className={styles.title}>{t('kiosk.pressTimeoutTitle')}</h1>
-            <p className={styles.body}>{t('kiosk.pressTimeoutHint')}</p>
+            <p className={styles.body}>
+              {t('kiosk.pressTimeoutHint', { seconds: config.pressWindowSec })}
+            </p>
           </>
         )}
         {phase === 'EXPIRED' && (
           <>
             <h1 className={styles.title}>{t('kiosk.paymentExpiredTitle')}</h1>
             <p className={styles.body}>{t('kiosk.paymentExpiredHint')}</p>
+            {/* Tiền về sau hạn thì đơn sang REFUND_PENDING — không được hứa "chưa bị trừ tiền". */}
+            <p className={styles.muted}>
+              {t('kiosk.paymentExpiredLatePayment', { reference: order.paymentReference })}
+            </p>
           </>
         )}
         {phase === 'PROBLEM' && (
           <>
             <h1 className={styles.title}>{t('kiosk.orderProblemTitle')}</h1>
-            <p className={styles.body}>
-              {t('kiosk.supportHint', { reference: support ?? order.paymentReference })}
-            </p>
+            <p className={styles.body}>{supportText(support ?? order.paymentReference)}</p>
           </>
         )}
 

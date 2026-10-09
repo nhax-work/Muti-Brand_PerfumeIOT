@@ -1,3 +1,4 @@
+import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import styles from './OutOfServiceScreen.module.css';
 
@@ -21,11 +22,15 @@ export default function OutOfServiceScreen() {
         <h1 className={styles.title}>{t('kiosk.outOfServiceTitle')}</h1>
         <p className={styles.hint}>{t('kiosk.outOfServiceHint')}</p>
 
-        <div className={styles.divider} />
-
-        <span className={styles.supportNote}>
-          Vui lòng chạm nút gọi Sommelier hoặc liên hệ quản trị viên quầy
-        </span>
+        {/* Máy chạy không có nhân viên (BR-001): chỉ hiện kênh hỗ trợ khi đã cấu hình. */}
+        {config.supportContact && (
+          <>
+            <div className={styles.divider} />
+            <span className={styles.supportNote}>
+              {t('kiosk.outOfServiceContact', { contact: config.supportContact })}
+            </span>
+          </>
+        )}
       </div>
     </section>
   );

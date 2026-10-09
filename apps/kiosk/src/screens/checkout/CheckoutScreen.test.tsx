@@ -153,7 +153,26 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     renderScreen();
 
     expect(screen.getByText('Đã hết thời gian bấm nút')).toBeTruthy();
-    expect(screen.queryByText(/báo mã/)).toBeNull();
+    expect(screen.getByText(/Đã hết 60 giây chờ bấm nút/)).toBeTruthy();
+    expect(screen.queryByText(/ORD-20261004-ABC123/)).toBeNull();
+  });
+
+  it('mã hết hạn thì không khẳng định "chưa bị trừ tiền" và hiện mã để hoàn tiền nếu tiền về muộn (FR-ORD-16)', () => {
+    mockOrder(created, view({ status: 'EXPIRED' }));
+    renderScreen();
+
+    expect(screen.getByText('Mã thanh toán đã hết hạn')).toBeTruthy();
+    expect(screen.queryByText(/chưa bị trừ tiền/)).toBeNull();
+    expect(screen.getByText(/đã chuyển khoản.*ORD-20261004-ABC123/)).toBeTruthy();
+  });
+
+  it('sự cố sau thanh toán thì hiện mã hỗ trợ, không nhắc tới nhân viên tại máy (FR-ORD-21, BR-001)', () => {
+    mockOrder(created, view({ status: 'FAILED', supportReference: 'SUP-123' }));
+    renderScreen();
+
+    expect(screen.getByText('Lượt xịt gặp sự cố')).toBeTruthy();
+    expect(screen.getByText(/SUP-123/)).toBeTruthy();
+    expect(screen.queryByText(/nhân viên/)).toBeNull();
   });
 });
 
