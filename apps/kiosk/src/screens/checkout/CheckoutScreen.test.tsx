@@ -125,12 +125,15 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     );
   });
 
-  it('chưa thanh toán thì hiện mã thanh toán và số tiền (FR-ORD-08)', () => {
+  it('chưa thanh toán thì hiện mã thanh toán, số tiền và lệnh thanh toán giả lập (FR-ORD-08)', () => {
     mockOrder(created, view({ status: 'PENDING_PAYMENT' }));
     renderScreen();
 
     expect(screen.getByText('ORD-20261004-ABC123')).toBeTruthy();
     expect(screen.getByText(/42\.000 VND/)).toBeTruthy();
+    expect(screen.getByText(/npm run pay:mock -- ORD-20261004-ABC123/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sao chép lệnh test' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sao chép mã' })).toBeTruthy();
   });
 
   it('đèn đã sáng thì mời bấm đúng nút và đếm ngược (FR-ORD-26)', () => {

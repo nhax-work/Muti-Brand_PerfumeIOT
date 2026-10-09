@@ -461,6 +461,12 @@ export const en: SameKeysAs<typeof vi> = {
     preparingSlotHint: 'Preparing nozzle {slot}. The button light will turn on shortly…',
     pressSlotHint: 'LED button {slot} is illuminated. Press it now to dispense your fragrance.',
     forfeitNote: 'The spray will be cancelled if the button is not pressed in time.',
+    copyCode: 'Copy code',
+    copied: 'Copied!',
+    mockPayGuide: 'Mock payment command (Dev / Test):',
+    copyCommand: 'Copy test command',
+    waitingPaymentDesc: 'Waiting for payment confirmation from bank / e-wallet…',
+    cancelOrder: 'Cancel payment',
   },
 };
 

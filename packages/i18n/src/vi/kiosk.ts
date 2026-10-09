@@ -73,5 +73,11 @@ export const kiosk = {
   preparingSlotHint: 'Hệ thống đang chuẩn bị đầu phun số {slot}. Đèn nút sẽ sáng ngay sau giây lát…',
   pressSlotHint: 'Đèn LED nút số {slot} trên máy đang sáng. Hãy nhấn nút để nhận lượt xịt.',
   forfeitNote: 'Lượt xịt sẽ tự hủy nếu không bấm nút trước khi hết thời gian đếm ngược.',
+  copyCode: 'Sao chép mã',
+  copied: 'Đã sao chép!',
+  mockPayGuide: 'Lệnh thanh toán giả lập (Dev / Test):',
+  copyCommand: 'Sao chép lệnh test',
+  waitingPaymentDesc: 'Đang chờ xác nhận từ ngân hàng / ví điện tử…',
+  cancelOrder: 'Hủy thanh toán',
 } as const;
 
