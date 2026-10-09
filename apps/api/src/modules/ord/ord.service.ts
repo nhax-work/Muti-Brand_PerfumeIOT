@@ -68,6 +68,11 @@ export interface DispenseOrderOutcome {
   /** Mã trong spec/errors.md (`PRESS_TIMEOUT`, `ACTUATOR_FAULT`…); `null` khi thành công. */
   readonly failureCode: string | null;
   readonly manualReview: boolean;
+  /**
+   * Lệnh đã bị quét sang `UNKNOWN` (và đơn bị cắm cờ kiểm tra) trước khi kết quả thật về. Kết cục
+   * `FORFEITED` khi đó gỡ cờ: đơn mất lượt không bao giờ vào kiểm tra thủ công (FR-ORD-27).
+   */
+  readonly resolvesUnknown?: boolean;
   readonly commandToken: string;
   /** Thời điểm thiết bị kích hoạt cơ cấu (`executed_at`) — ghi vào `dispensed_at`. */
   readonly at: Date;
@@ -446,7 +451,36 @@ export class OrdService {
         ...(outcome.to === 'DISPENSED' ? { dispensedAt: outcome.at } : {}),
         ...(outcome.failureCode ? { failureCode: outcome.failureCode } : {}),
         ...(outcome.manualReview ? { needsManualReview: true } : {}),
+        ...(outcome.to === 'FORFEITED' && outcome.resolvesUnknown
+          ? { needsManualReview: false }
+          : {}),
       },
+    );
+    return true;
+  }
+
+  /**
+   * PAID → FAILED + kiểm tra thủ công khi không thể ghi lệnh xịt cho đơn đã trả tiền — ví dụ slot
+   * mất hiệu chuẩn giữa lúc thanh toán và lúc sáng đèn. Khách đã trả tiền nên phải có người hoàn
+   * (FR-ORD-19, FR-ORD-20); để đơn nằm PAID thì khách đứng chờ một lượt không bao giờ tới.
+   *
+   * @returns `false` nếu đơn không còn ở PAID — không đổi gì
+   */
+  async failBeforeDispense(tx: Executor, orderId: string, failureCode: string): Promise<boolean> {
+    const order = await this.queries.lockOrder(orderId, tx);
+    if (!order || order.status !== 'PAID') return false;
+    await this.transition(
+      tx,
+      {
+        orderId: order.id,
+        brandId: order.brandId,
+        from: 'PAID',
+        to: 'FAILED',
+        reason: failureCode,
+        actorType: 'SYSTEM',
+        at: this.clock.now(),
+      },
+      { failureCode, needsManualReview: true },
     );
     return true;
   }
@@ -598,7 +632,9 @@ export function isSellable(offer: SlotOfferRecord): boolean {
     offer.productName !== null &&
     offer.productStatus === 'ACTIVE' &&
     offer.productDeletedAt === null &&
-    offer.brandStatus === 'ACTIVE'
+    offer.brandStatus === 'ACTIVE' &&
+    // Chưa hiệu chuẩn thì lệnh xịt không có liều để gửi (FR-MCH-06, mqtt.md §5 `dosage_ml`).
+    offer.calibratedDosageMl !== null
   );
 }
 

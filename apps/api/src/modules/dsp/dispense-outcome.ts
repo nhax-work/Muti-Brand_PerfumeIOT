@@ -24,6 +24,8 @@ export interface OrderOutcome {
 export type CommandOutcome =
   /** Đèn nút đã sáng, chờ khách bấm — đơn giữ nguyên DISPENSE_REQUESTED. */
   | { readonly kind: 'ACKNOWLEDGED' }
+  /** Bản tin nói về một bản sao của lệnh, không về chính lệnh — không đổi gì. */
+  | { readonly kind: 'IGNORED' }
   /** Lệnh kết thúc; đơn chuyển theo `order`. */
   | {
       readonly kind: 'CLOSED';
@@ -44,6 +46,7 @@ export const ACKNOWLEDGEABLE_STATUSES = ['CREATED', 'SENT'] as const;
 export const CLOSABLE_STATUSES = ['CREATED', 'SENT', 'ACKNOWLEDGED', 'UNKNOWN'] as const;
 
 export const PRESS_TIMEOUT = 'PRESS_TIMEOUT';
+export const CMD_DUPLICATE = 'CMD_DUPLICATE';
 
 /**
  * @param acknowledged lệnh đã có ACK trước bản tin này chưa (đèn đã sáng, khách có thể đã bấm)
@@ -71,6 +74,12 @@ export function outcomeOf(report: DeviceReport, acknowledged: boolean): CommandO
   }
 
   const failureCode = report.failureCode ?? 'UNKNOWN';
+  if (failureCode === CMD_DUPLICATE) {
+    // Thiết bị từ chối một BẢN SAO (broker gửi lại QoS 1) của lệnh nó đã nhận — lệnh gốc vẫn đang
+    // chờ bấm hoặc đã có kết quả riêng. Khép đơn theo bản tin này sẽ đánh FAILED một lượt khách vẫn
+    // bấm được. Kết quả gốc bị mất thì mốc UNKNOWN (FR-DSP-18) đưa đơn vào kiểm tra thủ công.
+    return { kind: 'IGNORED' };
+  }
   if (failureCode === PRESS_TIMEOUT && acknowledged) {
     // Khách không bấm: mất lượt, không hoàn tiền, không kiểm tra thủ công (FR-ORD-27).
     return {

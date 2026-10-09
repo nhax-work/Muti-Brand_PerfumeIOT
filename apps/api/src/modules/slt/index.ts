@@ -2,3 +2,5 @@ export { SltModule } from './slt.module.js';
 export { SltService } from './slt.service.js';
 export { CatalogService } from './catalog.service.js';
 export { SltCheckoutPaymentModule } from './checkout-payment.handler.js';
+export { newInvoiceNumber, INVOICE_NUMBER_PATTERN } from './invoice-number.js';
+export { SltJobs } from './slt.jobs.js';

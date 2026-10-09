@@ -6,7 +6,7 @@
  * về cửa vào).
  *
  * KHÔNG có test nào ở đây mang mã FR-AUTH-07 hay FR-AUTH-08: hai FR đó nghiệm thu bằng
- * tests/integration/test_slot_isolation.ts, thuộc 7 nhóm test người tự viết (spec/testing.md).
+ * tests/integration/test_slot_isolation.ts, thuộc 7 nhóm test trọng yếu (spec/testing.md).
  */
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';

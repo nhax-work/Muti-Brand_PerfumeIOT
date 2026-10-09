@@ -329,6 +329,7 @@ toàn lúc bấm không đạt).
 |---|---|---|
 | `stage = ACK` | `ACKNOWLEDGED` (đèn sáng, chờ bấm) | giữ nguyên `DISPENSE_REQUESTED`; kiosk hiện "Mời bấm nút số N" (FR-ORD-26) |
 | `stage = REJECT`, `failure_code = PRESS_TIMEOUT` | `REJECTED` | **`FORFEITED`** — không hoàn tiền, **không** đặt `needs_manual_review` (FR-ORD-27) |
+| `stage = REJECT`, `failure_code = CMD_DUPLICATE` | giữ nguyên | giữ nguyên — thiết bị từ chối một **bản sao** broker gửi lại, không phải lệnh gốc; kết quả gốc bị mất thì mốc `UNKNOWN` bên dưới xử lý (ADR-0011) |
 | `stage = REJECT`, mã khác, **sau** `ACK` | `REJECTED` | `FAILED`, đặt `needs_manual_review` (FR-ORD-19) — khách đã trả tiền và đã bấm |
 | `stage = REJECT`, mã khác, **trước** `ACK` | `REJECTED` | `FAILED` |
 | `stage = RESULT`, `success = true` | `SUCCEEDED` | `DISPENSED` (FR-DSP-17) |
@@ -507,5 +508,5 @@ docker exec scent-mqtt mosquitto_pub -t 'scentstation/M001/heartbeat' \
 ```
 
 Test tự động nằm ở `tests/contract/` (khớp đặc tả này) và `tests/e2e/` (luồng đầy đủ với Device
-Simulator). **`tests/e2e/test_command_ttl.ts` là test người tự viết**, agent không sinh
-(`spec/testing.md`).
+Simulator). `tests/e2e/test_command_ttl.test.ts` thuộc nhóm test trọng yếu "TTL lệnh xịt"
+(`spec/testing.md`, ADR-0010).

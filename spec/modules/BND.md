@@ -31,7 +31,7 @@
   * **AC5 (Tài khoản nền tảng):** Given người dùng không gắn thương hiệu,  
     When dựng điều kiện,  
     Then điều kiện luôn đúng — Platform Super Admin xem được mọi thương hiệu (FR-BND-07).
-* **Test:** `tests/unit/scoping.test.ts` kiểm logic của chốt chặn. Nghiệm thu đầu-cuối trên CSDL thật với hai thương hiệu cùng một máy là `tests/integration/test_slot_isolation.ts` — **test người tự viết** (`spec/testing.md`).
+* **Test:** `tests/unit/scoping.test.ts` kiểm logic của chốt chặn. Nghiệm thu đầu-cuối trên CSDL thật với hai thương hiệu cùng một máy là `tests/integration/test_slot_isolation.test.ts` — nhóm test trọng yếu (`spec/testing.md`).
 
 > **Nợ kỹ thuật:** Row-Level Security chưa bật (`schema.sql` §12, ADR-0002). Chốt chặn này là lớp
 > bảo vệ **duy nhất** cho FR này — một truy vấn bỏ qua nó là rò rỉ, không có lưới đỡ ở CSDL.
@@ -52,7 +52,7 @@
   * **AC3 (Sơ đồ máy):** Given máy có slot của `B1` và `B2`,  
     When Brand Admin của `B1` xem sơ đồ máy,  
     Then slot của `B2` hiển thị là không khả dụng, không kèm tên thương hiệu, sản phẩm hay số liệu (FR-RPT-12) — điều kiện dựng bằng `brandOccupiesSlotNow`.
-* **Test:** như FR-BND-05 — nghiệm thu bằng `tests/integration/test_slot_isolation.ts` (test người tự viết).
+* **Test:** như FR-BND-05 — nghiệm thu bằng `tests/integration/test_slot_isolation.test.ts` (nhóm test trọng yếu).
 
 ---
 

@@ -79,6 +79,8 @@ export interface SlotOfferRecord {
   readonly productFragranceNotes: Json | null;
   readonly productStatus: string | null;
   readonly productDeletedAt: Date | null;
+  /** `null` khi slot chưa hiệu chuẩn (FR-MCH-06) — lệnh xịt không có liều để gửi. */
+  readonly calibratedDosageMl: string | null;
 }
 
 /** Hóa đơn đang chiếm dụng một slot và đã gắn sản phẩm — đích ghi sự kiện tương tác kiosk. */
@@ -232,6 +234,7 @@ export class OrdQueries {
         'fp.fragrance_notes as product_fragrance_notes',
         'fp.status as product_status',
         'fp.deleted_at as product_deleted_at',
+        'ms.calibrated_dosage_ml',
       ])
       .where('ms.machine_id', '=', machineId)
       .orderBy('ms.slot_number');
@@ -256,6 +259,7 @@ export class OrdQueries {
       productFragranceNotes: r.product_fragrance_notes,
       productStatus: r.product_status,
       productDeletedAt: r.product_deleted_at,
+      calibratedDosageMl: r.calibrated_dosage_ml,
     }));
   }
 

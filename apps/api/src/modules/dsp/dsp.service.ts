@@ -91,6 +91,15 @@ export class DspService {
     for (const candidate of await this.queries.listArmableOrders()) {
       try {
         const created = await this.queries.transaction(async (tx) => {
+          if (candidate.dosageMl === null) {
+            // Slot mất hiệu chuẩn sau khi khách trả tiền: lệnh không có liều để gửi (mqtt.md §5).
+            if (await this.orders.failBeforeDispense(tx, candidate.orderId, 'SLOT_UNAVAILABLE')) {
+              this.logger.warn(
+                `Đơn ${candidate.orderId} FAILED: slot ${candidate.slotNumber} máy ${candidate.machineSerial} chưa hiệu chuẩn`,
+              );
+            }
+            return false;
+          }
           const order = await this.orders.startDispense(tx, candidate.orderId);
           if (!order) return false;
           const now = this.clock.now();
@@ -163,6 +172,7 @@ export class DspService {
       if (!command) return 'UNKNOWN_COMMAND';
       const now = this.clock.now();
       const outcome = outcomeOf(input, command.acknowledgedAt !== null);
+      if (outcome.kind === 'IGNORED') return 'IGNORED';
 
       if (outcome.kind === 'ACKNOWLEDGED') {
         if (!(ACKNOWLEDGEABLE_STATUSES as readonly string[]).includes(command.status)) {
@@ -194,6 +204,7 @@ export class DspService {
       if (command.orderId) {
         await this.orders.finishDispense(tx, command.orderId, {
           ...outcome.order,
+          resolvesUnknown: command.status === 'UNKNOWN',
           commandToken: input.commandToken,
           at: input.executedAt ?? now,
         });

@@ -294,6 +294,61 @@ async function seedLocationAndMachine(client: pg.Client): Promise<void> {
       [ID.slots[plan.slot], ID.machine, plan.slot + 1],
     );
   }
+
+  // Máy và slot trống mở cho thuê (để test tính năng thuê slot)
+  const locLandmark = '44444444-4444-4444-8444-000000000002';
+  const machM002 = '55555555-5555-4555-8555-000000000002';
+  const machM003 = '55555555-5555-4555-8555-000000000003';
+
+  await client.query(
+    `INSERT INTO locations (id, code, name, address)
+     VALUES ($1, 'HCM_BTH_LANDMARK81', 'Vincom Landmark 81', '208 Nguyễn Hữu Cảnh, Quận Bình Thạnh, TP.HCM')
+     ON CONFLICT (id) DO NOTHING`,
+    [locLandmark],
+  );
+
+  await client.query(
+    `INSERT INTO machines (id, location_id, serial_number, display_name, status, operating_mode,
+                           firmware_version, simulator_enabled)
+     VALUES ($1, $2, 'M002', 'Máy Landmark 81 #1', 'ONLINE', 'NORMAL', '0.1.0-dev', true),
+            ($3, $4, 'M003', 'Máy Vincom Đồng Khởi #2', 'ONLINE', 'NORMAL', '0.1.0-dev', true)
+     ON CONFLICT (id) DO NOTHING`,
+    [machM002, locLandmark, machM003, ID.location],
+  );
+
+  const m002Slots = [
+    '66666666-6666-4666-8666-000000000011',
+    '66666666-6666-4666-8666-000000000012',
+    '66666666-6666-4666-8666-000000000013',
+    '66666666-6666-4666-8666-000000000014',
+  ];
+  for (let i = 0; i < 4; i++) {
+    await client.query(
+      `INSERT INTO machine_slots (id, machine_id, slot_number, calibrated_dosage_ml,
+                                  low_stock_threshold_ml, estimated_remaining_ml,
+                                  estimated_remaining_sprays, monthly_rent_price, status)
+       VALUES ($1, $2, $3, 0.1200, 5.0000, 50.0000, 0, '1800000.0000', 'AVAILABLE')
+       ON CONFLICT (id) DO UPDATE SET monthly_rent_price = EXCLUDED.monthly_rent_price`,
+      [m002Slots[i], machM002, i + 1],
+    );
+  }
+
+  const m003Slots = [
+    '66666666-6666-4666-8666-000000000021',
+    '66666666-6666-4666-8666-000000000022',
+    '66666666-6666-4666-8666-000000000023',
+    '66666666-6666-4666-8666-000000000024',
+  ];
+  for (let i = 0; i < 4; i++) {
+    await client.query(
+      `INSERT INTO machine_slots (id, machine_id, slot_number, calibrated_dosage_ml,
+                                  low_stock_threshold_ml, estimated_remaining_ml,
+                                  estimated_remaining_sprays, monthly_rent_price, status)
+       VALUES ($1, $2, $3, 0.1200, 5.0000, 50.0000, 0, '1500000.0000', 'AVAILABLE')
+       ON CONFLICT (id) DO UPDATE SET monthly_rent_price = EXCLUDED.monthly_rent_price`,
+      [m003Slots[i], machM003, i + 1],
+    );
+  }
 }
 
 /**

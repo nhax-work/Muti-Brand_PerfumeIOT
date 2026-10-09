@@ -9,7 +9,7 @@
  * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Body, Controller, Get, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
@@ -145,6 +145,29 @@ export class RentalCheckoutsController {
   ) {
     const { id } = parseBody(IdParam, params);
     return this.service.getCheckout(actor, scope, id);
+  }
+
+  // Contract trả 200 (không phải 201 mặc định của @Post): bấm lại trả về chính Payment PENDING cũ
+  // (FR-SLT-37 AC2), không phải lúc nào cũng tạo mới.
+  @Post(':id/payments')
+  @HttpCode(200)
+  payCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.payCheckout(actor, scope, id);
+  }
+
+  @Post(':id/cancel')
+  cancelCheckout(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.cancelCheckout(actor, scope, id);
   }
 }
 

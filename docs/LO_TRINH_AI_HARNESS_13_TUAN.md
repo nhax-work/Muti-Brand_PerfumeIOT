@@ -303,7 +303,10 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 
 ---
 
-## Chín chỗ tự viết test, không giao AI
+## Chín chỗ test trọng yếu
+
+> ADR-0010 (2026-10-07): bỏ quy định "tự viết, không giao AI". Agent được viết test cho chín chỗ này;
+> PR có test trọng yếu cần người review riêng phần test, đối chiếu từng assert với yêu cầu ở bảng dưới.
 
 | Chỗ | Test bắt buộc |
 |---|---|

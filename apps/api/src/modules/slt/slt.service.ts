@@ -7,11 +7,14 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
-import { SPEC_CONSTRAINTS } from '../../shared/config/constraints.generated.js';
+import { CLOCK, type Clock } from '../../shared/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { MchQueries } from '../mch/mch.queries.js';
+import { newPaymentReference, PaymentService, type PaymentIntent } from '../ord/index.js';
 import { CatalogQueries } from './catalog.queries.js';
 import { toPlanDto } from './catalog.service.js';
 import {
@@ -27,6 +30,7 @@ type SlotRental = Schema<'SlotRental'>;
 type RentalCheckout = Schema<'RentalCheckout'>;
 type RentalQuote = Schema<'RentalQuote'>;
 type RentalInvoice = Schema<'RentalInvoice'>;
+type RentalPaymentIntent = Schema<'RentalPaymentIntent'>;
 
 @Injectable()
 export class SltService {
@@ -35,6 +39,10 @@ export class SltService {
     @Inject(CatalogQueries) private readonly catalogQueries: CatalogQueries,
     @Inject(MchQueries) private readonly mchQueries: MchQueries,
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(PaymentService) private readonly payments: PaymentService,
+    @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(DATABASE) private readonly db: Database,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   /** FR-SLT-41: Brand Admin chỉ thấy hóa đơn của mình (phạm vi qua `scope`, FR-BND-05). */
@@ -156,7 +164,7 @@ export class SltService {
       checkoutTotal += Number(itemTotal);
 
       const endsAt = new Date(t0);
-      endsAt.setDate(endsAt.getDate() + SPEC_CONSTRAINTS.RENTAL_MAX_STOCKING_DAYS);
+      endsAt.setDate(endsAt.getDate() + this.config.constraint('RENTAL_MAX_STOCKING_DAYS'));
       endsAt.setMonth(endsAt.getMonth() + duration);
 
       itemDatas.push({
@@ -178,7 +186,7 @@ export class SltService {
     }
 
     const holdExpiresAt = new Date(
-      t0.getTime() + SPEC_CONSTRAINTS.RENTAL_CHECKOUT_HOLD_MIN * 60 * 1000,
+      t0.getTime() + this.config.constraint('RENTAL_CHECKOUT_HOLD_MIN') * 60 * 1000,
     );
 
     const result = await this.queries.createCheckoutTx({
@@ -216,6 +224,122 @@ export class SltService {
     const record = await this.queries.findCheckoutById(scope, id);
     if (!record) throw notFoundFor(actor);
     return toCheckoutDto(record.checkout, record.items);
+  }
+
+  /** Chủ động hủy phiên thanh toán chưa trả và giải phóng slot ngay lập tức. */
+  async cancelCheckout(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalCheckout> {
+    const now = this.clock.now();
+    await this.db.transaction().execute(async (tx) => {
+      const checkout = await this.queries.lockCheckoutById(id, tx);
+      if (!checkout) throw notFoundFor(actor);
+
+      if (scope.kind === 'BRAND' && checkout.brandId !== scope.brandId) {
+        throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+      }
+
+      if (checkout.paidAt !== null) {
+        throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+      }
+
+      if (checkout.cancelledAt === null) {
+        await this.payments.expirePending({ rentalCheckoutId: checkout.id }, tx);
+        await this.queries.cancelCheckoutAndRentals(checkout.id, now, tx);
+
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: checkout.brandId,
+            action: 'slt.checkout.cancelled_by_user',
+            targetType: 'RentalCheckout',
+            targetId: checkout.id,
+            severity: 'INFO',
+            before: { status: 'AWAITING_PAYMENT' },
+            after: { status: 'CANCELLED', cancelledAt: now },
+          },
+          tx,
+        );
+      }
+    });
+
+    return this.getCheckout(actor, scope, id);
+  }
+
+  /** FR-SLT-37: Thanh toán phiên thanh toán thuê slot. */
+  async payCheckout(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    id: string,
+  ): Promise<RentalPaymentIntent> {
+    try {
+      const result = await this.db.transaction().execute(async (tx) => {
+        const checkout = await this.queries.lockCheckoutById(id, tx);
+        if (!checkout) {
+          throw notFoundFor(actor);
+        }
+
+        if (scope.kind === 'BRAND' && checkout.brandId !== scope.brandId) {
+          throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+        }
+
+        const now = this.clock.now();
+        if (
+          checkout.paidAt !== null ||
+          checkout.cancelledAt !== null ||
+          now.getTime() > checkout.holdExpiresAt.getTime()
+        ) {
+          throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+        }
+
+        const existing = await this.payments.findPendingIntent(
+          { rentalCheckoutId: checkout.id },
+          tx,
+        );
+        if (existing) {
+          return { intent: existing, holdExpiresAt: checkout.holdExpiresAt };
+        }
+
+        const reference = newPaymentReference('CHK', now, 'Asia/Ho_Chi_Minh');
+        const created = await this.payments.createPending(
+          {
+            brandId: checkout.brandId,
+            target: { rentalCheckoutId: checkout.id },
+            reference,
+            amount: checkout.totalAmount,
+            currency: checkout.currency,
+            expiresAt: checkout.holdExpiresAt,
+            description: `ScentStation thuê slot ${reference}`,
+          },
+          tx,
+        );
+
+        return { intent: created, holdExpiresAt: checkout.holdExpiresAt };
+      });
+
+      return toPaymentIntentDto(result.intent, result.holdExpiresAt, id);
+    } catch (err: unknown) {
+      // AC3: Bắt lỗi 23505 (uq_checkout_payment_pending) do 2 yêu cầu đồng thời
+      const isUniqueViolation =
+        typeof err === 'object' &&
+        err !== null &&
+        'code' in err &&
+        (err as { code: string }).code === '23505';
+
+      if (isUniqueViolation) {
+        const checkout = await this.queries.findCheckoutRecordById(id);
+        if (checkout) {
+          const fallback = await this.payments.findPendingIntent({ rentalCheckoutId: id });
+          if (fallback) {
+            return toPaymentIntentDto(fallback, checkout.holdExpiresAt, id);
+          }
+        }
+      }
+      throw err;
+    }
   }
 
   /** FR-SLT-40: Xem hóa đơn thuê slot. */
@@ -400,5 +524,22 @@ function toCheckoutDto(checkout: RentalCheckoutRecord, items: SlotRentalRecord[]
     cancelledAt: iso(checkout.cancelledAt),
     createdAt: checkout.createdAt.toISOString(),
     invoices: items.map(toDto),
+  };
+}
+
+function toPaymentIntentDto(
+  intent: PaymentIntent,
+  holdExpiresAt: Date,
+  checkoutId: string,
+): RentalPaymentIntent {
+  return {
+    paymentId: intent.paymentId,
+    checkoutId,
+    amount: intent.amount,
+    currency: intent.currency,
+    status: intent.status,
+    checkoutUrl: intent.checkoutUrl,
+    qrPayload: intent.qrPayload,
+    expiresAt: holdExpiresAt.toISOString(),
   };
 }
