@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
-import { KioskSessionContext } from './context';
+import { KioskSessionContext, type ActiveOrder } from './context';
 
 function generateSessionId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -14,10 +14,12 @@ function generateSessionId(): string {
 
 export function KioskSessionProvider({ children }: { children: ReactNode }) {
   const [sessionId, setSessionId] = useState<string>(() => generateSessionId());
+  const [activeOrder, setActiveOrder] = useState<ActiveOrder | null>(null);
 
   const startNewSession = useCallback(() => {
     const nextId = generateSessionId();
     setSessionId(nextId);
+    setActiveOrder(null);
     return nextId;
   }, []);
 
@@ -25,8 +27,10 @@ export function KioskSessionProvider({ children }: { children: ReactNode }) {
     () => ({
       kioskSessionId: sessionId,
       startNewSession,
+      activeOrder,
+      setActiveOrder,
     }),
-    [sessionId, startNewSession],
+    [sessionId, startNewSession, activeOrder],
   );
 
   return <KioskSessionContext.Provider value={value}>{children}</KioskSessionContext.Provider>;

@@ -33,7 +33,7 @@ export function KioskShell() {
   const location = useLocation();
   const matches = useMatches();
   const outOfService = useOutOfService();
-  const { startNewSession } = useKioskSession();
+  const { startNewSession, activeOrder } = useKioskSession();
 
   const [isLangOpen, setIsLangOpen] = useState(false);
   const langDropdownRef = useRef<HTMLDivElement>(null);
@@ -64,7 +64,9 @@ export function KioskShell() {
     };
   }, [isLangOpen]);
 
-  if (outOfService) return <OutOfServiceScreen />;
+  // Khách đang có đơn chưa kết thúc (có thể đã trả tiền, đèn đang sáng) thì không thay cả màn hình:
+  // giữ màn thanh toán để khách còn thấy mã và đếm ngược, chỉ báo mất kết nối (FR-IOT-13, FR-ORD-21).
+  if (outOfService && !activeOrder) return <OutOfServiceScreen />;
 
   const isCatalog = location.pathname === '/catalog';
   const isProductDetail = location.pathname.startsWith('/products/');
@@ -84,7 +86,8 @@ export function KioskShell() {
               ← {t('kiosk.backToHome')}
             </button>
           )}
-          {(isProductDetail || isCheckout) && (
+          {/* Đang có đơn thì CheckoutScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
+          {(isProductDetail || (isCheckout && !activeOrder)) && (
             <button
               type="button"
               className={styles.backButton}
@@ -139,6 +142,12 @@ export function KioskShell() {
           )}
         </div>
       </header>
+
+      {outOfService && (
+        <p className={styles.connectionBanner} role="alert">
+          {t('kiosk.connectionLost')}
+        </p>
+      )}
 
       <main className={styles.content}>
         <Outlet />

@@ -195,3 +195,13 @@
   display: flex;
   flex-direction: column;
 }
+
+/* Mất kết nối khi khách đang có đơn: báo nhẹ, không che màn thanh toán (FR-IOT-13). */
+.connectionBanner {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  background: #fdecec;
+  color: #a12828;
+  font-weight: 600;
+  text-align: center;
+}

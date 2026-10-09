@@ -199,3 +199,15 @@
     animation: none;
   }
 }
+
+/* Hộp xác nhận khi khách muốn rời màn mã thanh toán. */
+.confirmLeave {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-container);
+}
