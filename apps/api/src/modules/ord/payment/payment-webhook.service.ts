@@ -10,6 +10,8 @@
  *      b. Chiếm `payment_events (provider, provider_event_id)` bằng ON CONFLICT DO NOTHING — webhook
  *         trùng, kể cả tới song song, dừng ở đây và nhận 200 WEBHOOK_ALREADY_PROCESSED (FR-ORD-15).
  *      c. Đối chiếu số tiền, loại tiền với `payments.amount` (FR-ORD-14).
+ *      c'. Payment đã nhận tiền mà tới tin thành công của giao dịch ngân hàng KHÁC cùng mã (khách
+ *         quét lại QR, chuyển khoản lần hai) → ghi nhận để hoàn tiền, không coi là webhook trùng.
  *      d. Chia nhánh theo đích của payment: đơn kiosk → `OrdService.settleOrderPayment`; phiên thuê
  *         slot → `RentalCheckoutPaymentHandler` của SLT (ADR-0008).
  *      e. Cập nhật payment, đóng sự kiện, ghi AuditLog (FR-AUD-06).
@@ -182,6 +184,35 @@ export class PaymentWebhookService {
       return { kind: 'AMOUNT_MISMATCH' };
     }
 
+    if (isExtraTransfer(payment, event)) {
+      // Khách quét cùng một mã QR và chuyển khoản lần nữa: giao dịch ngân hàng khác, tiền thật đã về.
+      // Không được coi là webhook trùng rồi bỏ qua — ghi lại để hoàn tiền. Việc hoàn vẫn làm tay
+      // (FR-ORD-20) cho tới khi có luồng hoàn tiền tự động.
+      if (payment.orderId) await this.orders.flagOrderForReview(tx, payment.orderId);
+      await this.audit.log(
+        {
+          actorType: 'PAYMENT_PROVIDER',
+          brandId: payment.brandId,
+          action: 'ord.payment.extra_transfer',
+          targetType: payment.orderId ? 'Order' : 'RentalCheckout',
+          targetId: payment.orderId ?? payment.rentalCheckoutId,
+          severity: 'HIGH',
+          metadata: {
+            provider,
+            eventId: event.eventId,
+            paymentId: payment.id,
+            transactionId: event.transactionId,
+            firstTransactionId: payment.providerTransactionId,
+            amount: event.amount,
+            currency: event.currency,
+          },
+        },
+        tx,
+      );
+      await this.queries.finishEvent(eventRowId, 'EXTRA_TRANSFER_REFUND_PENDING', now, tx);
+      return { kind: 'PROCESSED' };
+    }
+
     if (!isSettleable(payment)) {
       // Cùng giao dịch báo lại bằng eventId khác, sau khi payment đã được ghi nhận.
       await this.queries.finishEvent(eventRowId, `IGNORED_PAYMENT_${payment.status}`, now, tx);
@@ -269,4 +300,13 @@ export class PaymentWebhookService {
 
 function isSettleable(payment: PaymentRecord): boolean {
   return (SETTLEABLE as ReadonlySet<string>).has(payment.status);
+}
+
+/** Payment đã nhận tiền từ một giao dịch, nay có tin thành công của một giao dịch KHÁC cùng mã. */
+function isExtraTransfer(payment: PaymentRecord, event: VerifiedPaymentEvent): boolean {
+  return (
+    !isSettleable(payment) &&
+    payment.providerTransactionId !== null &&
+    event.transactionId !== payment.providerTransactionId
+  );
 }
