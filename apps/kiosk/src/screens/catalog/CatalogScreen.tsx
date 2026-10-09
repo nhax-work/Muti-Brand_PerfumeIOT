@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import type { components } from '@scentstation/contracts';
-import { recordKioskInteraction, useKioskCatalog } from '@/shared/api';
+import { recordKioskInteraction, useCreateOrder, useKioskCatalog, useOrderStatus } from '@/shared/api';
+import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
+import { phaseOf } from '../checkout/checkout-phase';
+import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
 import styles from './CatalogScreen.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
@@ -85,6 +88,35 @@ export default function CatalogScreen() {
   const [customPaymentStep, setCustomPaymentStep] = useState<PaymentStep | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'card' | 'qr'>('card');
   const [countdown, setCountdown] = useState(299); // 04:59
+  const [copiedCmd, setCopiedCmd] = useState(false);
+
+  // Hook tạo đơn và theo dõi trạng thái thanh toán từ backend
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const createOrder = useCreateOrder();
+  const created = createOrder.data;
+  const statusQuery = useOrderStatus(created?.order.id ?? null);
+  const orderStatusView = statusQuery.data;
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(timer);
+  }, []);
+
+  const [prevStatus, setPrevStatus] = useState<string | null>(null);
+  const [paidSince, setPaidSince] = useState<number | null>(null);
+  const currentStatus = orderStatusView?.status ?? null;
+  if (currentStatus !== prevStatus) {
+    setPrevStatus(currentStatus);
+    setPaidSince(currentStatus === 'PAID' ? now : null);
+  }
+
+  const phase = phaseOf(orderStatusView, paidSince === null ? 0 : now - paidSince);
+  const isPostPayment = created !== undefined && phase !== 'PAYING' && phase !== 'EXPIRED';
 
   const items = useMemo(() => catalog.data?.items ?? [], [catalog.data?.items]);
 
@@ -97,6 +129,22 @@ export default function CatalogScreen() {
   const detailItem = selectedDetailItem ?? routeMatchedItem;
   const isCheckoutRoute = location.pathname.startsWith('/checkout/');
   const paymentStep = customPaymentStep ?? (isCheckoutRoute ? 'select' : null);
+
+  // Tự động gọi API tạo đơn khi khách vào bước thanh toán (qr hoặc pos)
+  useEffect(() => {
+    if (
+      detailItem &&
+      (paymentStep === 'qr' || paymentStep === 'pos') &&
+      !created &&
+      !createOrder.isPending
+    ) {
+      createOrder.mutate({
+        slotId: detailItem.slotId,
+        kioskSessionId,
+        idempotencyKey,
+      });
+    }
+  }, [detailItem, paymentStep, created, createOrder, kioskSessionId, idempotencyKey]);
 
   // Danh sách lặp vô tận (3 bộ lặp lại liên tục cho chu kỳ marquee conveyor)
   const loopItems = useMemo(() => {
@@ -359,6 +407,11 @@ export default function CatalogScreen() {
   const handleCloseDetailModal = () => {
     setSelectedDetailItem(null);
     setCustomPaymentStep(null);
+    setIdempotencyKey(
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     isPausedRef.current = false;
     void navigate('/');
   };
@@ -719,9 +772,26 @@ export default function CatalogScreen() {
       )}
 
       {/* ========================================================
+          3. MÀN HÌNH TOÀN TRANG KIOSK SAU THANH TOÁN (Stitch Screen d0590f7ae4954294b26d2f0d2b83b28f)
+          ======================================================== */}
+      {isPostPayment && created && (
+        <DispenseSuccessGuide
+          item={detailItem ?? undefined}
+          slot={detailItem?.slotNumber ?? 1}
+          order={created.order}
+          view={orderStatusView}
+          phase={phase}
+          now={now}
+          settled={['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase)}
+          pressWindowSec={config.pressWindowSec}
+          goHome={handleCloseDetailModal}
+        />
+      )}
+
+      {/* ========================================================
           2. MODAL THANH TOÁN (Stitch Screens 4, 5, 6)
           ======================================================== */}
-      {paymentStep && (
+      {paymentStep && !isPostPayment && (
         <div
           className={styles.modalBackdrop}
           onClick={handleCloseDetailModal}
@@ -934,7 +1004,11 @@ export default function CatalogScreen() {
                             color: 'var(--color-text-secondary)',
                           }}
                         >
-                          Mã đơn: <strong style={{ color: '#000000' }}>#SCT-8842</strong>
+                          Mã đơn:{' '}
+                          <strong style={{ color: '#000000' }}>
+                            {created?.order.paymentReference ??
+                              (createOrder.isPending ? 'Đang tạo đơn...' : '#SCT-8842')}
+                          </strong>
                         </div>
                         <div
                           style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}
@@ -1040,6 +1114,78 @@ export default function CatalogScreen() {
                     <span className={styles.badgeTag}>VNPAY</span>
                     <span className={styles.badgeTag}>NAPAS 247</span>
                   </div>
+
+                  {/* Lệnh thanh toán giả lập dành cho tester / dev */}
+                  {created?.order.paymentReference && (
+                    <div
+                      style={{
+                        marginTop: 14,
+                        padding: '10px 14px',
+                        background: '#1c1b1e',
+                        borderRadius: 8,
+                        color: '#e5e0d8',
+                        textAlign: 'left',
+                        border: '1px solid #333038',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 6,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 10,
+                            color: '#d4af37',
+                            fontWeight: 700,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                          }}
+                        >
+                          Lệnh thanh toán giả lập (Dev / Test)
+                        </span>
+                        <button
+                          type="button"
+                          style={{
+                            background: copiedCmd ? '#e6f4ea' : '#ffffff',
+                            color: copiedCmd ? '#1e7e34' : '#131315',
+                            border: 'none',
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => {
+                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                              void navigator.clipboard.writeText(
+                                `npm run pay:mock -- ${created.order.paymentReference}`,
+                              );
+                              setCopiedCmd(true);
+                              setTimeout(() => setCopiedCmd(false), 2000);
+                            }
+                          }}
+                        >
+                          {copiedCmd ? 'Đã sao chép!' : 'Sao chép lệnh test'}
+                        </button>
+                      </div>
+                      <code
+                        style={{
+                          color: '#e2c069',
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        npm run pay:mock -- {created.order.paymentReference}
+                      </code>
+                    </div>
+                  )}
                 </div>
 
                 <div className={styles.checkoutFooterButtons}>
@@ -1062,7 +1208,7 @@ export default function CatalogScreen() {
             )}
 
             {/* BƯỚC 2B: POPUP HƯỚNG DẪN POS / NFC (Screen 6) */}
-            {paymentStep === 'pos' && (
+            {!isPostPayment && paymentStep === 'pos' && (
               <>
                 <div className={styles.checkoutHeaderArea}>
                   <h2 className={styles.checkoutModalTitle}>THANH TOÁN THẺ QUỐC TẾ / NFC</h2>
