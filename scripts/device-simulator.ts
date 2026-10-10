@@ -34,11 +34,12 @@ import {
 import { SimulatedMachine, type MachineBehavior } from './lib/simulated-machine.js';
 
 const { values } = parseArgs({
+  allowPositionals: true,
   options: {
     serial: { type: 'string', default: 'M001' },
     machines: { type: 'string' },
     broker: { type: 'string' },
-    'press-after': { type: 'string', default: '2' },
+    'press-after': { type: 'string', default: '45' },
     'no-press': { type: 'boolean', default: false },
     'wrong-slot': { type: 'string' },
     'public-key': { type: 'string' },
@@ -55,9 +56,10 @@ if (wrongSlot !== null && (!Number.isInteger(wrongSlot) || wrongSlot < 1)) {
   process.exit(1);
 }
 
+const isAutoPress = process.argv.includes('--auto-press') || process.env['AUTO_PRESS'] === '1';
 const behavior: MachineBehavior = {
   pressWindowSec: SPEC_CONSTRAINTS.DISPENSE_PRESS_WINDOW_SEC,
-  pressAfterMs: values['no-press'] ? null : Math.max(0, Number(values['press-after'])) * 1000,
+  pressAfterMs: isAutoPress ? Math.max(0, Number(values['press-after'] ?? '15')) * 1000 : null,
   wrongSlot,
   reject: values.reject ?? null,
   failOnPress: values['fail-on-press'] ?? null,
@@ -92,7 +94,7 @@ function main(): void {
   const machines = new Map<string, SimulatedMachine>();
   client.on('connect', () => {
     console.log(
-      `Đã kết nối ${broker} — giả lập ${serials.length} máy: ${serials.slice(0, 5).join(', ')}${serials.length > 5 ? '…' : ''}`,
+      `Đã kết nối ${broker} — giả lập ${serials.length} máy: ${serials.slice(0, 5).join(', ')}${serials.length > 5 ? '…' : ''} | Tự bấm nút sau: ${behavior.pressAfterMs === null ? 'TẮT (không bấm)' : `${behavior.pressAfterMs / 1000}s`}`,
     );
     for (const serial of serials) {
       if (machines.has(serial)) continue;
@@ -101,17 +103,31 @@ function main(): void {
         verifier,
         behavior,
         publish: (topic, payload, qos) => client.publish(topic, payload, { qos }),
+        log: (line) =>
+          console.log(
+            `[${new Date().toLocaleTimeString('vi-VN')}.${String(new Date().getMilliseconds()).padStart(3, '0')}] ${line}`,
+          ),
       });
       machines.set(serial, machine);
       // Chế độ nhiều máy chỉ gửi heartbeat (test tải); một máy thì nhận lệnh.
-      if (count === 0) client.subscribe(machine.topic('command'), { qos: 1 });
+      if (count === 0) {
+        client.subscribe(machine.topic('command'), { qos: 1 });
+        client.subscribe('scentstation/+/button', { qos: 1 });
+      }
       machine.heartbeat();
       setInterval(() => machine.heartbeat(), SPEC_CONSTRAINTS.HEARTBEAT_INTERVAL_SEC * 1000);
     }
   });
   client.on('message', (topic, payload) => {
     const serial = topic.split('/')[1] ?? '';
-    if (topic.endsWith('/command')) machines.get(serial)?.onCommand(payload);
+    if (topic.endsWith('/command')) {
+      machines.get(serial)?.onCommand(payload);
+    } else if (topic.endsWith('/button')) {
+      const slot = Number(payload.toString().trim());
+      if (Number.isInteger(slot) && slot >= 1) {
+        machines.get(serial)?.press(slot);
+      }
+    }
   });
   client.on('error', (error) => console.error(`MQTT lỗi: ${error.message}`));
   client.on('offline', () => console.warn(`Mất kết nối ${broker}, đang thử lại…`));

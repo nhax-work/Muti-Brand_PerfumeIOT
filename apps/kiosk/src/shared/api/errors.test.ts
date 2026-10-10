@@ -35,6 +35,20 @@ describe('errorMessage', () => {
     expect(errorMessage(new ApiRequestError(0, null), tEn)).toBe(tEn('ui.networkError'));
   });
 
+  it('mã MACHINE_BUSY được ánh xạ thành thông báo máy đang phục vụ khách khác', () => {
+    const error = new ApiRequestError(409, {
+      code: 'MACHINE_BUSY',
+      message: 'Máy đang chờ khách trước bấm nút',
+    });
+
+    expect(errorMessage(error, tVi)).toBe(
+      'Máy đang phục vụ khách khác. Vui lòng chờ trong giây lát.',
+    );
+    expect(errorMessage(error, tEn)).toBe(
+      'The machine is serving another customer. Please wait a moment.',
+    );
+  });
+
   it('lỗi không phải từ API thì báo lỗi chung', () => {
     expect(errorMessage(new TypeError('boom'), tEn)).toBe(tEn('common.internalError'));
   });

@@ -18,6 +18,14 @@ vi.mock('@/shared/api', async (importOriginal) => {
     ...actual,
     useKioskCatalog: vi.fn(),
     recordKioskInteraction: vi.fn(),
+    useCreateOrder: () => ({
+      mutate: vi.fn(),
+      reset: vi.fn(),
+      data: undefined,
+      isPending: false,
+      isError: false,
+    }),
+    useOrderStatus: () => ({ data: undefined }),
   };
 });
 

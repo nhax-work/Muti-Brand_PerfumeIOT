@@ -70,6 +70,9 @@ export async function unwrap<D>(
 export function errorMessage(error: unknown, t: Translate): string {
   if (error instanceof ApiRequestError) {
     if (error.status === 0) return t('ui.networkError');
+    if (error.code === 'MACHINE_BUSY') {
+      return t('ord.machineBusy');
+    }
     const details = error.body?.details;
     const key = details?.messageKey;
     if (isMessageKey(key)) {
