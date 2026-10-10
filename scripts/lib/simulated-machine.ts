@@ -123,7 +123,9 @@ export class SimulatedMachine {
 
     // FR-DSP-21: sáng đèn, gửi ACK, chưa kích hoạt.
     this.ack(token);
-    this.log(`[${this.serial}] 💡 đèn nút slot ${slot} sáng — chờ bấm ${behavior.pressWindowSec}s`);
+    this.log(
+      `[${this.serial}] 💡 đèn nút slot ${slot} sáng — chờ bấm ${behavior.pressWindowSec}s | pressAfterMs = ${behavior.pressAfterMs}`,
+    );
     const windowMs = behavior.pressWindowSec * 1000;
     const timers: unknown[] = [this.clock.setTimeout(() => this.pressTimeout(), windowMs)];
     if (behavior.pressAfterMs !== null) {

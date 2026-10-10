@@ -74,7 +74,7 @@ export default function CatalogScreen() {
   const location = useLocation();
   const params = useParams<{ slotNumber?: string }>();
   const catalog = useKioskCatalog();
-  const { kioskSessionId } = useKioskSession();
+  const { kioskSessionId, startNewSession } = useKioskSession();
 
   const trackRef = useRef<HTMLDivElement>(null);
   const reportedImpressionsRef = useRef<Set<string>>(new Set());
@@ -412,6 +412,10 @@ export default function CatalogScreen() {
   const handleCloseDetailModal = () => {
     setSelectedDetailItem(null);
     setCustomPaymentStep(null);
+    createOrder.reset();
+    startNewSession();
+    setPaidSince(null);
+    setPrevStatus(null);
     setIdempotencyKey(
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
@@ -420,6 +424,15 @@ export default function CatalogScreen() {
     isPausedRef.current = false;
     void navigate('/');
   };
+
+  const settled =
+    created !== undefined && ['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase);
+
+  useEffect(() => {
+    if (!settled) return;
+    const timer = setTimeout(handleCloseDetailModal, 60_000);
+    return () => clearTimeout(timer);
+  }, [settled]);
 
   const handleBackToDetail = () => {
     setCustomPaymentStep(null);
@@ -787,7 +800,7 @@ export default function CatalogScreen() {
           view={orderStatusView}
           phase={phase}
           now={now}
-          settled={['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase)}
+          settled={settled}
           pressWindowSec={config.pressWindowSec}
           goHome={handleCloseDetailModal}
         />

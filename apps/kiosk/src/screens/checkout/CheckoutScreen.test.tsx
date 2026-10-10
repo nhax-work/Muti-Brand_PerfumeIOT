@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ApiRequestError,
   useCreateOrder,
   useKioskCatalog,
   useOrderStatus,
@@ -9,6 +10,7 @@ import {
 import { I18nProvider } from '@/shared/i18n';
 import { phaseOf, secondsUntil, WAITING_TURN_AFTER_MS } from './checkout-phase';
 import CheckoutScreen from './CheckoutScreen';
+import DispenseSuccessGuide from './DispenseSuccessGuide';
 
 const mockNavigate = vi.fn();
 const mockMutate = vi.fn();
@@ -90,6 +92,19 @@ function mockOrder(data: typeof created | undefined, status?: OrderStatusView) {
   } as unknown as ReturnType<typeof useCreateOrder>);
   vi.mocked(useOrderStatus).mockReturnValue({
     data: status,
+  } as unknown as ReturnType<typeof useOrderStatus>);
+}
+
+function mockOrderError(error: unknown) {
+  vi.mocked(useCreateOrder).mockReturnValue({
+    data: undefined,
+    mutate: mockMutate,
+    isPending: false,
+    isError: true,
+    error,
+  } as unknown as ReturnType<typeof useCreateOrder>);
+  vi.mocked(useOrderStatus).mockReturnValue({
+    data: undefined,
   } as unknown as ReturnType<typeof useOrderStatus>);
 }
 
@@ -184,6 +199,41 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByText('Cảm ơn bạn!')).toBeTruthy();
     expect(screen.getByText('Chúc bạn một ngày thơm tho.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Trang chủ' })).toBeTruthy();
+  });
+
+  it('tạo đơn bị MACHINE_BUSY thì hiện thông báo máy đang phục vụ khách khác (FR-ORD-24)', () => {
+    mockOrderError(
+      new ApiRequestError(409, {
+        code: 'MACHINE_BUSY',
+        message: 'Máy đang chờ khách trước bấm nút',
+      }),
+    );
+    renderScreen();
+
+    expect(
+      screen.getByText('Máy đang phục vụ khách khác. Vui lòng chờ trong giây lát.'),
+    ).toBeTruthy();
+  });
+
+  it('khi đang chờ lượt (WAITING_TURN) thì hiển thị Đang chờ lượt và Máy đang phục vụ khách khác', () => {
+    render(
+      <I18nProvider>
+        <DispenseSuccessGuide
+          slot={2}
+          order={created.order}
+          view={view({ status: 'PAID' })}
+          phase="WAITING_TURN"
+          now={Date.now()}
+          settled={false}
+          pressWindowSec={60}
+          goHome={vi.fn()}
+        />
+      </I18nProvider>,
+    );
+
+    expect(screen.getByText('ĐANG CHỜ LƯỢT')).toBeTruthy();
+    expect(screen.getByText('ĐANG CHỜ LƯỢT PHỤC VỤ')).toBeTruthy();
+    expect(screen.getAllByText(/Máy đang phục vụ khách/i).length).toBeGreaterThan(0);
   });
 });
 
