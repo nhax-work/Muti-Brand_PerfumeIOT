@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { CatalogItem, OrderStatusView } from '@/shared/api';
+import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { secondsUntil, type CheckoutPhase } from './checkout-phase';
 import styles from './DispenseSuccessGuide.module.css';
@@ -203,16 +204,22 @@ export default function DispenseSuccessGuide({
                 SƯƠNG ({secondsLeft}S)
               </p>
             ) : phase === 'FORFEITED' ? (
-              <p>{t('kiosk.pressTimeoutHint')}</p>
+              <p>{t('kiosk.pressTimeoutHint', { seconds: pressWindowSec })}</p>
             ) : phase === 'WAITING_TURN' ? (
               <p>{t('kiosk.waitingForTurn')}</p>
             ) : phase === 'DISPENSED' ? (
               <p>{t('kiosk.dispensedHint')}</p>
             ) : phase === 'PROBLEM' ? (
               <p>
-                {t('kiosk.supportHint', {
-                  reference: view?.supportReference ?? order.paymentReference,
-                })}
+                {/* FR-ORD-21: chỉ dẫn tới kênh hỗ trợ thật; máy không có nhân viên (BR-001). */}
+                {config.supportContact
+                  ? t('kiosk.supportHint', {
+                      reference: view?.supportReference ?? order.paymentReference,
+                      contact: config.supportContact,
+                    })
+                  : t('kiosk.supportHintNoContact', {
+                      reference: view?.supportReference ?? order.paymentReference,
+                    })}
               </p>
             ) : (
               <p>
@@ -317,10 +324,7 @@ export default function DispenseSuccessGuide({
             </div>
             <span className={styles.phaseHeroSlotTag}>HẾT THỜI GIAN</span>
             <h2 className={styles.phaseHeroTitle}>ĐÃ HẾT THỜI GIAN BẤM NÚT</h2>
-            <p className={styles.phaseHeroMessage}>
-              Thời gian bấm nút kích hoạt ({pressWindowSec} giây) đã kết thúc. Theo điều khoản đã
-              thỏa thuận, lượt xịt này đã bị hủy và không hoàn tiền.
-            </p>
+            {/* Câu hướng dẫn (không đổ lỗi, 0.7) đã hiện ở phần đầu màn hình — không lặp lại ở đây. */}
             <div className={styles.phaseHeroHint}>
               Cảm ơn bạn đã ghé thăm ScentStation Paris. Hệ thống sẽ tự động quay lại trang chủ sau
               giây lát.

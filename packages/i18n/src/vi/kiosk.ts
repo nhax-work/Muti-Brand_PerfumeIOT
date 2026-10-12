@@ -11,7 +11,10 @@ export const kiosk = {
   featureFineMist: 'Xịt sương vi hạt cao cấp',
   featureQrPay: 'Thanh toán QR nhanh chóng',
   outOfServiceTitle: 'Máy đang tạm ngưng phục vụ',
-  outOfServiceHint: 'Vui lòng quay lại sau ít phút hoặc liên hệ nhân viên tại điểm đặt máy.',
+  outOfServiceHint: 'Vui lòng quay lại sau ít phút.',
+  outOfServiceContact: 'Cần hỗ trợ? Liên hệ {contact}.',
+  connectionLost: 'Mất kết nối với hệ thống, đang thử lại…',
+  connectionLostOrder: 'Mất kết nối với hệ thống, đang thử lại… Mã đơn của bạn: {reference}',
   catalogTitle: 'Danh mục nước hoa',
   catalogSubtitle: 'Khám phá các mùi hương cao cấp và chạm để trải nghiệm',
   allBrands: 'Tất cả',
@@ -39,6 +42,11 @@ export const kiosk = {
     'Sau khi thanh toán, đèn nút số {slot} trên máy sẽ sáng. Bạn cần bấm nút đó trong {seconds} giây để nhận lượt xịt. Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
   agreeAndPay: 'Đồng ý và thanh toán',
   cancel: 'Hủy',
+  goBack: 'Quay lại',
+  leavePaymentConfirm:
+    'Nếu bạn đã quét mã và chuyển khoản, xin đừng rời màn hình này. Bạn vẫn muốn quay lại?',
+  stayHere: 'Ở lại',
+  leaveAnyway: 'Vẫn quay lại',
   creatingOrder: 'Đang tạo đơn…',
   scanToPay: 'Quét mã để thanh toán',
   paymentReference: 'Mã thanh toán',
@@ -52,12 +60,18 @@ export const kiosk = {
   dispensedTitle: 'Cảm ơn bạn!',
   dispensedHint: 'Chúc bạn một ngày thơm tho.',
   pressTimeoutTitle: 'Đã hết thời gian bấm nút',
-  pressTimeoutHint: 'Lượt xịt đã bị hủy theo điều khoản đã đồng ý.',
+  pressTimeoutHint:
+    'Đã hết {seconds} giây chờ bấm nút. Lần sau, bạn hãy đứng sẵn trước máy và để ý nút sáng đèn ngay sau khi thanh toán nhé.',
   paymentExpiredTitle: 'Mã thanh toán đã hết hạn',
-  paymentExpiredHint: 'Bạn chưa bị trừ tiền. Vui lòng chọn lại mùi hương để thử lại.',
+  paymentExpiredHint: 'Nếu bạn chưa chuyển khoản, chỉ cần chọn lại mùi hương để thử lại.',
+  paymentExpiredLatePayment:
+    'Nếu bạn đã chuyển khoản, đừng lo: giao dịch vẫn được ghi nhận để hoàn tiền. Hãy lưu lại mã {reference}.',
   orderProblemTitle: 'Lượt xịt gặp sự cố',
   checkingResult: 'Đang xác nhận kết quả với máy…',
-  supportHint: 'Vui lòng báo mã {reference} cho nhân viên tại điểm đặt máy để được hỗ trợ.',
+  // Máy chạy không có nhân viên (BR-001) — chỉ dẫn khách tới kênh hỗ trợ thật nếu có cấu hình.
+  supportHint: 'Vui lòng lưu lại mã {reference} và liên hệ {contact} để được hỗ trợ.',
+  supportHintNoContact:
+    'Hệ thống đã ghi nhận sự cố. Vui lòng chụp lại mã {reference} để được hỗ trợ khi cần.',
   // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (Stitch UI)
   paymentSuccessTitle: 'Thanh toán thành công',
   paymentSuccessSubtitle: 'Vui lòng làm theo hướng dẫn dưới đây để nhận lượt xịt nước hoa',

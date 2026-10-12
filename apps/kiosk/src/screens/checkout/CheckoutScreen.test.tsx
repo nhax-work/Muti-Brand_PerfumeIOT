@@ -14,6 +14,7 @@ import DispenseSuccessGuide from './DispenseSuccessGuide';
 
 const mockNavigate = vi.fn();
 const mockMutate = vi.fn();
+const mockSetActiveOrder = vi.fn();
 
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
@@ -21,7 +22,12 @@ vi.mock('react-router', () => ({
 }));
 
 vi.mock('@/shared/session', () => ({
-  useKioskSession: () => ({ kioskSessionId: 'session-1', startNewSession: vi.fn() }),
+  useKioskSession: () => ({
+    kioskSessionId: 'session-1',
+    startNewSession: vi.fn(),
+    activeOrder: null,
+    setActiveOrder: mockSetActiveOrder,
+  }),
 }));
 
 vi.mock('@/shared/api', async (importOriginal) => {
@@ -82,7 +88,7 @@ function view(overrides: Partial<OrderStatusView>): OrderStatusView {
   } as OrderStatusView;
 }
 
-function mockOrder(data: typeof created | undefined, status?: OrderStatusView) {
+function mockOrder(data: typeof created | undefined, status?: OrderStatusView, failureCount = 0) {
   vi.mocked(useCreateOrder).mockReturnValue({
     data,
     mutate: mockMutate,
@@ -92,6 +98,7 @@ function mockOrder(data: typeof created | undefined, status?: OrderStatusView) {
   } as unknown as ReturnType<typeof useCreateOrder>);
   vi.mocked(useOrderStatus).mockReturnValue({
     data: status,
+    failureCount,
   } as unknown as ReturnType<typeof useOrderStatus>);
 }
 
@@ -140,6 +147,56 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     );
   });
 
+  it('màn điều khoản hiện số tiền trước khi khách bấm đồng ý (FR-ORD-25)', () => {
+    mockOrder(undefined);
+    renderScreen();
+
+    expect(screen.getByText(/42\.000 VND/)).toBeTruthy();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('đã có đơn thì báo cho phiên kiosk để giữ khách trong luồng thanh toán (FR-IOT-13)', () => {
+    mockOrder(created, view({ status: 'PENDING_PAYMENT' }));
+    renderScreen();
+
+    expect(mockSetActiveOrder).toHaveBeenLastCalledWith({
+      id: 'order-1',
+      paymentReference: 'ORD-20261004-ABC123',
+    });
+  });
+
+  it('muốn rời màn mã thanh toán thì phải xác nhận trước (FR-ORD-08)', () => {
+    mockOrder(created, view({ status: 'PENDING_PAYMENT' }));
+    renderScreen();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.getByText(/xin đừng rời màn hình này/)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ở lại' }));
+    expect(screen.queryByText(/xin đừng rời màn hình này/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quay lại' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vẫn quay lại' }));
+    expect(mockNavigate).toHaveBeenCalledWith('/products/2');
+  });
+
+  it('mất liên lạc khi đang chờ bấm nút thì vẫn giữ mã đơn trên màn hình (FR-ORD-21)', () => {
+    mockOrder(
+      created,
+      view({
+        status: 'DISPENSE_REQUESTED',
+        dispenseStatus: 'ACKNOWLEDGED',
+        pressDeadline: new Date(Date.now() + 45_000).toISOString(),
+      }),
+      2,
+    );
+    renderScreen();
+
+    expect(screen.getByText('Mời bấm nút số 2')).toBeTruthy();
+    expect(screen.getByText(/Mất kết nối.*ORD-20261004-ABC123/)).toBeTruthy();
+  });
+
   it('chưa thanh toán thì hiện mã thanh toán, số tiền và lệnh thanh toán giả lập (FR-ORD-08)', () => {
     mockOrder(created, view({ status: 'PENDING_PAYMENT' }));
     renderScreen();
@@ -171,7 +228,26 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     renderScreen();
 
     expect(screen.getByText('Đã hết thời gian bấm nút')).toBeTruthy();
-    expect(screen.queryByText(/báo mã/)).toBeNull();
+    expect(screen.getByText(/Đã hết 60 giây chờ bấm nút/)).toBeTruthy();
+    expect(screen.queryByText(/ORD-20261004-ABC123/)).toBeNull();
+  });
+
+  it('mã hết hạn thì không khẳng định "chưa bị trừ tiền" và hiện mã để hoàn tiền nếu tiền về muộn (FR-ORD-16)', () => {
+    mockOrder(created, view({ status: 'EXPIRED' }));
+    renderScreen();
+
+    expect(screen.getByText('Mã thanh toán đã hết hạn')).toBeTruthy();
+    expect(screen.queryByText(/chưa bị trừ tiền/)).toBeNull();
+    expect(screen.getByText(/đã chuyển khoản.*ORD-20261004-ABC123/)).toBeTruthy();
+  });
+
+  it('sự cố sau thanh toán thì hiện mã hỗ trợ, không nhắc tới nhân viên tại máy (FR-ORD-21, BR-001)', () => {
+    mockOrder(created, view({ status: 'FAILED', supportReference: 'SUP-123' }));
+    renderScreen();
+
+    expect(screen.getByText('Lượt xịt gặp sự cố')).toBeTruthy();
+    expect(screen.getByText(/SUP-123/)).toBeTruthy();
+    expect(screen.queryByText(/nhân viên/)).toBeNull();
   });
 
   it('sau khi thanh toán thành công, hiển thị giao diện hướng dẫn nhận lượt xịt (Stitch UI)', () => {

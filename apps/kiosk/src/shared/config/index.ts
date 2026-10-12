@@ -36,4 +36,7 @@ export const config = {
 
   /** NFR-USA-04: cỡ chữ tối thiểu, áp vào biến CSS `--kiosk-min-font` lúc khởi động. */
   minFontPx: SPEC_CONSTRAINTS.KIOSK_MIN_FONT_PX,
+
+  /** FR-ORD-21: kênh hỗ trợ hiện cho khách khi gặp sự cố; `null` khi chưa cấu hình. */
+  supportContact: import.meta.env.VITE_SUPPORT_CONTACT?.trim() || null,
 } as const;

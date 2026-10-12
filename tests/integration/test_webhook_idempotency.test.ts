@@ -33,6 +33,7 @@ let brandA: ReturnType<typeof asUser>;
 let packageId: string;
 let storagePlanId: string;
 let vacantSlot: string;
+let vacantSlot2: string;
 
 beforeAll(async () => {
   client = await openRawClient();
@@ -44,6 +45,7 @@ beforeAll(async () => {
   packageId = randomUUID();
   storagePlanId = randomUUID();
   vacantSlot = randomUUID();
+  vacantSlot2 = randomUUID();
   await client.query(
     `INSERT INTO rental_packages (id, name, duration_months, discount_percent, is_active)
      VALUES ($1, $2, 3, 5.00, true)`,
@@ -57,8 +59,9 @@ beforeAll(async () => {
   await client.query(
     `INSERT INTO machine_slots (id, machine_id, slot_number, status, monthly_rent_price,
                                 calibrated_dosage_ml, low_stock_threshold_ml)
-     VALUES ($1, $2, 6, 'AVAILABLE', 1000000.0000, 0.1200, 5.0000)`,
-    [vacantSlot, fx.machineId],
+     VALUES ($1, $2, 6, 'AVAILABLE', 1000000.0000, 0.1200, 5.0000),
+            ($3, $2, 7, 'AVAILABLE', 1000000.0000, 0.1200, 5.0000)`,
+    [vacantSlot, fx.machineId, vacantSlot2],
   );
 }, 60_000);
 
@@ -85,7 +88,9 @@ afterAll(async () => {
     await client.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
     await client.query('COMMIT');
   }
-  await client.query(`DELETE FROM machine_slots WHERE id = $1`, [vacantSlot]);
+  await client.query(`DELETE FROM machine_slots WHERE id = ANY($1::uuid[])`, [
+    [vacantSlot, vacantSlot2],
+  ]);
   await client.query(`DELETE FROM rental_packages WHERE id = $1`, [packageId]);
   await client.query(`DELETE FROM storage_plans WHERE id = $1`, [storagePlanId]);
   await flow.cleanup();
@@ -105,6 +110,23 @@ async function acceptedEvents(eventId: string): Promise<number> {
   const res = await client.query(
     `SELECT 1 FROM payment_events WHERE provider = 'mock' AND provider_event_id = $1`,
     [eventId],
+  );
+  return res.rowCount ?? 0;
+}
+
+async function eventResult(eventId: string): Promise<string | undefined> {
+  const res = await client.query<{ processing_result: string }>(
+    `SELECT processing_result FROM payment_events WHERE provider = 'mock' AND provider_event_id = $1`,
+    [eventId],
+  );
+  return res.rows[0]?.processing_result;
+}
+
+async function extraTransferAudits(targetId: string): Promise<number> {
+  const res = await client.query(
+    `SELECT 1 FROM audit_logs
+      WHERE action = 'ord.payment.extra_transfer' AND target_id = $1 AND severity = 'HIGH'`,
+    [targetId],
   );
   return res.rowCount ?? 0;
 }
@@ -179,6 +201,44 @@ describe('Idempotency webhook — đơn kiosk', () => {
 
     await client.query(`UPDATE orders SET status = 'FAILED' WHERE id = $1`, [order.id]);
   });
+
+  it('test_FR_ORD_15_second_transfer_same_reference_recorded_for_refund', async () => {
+    const order = await flow.createOrder(2);
+    const first = flow.paidWebhook(order);
+    expect(await results([flow.sendWebhook(first)])).toEqual(['PROCESSED']);
+
+    // Khách quét lại cùng mã QR và chuyển khoản lần hai: giao dịch ngân hàng KHÁC, eventId khác.
+    const second = buildMockWebhook({
+      reference: first.reference,
+      amount: first.amount,
+      currency: first.currency,
+    });
+    expect(second.transactionId).not.toBe(first.transactionId);
+    expect(await results([flow.sendWebhook(second)])).toEqual(['PROCESSED']);
+
+    // Tiền thật đã về lần hai: không bị nuốt như webhook trùng, mà ghi lại để hoàn.
+    expect(await eventResult(second.eventId)).toBe('EXTRA_TRANSFER_REFUND_PENDING');
+    expect(await extraTransferAudits(order.id)).toBe(1);
+    const row = await flow.orderRow(order.id);
+    expect(row?.needs_manual_review).toBe(true);
+
+    // Đơn vẫn chỉ được thanh toán một lần; payment giữ giao dịch đầu tiên.
+    expect(row?.status).toBe('PAID');
+    expect(await paidTransitions(order.id)).toBe(1);
+    const payment = await client.query<{ status: string; provider_transaction_id: string }>(
+      `SELECT status, provider_transaction_id FROM payments WHERE order_id = $1`,
+      [order.id],
+    );
+    expect(payment.rows).toEqual([
+      { status: 'SUCCEEDED', provider_transaction_id: first.transactionId },
+    ]);
+
+    // Cổng gửi lại chính tin của lần chuyển thứ hai: chỉ ghi nhận một lần.
+    expect(await results([flow.sendWebhook(second)])).toEqual(['WEBHOOK_ALREADY_PROCESSED']);
+    expect(await extraTransferAudits(order.id)).toBe(1);
+
+    await client.query(`UPDATE orders SET status = 'FAILED' WHERE id = $1`, [order.id]);
+  });
 });
 
 describe('Idempotency webhook — phiên thuê slot', () => {
@@ -232,5 +292,48 @@ describe('Idempotency webhook — phiên thuê slot', () => {
       [fx.brandA],
     );
     expect(notifications.rowCount).toBe(1);
+  });
+
+  it('test_FR_SLT_38_second_transfer_for_checkout_recorded_for_refund', async () => {
+    const checkoutRes = await brandA('POST', '/rental-checkouts', {
+      payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
+    });
+    expect(checkoutRes.statusCode, checkoutRes.body).toBe(201);
+    const checkout = checkoutRes.json<{ id: string }>();
+    const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
+    expect(payRes.statusCode, payRes.body).toBe(200);
+    const { paymentId } = payRes.json<{ paymentId: string }>();
+    const row = (
+      await client.query<{ provider_reference: string; amount: string; currency: string }>(
+        `SELECT provider_reference, amount, currency FROM payments WHERE id = $1`,
+        [paymentId],
+      )
+    ).rows[0]!;
+    const first = buildMockWebhook({
+      reference: row.provider_reference,
+      amount: row.amount,
+      currency: row.currency,
+    });
+    expect(await results([flow.sendWebhook(first)])).toEqual(['PROCESSED']);
+    const invoices = await client.query(
+      `SELECT invoice_number FROM slot_rentals WHERE checkout_id = $1`,
+      [checkout.id],
+    );
+
+    const second = buildMockWebhook({
+      reference: row.provider_reference,
+      amount: row.amount,
+      currency: row.currency,
+    });
+    expect(await results([flow.sendWebhook(second)])).toEqual(['PROCESSED']);
+
+    expect(await eventResult(second.eventId)).toBe('EXTRA_TRANSFER_REFUND_PENDING');
+    expect(await extraTransferAudits(checkout.id)).toBe(1);
+    // Không cấp thêm hóa đơn, không đổi hóa đơn đã cấp.
+    const after = await client.query(
+      `SELECT invoice_number FROM slot_rentals WHERE checkout_id = $1`,
+      [checkout.id],
+    );
+    expect(after.rows).toEqual(invoices.rows);
   });
 });

@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '@/shared/i18n';
-import { KioskSessionProvider } from '@/shared/session';
+import { KioskSessionProvider, useKioskSession } from '@/shared/session';
 import { KioskShell } from './KioskShell';
 
 const mockNavigate = vi.fn();
@@ -14,9 +15,24 @@ vi.mock('react-router', () => ({
   Outlet: () => <div data-testid="outlet-content">Outlet Content</div>,
 }));
 
+let mockOutOfService = false;
+
 vi.mock('@/shared/hooks/useOutOfService', () => ({
-  useOutOfService: () => false,
+  useOutOfService: () => mockOutOfService,
 }));
+
+vi.mock('@/screens/out-of-service/OutOfServiceScreen', () => ({
+  default: () => <div data-testid="out-of-service">Out of service</div>,
+}));
+
+/** Giả lập CheckoutScreen đã tạo đơn cho phiên này. */
+function WithActiveOrder() {
+  const { setActiveOrder } = useKioskSession();
+  useEffect(() => {
+    setActiveOrder({ id: 'order-1', paymentReference: 'ORD-1' });
+  }, [setActiveOrder]);
+  return null;
+}
 
 vi.mock('@/shared/hooks/useIdleReset', () => ({
   useIdleReset: vi.fn(),
@@ -26,20 +42,54 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockPathname = '/';
+    mockOutOfService = false;
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  const renderShell = () =>
+  const renderShell = (withActiveOrder = false) =>
     render(
       <I18nProvider>
         <KioskSessionProvider>
+          {withActiveOrder && <WithActiveOrder />}
           <KioskShell />
         </KioskSessionProvider>
       </I18nProvider>,
     );
+
+  it('ở màn thanh toán chưa có đơn thì vẫn có nút Quay lại danh mục', () => {
+    mockPathname = '/checkout/2';
+    renderShell();
+
+    expect(screen.getByRole('button', { name: /Quay lại danh mục/i })).toBeTruthy();
+  });
+
+  it('đã có đơn thì ẩn nút Quay lại danh mục ở header — lỡ chạm là mất màn đếm ngược (FR-ORD-26)', () => {
+    mockPathname = '/checkout/2';
+    renderShell(true);
+
+    expect(screen.queryByRole('button', { name: /Quay lại danh mục/i })).toBeNull();
+  });
+
+  it('mất kết nối khi chưa có đơn thì hiện màn tạm ngưng (FR-IOT-13)', () => {
+    mockOutOfService = true;
+    renderShell();
+
+    expect(screen.getByTestId('out-of-service')).toBeTruthy();
+    expect(screen.queryByTestId('outlet-content')).toBeNull();
+  });
+
+  it('mất kết nối khi đang có đơn thì giữ màn thanh toán và chỉ báo mất kết nối (FR-IOT-13, FR-ORD-21)', () => {
+    mockPathname = '/checkout/2';
+    mockOutOfService = true;
+    renderShell(true);
+
+    expect(screen.queryByTestId('out-of-service')).toBeNull();
+    expect(screen.getByTestId('outlet-content')).toBeTruthy();
+    expect(screen.getByText(/Mất kết nối với hệ thống/)).toBeTruthy();
+  });
 
   it('ở màn hình Home (/) hiển thị logo ScentStation và không hiện nút back', () => {
     mockPathname = '/';

@@ -44,7 +44,7 @@ export default function CheckoutScreen() {
   const navigate = useNavigate();
   const { slotNumber } = useParams<{ slotNumber: string }>();
   const catalog = useKioskCatalog();
-  const { kioskSessionId, startNewSession } = useKioskSession();
+  const { kioskSessionId, startNewSession, setActiveOrder } = useKioskSession();
   const [idempotencyKey] = useState(newIdempotencyKey);
   const createOrder = useCreateOrder();
   const created = createOrder.data;
@@ -96,6 +96,21 @@ export default function CheckoutScreen() {
     return () => clearTimeout(timer);
   }, [settled, goHome]);
 
+  // Báo cho KioskShell biết khách đang giữa chừng một đơn: không thay màn hình khi mất kết nối, không
+  // hiện nút quay lại ở header (FR-IOT-13, FR-ORD-26). Rời màn hình hoặc đơn kết thúc thì gỡ.
+  const activeOrderId = created?.order.id;
+  const activeReference = created?.order.paymentReference;
+  useEffect(() => {
+    if (!activeOrderId || !activeReference || settled) {
+      setActiveOrder(null);
+      return;
+    }
+    setActiveOrder({ id: activeOrderId, paymentReference: activeReference });
+    return () => setActiveOrder(null);
+  }, [activeOrderId, activeReference, settled, setActiveOrder]);
+
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
+
   if (!created && (!item || !item.product || !item.available)) {
     return (
       <section className={styles.checkout}>
@@ -122,6 +137,13 @@ export default function CheckoutScreen() {
         <div className={styles.card}>
           {item?.product && <p className={styles.product}>{item.product.name}</p>}
           <h1 className={styles.title}>{t('kiosk.pressTermsTitle')}</h1>
+          {/* Khách phải thấy số tiền TRƯỚC khi bấm đồng ý, không phải sau khi đã có mã QR. */}
+          {item?.pricePerSpray && (
+            <dl className={styles.facts}>
+              <dt>{t('kiosk.amountLabel')}</dt>
+              <dd>{formatAmount(item.pricePerSpray, item.currency)}</dd>
+            </dl>
+          )}
           <p className={styles.body}>
             {t('kiosk.pressTerms', { slot, seconds: config.pressWindowSec })}
           </p>
@@ -159,6 +181,13 @@ export default function CheckoutScreen() {
   const order = created.order;
   const mockPayCmd = `npm run pay:mock -- ${order.paymentReference}`;
 
+  // Mất liên lạc khi đang theo dõi đơn: vẫn giữ mã trên màn hình để khách còn tra cứu được.
+  const connectionLost = !settled && statusQuery.failureCount > 0 && (
+    <p className={styles.error} role="alert">
+      {t('kiosk.connectionLostOrder', { reference: order.paymentReference })}
+    </p>
+  );
+
   // Giao diện sau khi thanh toán thành công (Stitch screen d0590f7ae4954294b26d2f0d2b83b28f)
   // Hiển thị ngay sau khi đơn chuyển khỏi trạng thái chờ thanh toán
   const isPostPayment = phase !== 'PAYING' && phase !== 'EXPIRED';
@@ -170,6 +199,7 @@ export default function CheckoutScreen() {
         aria-label={t('kiosk.paymentSuccessTitle')}
         data-phase={phase}
       >
+        {connectionLost}
         <DispenseSuccessGuide
           item={item}
           slot={slot}
@@ -342,22 +372,51 @@ export default function CheckoutScreen() {
               {t('kiosk.paymentExpiresIn', { seconds: secondsUntil(order.expiresAt, now) ?? 0 })}
             </p>
 
-            <div className={styles.actions}>
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => void navigate(`/products/${slot}`)}
-              >
-                {t('kiosk.cancelOrder')}
-              </button>
-            </div>
+            {/* Chưa có API hủy đơn: rời màn hình không hủy được đơn, nên phải dặn khách trước. */}
+            {confirmingLeave ? (
+              <div className={styles.confirmLeave} role="alertdialog">
+                <p className={styles.body}>{t('kiosk.leavePaymentConfirm')}</p>
+                <div className={styles.actions}>
+                  <button
+                    type="button"
+                    className={styles.primary}
+                    onClick={() => setConfirmingLeave(false)}
+                  >
+                    {t('kiosk.stayHere')}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    onClick={() => void navigate(`/products/${slot}`)}
+                  >
+                    {t('kiosk.leaveAnyway')}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.actions}>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={() => setConfirmingLeave(true)}
+                >
+                  {t('kiosk.goBack')}
+                </button>
+              </div>
+            )}
           </>
         )}
+
+        {connectionLost}
 
         {phase === 'EXPIRED' && (
           <>
             <h1 className={styles.title}>{t('kiosk.paymentExpiredTitle')}</h1>
             <p className={styles.body}>{t('kiosk.paymentExpiredHint')}</p>
+            {/* Tiền về sau hạn thì đơn sang REFUND_PENDING — không được hứa "chưa bị trừ tiền". */}
+            <p className={styles.muted}>
+              {t('kiosk.paymentExpiredLatePayment', { reference: order.paymentReference })}
+            </p>
           </>
         )}
 
