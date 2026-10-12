@@ -29,6 +29,11 @@ import type {
 } from '../../apps/api/src/modules/slt/catalog.queries.js';
 import type { MchService } from '../../apps/api/src/modules/mch/index.js';
 import type { MchQueries } from '../../apps/api/src/modules/mch/mch.queries.js';
+import { SltJobs } from '../../apps/api/src/modules/slt/slt.jobs.js';
+import type { Clock } from '../../apps/api/src/shared/clock.js';
+import type { Database } from '../../apps/api/src/shared/db/index.js';
+import type { PaymentService } from '../../apps/api/src/modules/ord/index.js';
+import type { RentalCheckoutRecord } from '../../apps/api/src/modules/slt/slt.queries.js';
 
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
 const BRAND_B = '11111111-1111-4111-8111-000000000002';
@@ -571,5 +576,339 @@ describe('newInvoiceNumber — sinh số hóa đơn thuê slot (FR-SLT-38)', () 
     // ALPHABET[0] là '2'
     const invoiceNum = newInvoiceNumber(date, 'Asia/Ho_Chi_Minh', () => 0);
     expect(invoiceNum).toBe('HD-20261004-222222');
+  });
+});
+
+// -------------------------------------------------------------------------------------
+// Job hủy phiên hết giờ giữ chỗ (FR-SLT-39)
+// -------------------------------------------------------------------------------------
+
+function checkoutRecord(
+  id: string,
+  holdExpiresAt: Date,
+  overrides: Partial<RentalCheckoutRecord> = {},
+): RentalCheckoutRecord {
+  return {
+    id,
+    brandId: BRAND_A,
+    currency: 'VND',
+    totalAmount: '3300000.0000',
+    holdExpiresAt,
+    paidAt: null,
+    cancelledAt: null,
+    createdBy: 'user-1',
+    createdAt: new Date('2026-10-01T00:00:00Z'),
+    ...overrides,
+  };
+}
+
+class FakeSltJobsQueries {
+  checkouts = new Map<string, RentalCheckoutRecord>();
+  rentals = new Map<string, SlotRentalRecord[]>();
+  callLog: string[] = [];
+  lastFindNow: Date | null = null;
+  lastFindLimit: number | null = null;
+  failLockOnId?: string;
+
+  async findExpiredCheckoutIds(now: Date, limit = 100): Promise<string[]> {
+    this.lastFindNow = now;
+    this.lastFindLimit = limit;
+    this.callLog.push(`queries.findExpiredCheckoutIds(limit=${limit})`);
+
+    const result: string[] = [];
+    for (const [id, c] of this.checkouts.entries()) {
+      if (
+        c.paidAt === null &&
+        c.cancelledAt === null &&
+        c.holdExpiresAt.getTime() <= now.getTime()
+      ) {
+        result.push(id);
+        if (result.length >= limit) break;
+      }
+    }
+    return result;
+  }
+
+  async lockCheckoutById(id: string, _tx: unknown): Promise<RentalCheckoutRecord | null> {
+    this.callLog.push(`queries.lockCheckoutById(${id})`);
+    if (this.failLockOnId === id) {
+      throw new Error(`DB Lock Timeout for checkout ${id}`);
+    }
+    const c = this.checkouts.get(id);
+    return c ? { ...c } : null;
+  }
+
+  async cancelCheckoutAndRentals(
+    checkoutId: string,
+    cancelledAt: Date,
+    _tx: unknown,
+  ): Promise<void> {
+    this.callLog.push(`queries.cancelCheckoutAndRentals(${checkoutId})`);
+    const c = this.checkouts.get(checkoutId);
+    if (c) {
+      this.checkouts.set(checkoutId, { ...c, cancelledAt });
+    }
+    const rList = this.rentals.get(checkoutId);
+    if (rList) {
+      this.rentals.set(
+        checkoutId,
+        rList.map((r) => ({ ...r, status: 'CANCELLED', cancelledAt })),
+      );
+    }
+  }
+}
+
+class FakePaymentServiceForJobs {
+  callLog: string[] = [];
+  expiredCheckoutIds: string[] = [];
+
+  async expirePending(target: { rentalCheckoutId: string }, _tx: unknown): Promise<void> {
+    this.callLog.push(`payments.expirePending(${target.rentalCheckoutId})`);
+    this.expiredCheckoutIds.push(target.rentalCheckoutId);
+  }
+}
+
+class FakeAuditServiceForJobs {
+  entries: AuditEntry[] = [];
+  callLog: string[] = [];
+
+  async log(entry: AuditEntry, _tx?: unknown): Promise<void> {
+    this.callLog.push(`audit.log(${entry.action}, ${entry.targetId})`);
+    this.entries.push(entry);
+  }
+}
+
+class FakeDbForJobs {
+  transaction() {
+    return {
+      execute: async <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => {
+        return fn({});
+      },
+    };
+  }
+}
+
+describe('SltJobs — job hủy phiên hết giờ giữ chỗ (FR-SLT-39)', () => {
+  let queries: FakeSltJobsQueries;
+  let payments: FakePaymentServiceForJobs;
+  let audit: FakeAuditServiceForJobs;
+  let db: FakeDbForJobs;
+  let now: Date;
+  let clock: Clock;
+  let jobs: SltJobs;
+
+  beforeEach(() => {
+    queries = new FakeSltJobsQueries();
+    payments = new FakePaymentServiceForJobs();
+    audit = new FakeAuditServiceForJobs();
+    db = new FakeDbForJobs();
+    now = new Date('2026-10-11T10:00:00.000Z');
+    clock = { now: () => now };
+
+    jobs = new SltJobs(
+      queries as unknown as SltQueries,
+      payments as unknown as PaymentService,
+      audit as unknown as AuditService,
+      clock,
+      db as unknown as Database,
+    );
+  });
+
+  it('test_FR_SLT_39_cancel_unpaid_invoice_after_hold — hủy phiên, hóa đơn, expire pending payment và ghi audit log', async () => {
+    // AC1: Given phiên C chưa thanh toán gồm hóa đơn H1, H2 ở DRAFT, now() > C.hold_expires_at
+    const checkoutId = 'co-1';
+    const holdExpiresAt = new Date('2026-10-11T09:45:00.000Z'); // quá hạn 15 phút
+    queries.checkouts.set(checkoutId, checkoutRecord(checkoutId, holdExpiresAt));
+
+    const r1 = rental('r-1', { checkoutId, status: 'DRAFT', cancelledAt: null });
+    const r2 = rental('r-2', { checkoutId, status: 'DRAFT', cancelledAt: null });
+    queries.rentals.set(checkoutId, [r1, r2]);
+
+    const count = await jobs.cancelExpiredCheckouts();
+
+    // 1. Số phiên hủy thành công
+    expect(count).toBe(1);
+
+    // 2. Checkout chuyển cancelled_at = now
+    const updatedCheckout = queries.checkouts.get(checkoutId)!;
+    expect(updatedCheckout.cancelledAt).toEqual(now);
+
+    // 3. Mọi hóa đơn của phiên chuyển status = 'CANCELLED' và cancelled_at = now
+    const rentals = queries.rentals.get(checkoutId)!;
+    expect(rentals[0]!.status).toBe('CANCELLED');
+    expect(rentals[0]!.cancelledAt).toEqual(now);
+    expect(rentals[1]!.status).toBe('CANCELLED');
+    expect(rentals[1]!.cancelledAt).toEqual(now);
+
+    // 4. Payment PENDING của phiên chuyển EXPIRED
+    expect(payments.expiredCheckoutIds).toContain(checkoutId);
+
+    // 5. Thứ tự khóa đúng tránh deadlock với webhook (payment trước, checkout sau, rồi đến update & audit)
+    expect(queries.callLog).toEqual([
+      'queries.findExpiredCheckoutIds(limit=100)',
+      'queries.lockCheckoutById(co-1)',
+      'queries.cancelCheckoutAndRentals(co-1)',
+    ]);
+    expect(payments.callLog).toEqual(['payments.expirePending(co-1)']);
+
+    // 6. Ghi AuditLog đầy đủ
+    expect(audit.entries).toHaveLength(1);
+    expect(audit.entries[0]).toMatchObject({
+      actorType: 'SYSTEM',
+      action: 'slt.rental_checkout.cancelled_due_to_expiry',
+      targetType: 'RentalCheckout',
+      targetId: checkoutId,
+      after: {
+        id: checkoutId,
+        cancelledAt: now.toISOString(),
+      },
+    });
+  });
+
+  it('test_FR_SLT_39_catch_up_after_downtime — bù sau downtime quét theo hold_expires_at <= now', async () => {
+    // AC3: Given hệ thống ngừng hoạt động qua mốc hold_expires_at của nhiều phiên
+    // Các phiên hết hạn ở các mốc khác nhau trong quá khứ (lúc downtime)
+    const co1 = 'co-downtime-1';
+    const co2 = 'co-downtime-2';
+    const co3 = 'co-downtime-3';
+    const coFuture = 'co-future';
+
+    queries.checkouts.set(
+      co1,
+      checkoutRecord(co1, new Date('2026-10-11T06:00:00.000Z')), // 4 tiếng trước
+    );
+    queries.checkouts.set(
+      co2,
+      checkoutRecord(co2, new Date('2026-10-11T08:30:00.000Z')), // 1.5 tiếng trước
+    );
+    queries.checkouts.set(
+      co3,
+      checkoutRecord(co3, new Date('2026-10-11T09:59:00.000Z')), // 1 phút trước
+    );
+    queries.checkouts.set(
+      coFuture,
+      checkoutRecord(coFuture, new Date('2026-10-11T10:15:00.000Z')), // còn 15 phút mới hết hạn
+    );
+
+    queries.rentals.set(co1, [rental('r-d1', { checkoutId: co1, status: 'DRAFT' })]);
+    queries.rentals.set(co2, [rental('r-d2', { checkoutId: co2, status: 'DRAFT' })]);
+    queries.rentals.set(co3, [rental('r-d3', { checkoutId: co3, status: 'DRAFT' })]);
+    queries.rentals.set(coFuture, [rental('r-fut', { checkoutId: coFuture, status: 'DRAFT' })]);
+
+    // When job chạy lần đầu sau khi hệ thống khởi động lại lúc 10:00
+    const count = await jobs.cancelExpiredCheckouts();
+
+    // Then cả 3 phiên quá hạn trong lúc downtime đều được hủy bù đầy đủ
+    expect(count).toBe(3);
+    expect(queries.checkouts.get(co1)!.cancelledAt).toEqual(now);
+    expect(queries.checkouts.get(co2)!.cancelledAt).toEqual(now);
+    expect(queries.checkouts.get(co3)!.cancelledAt).toEqual(now);
+
+    // Phiên tương lai chưa hết hạn không bị hủy
+    expect(queries.checkouts.get(coFuture)!.cancelledAt).toBeNull();
+    expect(queries.rentals.get(coFuture)![0]!.status).toBe('DRAFT');
+  });
+
+  it('test_FR_SLT_39_paid_checkout_is_not_cancelled — không hủy phiên đã thanh toán', async () => {
+    // AC4: Given phiên đã thanh toán, When job chạy sau hold_expires_at, Then không bị hủy
+    const coPaid = 'co-paid';
+    queries.checkouts.set(
+      coPaid,
+      checkoutRecord(coPaid, new Date('2026-10-11T09:00:00.000Z'), {
+        paidAt: new Date('2026-10-11T09:10:00.000Z'),
+      }),
+    );
+    queries.rentals.set(coPaid, [
+      rental('r-paid', { checkoutId: coPaid, status: 'DRAFT', paidAt: new Date() }),
+    ]);
+
+    const count = await jobs.cancelExpiredCheckouts();
+    expect(count).toBe(0);
+    expect(queries.checkouts.get(coPaid)!.cancelledAt).toBeNull();
+
+    // Race condition: quét ra ID nhưng webhook vừa ghi nhận paidAt khi job lock FOR UPDATE
+    const coRace = 'co-race';
+    const recRace = checkoutRecord(coRace, new Date('2026-10-11T09:00:00.000Z'));
+    queries.checkouts.set(coRace, recRace);
+    queries.rentals.set(coRace, [rental('r-race', { checkoutId: coRace, status: 'DRAFT' })]);
+
+    // Giả lập webhook hoàn tất thanh toán đúng lúc lockCheckoutById
+    const originalLock = queries.lockCheckoutById.bind(queries);
+    queries.lockCheckoutById = async (id, tx) => {
+      const res = await originalLock(id, tx);
+      if (res && id === coRace) {
+        return { ...res, paidAt: new Date('2026-10-11T10:00:00.000Z') }; // Webhook vừa thắng race condition
+      }
+      return res;
+    };
+
+    const raceCount = await jobs.cancelExpiredCheckouts();
+    expect(raceCount).toBe(0);
+    expect(queries.checkouts.get(coRace)!.cancelledAt).toBeNull();
+    expect(audit.entries).toHaveLength(0);
+  });
+
+  it('test_FR_SLT_39_already_cancelled_or_missing_checkout_is_safely_skipped — idempotent và an toàn', async () => {
+    // Phiên đã bị hủy trước đó
+    const coCancelled = 'co-cancelled';
+    queries.checkouts.set(
+      coCancelled,
+      checkoutRecord(coCancelled, new Date('2026-10-11T09:00:00.000Z'), {
+        cancelledAt: new Date('2026-10-11T09:30:00.000Z'),
+      }),
+    );
+
+    let count = await jobs.cancelExpiredCheckouts();
+    expect(count).toBe(0);
+
+    // Phiên không tồn tại (lock trả về null)
+    queries.findExpiredCheckoutIds = async () => ['co-nonexistent'];
+    count = await jobs.cancelExpiredCheckouts();
+    expect(count).toBe(0);
+    expect(audit.entries).toHaveLength(0);
+  });
+
+  it('test_FR_SLT_39_no_expired_checkouts_returns_zero_without_transaction — mảng rỗng dừng ngay', async () => {
+    const count = await jobs.cancelExpiredCheckouts();
+    expect(count).toBe(0);
+    expect(queries.callLog).toEqual(['queries.findExpiredCheckoutIds(limit=100)']);
+    expect(payments.callLog).toHaveLength(0);
+  });
+
+  it('test_FR_SLT_39_resilient_batch_continues_on_individual_failure — lỗi đơn lẻ không dừng cả batch', async () => {
+    const co1 = 'co-err-1';
+    const co2 = 'co-err-2';
+    const co3 = 'co-err-3';
+
+    queries.checkouts.set(co1, checkoutRecord(co1, new Date('2026-10-11T09:00:00.000Z')));
+    queries.checkouts.set(co2, checkoutRecord(co2, new Date('2026-10-11T09:00:00.000Z')));
+    queries.checkouts.set(co3, checkoutRecord(co3, new Date('2026-10-11T09:00:00.000Z')));
+
+    queries.rentals.set(co1, [rental('r-1', { checkoutId: co1 })]);
+    queries.rentals.set(co2, [rental('r-2', { checkoutId: co2 })]);
+    queries.rentals.set(co3, [rental('r-3', { checkoutId: co3 })]);
+
+    // Giả lập co2 ném lỗi DB Lock Timeout
+    queries.failLockOnId = co2;
+
+    const count = await jobs.cancelExpiredCheckouts();
+
+    // co1 và co3 vẫn thành công, co2 bị bỏ qua
+    expect(count).toBe(2);
+    expect(queries.checkouts.get(co1)!.cancelledAt).toEqual(now);
+    expect(queries.checkouts.get(co2)!.cancelledAt).toBeNull();
+    expect(queries.checkouts.get(co3)!.cancelledAt).toEqual(now);
+  });
+
+  it('test_FR_SLT_39_custom_batch_size_is_propagated_to_queries — tuân thủ batchSize', async () => {
+    for (let i = 1; i <= 5; i++) {
+      const id = `co-batch-${i}`;
+      queries.checkouts.set(id, checkoutRecord(id, new Date('2026-10-11T09:00:00.000Z')));
+      queries.rentals.set(id, [rental(`r-${i}`, { checkoutId: id })]);
+    }
+
+    const count = await jobs.cancelExpiredCheckouts(3);
+    expect(queries.lastFindLimit).toBe(3);
+    expect(count).toBe(3);
   });
 });

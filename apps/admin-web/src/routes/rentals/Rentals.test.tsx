@@ -81,6 +81,96 @@ vi.mock('./api', async () => {
       isLoading: false,
       refetch: vi.fn(),
     }),
+    useAvailableSlots: () => ({
+      data: {
+        items: [
+          {
+            slotId: 'slot-available-1',
+            slotNumber: 1,
+            machineId: 'mch-1',
+            machineDisplayName: 'Máy Kiosk Vincom',
+            locationName: 'Tầng 1 Vincom Đồng Khởi',
+            monthlyRentPrice: '1000000.0000',
+            status: 'AVAILABLE',
+          },
+        ],
+        meta: { page: 1, pageSize: 50, total: 1 },
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }),
+    useRentalQuote: () => ({
+      data: {
+        slotId: 'slot-available-1',
+        monthlyRentPrice: '1000000.0000',
+        currency: 'VND',
+        packages: [
+          {
+            rentalPackageId: 'pkg-1',
+            name: 'Gói 3 tháng',
+            durationMonths: 3,
+            discountPercent: 5,
+            listAmount: '3000000.0000',
+            rentAmount: '2850000.0000',
+          },
+        ],
+        storagePlans: [
+          {
+            id: 'plan-1',
+            name: 'Bảo quản tiêu chuẩn',
+            monthlyPrice: '100000.0000',
+            coveragePercent: 30,
+            coverageCap: '3000000.0000',
+            isActive: true,
+          },
+        ],
+      },
+      isLoading: false,
+    }),
+    useCreateCheckout: () => ({
+      mutateAsync: vi.fn().mockResolvedValue({ id: 'chk-1' }),
+      isPending: false,
+    }),
+    useCheckout: () => ({
+      data: {
+        id: 'chk-paid-1',
+        brandId: 'brand-1',
+        stage: 'PAID',
+        currency: 'VND',
+        totalAmount: '3150000.0000',
+        holdExpiresAt: '2026-10-09T15:30:00Z',
+        paidAt: '2026-10-09T15:15:00Z',
+        cancelledAt: null,
+        createdAt: '2026-10-09T15:00:00Z',
+        invoices: [
+          {
+            id: 'rental-invoice-1',
+            slotId: 'slot-available-1',
+            machineId: 'mch-1',
+            brandId: 'brand-1',
+            status: 'DRAFT',
+            stage: 'AWAITING_STOCK',
+            startsAt: '2026-10-09T15:15:00Z',
+            endsAt: '2027-01-09T15:15:00Z',
+            currency: 'VND',
+            totalAmount: '3150000.0000',
+            invoiceNumber: 'HD-20261009-ABC123',
+            durationMonths: 3,
+            paidAt: '2026-10-09T15:15:00Z',
+          },
+        ],
+      },
+      isLoading: false,
+      refetch: vi.fn(),
+    }),
+    usePayCheckout: () => ({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    }),
+    useCancelCheckout: () => ({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    }),
   };
 });
 
@@ -108,5 +198,38 @@ describe('RentalsPage Component', () => {
     expect(screen.getByText('HD-20261001-234567')).toBeDefined();
     expect(screen.getByText(/3[.,]300[.,]000/)).toBeDefined();
     expect(screen.getByText('Đang hiệu lực')).toBeDefined();
+  });
+});
+
+describe('CheckoutDetailPage Component (Task 3)', () => {
+  it('hiển thị hóa đơn đã thanh toán thành công và nút Cấu hình slot', async () => {
+    const { default: CheckoutDetailPage } = await import('./CheckoutDetailPage');
+    render(
+      <TestWrapper>
+        <CheckoutDetailPage />
+      </TestWrapper>,
+    );
+
+    // Kiểm tra trạng thái thanh toán thành công
+    expect(screen.getByText('Thanh toán thành công!')).toBeDefined();
+    // Kiểm tra số hóa đơn được hiển thị
+    expect(screen.getByText('HD-20261009-ABC123')).toBeDefined();
+    // Kiểm tra nút "Cấu hình slot" hiện diện để Brand Admin bấm chuyển sang cấu hình
+    expect(screen.getByText('Cấu hình slot')).toBeDefined();
+  });
+});
+
+describe('AvailableSlotsPage Component (Task 3)', () => {
+  it('hiển thị danh sách slot trống và nút giữ chỗ', async () => {
+    const { default: AvailableSlotsPage } = await import('./AvailableSlotsPage');
+    render(
+      <TestWrapper>
+        <AvailableSlotsPage />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/Slot #1/)).toBeDefined();
+    expect(screen.getByText(/Máy Kiosk Vincom/)).toBeDefined();
+    expect(screen.getByText('Giữ chỗ và thanh toán')).toBeDefined();
   });
 });

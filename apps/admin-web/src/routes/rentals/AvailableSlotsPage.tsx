@@ -33,6 +33,7 @@ interface SelectedSlotConfig {
   slotId: string;
   rentalPackageId?: string;
   storagePlanId?: string;
+  estimatedTotal?: number;
 }
 
 function SlotQuoteSelector({
@@ -65,6 +66,30 @@ function SlotQuoteSelector({
       : 0;
   const slotTotal = estimatedRent + estimatedStorage;
 
+  const handlePackageChange = (val: string) => {
+    const pkg = quote.packages.find((p) => p.rentalPackageId === val);
+    const plan = quote.storagePlans.find((p) => p.id === config.storagePlanId);
+    const rent = pkg ? Number(pkg.rentAmount) : 0;
+    const storage = plan && pkg ? Number(plan.monthlyPrice) * pkg.durationMonths : 0;
+    onChange({
+      ...config,
+      rentalPackageId: val,
+      estimatedTotal: rent + storage,
+    });
+  };
+
+  const handlePlanChange = (val: string) => {
+    const pkg = quote.packages.find((p) => p.rentalPackageId === config.rentalPackageId);
+    const plan = quote.storagePlans.find((p) => p.id === val);
+    const rent = pkg ? Number(pkg.rentAmount) : 0;
+    const storage = plan && pkg ? Number(plan.monthlyPrice) * pkg.durationMonths : 0;
+    onChange({
+      ...config,
+      storagePlanId: val,
+      estimatedTotal: rent + storage,
+    });
+  };
+
   return (
     <Card
       size="small"
@@ -89,7 +114,7 @@ function SlotQuoteSelector({
             <Select
               placeholder={t('ui.selectPackage')}
               value={config.rentalPackageId}
-              onChange={(val) => onChange({ ...config, rentalPackageId: val })}
+              onChange={handlePackageChange}
               options={quote.packages.map((pkg) => ({
                 label: `${pkg.name} (${pkg.durationMonths} tháng${
                   pkg.discountPercent > 0 ? ` • -${pkg.discountPercent}%` : ''
@@ -104,7 +129,7 @@ function SlotQuoteSelector({
             <Select
               placeholder={t('ui.selectStoragePlan')}
               value={config.storagePlanId}
-              onChange={(val) => onChange({ ...config, storagePlanId: val })}
+              onChange={handlePlanChange}
               options={quote.storagePlans.map((plan) => ({
                 label: `${plan.name} (${Number(plan.monthlyPrice).toLocaleString('vi-VN')} đ/tháng • Bồi thường ${
                   plan.coveragePercent
@@ -196,6 +221,11 @@ export default function AvailableSlotsPage() {
       }
     }
   };
+
+  const totalEstimatedAmount = Array.from(selectedConfigs.values()).reduce(
+    (sum, cfg) => sum + (cfg.estimatedTotal || 0),
+    0,
+  );
 
   return (
     <RequireRole allow={['BRAND_ADMIN']}>
@@ -294,6 +324,17 @@ export default function AvailableSlotsPage() {
                   prefix={<CheckCircleOutlined />}
                   valueStyle={{ color: '#1677ff' }}
                 />
+
+                {totalEstimatedAmount > 0 && (
+                  <div style={{ marginTop: 16 }}>
+                    <Statistic
+                      title={t('ui.estimatedTotal')}
+                      value={totalEstimatedAmount.toLocaleString('vi-VN')}
+                      suffix="VND"
+                      valueStyle={{ color: '#52c41a', fontWeight: 600 }}
+                    />
+                  </div>
+                )}
 
                 <div style={{ marginTop: 24 }}>
                   <Button
