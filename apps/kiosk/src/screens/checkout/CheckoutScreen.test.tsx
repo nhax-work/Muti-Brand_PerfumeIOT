@@ -15,6 +15,19 @@ import DispenseSuccessGuide from './DispenseSuccessGuide';
 const mockNavigate = vi.fn();
 const mockMutate = vi.fn();
 const mockSetActiveOrder = vi.fn();
+let mockShowDevTools = true;
+
+vi.mock('@/shared/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/config')>();
+  return {
+    config: {
+      ...actual.config,
+      get showDevTools() {
+        return mockShowDevTools;
+      },
+    },
+  };
+});
 
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
@@ -206,6 +219,25 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByText(/npm run pay:mock -- ORD-20261004-ABC123/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sao chép lệnh test' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Sao chép mã' })).toBeTruthy();
+  });
+
+  it('bản build thật: có QR quét được, không lộ lệnh thanh toán giả lập cho khách (FR-ORD-08)', () => {
+    mockShowDevTools = false;
+    try {
+      mockOrder(created, view({ status: 'PENDING_PAYMENT' }));
+      const { container } = renderScreen();
+
+      // QR thật do thư viện vẽ (SVG có đường path), không phải hình trang trí.
+      const qr = screen.getByRole('img', { name: 'Quét mã để thanh toán' });
+      expect(qr.tagName.toLowerCase()).toBe('svg');
+      expect(qr.querySelector('path')).not.toBeNull();
+
+      expect(screen.queryByText(/npm run pay:mock/)).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Sao chép lệnh test' })).toBeNull();
+      expect(container.textContent).not.toContain(created.qrPayload);
+    } finally {
+      mockShowDevTools = true;
+    }
   });
 
   it('đèn đã sáng thì mời bấm đúng nút và đếm ngược (FR-ORD-26)', () => {

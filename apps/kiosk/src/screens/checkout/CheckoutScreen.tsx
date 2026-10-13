@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { QRCodeSVG } from 'qrcode.react';
 import { errorMessage, useCreateOrder, useKioskCatalog, useOrderStatus } from '@/shared/api';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
@@ -224,107 +225,16 @@ export default function CheckoutScreen() {
             <h1 className={styles.title}>{t('kiosk.scanToPay')}</h1>
 
             <div className={styles.qrBox} aria-label={t('kiosk.scanToPay')}>
+              {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08). */}
               <div className={styles.qrSvgFrame}>
-                <svg
-                  width="180"
-                  height="180"
-                  viewBox="0 0 180 180"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
+                <QRCodeSVG
+                  value={created.qrPayload}
+                  size={200}
+                  level="M"
                   role="img"
-                  aria-label="QR Code Visual"
-                >
-                  <rect width="180" height="180" rx="12" fill="#FFFFFF" />
-                  {/* Top-Left Finder */}
-                  <rect x="14" y="14" width="40" height="40" rx="6" fill="#131315" />
-                  <rect x="20" y="20" width="28" height="28" rx="4" fill="#FFFFFF" />
-                  <rect x="26" y="26" width="16" height="16" rx="2" fill="#D4AF37" />
-
-                  {/* Top-Right Finder */}
-                  <rect x="126" y="14" width="40" height="40" rx="6" fill="#131315" />
-                  <rect x="132" y="20" width="28" height="28" rx="4" fill="#FFFFFF" />
-                  <rect x="138" y="26" width="16" height="16" rx="2" fill="#D4AF37" />
-
-                  {/* Bottom-Left Finder */}
-                  <rect x="14" y="126" width="40" height="40" rx="6" fill="#131315" />
-                  <rect x="20" y="132" width="28" height="28" rx="4" fill="#FFFFFF" />
-                  <rect x="26" y="138" width="16" height="16" rx="2" fill="#D4AF37" />
-
-                  {/* Matrix decorative dots */}
-                  <g fill="#1A191C" opacity="0.9">
-                    <rect x="62" y="16" width="6" height="6" rx="1.5" />
-                    <rect x="74" y="16" width="6" height="6" rx="1.5" />
-                    <rect x="86" y="16" width="6" height="6" rx="1.5" />
-                    <rect x="106" y="16" width="6" height="6" rx="1.5" />
-                    <rect x="62" y="28" width="6" height="6" rx="1.5" />
-                    <rect x="98" y="28" width="6" height="6" rx="1.5" />
-                    <rect x="110" y="28" width="6" height="6" rx="1.5" />
-                    <rect x="74" y="40" width="6" height="6" rx="1.5" />
-                    <rect x="86" y="40" width="6" height="6" rx="1.5" />
-                    <rect x="106" y="40" width="6" height="6" rx="1.5" />
-
-                    <rect x="16" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="28" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="44" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="60" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="114" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="130" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="146" y="62" width="6" height="6" rx="1.5" />
-                    <rect x="158" y="62" width="6" height="6" rx="1.5" />
-
-                    <rect x="16" y="74" width="6" height="6" rx="1.5" />
-                    <rect x="40" y="74" width="6" height="6" rx="1.5" />
-                    <rect x="134" y="74" width="6" height="6" rx="1.5" />
-                    <rect x="150" y="74" width="6" height="6" rx="1.5" />
-
-                    <rect x="20" y="86" width="6" height="6" rx="1.5" />
-                    <rect x="36" y="86" width="6" height="6" rx="1.5" />
-                    <rect x="52" y="86" width="6" height="6" rx="1.5" />
-                    <rect x="122" y="86" width="6" height="6" rx="1.5" />
-                    <rect x="142" y="86" width="6" height="6" rx="1.5" />
-                    <rect x="158" y="86" width="6" height="6" rx="1.5" />
-
-                    <rect x="62" y="126" width="6" height="6" rx="1.5" />
-                    <rect x="74" y="126" width="6" height="6" rx="1.5" />
-                    <rect x="98" y="126" width="6" height="6" rx="1.5" />
-                    <rect x="130" y="126" width="6" height="6" rx="1.5" />
-                    <rect x="146" y="126" width="6" height="6" rx="1.5" />
-                    <rect x="158" y="126" width="6" height="6" rx="1.5" />
-
-                    <rect x="62" y="138" width="6" height="6" rx="1.5" />
-                    <rect x="86" y="138" width="6" height="6" rx="1.5" />
-                    <rect x="110" y="138" width="6" height="6" rx="1.5" />
-                    <rect x="138" y="138" width="6" height="6" rx="1.5" />
-                    <rect x="154" y="138" width="6" height="6" rx="1.5" />
-
-                    <rect x="74" y="150" width="6" height="6" rx="1.5" />
-                    <rect x="86" y="150" width="6" height="6" rx="1.5" />
-                    <rect x="102" y="150" width="6" height="6" rx="1.5" />
-                    <rect x="126" y="150" width="6" height="6" rx="1.5" />
-                    <rect x="142" y="150" width="6" height="6" rx="1.5" />
-                    <rect x="158" y="150" width="6" height="6" rx="1.5" />
-                  </g>
-
-                  {/* Logo Center */}
-                  <rect
-                    x="72"
-                    y="72"
-                    width="36"
-                    height="36"
-                    rx="8"
-                    fill="#131315"
-                    stroke="#D4AF37"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M84 90C84 86 96 86 96 90C96 94 84 94 84 98C84 102 96 102 96 98"
-                    stroke="#D4AF37"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
+                  aria-label={t('kiosk.scanToPay')}
+                />
               </div>
-              <code className={styles.qrPayload}>{created.qrPayload}</code>
             </div>
 
             <dl className={styles.facts}>
@@ -346,22 +256,25 @@ export default function CheckoutScreen() {
               <dd>{formatAmount(order.amount, order.currency)}</dd>
             </dl>
 
-            {/* Khung hướng dẫn thanh toán giả lập dành cho tester / dev */}
-            <div className={styles.devHelper}>
-              <div className={styles.devHelperTitle}>
-                <span>{t('kiosk.mockPayGuide')}</span>
-                <button
-                  type="button"
-                  className={`${styles.copyBtn} ${copiedCmd ? styles.copyBtnCopied : ''}`}
-                  onClick={() => copyText(mockPayCmd, true)}
-                >
-                  {copiedCmd ? t('kiosk.copied') : t('kiosk.copyCommand')}
-                </button>
+            {/* Khung thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
+            {config.showDevTools && (
+              <div className={styles.devHelper}>
+                <div className={styles.devHelperTitle}>
+                  <span>{t('kiosk.mockPayGuide')}</span>
+                  <button
+                    type="button"
+                    className={`${styles.copyBtn} ${copiedCmd ? styles.copyBtnCopied : ''}`}
+                    onClick={() => copyText(mockPayCmd, true)}
+                  >
+                    {copiedCmd ? t('kiosk.copied') : t('kiosk.copyCommand')}
+                  </button>
+                </div>
+                <div className={styles.devHelperCodeRow}>
+                  <span className={styles.devHelperCode}>{mockPayCmd}</span>
+                </div>
+                <code className={styles.qrPayload}>{created.qrPayload}</code>
               </div>
-              <div className={styles.devHelperCodeRow}>
-                <span className={styles.devHelperCode}>{mockPayCmd}</span>
-              </div>
-            </div>
+            )}
 
             <div className={styles.waitingBox}>
               <div className={styles.waitingSpinner} aria-hidden="true" />
