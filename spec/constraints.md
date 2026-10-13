@@ -67,6 +67,18 @@ hết giờ thì phiên bị hủy và mọi hóa đơn `DRAFT` của phiên chu
 thường **không** phải hằng ngưỡng — chúng là dữ liệu danh mục trong `rental_packages` và
 `storage_plans`, do Platform Super Admin cấu hình.
 
+## Phiếu khiếu nại hoàn tiền
+
+| Hằng | Giá trị | FR |
+|---|---|---|
+| `REFUND_CLAIM_SLA_HOURS` | 24 | FR-ORD-32 |
+| `REFUND_CLAIM_MAX_OPEN_DAYS` | 30 | FR-ORD-32 |
+| `REFUND_CLAIM_RATE_LIMIT_PER_MIN` | 5 | FR-ORD-29 |
+| `REFUND_CLAIM_CONTACT_RETENTION_DAYS` | 30 | FR-ORD-31 |
+
+Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 — quá hạn thì cảnh báo, không tự
+đóng phiếu. `REFUND_CLAIM_RATE_LIMIT_PER_MIN` tính theo địa chỉ IP gửi khiếu nại trên trang công khai.
+
 ## Tồn kho và cảnh báo
 
 | Hằng | Giá trị | FR |

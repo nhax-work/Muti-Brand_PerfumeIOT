@@ -172,5 +172,29 @@ Mã khiếu nại sai hoặc đã dùng trả `NOT_FOUND`, để không lộ đ�
 | `POST /orders/{id}/refund` | Đánh dấu `deprecated`; ghi nhận hoàn tiền chỉ qua phiếu |
 | Người xử lý | Chỉ Operations Staff được phân công xem tài khoản và ghi nhận hoàn; Super Admin chỉ phân công |
 
-Chưa áp dụng vào `docs/FR_NFR_SCENTSTATION.md`, `spec/contracts/*`, `spec/errors.md`,
-`spec/constraints.md`.
+**2026-10-13 — áp dụng đặc tả và contract** (nhánh `feat/business-gap-review`):
+
+| Hạng mục | Đã làm |
+|---|---|
+| `spec/errors.md`, `spec/constraints.md` | 3 mã lỗi, 4 hằng `REFUND_CLAIM_*`; `npm run spec:generate` |
+| Migration | `1790850000000_refund-claims.sql` — enum `refund_claim_status`, bảng `refund_claims`, `uq_order_id_brand` |
+| `schema.sql` | §10f mới, enum, COMMENT `payments` theo NFR-DAT-04 mới |
+| `openapi.yaml` | 6 endpoint `/public/refund-claims`, `/refund-claims…`; `OrderStatusView.claimToken`; `POST /orders/{id}/refund` deprecated |
+| `erd.md`, `spec/glossary.md` | Thực thể và state machine `RefundClaim` |
+| `docs/FR_NFR_SCENTSTATION.md` | NFR-DAT-04, FR-ORD-20 (S → M), FR-ORD-21; FR-ORD-28 ÷ 32 mới; thống kê |
+| Sinh lại | `data-dictionary.md`, `types.generated.ts`, `packages/contracts/src/openapi.ts` |
+
+Đã kiểm trên PostgreSQL 16 (container `db-test`): migration chạy `up`, `down` rồi `up` sạch;
+`pg_dump --schema-only` của CSDL nạp `schema.sql` trùng khít CSDL chạy hết migration (chỉ khác bảng
+`pgmigrations` của công cụ).
+
+**Lệch so với đề xuất ở trên:**
+
+| Chỗ | Đề xuất | Đã làm | Vì sao |
+|---|---|---|---|
+| Mã khiếu nại | lưu `claim_token_hash` | Không lưu: mã = HMAC(bí mật, `order_id`), kiểm bằng cách tính lại | Kiosk cần hiện lại mã mỗi lần poll trạng thái; lưu băm thì không lấy lại được mã gốc. Dùng một lần nhờ mỗi đơn chỉ có một phiếu |
+| Một phiếu mỗi đơn | partial unique khi `OPEN` | `UNIQUE (order_id)` | Mã khiếu nại chỉ dùng một lần — phiếu đã đóng thì không mở lại; đơn vẫn nằm trong danh sách kiểm tra thủ công |
+| Cột | `has_refund_account` | Bỏ; suy ra từ `account_ciphertext IS NOT NULL` | Tránh hai nguồn sự thật |
+| Cột | — | Thêm `refund_order`, `resolved_by` | Phân biệt hoàn cả tiền đơn với chỉ hoàn chuyển khoản thừa; biết ai đóng phiếu |
+| Khóa ngoại | `order_id` FK đơn | Khóa ngoại kép `(order_id, brand_id)` + `uq_order_id_brand` | Giống `payments`: phiếu luôn cùng thương hiệu với đơn |
+| Mã lỗi giới hạn tần suất | — | Chưa có: `429` chỉ có mô tả, như `POST /kiosk/orders` | Cần thêm mã mới vào `spec/errors.md` — chờ chốt |

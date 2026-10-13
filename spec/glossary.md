@@ -45,6 +45,7 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 | `Alert` | Cảnh báo vận hành |
 | `MaintenanceTicket` | Phiếu bảo trì |
 | `AuditLog` | Nhật ký kiểm toán, chỉ thêm mới |
+| `RefundClaim` | **Phiếu khiếu nại hoàn tiền**: khách gửi qua QR sự cố trên kiosk, Operations Staff chuyển khoản hoàn tay (ADR-0012). Chỗ duy nhất được lưu tài khoản ngân hàng của khách — mã hóa, xóa khi phiếu đóng |
 
 ---
 
@@ -162,6 +163,19 @@ OPEN ──> ASSIGNED ──> IN_PROGRESS ──> RESOLVED ──> CLOSED
 ```
 
 Máy chỉ về `NORMAL` sau khi checklist kiểm tra sau bảo trì hoàn tất (FR-MNT-12).
+
+### RefundClaim
+
+```
+OPEN ──> REFUNDED   (đã chuyển khoản, có payout_reference)
+  ├────> REJECTED   (lý do bắt buộc)
+  └────> EXPIRED    (mở quá REFUND_CLAIM_MAX_OPEN_DAYS)
+```
+
+Ba trạng thái sau đều là đã đóng: tài khoản nhận hoàn tiền bị xóa ngay trong cùng transaction
+(`chk_refund_claim_account_purged_on_close`); thông tin liên hệ được giữ thêm
+`REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày rồi xóa. Mỗi đơn tối đa một phiếu. `refund_order = true` thì
+ghi nhận hoàn đưa đơn sang `REFUNDED`; `false` (chỉ hoàn tiền chuyển thừa) thì trạng thái đơn giữ nguyên.
 
 ### Machine — hai trục độc lập
 

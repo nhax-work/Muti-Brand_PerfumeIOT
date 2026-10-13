@@ -55,6 +55,8 @@ export type RefillRequestStatus = "ACCEPTED" | "CANCELLED" | "COMPLETED" | "REJE
 
 export type RefillStatus = "CANCELLED" | "COMPLETED" | "STARTED";
 
+export type RefundClaimStatus = "EXPIRED" | "OPEN" | "REFUNDED" | "REJECTED";
+
 export type RevenueOwnerType = "BRAND" | "PLATFORM";
 
 export type ShipmentDeclarationStatus = "CANCELLED" | "DECLARED" | "DISCREPANCY" | "RECEIVED";
@@ -620,6 +622,51 @@ export interface RefreshSessions {
   user_id: string;
 }
 
+export interface RefundClaims {
+  /**
+   * Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng.
+   */
+  account_ciphertext: Buffer | null;
+  account_purged_at: Timestamp | null;
+  /**
+   * Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa.
+   */
+  amount: Numeric;
+  assigned_at: Timestamp | null;
+  assigned_to: string | null;
+  brand_id: string;
+  closed_at: Timestamp | null;
+  /**
+   * Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại.
+   */
+  consented_at: Timestamp;
+  /**
+   * Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa.
+   */
+  contact_ciphertext: Buffer | null;
+  contact_purged_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  id: Generated<string>;
+  order_id: string;
+  /**
+   * Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED.
+   */
+  payout_reference: string | null;
+  /**
+   * Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ.
+   */
+  pii_key_version: number;
+  /**
+   * TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên.
+   */
+  refund_order: boolean;
+  resolution_note: string | null;
+  resolved_by: string | null;
+  status: Generated<RefundClaimStatus>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface RentalCheckouts {
   brand_id: string;
   /**
@@ -892,6 +939,7 @@ export interface DB {
   refill_requests: RefillRequests;
   refill_sessions: RefillSessions;
   refresh_sessions: RefreshSessions;
+  refund_claims: RefundClaims;
   rental_checkouts: RentalCheckouts;
   rental_packages: RentalPackages;
   role_permissions: RolePermissions;

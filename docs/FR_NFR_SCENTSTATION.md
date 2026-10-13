@@ -347,14 +347,19 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-17 | Hệ thống phải từ chối tạo lệnh xịt từ đơn hàng ở trạng thái FAILED, EXPIRED, REFUNDED hoặc FORFEITED | BR-002 | M |
 | FR-ORD-18 | Hệ thống phải lưu toàn bộ lịch sử chuyển trạng thái của đơn hàng kèm thời điểm và nguyên nhân | BR-008 | M |
 | FR-ORD-19 | Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định, trừ trường hợp khách không bấm nút trong thời gian chờ | BR-002, BR-006 | M |
-| FR-ORD-20 | Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công | BR-002 | S |
-| FR-ORD-21 | Hệ thống phải hiển thị hướng dẫn xử lý cho khách trên kiosk khi đã thanh toán nhưng lượt xịt thất bại, kèm mã tham chiếu sự cố | BR-002 | M |
+| FR-ORD-20 | Hệ thống phải cho phép Operations Staff được phân công cho phiếu khiếu nại ghi nhận đã hoàn tiền thủ công kèm mã giao dịch chuyển khoản, hoặc từ chối phiếu kèm lý do (ADR-0012) | BR-002, BR-008 | M |
+| FR-ORD-21 | Hệ thống phải hiển thị hướng dẫn xử lý cho khách trên kiosk khi đã thanh toán nhưng lượt xịt thất bại, kèm mã tham chiếu sự cố và mã QR sự cố (FR-ORD-28) | BR-002 | M |
 | FR-ORD-22 | Hệ thống phải cho phép tìm kiếm giao dịch theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng thái | BR-008 | M |
 | FR-ORD-23 | Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch | BR-008, BR-009 | S |
 | FR-ORD-24 | Hệ thống phải từ chối tạo đơn hàng mới trên máy đang có lệnh xịt khách hàng chờ bấm nút | BR-002 | M |
 | FR-ORD-25 | Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền | BR-001, BR-002 | M |
 | FR-ORD-26 | Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ | BR-001 | M |
 | FR-ORD-27 | Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn | BR-002, BR-009 | M |
+| FR-ORD-28 | Hệ thống phải hiển thị trên kiosk một mã QR sự cố cho đơn khách đã trả tiền mà không nhận được lượt xịt hoặc đã chuyển khoản thừa, dẫn tới trang khiếu nại công khai kèm mã khiếu nại dùng một lần | BR-002 | M |
+| FR-ORD-29 | Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm thông tin liên hệ, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu | BR-002, BR-008 | M |
+| FR-ORD-30 | Hệ thống phải chỉ cho Operations Staff đang được phân công xem tài khoản nhận hoàn tiền của phiếu, sau khi xác thực lại, và ghi nhật ký mỗi lần xem không kèm dữ liệu tài khoản | BR-002, BR-008 | M |
+| FR-ORD-31 | Hệ thống phải xóa tài khoản nhận hoàn tiền ngay khi phiếu đóng, và xóa thông tin liên hệ sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày kể từ khi phiếu đóng | BR-002 | M |
+| FR-ORD-32 | Hệ thống phải tự chuyển phiếu còn mở quá `REFUND_CLAIM_MAX_OPEN_DAYS` ngày sang EXPIRED, và sinh cảnh báo cho phiếu quá `REFUND_CLAIM_SLA_HOURS` giờ chưa xử lý | BR-002, BR-006 | M |
 
 ## A12. FR-DSP — Điều khiển lượt xịt an toàn
 
@@ -576,7 +581,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | NFR-DAT-01 | Hệ thống phải lưu toàn bộ thời điểm ở múi giờ UTC và hiển thị theo múi giờ địa phương | Kiểm tra cơ sở dữ liệu |
 | NFR-DAT-02 | Hệ thống phải lưu số tiền bằng kiểu số thập phân chính xác (`numeric`), không dùng kiểu dấu phẩy động | Kiểm tra lược đồ |
 | NFR-DAT-03 | Hệ thống phải giữ dữ liệu giao dịch, hóa đơn thuê và nhật ký kiểm toán tối thiểu 12 tháng | Kiểm tra chính sách lưu trữ |
-| NFR-DAT-04 | Hệ thống phải không lưu bất kỳ thông tin thẻ hoặc tài khoản ngân hàng nào của khách hàng | Rà soát lược đồ dữ liệu |
+| NFR-DAT-04 | Hệ thống phải không lưu thông tin thẻ của khách hàng, và không lưu thông tin tài khoản ngân hàng của khách hàng ở bất kỳ đâu ngoài phiếu khiếu nại hoàn tiền. Trong phiếu khiếu nại, tài khoản nhận hoàn tiền phải được mã hóa, chỉ nhân viên được phân công xử lý phiếu xem được, và phải bị xóa khi phiếu đóng (ADR-0012) | Rà soát lược đồ dữ liệu · ràng buộc CSDL xóa khi đóng phiếu · test nhóm "Tài khoản hoàn tiền" |
 | NFR-DAT-05 | Hệ thống phải có cơ chế sao lưu cơ sở dữ liệu hằng ngày trong giai đoạn chạy thử | Kiểm tra quy trình |
 | NFR-DAT-06 | Trường thương hiệu và chủ sở hữu doanh thu trên đơn hàng phải là NOT NULL và bất biến sau khi tạo | Kiểm tra ràng buộc cơ sở dữ liệu |
 | NFR-DAT-07 | Hệ thống phải có chỉ số duy nhất từng phần trên slot, áp dụng cho hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE và LIQUIDATED | Kiểm tra lược đồ |
@@ -633,10 +638,10 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 
 | Ưu tiên | Số FR |
 |---|---|
-| **M — Must** (phạm vi MVP 13 tuần) | 259 |
-| **S — Should** (làm nếu còn thời gian sau tuần 9) | 24 |
+| **M — Must** (phạm vi MVP 13 tuần) | 265 |
+| **S — Should** (làm nếu còn thời gian sau tuần 9) | 23 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** (không tính mức X) | **286** |
+| **Tổng FR** (không tính mức X) | **291** |
 | **X — Bãi bỏ** (giữ số hiệu, không tính) | 7 |
 | **Tổng NFR** | **52** |
 
@@ -647,7 +652,7 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 | Module | Số FR | Module | Số FR |
 |---|---|---|---|
 | AUTH | 12 | RFQ | 12 |
-| BND | 8 | ORD | 27 |
+| BND | 8 | ORD | 32 |
 | USR | 5 | DSP | 27 |
 | PRD | 6 | IOT | 15 |
 | MCH | 17 | ALR | 15 |
@@ -671,3 +676,12 @@ Tinh thần gốc của NFR-DAT-02 (cấm `float`/`double` vì sai số nhị ph
 **Ghi chú bổ sung (2026-09-25).** Đổi mô hình thuê slot theo `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (**TV1 đã duyệt 2026-09-29**; thay thế ADR-0005 chưa từng được duyệt). Mô hình cũ là đàm phán hợp đồng: Brand Admin gửi yêu cầu, Super Admin duyệt kèm phí cố định theo kỳ và tỷ lệ ăn chia, thương hiệu khai thác slot trước rồi mới quyết toán — không có bước thu tiền trước và công nợ âm không có bảo đảm. Mô hình mới là **mua gói tự phục vụ**: Brand Admin chọn slot, chọn gói thuê 3/6/12 tháng (gói dài có ưu đãi) và bắt buộc một gói bảo quản (bảo hiểm hàng hóa), trả hết một lần qua cổng thanh toán và nhận hóa đơn; thời hạn tính từ lúc lắp chai đầu tiên. Bỏ ăn chia doanh thu. "Hợp đồng thuê slot" đổi tên thành "hóa đơn thuê slot" (định danh kỹ thuật `SlotRental` giữ nguyên). Thêm mức ưu tiên **X** (bãi bỏ) cho FR-SLT-01, 20, 21, 22, 23, 25, 26; viết lại BR-009, quyết định nghiệp vụ #5 ÷ #8, FR-SLT-06, 12, 13, 17, 18, 19, 24, 27, 29, FR-EXP-12, 13, FR-MCH-16; thêm FR-SLT-30 ÷ 47 (18 FR mức M). Hai hằng ngưỡng mới `RENTAL_CHECKOUT_HOLD_MIN`, `RENTAL_MAX_STOCKING_DAYS` đã thêm vào `spec/constraints.md` sau khi ADR được duyệt.
 
 **Ghi chú bổ sung (2026-09-29).** Khách bấm nút vật lý để nhận lượt xịt theo `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (**TV1 đã duyệt 2026-09-29**). Mỗi slot có một nút có đèn; thanh toán xong đèn sáng, khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì máy xịt, quá thời gian thì đơn chuyển trạng thái mới `FORFEITED` và không hoàn tiền (điều khoản hiện trước khi thanh toán). Mỗi máy tối đa một lệnh xịt khách hàng đang hiệu lực. Làm rõ BR-002; thêm quyết định nghiệp vụ #9; sửa FR-DSP-06, 08, 11÷15, 18, FR-ORD-10, 17, 19, FR-RPT-04, NFR-PER-03; thêm FR-DSP-21÷27, FR-ORD-24÷27 (11 FR mức M) và NFR-PER-07. Đếm lại bảng NFR: trước thay đổi này đã có 51 dòng dù thống kê ghi 50; nay 52.
+
+**Ghi chú bổ sung (2026-10-13).** Hoàn tiền thủ công qua phiếu khiếu nại theo
+`spec/decisions/0012-luu-tai-khoan-hoan-tien-trong-phieu-khieu-nai.md` (đã duyệt 2026-10-13). Nhóm chọn
+PayOS và không dùng API hoàn tiền tự động: khách quét QR sự cố trên kiosk, gửi phiếu khiếu nại kèm tài
+khoản nhận hoàn tiền, Operations Staff chuyển khoản tay rồi ghi nhận. Viết lại NFR-DAT-04 (chỉ lưu tài
+khoản ngân hàng của khách trong phiếu khiếu nại, mã hóa, xóa khi phiếu đóng); FR-ORD-20 nâng từ S lên M
+và viết lại; FR-ORD-21 bổ sung QR sự cố; thêm FR-ORD-28 ÷ 32 (5 FR mức M). Thống kê: M 259 → 265, S 24 →
+23, tổng FR 286 → 291, ORD 27 → 32. Bốn hằng ngưỡng `REFUND_CLAIM_*` và ba mã lỗi `ORDER_NOT_CLAIMABLE`,
+`CLAIM_ALREADY_OPEN`, `CLAIM_NOT_ASSIGNED` đã thêm vào `spec/constraints.md` và `spec/errors.md`.

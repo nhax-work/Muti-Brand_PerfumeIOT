@@ -75,3 +75,13 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `SLOT_HAS_ACTIVE_BOTTLE` | 409 | Slot đã có chai đang hoạt động |
 | `ADJUSTMENT_REASON_REQUIRED` | 400 | Điều chỉnh tồn kho thiếu lý do |
 | `REFILL_REQUEST_PENDING` | 409 | Slot đã có yêu cầu chưa hoàn tất |
+
+## Phiếu khiếu nại hoàn tiền
+
+Thêm ngày 2026-10-13 theo ADR-0012 (hoàn tiền thủ công qua phiếu khiếu nại).
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `ORDER_NOT_CLAIMABLE` | 409 | Đơn không thuộc trường hợp được khiếu nại hoàn tiền (đơn đã xịt, khách bỏ lượt, chưa thanh toán…) |
+| `CLAIM_ALREADY_OPEN` | 409 | Đơn đã có phiếu khiếu nại — mã khiếu nại chỉ dùng một lần |
+| `CLAIM_NOT_ASSIGNED` | 403 | Người gọi không phải Operations Staff đang được phân công cho phiếu |
