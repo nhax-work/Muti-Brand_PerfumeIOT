@@ -197,4 +197,4 @@ Mã khiếu nại sai hoặc đã dùng trả `NOT_FOUND`, để không lộ đ�
 | Cột | `has_refund_account` | Bỏ; suy ra từ `account_ciphertext IS NOT NULL` | Tránh hai nguồn sự thật |
 | Cột | — | Thêm `refund_order`, `resolved_by` | Phân biệt hoàn cả tiền đơn với chỉ hoàn chuyển khoản thừa; biết ai đóng phiếu |
 | Khóa ngoại | `order_id` FK đơn | Khóa ngoại kép `(order_id, brand_id)` + `uq_order_id_brand` | Giống `payments`: phiếu luôn cùng thương hiệu với đơn |
-| Mã lỗi giới hạn tần suất | — | Chưa có: `429` chỉ có mô tả, như `POST /kiosk/orders` | Cần thêm mã mới vào `spec/errors.md` — chờ chốt |
+| Mã lỗi giới hạn tần suất | — | Thêm `RATE_LIMITED` (429) vào nhóm lỗi chung, dùng cho cả khiếu nại lẫn tạo đơn kiosk (NFR-SEC-06) | Chốt ngày 2026-10-13 |

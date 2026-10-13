@@ -44,6 +44,17 @@ export interface AppConfig {
    * chủ động bật.
    */
   readonly swaggerEnabled: boolean;
+  /**
+   * Khóa AES-256 (32 byte, base64) mã hóa tài khoản nhận hoàn tiền và liên hệ trong phiếu khiếu nại
+   * (REFUND_ACCOUNT_ENC_KEY, ADR-0012, NFR-DAT-04). `null` khi chưa cấu hình ở máy dev: tính năng
+   * khiếu nại tắt (kiosk không hiện QR sự cố). Production bắt buộc có.
+   */
+  readonly refundAccountEncKey: Buffer | null;
+  /**
+   * Bí mật ký mã khiếu nại dùng một lần trên QR sự cố (REFUND_CLAIM_TOKEN_SECRET, ADR-0012). Cùng
+   * quy tắc với khóa trên: thiếu ở dev thì tính năng tắt, production bắt buộc có.
+   */
+  readonly refundClaimTokenSecret: string | null;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -105,6 +116,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const swaggerEnabled =
     rawSwagger === 'true' || ((rawSwagger ?? '') === '' && appEnv !== 'production');
 
+  const refundAccountEncKey = parseAesKey(env['REFUND_ACCOUNT_ENC_KEY']);
+  const rawClaimSecret = env['REFUND_CLAIM_TOKEN_SECRET'];
+  const refundClaimTokenSecret =
+    rawClaimSecret && rawClaimSecret !== PLACEHOLDER_SECRET ? rawClaimSecret : null;
+  if (appEnv === 'production') {
+    if (!refundAccountEncKey) {
+      throw new Error(
+        'REFUND_ACCOUNT_ENC_KEY ở production phải là khóa AES-256 32 byte dạng base64 (ADR-0012).',
+      );
+    }
+    if (!refundClaimTokenSecret || refundClaimTokenSecret.length < MIN_PRODUCTION_SECRET_LENGTH) {
+      throw new Error(
+        `REFUND_CLAIM_TOKEN_SECRET ở production phải có và dài tối thiểu ${MIN_PRODUCTION_SECRET_LENGTH} ký tự.`,
+      );
+    }
+  }
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -127,10 +155,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     mqttUrl,
     dispenseSigningKey,
     swaggerEnabled,
+    refundAccountEncKey,
+    refundClaimTokenSecret,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
   };
+}
+
+/** Khóa AES-256 dạng base64; trống hoặc giá trị mẫu → `null`; sai độ dài → lỗi khởi động. */
+function parseAesKey(raw: string | undefined): Buffer | null {
+  if (!raw || raw === PLACEHOLDER_SECRET) return null;
+  const key = Buffer.from(raw, 'base64');
+  if (key.length !== 32) {
+    throw new Error(
+      `REFUND_ACCOUNT_ENC_KEY phải là đúng 32 byte mã hóa base64, nhận được ${key.length} byte.`,
+    );
+  }
+  return key;
 }
 
 /** Token DI để inject AppConfig trong Nest. */

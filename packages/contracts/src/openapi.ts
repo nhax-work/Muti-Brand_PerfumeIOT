@@ -1843,7 +1843,7 @@ export interface paths {
         };
         /**
          * Xem tài khoản nhận hoàn tiền
-         * @description FR-ORD-30: chỉ Operations Staff đang được phân công, sau khi xác thực lại. Người khác, kể cả Super Admin, nhận CLAIM_NOT_ASSIGNED. Mỗi lần gọi ghi AuditLog không kèm dữ liệu tài khoản. Phiếu đã đóng thì không còn dữ liệu (409).
+         * @description FR-ORD-30: chỉ Operations Staff đang được phân công, sau khi xác thực lại. Người khác, kể cả Super Admin, nhận CLAIM_NOT_ASSIGNED. Mỗi lần gọi ghi AuditLog không kèm dữ liệu tài khoản. Phiếu đã đóng thì không còn dữ liệu (VALIDATION_ERROR).
          */
         get: operations["getRefundClaimAccount"];
         put?: never;
@@ -6640,7 +6640,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
-            /** @description Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) */
+            /** @description Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) — mã RATE_LIMITED */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6903,7 +6903,7 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
-            /** @description Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này */
+            /** @description Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6994,7 +6994,6 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     getRefundClaimAccount: {
@@ -7023,9 +7022,9 @@ export interface operations {
                     "application/json": components["schemas"]["RefundAccountView"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     recordRefundClaimPayout: {
@@ -7061,7 +7060,6 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     rejectRefundClaim: {
@@ -7091,7 +7089,6 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
-            409: components["responses"]["Conflict"];
         };
     };
     getOrderDispenseCommand: {

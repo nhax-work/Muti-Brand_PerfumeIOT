@@ -15,6 +15,7 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `VALIDATION_ERROR` | 400 | Dữ liệu vào thiếu trường hoặc sai định dạng, khi không có mã nghiệp vụ cụ thể hơn |
 | `NOT_FOUND` | 404 | Không tìm thấy tài nguyên. Người dùng thuộc thương hiệu **không** nhận mã này cho tài nguyên của thương hiệu khác — xem FR-AUTH-08 AC2 |
 | `INTERNAL_ERROR` | 500 | Lỗi không lường trước. Không bao giờ kèm chi tiết nội bộ trong `message` |
+| `RATE_LIMITED` | 429 | Vượt giới hạn tần suất: tạo đơn kiosk theo máy (`ORDER_RATE_LIMIT_PER_MIN`, NFR-SEC-06), gửi khiếu nại theo địa chỉ IP (`REFUND_CLAIM_RATE_LIMIT_PER_MIN`, ADR-0012) |
 
 ## Xác thực và phân quyền
 

@@ -29,6 +29,7 @@ import {
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { OrdService } from './ord.service.js';
+import { RefundClaimsService } from './refund-claims/refund-claims.service.js';
 
 const ORDER_STATUSES = [
   'CREATED',
@@ -96,7 +97,10 @@ interface StatusReply {
 @Controller('kiosk')
 @Public()
 export class KioskController {
-  constructor(@Inject(OrdService) private readonly service: OrdService) {}
+  constructor(
+    @Inject(OrdService) private readonly service: OrdService,
+    @Inject(RefundClaimsService) private readonly claims: RefundClaimsService,
+  ) {}
 
   @Get('machines/:serialNumber/catalog')
   catalog(@Param() params: unknown) {
@@ -121,10 +125,12 @@ export class KioskController {
     return created;
   }
 
+  /** FR-ORD-11; kèm mã khiếu nại cho QR sự cố khi đơn đủ điều kiện (FR-ORD-28, ADR-0012). */
   @Get('orders/:id/status')
-  status(@Param() params: unknown) {
+  async status(@Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
-    return this.service.getKioskOrderStatus(id);
+    const view = await this.service.getKioskOrderStatus(id);
+    return { ...view, claimToken: await this.claims.claimTokenForOrder(id) };
   }
 
   /** FR-RPT-06: 202 — đã tiếp nhận, không trả nội dung. */

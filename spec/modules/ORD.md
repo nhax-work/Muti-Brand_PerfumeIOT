@@ -1,7 +1,7 @@
 # FR-ORD — Đơn hàng và thanh toán
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 27 FR  
-> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 32 FR  
+> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012 — hoàn tiền thủ công qua phiếu khiếu nại)  
 > Phụ trách: TV1 / Tài  
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
@@ -288,20 +288,23 @@
 
 ---
 
-## FR-ORD-20 — Khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra
-* **Statement:** Hệ thống phải cho phép Operations Staff khởi tạo quy trình hoàn tiền cho đơn hàng cần kiểm tra thủ công.
-* **Traces:** BR-002 · **Priority:** S
+## FR-ORD-20 — Ghi nhận hoàn tiền thủ công qua phiếu khiếu nại
+* **Statement:** Hệ thống phải cho phép Operations Staff được phân công cho phiếu khiếu nại ghi nhận đã hoàn tiền thủ công kèm mã giao dịch chuyển khoản, hoặc từ chối phiếu kèm lý do (ADR-0012).
+* **Traces:** BR-002, BR-008 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given người dùng là Operations Staff đã xác thực lại mật khẩu (`REAUTH_REQUIRED`), đơn hàng `O` đang ở trạng thái `REFUND_PENDING` hoặc có cờ `needs_manual_review = TRUE`,  
-    When bấm nút xác nhận hoàn tiền kèm lý do bắt buộc,  
-    Then trạng thái đơn hàng chuyển sang `REFUNDED`, hệ thống gửi yêu cầu hoàn tiền đến cổng thanh toán, lưu lịch sử và ghi AuditLog.
-  * **AC2 (Đơn đã xịt thành công):** Given đơn hàng `O` đang ở trạng thái `DISPENSED` (đã xịt thành công bình thường),  
-    When cố gắng thao tác hoàn tiền thông thường,  
-    Then hệ thống từ chối với HTTP 409 `ORDER_NOT_REFUNDABLE`.
-  * **AC3:** Given người dùng không có vai trò vận hành nền tảng (vd: Brand Admin),  
-    When gửi yêu cầu hoàn tiền,  
-    Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-* **Test:** `test_FR_ORD_20_initiate_refund_process`
+  * **AC1:** Given phiếu `C` đang `OPEN`, được phân công cho Operations Staff `U`, `U` đã xác thực lại,
+    When `U` gửi `POST /refund-claims/{id}/refund` kèm `payoutReference`,
+    Then phiếu chuyển `REFUNDED`, tài khoản nhận hoàn tiền bị xóa trong cùng transaction; nếu `refundOrder` thì đơn chuyển `REFUNDED` (qua `REFUND_PENDING` nếu cần) và gỡ `needs_manual_review`; ghi AuditLog (FR-AUD-06).
+  * **AC2 (Không được phân công):** Given người gọi không phải người được phân công cho phiếu,
+    When ghi nhận hoàn tiền hoặc từ chối,
+    Then trả HTTP 403 `CLAIM_NOT_ASSIGNED`.
+  * **AC3 (Từ chối):** Given người được phân công,
+    When gửi `POST /refund-claims/{id}/reject` với lý do rỗng,
+    Then trả HTTP 400; có lý do thì phiếu chuyển `REJECTED`, tài khoản bị xóa, đơn rời danh sách kiểm tra thủ công.
+  * **AC4 (Phiếu đã đóng):** Given phiếu không còn `OPEN`,
+    When ghi nhận hoàn tiền lần nữa,
+    Then trả HTTP 400 `VALIDATION_ERROR`.
+* **Test:** `test_FR_ORD_20_record_manual_refund_closes_claim_and_order`, `test_FR_ORD_20_reject_claim_requires_assignee_and_reason`
 
 ---
 
@@ -423,3 +426,68 @@
     When hệ thống xử lý,  
     Then đơn **không** chuyển `FORFEITED` mà đi theo FR-ORD-19.
 * **Test:** `test_FR_ORD_27_forfeit_order_on_press_timeout`
+
+---
+
+## FR-ORD-28 — QR sự cố trên kiosk
+* **Statement:** Hệ thống phải hiển thị trên kiosk một mã QR sự cố cho đơn khách đã trả tiền mà không nhận được lượt xịt hoặc đã chuyển khoản thừa, dẫn tới trang khiếu nại công khai kèm mã khiếu nại dùng một lần.
+* **Traces:** BR-002 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given đơn đã thanh toán và `FAILED`, `REFUND_PENDING`, hoặc `DISPENSE_REQUESTED` có `needs_manual_review`, hoặc có lần chuyển khoản thừa,
+    When kiosk gọi `GET /kiosk/orders/{id}/status`,
+    Then phản hồi có `claimToken` = HMAC(bí mật, mã đơn).
+  * **AC2:** Given đơn `DISPENSED` hoặc `FORFEITED` không có chuyển khoản thừa,
+    When kiosk hỏi trạng thái,
+    Then `claimToken` là `null`.
+  * **AC3 (Dùng một lần):** Given đơn đã có phiếu khiếu nại,
+    When kiosk hỏi trạng thái,
+    Then `claimToken` là `null`.
+* **Test:** `test_FR_ORD_28_kiosk_shows_claim_qr_only_for_unserved_paid_orders`
+
+---
+
+## FR-ORD-29 — Khách gửi phiếu khiếu nại hoàn tiền
+* **Statement:** Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm thông tin liên hệ, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu.
+* **Traces:** BR-002, BR-008 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given mã khiếu nại đúng và đơn đủ điều kiện,
+    When khách gửi `POST /public/refund-claims` với `consent = true`,
+    Then trả 201 với số tiền phải hoàn, không chứa dữ liệu cá nhân; tài khoản và liên hệ lưu dạng mã hóa.
+  * **AC2:** Given mã khiếu nại sai hoặc không khớp đơn, When gửi, Then trả 404 `NOT_FOUND` (không lộ đơn nào tồn tại).
+  * **AC3:** Given đơn đã có phiếu, When gửi lại, Then trả 409 `CLAIM_ALREADY_OPEN`. Given đơn không có gì để hoàn, Then trả 409 `ORDER_NOT_CLAIMABLE`. Thiếu đồng ý thì 400.
+  * **AC4 (Chỉ hoàn phần thừa):** Given khách đã nhận lượt xịt nhưng chuyển khoản hai lần, When gửi khiếu nại, Then số tiền bằng phần chuyển thừa và `refundOrder = false`.
+  * **AC5 (Giới hạn tần suất):** Given một địa chỉ IP đã gửi `REFUND_CLAIM_RATE_LIMIT_PER_MIN` lần trong một phút, When gửi thêm, Then trả 429 `RATE_LIMITED`.
+* **Test:** `test_FR_ORD_29_customer_submits_refund_claim`, `test_FR_ORD_29_reject_invalid_token_unclaimable_order_and_missing_consent`, `test_FR_ORD_29_extra_transfer_claim_refunds_only_the_extra_amount`, `test_FR_ORD_29_rate_limit_per_ip`
+
+---
+
+## FR-ORD-30 — Chỉ người được phân công xem tài khoản nhận hoàn tiền
+* **Statement:** Hệ thống phải chỉ cho Operations Staff đang được phân công xem tài khoản nhận hoàn tiền của phiếu, sau khi xác thực lại, và ghi nhật ký mỗi lần xem không kèm dữ liệu tài khoản.
+* **Traces:** BR-002, BR-008 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given phiếu chưa phân công cho người gọi (kể cả Super Admin), When gọi `GET /refund-claims/{id}/refund-account`, Then trả 403 `CLAIM_NOT_ASSIGNED`.
+  * **AC2:** Given người được phân công chưa xác thực lại, When gọi, Then trả 403 `REAUTH_REQUIRED`.
+  * **AC3:** Given người được phân công đã xác thực lại, When gọi, Then trả tài khoản và liên hệ đã giải mã, và ghi AuditLog `ord.refund_claim.account_viewed` không chứa dữ liệu tài khoản.
+  * **AC4:** Danh sách và chi tiết phiếu không bao giờ chứa tài khoản hay liên hệ.
+* **Test:** `test_FR_ORD_30_only_assigned_staff_views_refund_account`
+
+---
+
+## FR-ORD-31 — Xóa dữ liệu cá nhân khi đóng phiếu
+* **Statement:** Hệ thống phải xóa tài khoản nhận hoàn tiền ngay khi phiếu đóng, và xóa thông tin liên hệ sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày kể từ khi phiếu đóng.
+* **Traces:** BR-002 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given phiếu chuyển `REFUNDED`, `REJECTED` hoặc `EXPIRED`, Then `account_ciphertext` là NULL trong cùng transaction; CSDL từ chối mọi UPDATE đóng phiếu mà còn dữ liệu tài khoản (`chk_refund_claim_account_purged_on_close`).
+  * **AC2:** Given phiếu đã đóng quá `REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày (kể cả khi dịch vụ tắt qua mốc rồi bật lại), When job chạy, Then `contact_ciphertext` là NULL.
+  * **AC3:** Sau cả vòng khiếu nại → hoàn tiền, `audit_logs`, `payment_events`, `payments`, `notifications`, `alerts` không chứa số tài khoản hay liên hệ của khách.
+* **Test:** `test_FR_ORD_31_account_purged_on_close_and_enforced_by_database`, `test_FR_ORD_31_contact_purged_after_retention_with_catch_up`
+
+---
+
+## FR-ORD-32 — Phiếu quá hạn và cảnh báo quá SLA
+* **Statement:** Hệ thống phải tự chuyển phiếu còn mở quá `REFUND_CLAIM_MAX_OPEN_DAYS` ngày sang EXPIRED, và sinh cảnh báo cho phiếu quá `REFUND_CLAIM_SLA_HOURS` giờ chưa xử lý.
+* **Traces:** BR-002, BR-006 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given phiếu `OPEN` tạo quá `REFUND_CLAIM_MAX_OPEN_DAYS` ngày, When job chạy, Then phiếu `EXPIRED`, tài khoản bị xóa, ghi AuditLog.
+  * **AC2:** Given phiếu `OPEN` quá `REFUND_CLAIM_SLA_HOURS` giờ, When job chạy, Then sinh một cảnh báo `REFUND_CLAIM_SLA_BREACHED` mức HIGH gắn máy của đơn; chạy lại không sinh cảnh báo trùng (FR-ALR-07).
+* **Test:** `test_FR_ORD_32_expire_stale_claims_and_alert_sla_breach`

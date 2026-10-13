@@ -16,4 +16,13 @@ export const ord = {
   webhookSignatureInvalid: 'Chữ ký thông báo thanh toán không hợp lệ',
   paymentReferenceUnknown: 'Không tìm thấy giao dịch ứng với mã tham chiếu',
   amountMismatch: 'Số tiền thanh toán không khớp với đơn',
+  // Phiếu khiếu nại hoàn tiền (ADR-0012)
+  claimNotFound: 'Không tìm thấy khiếu nại. Vui lòng quét lại mã QR trên máy.',
+  orderNotClaimable: 'Đơn này không thuộc trường hợp được hoàn tiền.',
+  claimAlreadyOpen: 'Đơn này đã được gửi khiếu nại. Chúng tôi sẽ liên hệ bạn sớm.',
+  claimNotAssigned: 'Chỉ nhân viên được phân công cho phiếu này mới thực hiện được thao tác',
+  claimClosed: 'Phiếu khiếu nại đã đóng',
+  claimFeatureDisabled: 'Chưa cấu hình khóa mã hóa cho phiếu khiếu nại (REFUND_ACCOUNT_ENC_KEY)',
+  assigneeNotOperations: 'Người nhận xử lý phải là Operations Staff đang hoạt động',
+  claimRateLimited: 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau một phút.',
 } as const;

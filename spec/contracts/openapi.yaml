@@ -4182,7 +4182,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '429':
-          description: Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06)
+          description: Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) — mã RATE_LIMITED
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -4447,7 +4447,7 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '429':
-          description: Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này
+          description: Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED
 
   /refund-claims:
     get:
@@ -4519,7 +4519,6 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /refund-claims/{id}/refund-account:
     parameters:
@@ -4532,7 +4531,7 @@ paths:
       description: >-
         FR-ORD-30: chỉ Operations Staff đang được phân công, sau khi xác thực lại. Người khác, kể cả
         Super Admin, nhận CLAIM_NOT_ASSIGNED. Mỗi lần gọi ghi AuditLog không kèm dữ liệu tài khoản.
-        Phiếu đã đóng thì không còn dữ liệu (409).
+        Phiếu đã đóng thì không còn dữ liệu (VALIDATION_ERROR).
       responses:
         '200':
           description: Tài khoản nhận hoàn tiền và liên hệ
@@ -4541,7 +4540,7 @@ paths:
               schema: { $ref: '#/components/schemas/RefundAccountView' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 
   /refund-claims/{id}/refund:
     parameters:
@@ -4568,7 +4567,6 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   /refund-claims/{id}/reject:
     parameters:
@@ -4592,7 +4590,6 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
 
   # -----------------------------------------------------------------------------------
   # DSP — Điều khiển lượt xịt

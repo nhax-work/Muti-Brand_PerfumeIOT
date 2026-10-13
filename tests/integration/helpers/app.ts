@@ -16,6 +16,11 @@ import { resolveTestDatabaseUrl } from './db.js';
 /** Bí mật ký webhook mock trong test tích hợp — test tự ký bằng `signMockPayload` với giá trị này. */
 export const TEST_PAYMENT_WEBHOOK_SECRET = 'integration-test-webhook-secret';
 
+/** Khóa mã hóa phiếu khiếu nại trong test (32 byte 0x11) — không dùng ở môi trường thật. */
+export const TEST_REFUND_ACCOUNT_ENC_KEY = Buffer.alloc(32, 0x11).toString('base64');
+/** Bí mật ký mã khiếu nại trong test — test tự tính mã bằng `claimTokenFor` với giá trị này. */
+export const TEST_REFUND_CLAIM_TOKEN_SECRET = 'integration-test-refund-claim-secret';
+
 export async function createTestApp(): Promise<NestFastifyApplication> {
   // `loadConfig()` đọc process.env NGAY lúc CoreModule khởi tạo, nên phải đặt trước khi import
   // AppModule — vì vậy các import dưới đây là import động, không phải import tĩnh ở đầu file.
@@ -24,6 +29,9 @@ export async function createTestApp(): Promise<NestFastifyApplication> {
   // Gán đè, không `??=`: test tự ký webhook bằng đúng bí mật này, bất kể .env của máy đang có gì.
   process.env['PAYMENT_PROVIDER'] = 'mock';
   process.env['PAYMENT_WEBHOOK_SECRET'] = TEST_PAYMENT_WEBHOOK_SECRET;
+  // Phiếu khiếu nại hoàn tiền (ADR-0012): khóa AES-256 32 byte và bí mật ký mã khiếu nại — chỉ cho test.
+  process.env['REFUND_ACCOUNT_ENC_KEY'] = TEST_REFUND_ACCOUNT_ENC_KEY;
+  process.env['REFUND_CLAIM_TOKEN_SECRET'] = TEST_REFUND_CLAIM_TOKEN_SECRET;
 
   const { NestFactory } = await import('@nestjs/core');
   const { FastifyAdapter } = await import('@nestjs/platform-fastify');

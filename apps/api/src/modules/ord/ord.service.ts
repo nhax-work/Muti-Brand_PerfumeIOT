@@ -394,6 +394,65 @@ export class OrdService {
   }
 
   // -----------------------------------------------------------------------------------
+  // Hoàn tiền thủ công qua phiếu khiếu nại (ADR-0012, FR-ORD-20) — gọi từ RefundClaimsService
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Đơn khách đã trả tiền mà không nhận được lượt xịt, nay đã được chuyển khoản hoàn: đưa về
+   * REFUNDED theo đúng state machine (qua REFUND_PENDING nếu cần) và gỡ cờ kiểm tra thủ công.
+   */
+  async markRefunded(
+    tx: Executor,
+    orderId: string,
+    actorId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    let order = await this.queries.lockOrder(orderId, tx);
+    if (!order) throw new Error(`Phiếu khiếu nại trỏ tới đơn không tồn tại: ${orderId}`);
+    const at = this.clock.now();
+    const base = { orderId: order.id, brandId: order.brandId, actorType: 'USER' as const, actorId };
+
+    if (
+      order.status === 'PAID' ||
+      order.status === 'DISPENSE_REQUESTED' ||
+      order.status === 'EXPIRED'
+    ) {
+      order = await this.transition(
+        tx,
+        {
+          ...base,
+          from: order.status,
+          to: 'REFUND_PENDING',
+          reason: 'REFUND_CLAIM_ACCEPTED',
+          metadata,
+          at,
+        },
+        {},
+      );
+    }
+    if (order.status !== 'FAILED' && order.status !== 'REFUND_PENDING') {
+      throw new Error(`Đơn ${orderId} ở ${order.status} không ghi nhận hoàn tiền được`);
+    }
+    await this.transition(
+      tx,
+      {
+        ...base,
+        from: order.status,
+        to: 'REFUNDED',
+        reason: 'MANUAL_REFUND_RECORDED',
+        metadata,
+        at,
+      },
+      { needsManualReview: false },
+    );
+  }
+
+  /** Đã xử lý xong phần cần người xem (chỉ hoàn chuyển khoản thừa, hoặc phiếu bị từ chối). */
+  async clearManualReview(tx: Executor, orderId: string): Promise<void> {
+    await this.queries.clearManualReview(orderId, tx);
+  }
+
+  // -----------------------------------------------------------------------------------
   // Lệnh xịt — phần của đơn (gọi từ DSP trong transaction của DSP)
   // -----------------------------------------------------------------------------------
 

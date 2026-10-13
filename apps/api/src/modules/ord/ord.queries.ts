@@ -434,6 +434,14 @@ export class OrdQueries {
       .execute();
   }
 
+  async clearManualReview(orderId: string, executor: Executor): Promise<void> {
+    await executor
+      .updateTable('orders')
+      .set({ needs_manual_review: false })
+      .where('id', '=', orderId)
+      .execute();
+  }
+
   /** Đơn PENDING_PAYMENT đã quá hạn, cũ nhất trước — cho job FR-ORD-16. */
   async listOverduePendingOrderIds(now: Date, limit: number): Promise<string[]> {
     const rows = await this.db

@@ -7,7 +7,7 @@
 
 import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { DspJobs } from '../modules/dsp/index.js';
-import { OrdService } from '../modules/ord/index.js';
+import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { SltJobs } from '../modules/slt/index.js';
 
 /** Nhịp điều phối lệnh xịt — đủ nhanh cho WEBHOOK_TO_ARMED_MAX_SEC (NFR-PER-03). */
@@ -16,6 +16,11 @@ const DSP_TICK_MS = 1000;
 const ORDER_EXPIRY_TICK_MS = 30_000;
 /** Quét phiên thuê slot quá hạn giữ chỗ (FR-SLT-39). */
 const RENTAL_CHECKOUT_EXPIRY_TICK_MS = 60_000;
+/**
+ * Phiếu khiếu nại hoàn tiền: hết hạn, cảnh báo quá SLA, xóa liên hệ (FR-ORD-31, 32). Các mốc tính
+ * bằng giờ và ngày nên năm phút một lần là đủ.
+ */
+const REFUND_CLAIM_TICK_MS = 5 * 60_000;
 
 export interface SchedulerOptions {
   /** Chạy vòng điều phối lệnh xịt — chỉ bật khi đã kết nối MQTT. */
@@ -63,8 +68,28 @@ export function startScheduler(
     }, RENTAL_CHECKOUT_EXPIRY_TICK_MS),
   );
 
+  const claims = app.get(RefundClaimsService);
+  let maintainingClaims = false;
+  timers.push(
+    setInterval(() => {
+      if (maintainingClaims) return;
+      maintainingClaims = true;
+      claims
+        .runMaintenance()
+        .then(({ expired, alerted, contactsPurged }) => {
+          if (expired + alerted + contactsPurged > 0) {
+            logger.log(
+              `Phiếu khiếu nại: ${expired} hết hạn, ${alerted} cảnh báo quá SLA, ${contactsPurged} xóa liên hệ`,
+            );
+          }
+        })
+        .catch((e: unknown) => logger.error(`Bảo trì phiếu khiếu nại lỗi: ${String(e)}`))
+        .finally(() => (maintainingClaims = false));
+    }, REFUND_CLAIM_TICK_MS),
+  );
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }
