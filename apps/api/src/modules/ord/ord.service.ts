@@ -497,6 +497,15 @@ export class OrdService {
     return { items: items.map(toOrderDto), total };
   }
 
+  /** FR-ORD-19, FR-RPT-05: hàng việc của nhân viên xử lý sự cố và hoàn tiền thủ công. */
+  async listNeedingReview(
+    scope: BrandScope,
+    page: { readonly page: number; readonly pageSize: number },
+  ): Promise<{ items: Order[]; total: number }> {
+    const { items, total } = await this.queries.listNeedingReview(scope, page);
+    return { items: items.map(toOrderDto), total };
+  }
+
   async get(actor: AuthenticatedUser, scope: BrandScope, orderId: string): Promise<Order> {
     const order = await this.queries.findById(scope, orderId);
     if (!order) throw notFoundFor(actor);

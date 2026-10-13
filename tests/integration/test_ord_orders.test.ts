@@ -489,4 +489,52 @@ describe('ORD — tra cứu đơn', () => {
       true,
     );
   });
+
+  it('test_FR_RPT_05_list_paid_orders_without_confirmed_dispense', async () => {
+    // Bốn đơn đã thanh toán: lỗi cần xem, tiền về sau hạn, đã hoàn xong, và đơn bình thường.
+    const failed = await newOrder(0);
+    const latePaid = await newOrder(0);
+    const refunded = await newOrder(0);
+    const normal = await newOrder(0);
+    for (const o of [failed, latePaid, refunded, normal]) await sendWebhook(paidWebhook(o));
+    await client.query(
+      `UPDATE orders SET status = 'FAILED', needs_manual_review = true WHERE id = $1`,
+      [failed.id],
+    );
+    await client.query(`UPDATE orders SET status = 'REFUND_PENDING' WHERE id = $1`, [latePaid.id]);
+    await client.query(
+      `UPDATE orders SET status = 'REFUNDED', needs_manual_review = true WHERE id = $1`,
+      [refunded.id],
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/orders/manual-review?pageSize=200',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json<{ items: OrderBody[]; meta: { total: number } }>();
+    const ids = body.items.map((o) => o.id);
+
+    expect(ids).toEqual(expect.arrayContaining([failed.id, latePaid.id]));
+    expect(ids).not.toContain(refunded.id);
+    expect(ids).not.toContain(normal.id);
+    // Cũ nhất trước — mục tiêu BR-002 là xử lý trong 24 giờ.
+    expect(ids.indexOf(failed.id)).toBeLessThan(ids.indexOf(latePaid.id));
+    expect(body.meta.total).toBeGreaterThanOrEqual(2);
+
+    // Việc nội bộ nền tảng: Brand Admin không có quyền order.refund.
+    const brandToken = (await login(app, fx.brandAdminAEmail, TEST_PASSWORD)).accessToken;
+    const forbidden = await app.inject({
+      method: 'GET',
+      url: '/api/v1/orders/manual-review',
+      headers: { authorization: `Bearer ${brandToken}` },
+    });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json()).toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+
+    await client.query(`UPDATE orders SET status = 'FAILED' WHERE id = ANY($1::uuid[])`, [
+      [latePaid.id, normal.id],
+    ]);
+  });
 });
