@@ -1,6 +1,6 @@
 # ADR-0012 — Hoàn tiền thủ công qua phiếu khiếu nại và lưu tài khoản nhận hoàn tiền (sửa NFR-DAT-04)
 
-**Ngày:** 2026-10-13 · **Trạng thái:** đề xuất — chờ TV1 duyệt · **Người quyết:** TV1
+**Ngày:** 2026-10-13 · **Trạng thái:** đã duyệt (2026-10-13) · **Người quyết:** TV1
 
 ## Bối cảnh
 
@@ -160,5 +160,6 @@ Mã khiếu nại sai hoặc đã dùng trả `NOT_FOUND`, để không lộ đ�
 
 ## Nhật ký áp dụng
 
-Chưa áp dụng. Chưa sửa `docs/FR_NFR_SCENTSTATION.md`, `spec/contracts/*`, `spec/errors.md` hay
-`spec/constraints.md` — chỉ làm sau khi TV1 duyệt.
+**2026-10-13:** ADR được duyệt. Chưa áp dụng vào `docs/FR_NFR_SCENTSTATION.md`, `spec/contracts/*`,
+`spec/errors.md` hay `spec/constraints.md` — các điểm còn để mở (giá trị hằng ngưỡng, mã lỗi, xoá
+thông tin liên hệ, số phận `POST /orders/{id}/refund`) chốt trước khi viết migration và sửa contract.
