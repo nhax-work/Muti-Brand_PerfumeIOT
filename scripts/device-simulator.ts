@@ -2,11 +2,14 @@
  * Thiết bị giả lập chạy bằng Node — đóng vai ESP32 theo spec/contracts/mqtt.md, để chạy hết chuỗi
  * thanh toán → lệnh → ACK → bấm nút → RESULT mà không cần phần cứng.
  *
- *   npm run sim                                  # M001, tự "bấm nút" sau 2 giây
- *   npm run sim -- --serial M001 --press-after 5
- *   npm run sim -- --no-press                    # không bấm → PRESS_TIMEOUT → đơn FORFEITED
- *   npm run sim -- --wrong-slot 3                # bấm nhầm nút slot 3 (bị bỏ qua) rồi bấm đúng nút
- *   npm run sim -- --wrong-slot 3 --no-press     # chỉ bấm nhầm → PRESS_TIMEOUT → đơn FORFEITED
+ *   npm run sim                                  # M001, KHÔNG tự bấm — bấm tay: npm run sim:press <slot>
+ *   npm run sim -- --auto-press                  # tự "bấm nút" sau 45 giây
+ *   npm run sim -- --serial M001 --press-after 5 # tự "bấm nút" sau 5 giây
+ *   npm run sim -- --no-press                    # không bao giờ tự bấm (ghi đè hai lệnh trên)
+ *                                                #   → hết giờ PRESS_TIMEOUT → đơn FORFEITED
+ *   npm run sim -- --wrong-slot 3 --press-after 5 # bấm nhầm nút slot 3 (bị bỏ qua) rồi bấm đúng nút
+ *   npm run sim:press 3                          # (khi sim không tự bấm) bấm tay nút slot 3 — bấm
+ *                                                #   nhầm thì bị bỏ qua, hết giờ → đơn FORFEITED
  *   npm run sim -- --reject DOOR_OPEN            # từ chối ngay khi nhận lệnh
  *   npm run sim -- --fail-on-press DOOR_OPEN     # bấm rồi nhưng kiểm an toàn lần hai không đạt
  *                                                #   (FR-DSP-23) → đơn FAILED + kiểm tra thủ công
@@ -39,7 +42,9 @@ const { values } = parseArgs({
     serial: { type: 'string', default: 'M001' },
     machines: { type: 'string' },
     broker: { type: 'string' },
-    'press-after': { type: 'string', default: '45' },
+    // Không đặt default: có truyền --press-after nghĩa là muốn tự bấm.
+    'press-after': { type: 'string' },
+    'auto-press': { type: 'boolean', default: false },
     'no-press': { type: 'boolean', default: false },
     'wrong-slot': { type: 'string' },
     'public-key': { type: 'string' },
@@ -56,10 +61,18 @@ if (wrongSlot !== null && (!Number.isInteger(wrongSlot) || wrongSlot < 1)) {
   process.exit(1);
 }
 
-const isAutoPress = process.argv.includes('--auto-press') || process.env['AUTO_PRESS'] === '1';
+/** Tự bấm sau chừng này giây khi bật --auto-press mà không chỉ định --press-after. */
+const AUTO_PRESS_DEFAULT_SEC = 45;
+const isAutoPress =
+  !values['no-press'] &&
+  (values['auto-press'] ||
+    values['press-after'] !== undefined ||
+    process.env['AUTO_PRESS'] === '1');
 const behavior: MachineBehavior = {
   pressWindowSec: SPEC_CONSTRAINTS.DISPENSE_PRESS_WINDOW_SEC,
-  pressAfterMs: isAutoPress ? Math.max(0, Number(values['press-after'] ?? '15')) * 1000 : null,
+  pressAfterMs: isAutoPress
+    ? Math.max(0, Number(values['press-after'] ?? AUTO_PRESS_DEFAULT_SEC)) * 1000
+    : null,
   wrongSlot,
   reject: values.reject ?? null,
   failOnPress: values['fail-on-press'] ?? null,
