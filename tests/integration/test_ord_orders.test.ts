@@ -390,7 +390,11 @@ describe('ORD — webhook thanh toán', () => {
 
     // AC3 (ADR-0016): chữ ký đúng, mã tham chiếu không tồn tại → 200 UNKNOWN_REFERENCE, không đổi
     // dữ liệu, vẫn ghi lại để đối soát.
-    const stray = buildMockWebhook({ reference: 'ORD-20260101-ZZZZZZ', amount: '1', currency: 'VND' });
+    const stray = buildMockWebhook({
+      reference: `ORD-20260101-${randomUUID().slice(0, 6).toUpperCase()}`,
+      amount: '1',
+      currency: 'VND',
+    });
     const unknown = await sendWebhook(stray);
     expect(unknown.statusCode).toBe(200);
     expect(unknown.json()).toEqual({ result: 'UNKNOWN_REFERENCE' });

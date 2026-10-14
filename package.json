@@ -38,7 +38,7 @@
     "admin:dev": "npm run dev -w @scentstation/admin-web",
     "kiosk:dev": "npm run dev -w @scentstation/kiosk",
     "contracts:generate": "npm run generate -w @scentstation/contracts",
-    "spec:generate": "tsx scripts/gen-spec-constants.ts && prettier --write apps/api/src/shared/config/constraints.generated.ts apps/kiosk/src/shared/config/constraints.generated.ts apps/api/src/shared/errors/codes.generated.ts",
+    "spec:generate": "tsx scripts/gen-spec-constants.ts && prettier --write apps/api/src/shared/config/constraints.generated.ts apps/kiosk/src/shared/config/constraints.generated.ts apps/admin-web/src/shared/constraints.generated.ts apps/api/src/shared/errors/codes.generated.ts",
     "db:types": "kysely-codegen --dialect postgres --out-file apps/api/src/shared/db/types.generated.ts --exclude-pattern pgmigrations"
   },
   "dependencies": {

@@ -1,5 +1,5 @@
 /**
- * Hằng ngưỡng và mã lỗi đã sinh trong apps/api — cùng bản hằng ngưỡng của apps/kiosk — phải khớp
+ * Hằng ngưỡng và mã lỗi đã sinh trong apps/api — cùng bản hằng ngưỡng của apps/kiosk, apps/admin-web — phải khớp
  * đúng đặc tả.
  *
  * Đỏ nghĩa là ai đó sửa spec/constraints.md hoặc spec/errors.md mà quên `npm run spec:generate` —
@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPEC_CONSTRAINTS } from '../../apps/api/src/shared/config/constraints.generated.js';
 import { ERROR_CODES } from '../../apps/api/src/shared/errors/codes.generated.js';
+import { SPEC_CONSTRAINTS as ADMIN_CONSTRAINTS } from '../../apps/admin-web/src/shared/constraints.generated.js';
 import { SPEC_CONSTRAINTS as KIOSK_CONSTRAINTS } from '../../apps/kiosk/src/shared/config/constraints.generated.js';
 import { readConstraints, readErrorCodes } from '../../scripts/lib/spec-tables.js';
 
@@ -17,6 +18,7 @@ describe('mã đã sinh khớp đặc tả', () => {
     const fromSpec = Object.fromEntries(readConstraints().map((c) => [c.name, c.value]));
     expect(SPEC_CONSTRAINTS).toEqual(fromSpec);
     expect(KIOSK_CONSTRAINTS).toEqual(fromSpec);
+    expect(ADMIN_CONSTRAINTS).toEqual(fromSpec);
   });
 
   it('mã lỗi và HTTP status khớp spec/errors.md', () => {
