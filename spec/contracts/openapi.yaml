@@ -1628,10 +1628,12 @@ components:
       properties:
         result:
           type: string
-          enum: [PROCESSED, WEBHOOK_ALREADY_PROCESSED]
+          enum: [PROCESSED, WEBHOOK_ALREADY_PROCESSED, UNKNOWN_REFERENCE]
           description: >-
             WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi
-            (spec/errors.md, FR-ORD-15).
+            (spec/errors.md, FR-ORD-15). UNKNOWN_REFERENCE: chữ ký đúng nhưng mã tham chiếu không
+            khớp payment nào (ví dụ giao dịch mẫu lúc đăng ký URL webhook) — đã ghi lại để đối soát,
+            không đổi dữ liệu nghiệp vụ (ADR-0016).
     RefundAccountInput:
       type: object
       required: [bankBin, accountNumber, accountName]

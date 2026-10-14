@@ -42,7 +42,7 @@ import {
   type RentalCheckoutPaymentHandler,
 } from './rental-checkout-payment.port.js';
 
-export type WebhookResult = 'PROCESSED' | 'WEBHOOK_ALREADY_PROCESSED';
+export type WebhookResult = 'PROCESSED' | 'WEBHOOK_ALREADY_PROCESSED' | 'UNKNOWN_REFERENCE';
 
 /** Payment ở các trạng thái này mà nhận tin thành công thì có thể là tiền thật đã về. */
 const SETTLEABLE = new Set(['PENDING', 'FAILED', 'EXPIRED'] as const);
@@ -112,7 +112,10 @@ export class PaymentWebhookService {
       case 'DUPLICATE':
         return 'WEBHOOK_ALREADY_PROCESSED';
       case 'UNKNOWN_REFERENCE':
-        // FR-ORD-14 AC3: 404, không đổi dữ liệu nghiệp vụ; vẫn lưu lại để đối soát (FR-ORD-23).
+        // FR-ORD-14 AC3 (ADR-0016): chữ ký đúng nghĩa là do cổng gửi — trả 200, không đổi dữ liệu
+        // nghiệp vụ, lưu lại để đối soát (FR-ORD-23). Trả 4xx chỉ khiến cổng gửi lại, và PayOS từ
+        // chối lưu URL webhook vì giao dịch mẫu lúc xác nhận URL luôn mang mã lạ.
+        this.logger.warn(`Webhook ${provider} mang mã tham chiếu lạ: ${event.reference}`);
         await this.reject(
           provider,
           payloadHash,
@@ -121,7 +124,7 @@ export class PaymentWebhookService {
           'UNKNOWN_REFERENCE',
           now,
         );
-        throw new AppError('NOT_FOUND', 'ord.paymentReferenceUnknown');
+        return 'UNKNOWN_REFERENCE';
       case 'AMOUNT_MISMATCH':
         // Đã commit cờ kiểm tra thủ công và bản ghi sự kiện: cổng gửi lại sẽ nhận 200 "đã xử lý"
         // thay vì 400 mãi — người vận hành xử lý qua danh sách kiểm tra thủ công.

@@ -200,9 +200,9 @@
   * **AC2 (Sai lệch số tiền):** Given webhook có `amount = 20000` nhưng đơn hàng yêu cầu `25000`,  
     When đối soát thông tin,  
     Then hệ thống từ chối cập nhật `PAID`, trả về HTTP 400 `AMOUNT_MISMATCH`, và đánh dấu đơn hàng cần kiểm tra thủ công.
-  * **AC3 (Không tìm thấy đơn hàng):** Given `order_code` trong webhook không tồn tại trong hệ thống,  
+  * **AC3 (Không tìm thấy đơn hàng — sửa theo ADR-0016):** Given webhook có chữ ký hợp lệ nhưng mã tham chiếu không khớp payment nào (ví dụ giao dịch mẫu PayOS gửi lúc xác nhận URL webhook),  
     When xử lý,  
-    Then hệ thống trả về HTTP 404 và không thay đổi trạng thái dữ liệu.
+    Then hệ thống trả HTTP 200 với `result = UNKNOWN_REFERENCE`, không thay đổi dữ liệu nghiệp vụ, và vẫn ghi `payment_events` để đối soát (FR-ORD-23).
 * **Test:** `test_FR_ORD_14_verify_webhook_amount_and_reference`
 
 ---

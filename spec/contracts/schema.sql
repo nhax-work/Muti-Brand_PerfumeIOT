@@ -21,6 +21,8 @@
 --                  trigger §10e, uq_payment_provider_reference; áp bằng migrations/1790760300000_*.
 --                  ADR-0012 (phiếu khiếu nại hoàn tiền, NFR-DAT-04 viết lại) — bảng refund_claims,
 --                  uq_order_id_brand, §10f; áp bằng migrations/1790850000000_*.
+--                  ADR-0016 (tích hợp PayOS) — COMMENT payments.provider_reference; áp bằng
+--                  migrations/1790936400000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -937,8 +939,9 @@ COMMENT ON COLUMN payments.rental_checkout_id IS
     'Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa '
     'đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending).';
 COMMENT ON COLUMN payments.provider_reference IS
-    'Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: '
-    'bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider '
+    'Mã tham chiếu cổng thanh toán gửi lại trong webhook (FR-ORD-14). Cổng có mã riêng thì lưu mã của '
+    'cổng — PayOS: orderCode (số nguyên, ADR-0016); cổng không có (mock) thì lưu mã hệ thống: đơn kiosk '
+    'bằng orders.payment_reference, phiên thuê slot mã riêng cho MỖI payment. Duy nhất theo provider '
     '(uq_payment_provider_reference, ADR-0009).';
 
 CREATE TABLE payment_events (

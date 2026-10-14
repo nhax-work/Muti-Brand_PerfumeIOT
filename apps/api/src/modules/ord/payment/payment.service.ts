@@ -65,7 +65,7 @@ export class PaymentService {
         brandId: input.brandId,
         target: input.target,
         provider: gateway.provider,
-        providerReference: input.reference,
+        providerReference: created.providerReference ?? input.reference,
         amount: input.amount,
         currency: input.currency,
         rawResponse: {

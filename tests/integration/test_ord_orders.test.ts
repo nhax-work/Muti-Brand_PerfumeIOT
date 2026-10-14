@@ -388,11 +388,18 @@ describe('ORD — webhook thanh toán', () => {
     });
     expect((await paymentOf(order.id))?.status).toBe('PENDING');
 
-    // AC3: mã tham chiếu không tồn tại → 404, không đổi dữ liệu.
-    const unknown = await sendWebhook(
-      buildMockWebhook({ reference: 'ORD-20260101-ZZZZZZ', amount: '1', currency: 'VND' }),
+    // AC3 (ADR-0016): chữ ký đúng, mã tham chiếu không tồn tại → 200 UNKNOWN_REFERENCE, không đổi
+    // dữ liệu, vẫn ghi lại để đối soát.
+    const stray = buildMockWebhook({ reference: 'ORD-20260101-ZZZZZZ', amount: '1', currency: 'VND' });
+    const unknown = await sendWebhook(stray);
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json()).toEqual({ result: 'UNKNOWN_REFERENCE' });
+    const logged = await client.query(
+      `SELECT 1 FROM payment_events WHERE provider = 'mock' AND processing_result = 'UNKNOWN_REFERENCE'
+         AND payload->>'reference' = $1`,
+      [stray.reference],
     );
-    expect(unknown.statusCode).toBe(404);
+    expect(logged.rowCount).toBe(1);
   });
 
   it('test_FR_ORD_16_order_expiration_timeout', async () => {

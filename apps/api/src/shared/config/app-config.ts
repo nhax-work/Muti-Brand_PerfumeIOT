@@ -28,6 +28,11 @@ export interface AppConfig {
    */
   readonly paymentWebhookSecret: string | null;
   /**
+   * Thông tin kênh thanh toán PayOS (ADR-0016). `null` khi chưa cấu hình — cổng PayOS không được
+   * đăng ký. `PAYMENT_PROVIDER=payos` mà thiếu thì API không khởi động.
+   */
+  readonly payos: PayosConfig | null;
+  /**
    * Địa chỉ broker MQTT (MQTT_URL), ví dụ `mqtt://localhost:1883`. `null` thì cửa vào MQTT và vòng
    * điều phối lệnh xịt không chạy — API vẫn phục vụ HTTP bình thường (test tích hợp chạy kiểu này).
    */
@@ -58,7 +63,18 @@ export interface AppConfig {
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
+export interface PayosConfig {
+  readonly baseUrl: string;
+  readonly clientId: string;
+  readonly apiKey: string;
+  /** Khóa checksum: ký yêu cầu tạo link và kiểm chữ ký webhook. */
+  readonly checksumKey: string;
+  readonly returnUrl: string;
+  readonly cancelUrl: string;
+}
+
 const PLACEHOLDER_SECRET = 'doi_gia_tri_nay';
+const PAYOS_DEFAULT_BASE_URL = 'https://api-merchant.payos.vn';
 const MIN_PRODUCTION_SECRET_LENGTH = 32;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -83,16 +99,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const paymentProvider = env['PAYMENT_PROVIDER'] || 'mock';
   const paymentWebhookSecret = env['PAYMENT_WEBHOOK_SECRET'] || null;
+  const payos = loadPayosConfig(env);
+  if (paymentProvider === 'payos' && !payos) {
+    throw new Error(
+      'PAYMENT_PROVIDER=payos cần đủ PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY, PAYOS_RETURN_URL, PAYOS_CANCEL_URL (ADR-0016).',
+    );
+  }
   if (appEnv === 'production') {
     if (paymentProvider === 'mock') {
       throw new Error(
         'PAYMENT_PROVIDER=mock không được dùng ở production — ai cũng tự ký được webhook.',
       );
     }
+    // PayOS ký webhook bằng khóa checksum riêng; PAYMENT_WEBHOOK_SECRET chỉ dành cho cổng khác.
     if (
-      !paymentWebhookSecret ||
-      paymentWebhookSecret === PLACEHOLDER_SECRET ||
-      paymentWebhookSecret.length < MIN_PRODUCTION_SECRET_LENGTH
+      paymentProvider !== 'payos' &&
+      (!paymentWebhookSecret ||
+        paymentWebhookSecret === PLACEHOLDER_SECRET ||
+        paymentWebhookSecret.length < MIN_PRODUCTION_SECRET_LENGTH)
     ) {
       throw new Error(
         `PAYMENT_WEBHOOK_SECRET ở production phải có, khác giá trị mẫu và dài tối thiểu ${MIN_PRODUCTION_SECRET_LENGTH} ký tự.`,
@@ -152,6 +176,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jwtSecret,
     paymentProvider,
     paymentWebhookSecret,
+    payos,
     mqttUrl,
     dispenseSigningKey,
     swaggerEnabled,
@@ -160,6 +185,28 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
+  };
+}
+
+/** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */
+function loadPayosConfig(env: NodeJS.ProcessEnv): PayosConfig | null {
+  const read = (name: string) => {
+    const value = env[name];
+    return value && value !== PLACEHOLDER_SECRET ? value : null;
+  };
+  const clientId = read('PAYOS_CLIENT_ID');
+  const apiKey = read('PAYOS_API_KEY');
+  const checksumKey = read('PAYOS_CHECKSUM_KEY');
+  const returnUrl = read('PAYOS_RETURN_URL');
+  const cancelUrl = read('PAYOS_CANCEL_URL');
+  if (!clientId || !apiKey || !checksumKey || !returnUrl || !cancelUrl) return null;
+  return {
+    baseUrl: read('PAYOS_BASE_URL') ?? PAYOS_DEFAULT_BASE_URL,
+    clientId,
+    apiKey,
+    checksumKey,
+    returnUrl,
+    cancelUrl,
   };
 }
 

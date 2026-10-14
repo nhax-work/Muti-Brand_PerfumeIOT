@@ -2,8 +2,8 @@
  * Cổng thanh toán — điểm nối DUY NHẤT giữa hệ thống và nhà cung cấp (mock, sandbox, thật).
  *
  * Đơn kiosk (ORD) và phiên thuê slot (SLT, ADR-0008) cùng đi qua đây: tạo thanh toán thì gọi
- * `createPayment`, kết quả về qua webhook thì `verifyWebhook`. Đổi từ mock sang sandbox (tuần 6)
- * chỉ là thêm một lớp hiện thực interface này và đăng ký vào `PaymentGatewayRegistry`.
+ * `createPayment`, kết quả về qua webhook thì `verifyWebhook`. Thêm cổng mới chỉ là thêm một lớp
+ * hiện thực interface này và đăng ký vào `PaymentGatewayRegistry` (NFR-SCA-03) — PayOS: ADR-0016.
  */
 
 /** Yêu cầu tạo một thanh toán ở cổng. */
@@ -23,6 +23,11 @@ export interface CreatePaymentRequest {
 }
 
 export interface CreatedPayment {
+  /**
+   * Mã cổng sẽ gửi lại trong webhook, nếu cổng tự đặt mã (PayOS: `orderCode` số nguyên, ADR-0016).
+   * Có thì lưu vào `payments.provider_reference` thay cho `request.reference`.
+   */
+  readonly providerReference?: string;
   /** Nội dung mã QR (FR-ORD-08). */
   readonly qrPayload: string;
   /** Trang thanh toán của cổng, nếu cổng có (web quản trị dùng cho phiên thuê slot). */

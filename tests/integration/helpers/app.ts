@@ -21,14 +21,29 @@ export const TEST_REFUND_ACCOUNT_ENC_KEY = Buffer.alloc(32, 0x11).toString('base
 /** Bí mật ký mã khiếu nại trong test — test tự tính mã bằng `claimTokenFor` với giá trị này. */
 export const TEST_REFUND_CLAIM_TOKEN_SECRET = 'integration-test-refund-claim-secret';
 
-export async function createTestApp(): Promise<NestFastifyApplication> {
+/** Khóa checksum PayOS trong test — test tự ký webhook bằng `payosSignatureOf` với giá trị này. */
+export const TEST_PAYOS_CHECKSUM_KEY = 'integration-test-payos-checksum-key';
+
+export interface TestAppOptions {
+  /** Cổng tạo thanh toán mới. Mặc định `mock`. `payos` thì test phải giả lập `fetch` (ADR-0016). */
+  readonly paymentProvider?: 'mock' | 'payos';
+}
+
+export async function createTestApp(options: TestAppOptions = {}): Promise<NestFastifyApplication> {
   // `loadConfig()` đọc process.env NGAY lúc CoreModule khởi tạo, nên phải đặt trước khi import
   // AppModule — vì vậy các import dưới đây là import động, không phải import tĩnh ở đầu file.
   process.env['DATABASE_URL'] = resolveTestDatabaseUrl();
   process.env['JWT_SECRET'] ??= 'integration-test-secret-khong-dung-o-that';
   // Gán đè, không `??=`: test tự ký webhook bằng đúng bí mật này, bất kể .env của máy đang có gì.
-  process.env['PAYMENT_PROVIDER'] = 'mock';
+  process.env['PAYMENT_PROVIDER'] = options.paymentProvider ?? 'mock';
   process.env['PAYMENT_WEBHOOK_SECRET'] = TEST_PAYMENT_WEBHOOK_SECRET;
+  // PayOS luôn được cấu hình trong test để webhook /payos xử lý được; chỉ gọi API khi là cổng hiện tại.
+  process.env['PAYOS_BASE_URL'] = 'https://payos.test.invalid';
+  process.env['PAYOS_CLIENT_ID'] = 'test-client-id';
+  process.env['PAYOS_API_KEY'] = 'test-api-key';
+  process.env['PAYOS_CHECKSUM_KEY'] = TEST_PAYOS_CHECKSUM_KEY;
+  process.env['PAYOS_RETURN_URL'] = 'https://admin.test.invalid/rentals/payment-return';
+  process.env['PAYOS_CANCEL_URL'] = 'https://admin.test.invalid/rentals/payment-cancel';
   // Phiếu khiếu nại hoàn tiền (ADR-0012): khóa AES-256 32 byte và bí mật ký mã khiếu nại — chỉ cho test.
   process.env['REFUND_ACCOUNT_ENC_KEY'] = TEST_REFUND_ACCOUNT_ENC_KEY;
   process.env['REFUND_CLAIM_TOKEN_SECRET'] = TEST_REFUND_CLAIM_TOKEN_SECRET;

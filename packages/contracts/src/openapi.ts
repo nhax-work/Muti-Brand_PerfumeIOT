@@ -3768,10 +3768,10 @@ export interface components {
         };
         WebhookAck: {
             /**
-             * @description WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi (spec/errors.md, FR-ORD-15).
+             * @description WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi (spec/errors.md, FR-ORD-15). UNKNOWN_REFERENCE: chữ ký đúng nhưng mã tham chiếu không khớp payment nào (ví dụ giao dịch mẫu lúc đăng ký URL webhook) — đã ghi lại để đối soát, không đổi dữ liệu nghiệp vụ (ADR-0016).
              * @enum {string}
              */
-            result: "PROCESSED" | "WEBHOOK_ALREADY_PROCESSED";
+            result: "PROCESSED" | "WEBHOOK_ALREADY_PROCESSED" | "UNKNOWN_REFERENCE";
         };
         /** @description Tài khoản nhận hoàn tiền. Chỉ lưu mã hóa trong phiếu, xóa khi phiếu đóng (NFR-DAT-04). */
         RefundAccountInput: {

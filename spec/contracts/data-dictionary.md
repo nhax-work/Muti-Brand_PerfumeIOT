@@ -894,7 +894,7 @@ Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân h�
 | `order_id` | `uuid` | có |  | Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị (chk_payment_single_target). |
 | `provider` | `character varying(50)` | — |  |  |
 | `provider_transaction_id` | `character varying(200)` | có |  |  |
-| `provider_reference` | `character varying(200)` | có |  | Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009). |
+| `provider_reference` | `character varying(200)` | có |  | Mã tham chiếu cổng thanh toán gửi lại trong webhook (FR-ORD-14). Cổng có mã riêng thì lưu mã của cổng — PayOS: orderCode (số nguyên, ADR-0016); cổng không có (mock) thì lưu mã hệ thống: đơn kiosk bằng orders.payment_reference, phiên thuê slot mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009). |
 | `amount` | `numeric(19,4)` | — |  |  |
 | `currency` | `character(3)` | — |  |  |
 | `status` | `payment_status` | — | `'PENDING'::payment_status` |  |
