@@ -159,10 +159,12 @@ export const en: SameKeysAs<typeof vi> = {
     amountMismatch: 'The paid amount does not match the order',
     claimNotFound: 'Claim not found. Please scan the QR code on the machine again.',
     orderNotClaimable: 'This order is not eligible for a refund.',
-    claimAlreadyOpen: 'A claim has already been submitted for this order. We will contact you soon.',
+    claimAlreadyOpen:
+      'A claim has already been submitted for this order. We will contact you soon.',
     claimNotAssigned: 'Only the staff member assigned to this claim can perform this action',
     claimClosed: 'This claim is closed',
-    claimFeatureDisabled: 'The refund claim encryption key is not configured (REFUND_ACCOUNT_ENC_KEY)',
+    claimFeatureDisabled:
+      'The refund claim encryption key is not configured (REFUND_ACCOUNT_ENC_KEY)',
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
   },
@@ -466,6 +468,9 @@ export const en: SameKeysAs<typeof vi> = {
     orderProblemTitle: 'Something went wrong with your spray',
     checkingResult: 'Confirming the result with the machine…',
     supportHint: 'Please keep code {reference} and contact {contact} for help.',
+    claimQrTitle: 'Scan to request a refund',
+    claimQrHint:
+      'Scan with your phone and enter the account to receive the money. Our staff will transfer the refund within {hours} hours.',
     supportHintNoContact:
       'We have recorded the problem. Please take a photo of code {reference} in case you need help.',
     paymentSuccessTitle: 'Payment Successful',

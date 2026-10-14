@@ -45,4 +45,23 @@ export const config = {
 
   /** FR-ORD-21: kênh hỗ trợ hiện cho khách khi gặp sự cố; `null` khi chưa cấu hình. */
   supportContact: import.meta.env.VITE_SUPPORT_CONTACT?.trim() || null,
+
+  /** FR-ORD-28: trang khiếu nại hoàn tiền mà QR sự cố dẫn tới; `null` thì không hiện QR. */
+  claimPageUrl: import.meta.env.VITE_CLAIM_PAGE_URL?.trim() || null,
+
+  /** Mục tiêu xử lý khiếu nại hiện cho khách (BR-002, ADR-0012). */
+  refundClaimSlaHours: SPEC_CONSTRAINTS.REFUND_CLAIM_SLA_HOURS,
 } as const;
+
+/** Đường dẫn QR sự cố cho đơn `orderId` (FR-ORD-28); `null` khi chưa cấu hình trang khiếu nại. */
+export function claimUrlFor(
+  claimPageUrl: string | null,
+  orderId: string,
+  claimToken: string,
+): string | null {
+  if (!claimPageUrl) return null;
+  const url = new URL(claimPageUrl);
+  url.searchParams.set('o', orderId);
+  url.searchParams.set('t', claimToken);
+  return url.toString();
+}

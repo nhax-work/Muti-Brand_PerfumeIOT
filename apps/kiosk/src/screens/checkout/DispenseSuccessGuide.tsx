@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { CatalogItem, OrderStatusView } from '@/shared/api';
-import { config } from '@/shared/config';
+import { QRCodeSVG } from 'qrcode.react';
+import { claimUrlFor, config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { secondsUntil, type CheckoutPhase } from './checkout-phase';
 import styles from './DispenseSuccessGuide.module.css';
@@ -42,6 +43,11 @@ export default function DispenseSuccessGuide({
 
   const product = item?.product;
   const productName = product?.name ?? "Nuit d'Or (50ml)";
+
+  // FR-ORD-28: máy chủ chỉ trả claimToken khi đơn đủ điều kiện khiếu nại và chưa có phiếu.
+  const claimUrl = view?.claimToken
+    ? claimUrlFor(config.claimPageUrl, order.id, view.claimToken)
+    : null;
 
   const secondsLeft = useMemo(() => {
     return secondsUntil(view?.pressDeadline, now) ?? pressWindowSec;
@@ -210,17 +216,33 @@ export default function DispenseSuccessGuide({
             ) : phase === 'DISPENSED' ? (
               <p>{t('kiosk.dispensedHint')}</p>
             ) : phase === 'PROBLEM' ? (
-              <p>
-                {/* FR-ORD-21: chỉ dẫn tới kênh hỗ trợ thật; máy không có nhân viên (BR-001). */}
-                {config.supportContact
-                  ? t('kiosk.supportHint', {
-                      reference: view?.supportReference ?? order.paymentReference,
-                      contact: config.supportContact,
-                    })
-                  : t('kiosk.supportHintNoContact', {
-                      reference: view?.supportReference ?? order.paymentReference,
-                    })}
-              </p>
+              <>
+                {/* FR-ORD-21, FR-ORD-28: QR sự cố dẫn tới trang khiếu nại hoàn tiền (ADR-0012). */}
+                {claimUrl && (
+                  <div className={styles.claimQr}>
+                    <QRCodeSVG
+                      value={claimUrl}
+                      size={180}
+                      level="M"
+                      role="img"
+                      aria-label={t('kiosk.claimQrTitle')}
+                    />
+                    <strong>{t('kiosk.claimQrTitle')}</strong>
+                    <span>{t('kiosk.claimQrHint', { hours: config.refundClaimSlaHours })}</span>
+                  </div>
+                )}
+                <p>
+                  {/* FR-ORD-21: chỉ dẫn tới kênh hỗ trợ thật; máy không có nhân viên (BR-001). */}
+                  {config.supportContact
+                    ? t('kiosk.supportHint', {
+                        reference: view?.supportReference ?? order.paymentReference,
+                        contact: config.supportContact,
+                      })
+                    : t('kiosk.supportHintNoContact', {
+                        reference: view?.supportReference ?? order.paymentReference,
+                      })}
+                </p>
+              </>
             ) : (
               <p>
                 MÃ GIAO DỊCH: #{order.paymentReference} / {productName.toUpperCase()} / 1 LƯỢT TRẢI

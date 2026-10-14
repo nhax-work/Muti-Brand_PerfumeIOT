@@ -491,3 +491,18 @@
   align-items: center;
   justify-content: space-between;
 }
+
+/* QR sự cố dẫn tới trang khiếu nại hoàn tiền (FR-ORD-28, ADR-0012). */
+.claimQr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 12px auto;
+  padding: 16px;
+  max-width: 320px;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #131315;
+  text-align: center;
+}

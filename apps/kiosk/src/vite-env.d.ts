@@ -10,6 +10,11 @@ interface ImportMetaEnv {
    * kiosk chỉ dặn khách lưu lại mã — máy chạy không có nhân viên (BR-001).
    */
   readonly VITE_SUPPORT_CONTACT?: string;
+  /**
+   * Địa chỉ trang khiếu nại hoàn tiền công khai (route `/claim` của web quản trị, ADR-0012). Kiosk
+   * ghép mã đơn và mã khiếu nại vào đây để vẽ QR sự cố. Để trống thì không hiện QR.
+   */
+  readonly VITE_CLAIM_PAGE_URL?: string;
 }
 
 interface ImportMeta {

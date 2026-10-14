@@ -16,14 +16,19 @@ const mockNavigate = vi.fn();
 const mockMutate = vi.fn();
 const mockSetActiveOrder = vi.fn();
 let mockShowDevTools = true;
+let mockClaimPageUrl: string | null = null;
 
 vi.mock('@/shared/config', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared/config')>();
   return {
+    ...actual,
     config: {
       ...actual.config,
       get showDevTools() {
         return mockShowDevTools;
+      },
+      get claimPageUrl() {
+        return mockClaimPageUrl;
       },
     },
   };
@@ -342,6 +347,42 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByText('ĐANG CHỜ LƯỢT')).toBeTruthy();
     expect(screen.getByText('ĐANG CHỜ LƯỢT PHỤC VỤ')).toBeTruthy();
     expect(screen.getAllByText(/Máy đang phục vụ khách/i).length).toBeGreaterThan(0);
+  });
+});
+
+describe('QR sự cố (FR-ORD-21, FR-ORD-28)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(useKioskCatalog).mockReturnValue({
+      data: catalog,
+    } as unknown as ReturnType<typeof useKioskCatalog>);
+  });
+  afterEach(() => {
+    cleanup();
+    mockClaimPageUrl = null;
+  });
+
+  it('test_FR_ORD_21_problem_screen_shows_claim_qr_with_order_and_token', () => {
+    mockClaimPageUrl = 'https://admin.scentstation.test/claim';
+    mockOrder(created, view({ status: 'FAILED', supportReference: 'SUP-1', claimToken: 'tok123' }));
+    renderScreen();
+
+    const qr = screen.getByRole('img', { name: 'Quét mã để yêu cầu hoàn tiền' });
+    expect(qr.tagName.toLowerCase()).toBe('svg');
+    expect(screen.getByText(/trong vòng 24 giờ/)).toBeTruthy();
+  });
+
+  it('test_FR_ORD_21_no_claim_qr_without_token_or_claim_page', () => {
+    mockClaimPageUrl = 'https://admin.scentstation.test/claim';
+    mockOrder(created, view({ status: 'FAILED', supportReference: 'SUP-1', claimToken: null }));
+    const { unmount } = renderScreen();
+    expect(screen.queryByRole('img', { name: 'Quét mã để yêu cầu hoàn tiền' })).toBeNull();
+    unmount();
+
+    mockClaimPageUrl = null;
+    mockOrder(created, view({ status: 'FAILED', supportReference: 'SUP-1', claimToken: 'tok123' }));
+    renderScreen();
+    expect(screen.queryByRole('img', { name: 'Quét mã để yêu cầu hoàn tiền' })).toBeNull();
   });
 });
 

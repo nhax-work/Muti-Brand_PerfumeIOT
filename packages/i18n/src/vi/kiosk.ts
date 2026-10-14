@@ -70,6 +70,9 @@ export const kiosk = {
   checkingResult: 'Đang xác nhận kết quả với máy…',
   // Máy chạy không có nhân viên (BR-001) — chỉ dẫn khách tới kênh hỗ trợ thật nếu có cấu hình.
   supportHint: 'Vui lòng lưu lại mã {reference} và liên hệ {contact} để được hỗ trợ.',
+  claimQrTitle: 'Quét mã để yêu cầu hoàn tiền',
+  claimQrHint:
+    'Dùng điện thoại quét mã, điền tài khoản nhận tiền. Nhân viên sẽ chuyển khoản hoàn cho bạn trong vòng {hours} giờ.',
   supportHintNoContact:
     'Hệ thống đã ghi nhận sự cố. Vui lòng chụp lại mã {reference} để được hỗ trợ khi cần.',
   // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (Stitch UI)
