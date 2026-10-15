@@ -45,6 +45,28 @@ export function phaseOf(view: OrderStatusView | undefined, paidForMs = 0): Check
   }
 }
 
+/**
+ * Hạn bấm nút khách thấy trên kiosk (FR-ORD-26, FR-ORD-27): `pressWindowSec` tính từ lúc modal
+ * hướng dẫn hiện ra (`turnStartedAt`), nhưng không muộn hơn hạn máy chủ trả (đèn sáng +
+ * `DISPENSE_PRESS_WINDOW_SEC`) — thiết bị hết giờ trước thì kiosk theo thiết bị.
+ *
+ * Đây chỉ là mốc giao diện. Ghi nhận khách bỏ lượt là việc của thiết bị và máy chủ: thiết bị báo
+ * `PRESS_TIMEOUT` → đơn `FORFEITED`; thiết bị im lặng → job quét lệnh quá hạn đưa đơn vào kiểm tra
+ * thủ công (ADR-0007, FR-DSP-18). Kiosk không gửi gì khi hết giờ.
+ *
+ * @returns mốc epoch ms, hoặc `null` khi chưa tới lượt khách (chưa bắt đầu đếm)
+ */
+export function pressDeadlineMs(
+  turnStartedAt: number | null,
+  pressWindowSec: number,
+  serverDeadline: string | null | undefined,
+): number | null {
+  if (turnStartedAt === null) return null;
+  const local = turnStartedAt + pressWindowSec * 1000;
+  const server = serverDeadline ? Date.parse(serverDeadline) : Number.NaN;
+  return Number.isNaN(server) ? local : Math.min(local, server);
+}
+
 /** Số giây còn lại tới `deadline`, không âm. */
 export function secondsUntil(deadline: string | null | undefined, now: number): number | null {
   if (!deadline) return null;

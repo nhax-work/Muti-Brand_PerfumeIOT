@@ -24,10 +24,10 @@ Test integration và e2e chạy **tuần tự từng file** (`--no-file-parallel
 một CSDL test, và job DSP (`armQueuedOrders`, `sweepTimeouts`) quét mọi máy, nên chạy song song thì
 file này sẽ ghi lệnh lên đơn của file kia.
 
-## Bảy nhóm test trọng yếu
+## Các nhóm test trọng yếu
 
-Đây là những bất biến dễ sai nhất và tốn kém nhất nếu sai. Agent **được** viết và sửa test của cả bảy
-nhóm (ADR-0010 bỏ quy định "người tự viết" trước đây). Đổi lại:
+Đây là những bất biến dễ sai nhất và tốn kém nhất nếu sai. Bảng dưới gồm bảy nhóm gốc cộng nhóm giữ
+chỗ slot đồng thời (lộ trình 13 tuần, ADR-0006). Agent **được** viết và sửa test của mọi nhóm (ADR-0010 bỏ quy định "người tự viết" trước đây). Đổi lại:
 
 - test mang đúng mã FR của ca nó chứng minh, theo quy ước đặt tên ở trên;
 - test phải đi qua chính cơ chế cần chứng minh: ràng buộc CSDL thật, webhook có chữ ký, simulator
@@ -42,7 +42,8 @@ nhóm (ADR-0010 bỏ quy định "người tự viết" trước đây). Đổi 
 | Unique constraint slot | `tests/integration/test_slot_constraint.test.ts` | có |
 | TTL lệnh xịt | `tests/e2e/test_command_ttl.test.ts` | có |
 | Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report | — |
-| Job chuyển trạng thái | `tests/integration/test_rental_scheduler.test.ts` | chưa có |
+| Job chuyển trạng thái | `tests/integration/test_slt_job_expiry.test.ts` | một phần — hủy phiên hết giờ giữ chỗ, có bù sau downtime (FR-SLT-39); tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42) chưa có |
+| Giữ chỗ slot đồng thời | `tests/integration/test_slt_concurrent_hold.test.ts` | có — hai thương hiệu cùng slot, giỏ có slot đã bị giữ, hai giỏ chồng nhau (FR-SLT-35, ADR-0006, ADR-0008) |
 
 ## Cổng CI
 

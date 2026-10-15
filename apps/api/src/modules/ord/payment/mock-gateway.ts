@@ -18,6 +18,8 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import type {
+  CancelPaymentRequest,
+  CancelPaymentResult,
   CreatedPayment,
   CreatePaymentRequest,
   PaymentGateway,
@@ -81,6 +83,14 @@ export class MockPaymentGateway implements PaymentGateway {
       checkoutUrl: null,
       raw: { provider: MOCK_PROVIDER, qrPayload, reference: request.reference },
     };
+  }
+
+  /**
+   * Cổng mock không giữ trạng thái nên luôn hủy được. Người thử vẫn gọi được `pay:mock` sau khi hủy —
+   * đúng tình huống tiền về sau khi khách đã hủy, đơn vào REFUND_PENDING (ADR-0015 mục 3).
+   */
+  async cancelPayment(_request: CancelPaymentRequest): Promise<CancelPaymentResult> {
+    return { kind: 'CANCELLED' };
   }
 
   verifyWebhook(rawBody: Buffer, headers: WebhookHeaders): WebhookVerification {

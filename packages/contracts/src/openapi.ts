@@ -1586,6 +1586,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kiosk/orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khách hủy đơn đang chờ thanh toán trên kiosk
+         * @description FR-ORD-33 (ADR-0015 mục 3): kiosk gọi khi khách xác nhận rời màn QR. Hệ thống hủy link thanh toán ở cổng để khách không trả được nữa, rồi chuyển đơn PENDING_PAYMENT → EXPIRED với lý do CUSTOMER_CANCELLED — không có trạng thái đơn riêng cho việc hủy; payment chuyển CANCELLED.
+         *     Cổng báo đã hoặc đang nhận tiền → không hủy, trả ORDER_NOT_CANCELLABLE (409); kiosk tiếp tục chờ kết quả thanh toán. Không liên lạc được cổng → vẫn hủy phía hệ thống. Tiền về sau khi đã hủy → đơn REFUND_PENDING như tiền về sau hạn, không xịt (FR-ORD-16 AC3).
+         *     Gọi lại với đơn đã EXPIRED trả 200 cùng trạng thái hiện tại.
+         */
+        post: operations["cancelKioskOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/kiosk/interactions": {
         parameters: {
             query?: never;
@@ -1735,9 +1759,169 @@ export interface paths {
         put?: never;
         /**
          * Khởi tạo hoàn tiền
-         * @description FR-ORD-20: Operations Staff khởi tạo hoàn tiền cho đơn cần kiểm tra thủ công. Đơn không ở trạng thái cho hoàn tiền trả ORDER_NOT_REFUNDABLE. Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-06).
+         * @deprecated
+         * @description DEPRECATED theo ADR-0012: ghi nhận hoàn tiền chỉ qua phiếu khiếu nại (POST /refund-claims/{id}/refund). Giữ để không phá client cũ. FR-ORD-20: Operations Staff khởi tạo hoàn tiền cho đơn cần kiểm tra thủ công. Đơn không ở trạng thái cho hoàn tiền trả ORDER_NOT_REFUNDABLE. Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-06).
          */
         post: operations["refundOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/refund-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khách gửi khiếu nại hoàn tiền
+         * @description FR-ORD-29: trang công khai mở từ QR sự cố trên kiosk. Mã khiếu nại sai, đã dùng, hoặc không khớp đơn trả NOT_FOUND để không lộ đơn nào tồn tại. Giới hạn REFUND_CLAIM_RATE_LIMIT_PER_MIN lần mỗi phút cho mỗi địa chỉ IP.
+         */
+        post: operations["createRefundClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Danh sách phiếu khiếu nại hoàn tiền
+         * @description FR-ORD-20, FR-ORD-32: hàng việc của Operations Staff. Không trả tài khoản hay liên hệ. Cũ nhất trước.
+         */
+        get: operations["listRefundClaims"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /** Chi tiết phiếu khiếu nại */
+        get: operations["getRefundClaim"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/assign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Phân công người xử lý phiếu
+         * @description Operations Staff hoặc Super Admin phân công; người nhận phải là Operations Staff.
+         */
+        post: operations["assignRefundClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/refund-account": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Xem tài khoản nhận hoàn tiền
+         * @description FR-ORD-30: chỉ Operations Staff đang được phân công, sau khi xác thực lại. Người khác, kể cả Super Admin, nhận CLAIM_NOT_ASSIGNED. Mỗi lần gọi ghi AuditLog không kèm dữ liệu tài khoản. Phiếu đã đóng thì không còn dữ liệu (VALIDATION_ERROR).
+         */
+        get: operations["getRefundClaimAccount"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/refund": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ghi nhận đã hoàn tiền
+         * @description FR-ORD-20: người được phân công nhập mã giao dịch chuyển khoản. Phiếu đóng REFUNDED, tài khoản bị xóa (FR-ORD-31); nếu refundOrder thì đơn chuyển REFUNDED. Ghi AuditLog (FR-AUD-06).
+         */
+        post: operations["recordRefundClaimPayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Từ chối phiếu khiếu nại
+         * @description Người được phân công từ chối kèm lý do. Phiếu đóng REJECTED, tài khoản bị xóa.
+         */
+        post: operations["rejectRefundClaim"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2489,6 +2673,11 @@ export interface components {
          * @enum {string}
          */
         StorageCompensationStatus: "PENDING" | "PAID";
+        /**
+         * @description Trạng thái phiếu khiếu nại hoàn tiền (ADR-0012). REFUNDED, REJECTED, EXPIRED đều là đã đóng — tài khoản nhận hoàn tiền bị xóa ngay khi phiếu đóng.
+         * @enum {string}
+         */
+        RefundClaimStatus: "OPEN" | "REFUNDED" | "REJECTED" | "EXPIRED";
         /**
          * @description Nhãn hiển thị cho Brand Admin (FR-SLT-41), SUY RA từ `status` và `paidAt` — không phải cột
          *     trong CSDL. DRAFT + chưa thanh toán → AWAITING_PAYMENT; DRAFT + đã thanh toán →
@@ -3545,6 +3734,10 @@ export interface components {
              */
             kioskSessionId?: string;
         };
+        /** @description Máy đang hiện đơn (ADR-0015). Đơn không thuộc máy này được trả như không tồn tại (404). */
+        OrderCancel: {
+            machineSerial: string;
+        };
         OrderCreated: {
             order: components["schemas"]["Order"];
             /** @description Nội dung mã QR thanh toán ứng với paymentReference (FR-ORD-08). */
@@ -3569,6 +3762,8 @@ export interface components {
             pressDeadline?: string | null;
             /** @description Mã tham chiếu sự cố hiển thị cho khách khi đã thanh toán nhưng lượt xịt thất bại (FR-ORD-21). */
             supportReference?: string | null;
+            /** @description Mã khiếu nại dùng một lần, có khi đơn đủ điều kiện khiếu nại hoàn tiền và chưa có phiếu (FR-ORD-28, ADR-0012). Kiosk ghép với mã đơn thành mã QR sự cố dẫn tới trang khiếu nại. Null ở mọi trường hợp khác. */
+            claimToken?: string | null;
         };
         OrderStatusHistoryEntry: {
             /** Format: uuid */
@@ -3601,10 +3796,90 @@ export interface components {
         };
         WebhookAck: {
             /**
-             * @description WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi (spec/errors.md, FR-ORD-15).
+             * @description WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi (spec/errors.md, FR-ORD-15). UNKNOWN_REFERENCE: chữ ký đúng nhưng mã tham chiếu không khớp payment nào (ví dụ giao dịch mẫu lúc đăng ký URL webhook) — đã ghi lại để đối soát, không đổi dữ liệu nghiệp vụ (ADR-0016).
              * @enum {string}
              */
-            result: "PROCESSED" | "WEBHOOK_ALREADY_PROCESSED";
+            result: "PROCESSED" | "WEBHOOK_ALREADY_PROCESSED" | "UNKNOWN_REFERENCE";
+        };
+        /** @description Tài khoản nhận hoàn tiền. Chỉ lưu mã hóa trong phiếu, xóa khi phiếu đóng (NFR-DAT-04). */
+        RefundAccountInput: {
+            /** @description Mã BIN ngân hàng theo VietQR */
+            bankBin: string;
+            accountNumber: string;
+            accountName: string;
+        };
+        RefundClaimCreate: {
+            /** Format: uuid */
+            orderId: string;
+            claimToken: string;
+            /** @description Số điện thoại hoặc email để nhận kết quả. Mã hóa; xóa sau REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng. */
+            contact: string;
+            refundAccount: components["schemas"]["RefundAccountInput"];
+            /**
+             * @description Khách đồng ý cho nền tảng xử lý dữ liệu cá nhân để hoàn tiền. Bắt buộc là true.
+             * @constant
+             */
+            consent: true;
+        };
+        /** @description Phản hồi cho khách sau khi gửi khiếu nại — không chứa dữ liệu cá nhân. */
+        RefundClaimReceipt: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["RefundClaimStatus"];
+            amount: components["schemas"]["Money"];
+            currency: components["schemas"]["Currency"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @description Phiếu khiếu nại cho Operations Staff và Super Admin. Không bao giờ chứa tài khoản nhận hoàn tiền hay thông tin liên hệ — xem tài khoản qua endpoint riêng, chỉ người được phân công. */
+        RefundClaim: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            orderId: string;
+            paymentReference: string;
+            status: components["schemas"]["RefundClaimStatus"];
+            /** @description true = hoàn cả tiền đơn; false = chỉ hoàn tiền chuyển khoản thừa. */
+            refundOrder: boolean;
+            amount: components["schemas"]["Money"];
+            currency: components["schemas"]["Currency"];
+            hasRefundAccount: boolean;
+            /** Format: uuid */
+            assignedTo?: string | null;
+            /** Format: date-time */
+            assignedAt?: string | null;
+            payoutReference?: string | null;
+            resolutionNote?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            closedAt?: string | null;
+            /**
+             * Format: date-time
+             * @description createdAt + REFUND_CLAIM_SLA_HOURS — mục tiêu xử lý của BR-002.
+             */
+            slaDueAt: string;
+        };
+        RefundAccountView: {
+            bankBin: string;
+            accountNumber: string;
+            accountName: string;
+            contact: string | null;
+        };
+        RefundClaimAssign: {
+            /**
+             * Format: uuid
+             * @description Tài khoản Operations Staff nhận xử lý
+             */
+            assigneeId: string;
+        };
+        RefundClaimPayout: {
+            /** @description Mã giao dịch chuyển khoản hoàn tiền */
+            payoutReference: string;
+            note?: string;
+        };
+        RefundClaimReject: {
+            reason: string;
         };
         /** @description Chỉ áp dụng cho đơn cần kiểm tra thủ công (FR-ORD-19, FR-ORD-20). */
         RefundRequest: {
@@ -6393,7 +6668,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             409: components["responses"]["Conflict"];
-            /** @description Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) */
+            /** @description Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) — mã RATE_LIMITED */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -6425,6 +6700,35 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    cancelKioskOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderCancel"];
+            };
+        };
+        responses: {
+            /** @description Trạng thái đơn sau khi hủy (EXPIRED) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderStatusView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     recordKioskInteractions: {
@@ -6629,6 +6933,219 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    createRefundClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundClaimCreate"];
+            };
+        };
+        responses: {
+            /** @description Đã tiếp nhận khiếu nại */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaimReceipt"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listRefundClaims: {
+        parameters: {
+            query?: {
+                /** @description Trang, bắt đầu từ 1 */
+                page?: components["parameters"]["page"];
+                /** @description Số bản ghi mỗi trang */
+                pageSize?: components["parameters"]["pageSize"];
+                status?: components["schemas"]["RefundClaimStatus"];
+                assignedToMe?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Danh sách phiếu */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["RefundClaim"][];
+                        meta: components["schemas"]["PageMeta"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getRefundClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Phiếu khiếu nại */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaim"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    assignRefundClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundClaimAssign"];
+            };
+        };
+        responses: {
+            /** @description Đã phân công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaim"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRefundClaimAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tài khoản nhận hoàn tiền và liên hệ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundAccountView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    recordRefundClaimPayout: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundClaimPayout"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi nhận */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaim"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    rejectRefundClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefundClaimReject"];
+            };
+        };
+        responses: {
+            /** @description Đã từ chối */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaim"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getOrderDispenseCommand: {

@@ -19,6 +19,10 @@
 --                  slot_rental_id, constraint trigger §10d; áp bằng migrations/1790757100000_*.
 --                  ADR-0009 (ảnh chụp đơn hàng bất biến, mã tham chiếu thanh toán duy nhất) —
 --                  trigger §10e, uq_payment_provider_reference; áp bằng migrations/1790760300000_*.
+--                  ADR-0012 (phiếu khiếu nại hoàn tiền, NFR-DAT-04 viết lại) — bảng refund_claims,
+--                  uq_order_id_brand, §10f; áp bằng migrations/1790850000000_*.
+--                  ADR-0016 (tích hợp PayOS) — COMMENT payments.provider_reference; áp bằng
+--                  migrations/1790936400000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -32,7 +36,7 @@
 --   §9  Khóa ngoại vòng (tách ra vì phụ thuộc hai chiều)
 --   §10 Index và ràng buộc bắt buộc (spec/contracts/README.md)
 --   §10b Ràng buộc cùng thương hiệu · §10c updated_at · §10d Bất biến phiên thanh toán (ADR-0008)
---   §10e Ảnh chụp đơn hàng bất biến (ADR-0009)
+--   §10e Ảnh chụp đơn hàng bất biến (ADR-0009) · §10f Phiếu khiếu nại hoàn tiền (ADR-0012)
 --   §11 Audit log append-only (FR-AUD-09, NFR-SEC-08)
 --   §12 Row-Level Security — mẫu, chưa bật
 --   §13 Ràng buộc thuộc tầng domain service, KHÔNG nằm ở CSDL
@@ -130,6 +134,8 @@ CREATE TYPE shipment_declaration_status AS ENUM (
 );
 
 CREATE TYPE storage_compensation_status AS ENUM ('PENDING', 'PAID');
+
+CREATE TYPE refund_claim_status AS ENUM ('OPEN', 'REFUNDED', 'REJECTED', 'EXPIRED');
 
 
 -- =====================================================================================
@@ -923,8 +929,9 @@ CREATE INDEX idx_payments_order        ON payments (order_id);
 CREATE INDEX idx_payments_brand_status ON payments (brand_id, status, created_at);
 
 COMMENT ON TABLE payments IS
-    'Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04). '
-    'raw_response chỉ chứa phản hồi của cổng thanh toán đã loại dữ liệu nhạy cảm.';
+    'Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân hàng của khách — tài khoản nhận '
+    'hoàn tiền chỉ nằm trong refund_claims (NFR-DAT-04, ADR-0012). raw_response chỉ chứa phản hồi của '
+    'cổng thanh toán đã loại dữ liệu nhạy cảm, kể cả tài khoản người chuyển.';
 COMMENT ON COLUMN payments.order_id IS
     'Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị '
     '(chk_payment_single_target).';
@@ -932,8 +939,9 @@ COMMENT ON COLUMN payments.rental_checkout_id IS
     'Phiên thanh toán thuê slot được thanh toán (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa '
     'đơn trong phiên. Mỗi phiên tối đa một payment PENDING (uq_checkout_payment_pending).';
 COMMENT ON COLUMN payments.provider_reference IS
-    'Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: '
-    'bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider '
+    'Mã tham chiếu cổng thanh toán gửi lại trong webhook (FR-ORD-14). Cổng có mã riêng thì lưu mã của '
+    'cổng — PayOS: orderCode (số nguyên, ADR-0016); cổng không có (mock) thì lưu mã hệ thống: đơn kiosk '
+    'bằng orders.payment_reference, phiên thuê slot mã riêng cho MỖI payment. Duy nhất theo provider '
     '(uq_payment_provider_reference, ADR-0009).';
 
 CREATE TABLE payment_events (
@@ -1619,6 +1627,95 @@ $$;
 CREATE TRIGGER trg_orders_snapshot_immutable
     BEFORE UPDATE ON orders
     FOR EACH ROW EXECUTE FUNCTION fn_orders_snapshot_immutable();
+
+
+-- =====================================================================================
+-- §10f. PHIẾU KHIẾU NẠI HOÀN TIỀN (ADR-0012)
+--
+-- PayOS không dùng API hoàn tiền tự động: khách quét QR sự cố trên kiosk, nhân viên chuyển khoản
+-- hoàn tay. refund_claims là chỗ DUY NHẤT được lưu tài khoản ngân hàng của khách (NFR-DAT-04 viết
+-- lại): mã hóa tầng ứng dụng, chỉ nhân viên được phân công giải mã, xóa ngay khi phiếu đóng — các
+-- CHECK dưới đây biến điều đó thành bất biến CSDL.
+-- =====================================================================================
+
+-- Khóa ngoại kép cần UNIQUE (id, brand_id) ở bảng cha (§10b).
+ALTER TABLE orders
+    ADD CONSTRAINT uq_order_id_brand UNIQUE (id, brand_id);
+
+CREATE TABLE refund_claims (
+    id                  uuid                PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id            uuid                NOT NULL,
+    brand_id            uuid                NOT NULL REFERENCES brands (id),
+    status              refund_claim_status NOT NULL DEFAULT 'OPEN',
+    refund_order        boolean             NOT NULL,
+    amount              numeric(19,4)       NOT NULL,
+    currency            char(3)             NOT NULL,
+    account_ciphertext  bytea,
+    contact_ciphertext  bytea,
+    pii_key_version     smallint            NOT NULL,
+    consented_at        timestamptz         NOT NULL,
+    assigned_to         uuid                REFERENCES users (id),
+    assigned_at         timestamptz,
+    payout_reference    varchar(100),
+    resolution_note     text,
+    resolved_by         uuid                REFERENCES users (id),
+    created_at          timestamptz         NOT NULL DEFAULT now(),
+    updated_at          timestamptz         NOT NULL DEFAULT now(),
+    closed_at           timestamptz,
+    account_purged_at   timestamptz,
+    contact_purged_at   timestamptz,
+
+    CONSTRAINT uq_refund_claim_order UNIQUE (order_id),
+    CONSTRAINT fk_refund_claim_order_same_brand
+        FOREIGN KEY (order_id, brand_id) REFERENCES orders (id, brand_id),
+    CONSTRAINT chk_refund_claim_amount_positive
+        CHECK (amount > 0),
+    CONSTRAINT chk_refund_claim_open_has_account
+        CHECK (status <> 'OPEN' OR account_ciphertext IS NOT NULL),
+    CONSTRAINT chk_refund_claim_account_purged_on_close
+        CHECK (status = 'OPEN' OR (account_ciphertext IS NULL AND account_purged_at IS NOT NULL)),
+    CONSTRAINT chk_refund_claim_contact_purge
+        CHECK (contact_purged_at IS NULL OR contact_ciphertext IS NULL),
+    CONSTRAINT chk_refund_claim_closed_at
+        CHECK ((status = 'OPEN') = (closed_at IS NULL)),
+    CONSTRAINT chk_refund_claim_refunded_has_payout
+        CHECK (status <> 'REFUNDED' OR payout_reference IS NOT NULL),
+    CONSTRAINT chk_refund_claim_rejected_has_note
+        CHECK (status <> 'REJECTED' OR resolution_note IS NOT NULL),
+    CONSTRAINT chk_refund_claim_assignment
+        CHECK ((assigned_to IS NULL) = (assigned_at IS NULL))
+);
+
+CREATE INDEX idx_refund_claims_status ON refund_claims (status, created_at);
+CREATE INDEX idx_refund_claims_assigned ON refund_claims (assigned_to, status);
+CREATE INDEX idx_refund_claims_contact_purge ON refund_claims (closed_at)
+    WHERE contact_ciphertext IS NOT NULL;
+
+CREATE TRIGGER trg_refund_claims_set_updated_at
+    BEFORE UPDATE ON refund_claims
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+COMMENT ON TABLE refund_claims IS
+    'Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT được lưu tài khoản ngân hàng của '
+    'khách (NFR-DAT-04): mã hóa tầng ứng dụng, xóa khi phiếu đóng. Không ghi dữ liệu tài khoản vào '
+    'audit_logs, log, payment_events hay notifications.';
+COMMENT ON COLUMN refund_claims.refund_order IS
+    'TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. '
+    'FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên.';
+COMMENT ON COLUMN refund_claims.amount IS
+    'Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa.';
+COMMENT ON COLUMN refund_claims.account_ciphertext IS
+    'Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng '
+    'dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng.';
+COMMENT ON COLUMN refund_claims.contact_ciphertext IS
+    'Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày '
+    'sau khi đóng phiếu rồi job xóa.';
+COMMENT ON COLUMN refund_claims.pii_key_version IS
+    'Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ.';
+COMMENT ON COLUMN refund_claims.consented_at IS
+    'Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại.';
+COMMENT ON COLUMN refund_claims.payout_reference IS
+    'Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED.';
 
 
 -- =====================================================================================

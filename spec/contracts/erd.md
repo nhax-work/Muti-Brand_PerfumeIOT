@@ -6,8 +6,8 @@
 Nguồn: `seed_document/DB_DIAGRAM_MERMAID.md` · Chuẩn đặt tên: `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`
 Lược đồ thi hành: `spec/contracts/schema.sql` · Mô tả từng cột: `spec/contracts/data-dictionary.md`
 
-39 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
-`storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
+40 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
+`storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008 + `refund_claims` theo ADR-0012). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
 tổng quan các quan hệ cốt lõi, rồi 6 sơ đồ chi tiết theo nhóm.
 
 ---
@@ -391,6 +391,18 @@ erDiagram
         kiosk_interaction_type event_type
         uuid kiosk_session_id "ẩn danh"
     }
+    REFUND_CLAIMS {
+        uuid id PK
+        uuid order_id FK,UK "một phiếu mỗi đơn"
+        uuid brand_id FK "cùng thương hiệu với đơn"
+        refund_claim_status status
+        boolean refund_order
+        numeric amount
+        bytea account_ciphertext "mã hóa, NULL khi đóng"
+        bytea contact_ciphertext "mã hóa, xóa sau 30 ngày"
+        uuid assigned_to FK
+        varchar payout_reference
+    }
 
     ORDERS ||--o{ ORDER_STATUS_HISTORIES : "ghi lịch sử"
     ORDERS ||--o{ PAYMENTS : "thanh toán"
@@ -398,6 +410,7 @@ erDiagram
     PAYMENTS ||--o{ PAYMENT_EVENTS : "nhận webhook"
     ORDERS ||--o{ DISPENSE_COMMANDS : "sinh lệnh"
     DISPENSE_COMMANDS ||--|| DISPENSE_RESULTS : "trả kết quả"
+    ORDERS ||--o| REFUND_CLAIMS : "khiếu nại hoàn tiền"
 ```
 
 **Bốn ràng buộc duy nhất giữ cho BR-002 đúng:**
@@ -418,6 +431,13 @@ hóa đơn của nó cùng đã trả, và tổng phiên bằng tổng hóa đơ
 
 `payment_events.brand_id`/`payment_id` NULL khi webhook không khớp được với đơn nào (chữ ký sai, mã
 tham chiếu lạ) — vẫn ghi lại để rà soát bảo mật (FR-ORD-13/14).
+
+**`refund_claims` là chỗ duy nhất được lưu tài khoản ngân hàng của khách** (ADR-0012, NFR-DAT-04 viết
+lại). Hoàn tiền làm tay vì PayOS không dùng API hoàn tiền tự động. Tài khoản và liên hệ mã hóa tầng ứng
+dụng thành hai khối riêng; `chk_refund_claim_account_purged_on_close` bắt buộc khối tài khoản là NULL
+khi phiếu đóng, còn khối liên hệ được job xóa sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS`.
+`fk_refund_claim_order_same_brand` (cần `uq_order_id_brand`) giữ phiếu cùng thương hiệu với đơn.
+`refund_order = false` khi chỉ hoàn tiền chuyển khoản thừa — trạng thái đơn khi đó giữ nguyên.
 
 `kiosk_interaction_events` tách khỏi `orders` vì ghi cả lượt xem và lượt chọn không dẫn tới đơn hàng
 — đây là nguồn dữ liệu cho xếp hạng sản phẩm (FR-RPT-06, BR-007). `kiosk_session_id` là phiên ẩn

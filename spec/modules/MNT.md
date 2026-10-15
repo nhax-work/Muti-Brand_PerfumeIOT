@@ -65,7 +65,7 @@
 
 ## FR-MNT-05 — Chuyển máy sang MAINTENANCE
 
-**Tuyên bố:** Hệ thống phải cho phép Operations Staff chuyển máy sang chế độ MAINTENANCE.
+**Tuyên bố:** Hệ thống phải cho phép Operations Staff yêu cầu đưa máy vào bảo trì: máy chuyển sang DRAINING, phục vụ nốt đơn đã thanh toán và lệnh đang chạy, rồi tự chuyển sang MAINTENANCE khi không còn lệnh xịt khách hàng hiệu lực, đơn chờ thanh toán hay đơn chờ lượt. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-006 · **Ưu tiên:** M
 
@@ -78,7 +78,7 @@
 
 ## FR-MNT-06 — Không tạo đơn khi bảo trì
 
-**Tuyên bố:** Hệ thống phải từ chối tạo đơn hàng mới trên máy đang ở chế độ MAINTENANCE.
+**Tuyên bố:** Hệ thống phải từ chối tạo đơn hàng mới trên máy đang ở chế độ DRAINING hoặc MAINTENANCE. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-002, BR-010 · **Ưu tiên:** M
 

@@ -79,7 +79,7 @@
 ---
 
 ## FR-EXP-06 — Chuyển sang GRACE khi đến ngày hết hạn mà chưa gia hạn
-* **Statement:** Hệ thống phải chuyển hóa đơn sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hóa đơn gia hạn.
+* **Statement:** Hệ thống phải chuyển hóa đơn sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hóa đơn gia hạn và thương hiệu chưa báo không gia hạn (FR-EXP-23). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0014; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given hóa đơn `H` ở trạng thái `EXPIRING` có `end_date < CurrentDate` và chưa có hóa đơn gia hạn nối tiếp,  
@@ -93,7 +93,7 @@
 ---
 
 ## FR-EXP-07 — Cấu hình ngày kết thúc ân hạn cho từng hóa đơn
-* **Statement:** Hệ thống phải cho phép Platform Super Admin ấn định ngày kết thúc thời gian ân hạn cho từng hóa đơn.
+* **Statement:** Hệ thống phải đặt ngày kết thúc ân hạn mặc định bằng ngày hết hạn cộng `GRACE_PERIOD_DEFAULT_DAYS` ngày khi hóa đơn vào GRACE, và cho phép Platform Super Admin sửa ngày đó cho từng hóa đơn. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0014; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given người dùng là Platform Super Admin, hóa đơn `H` đang ở trạng thái `GRACE`,  

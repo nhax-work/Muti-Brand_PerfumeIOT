@@ -174,6 +174,15 @@ export interface CheckoutCreateItemData {
 
 const BLOCKING_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
 
+/** Lỗi CSDL do slot đã bị giữ: chồng lấn kỳ hạn (23P01) hoặc trùng hóa đơn hiệu lực (23505). */
+function isSlotHoldConflict(error: unknown): boolean {
+  const e = error as { code?: string; constraint?: string };
+  return (
+    (e.code === '23P01' && e.constraint === 'excl_slot_rental_overlap') ||
+    (e.code === '23505' && e.constraint === 'uq_slot_active_rental')
+  );
+}
+
 @Injectable()
 export class SltQueries {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -327,6 +336,24 @@ export class SltQueries {
     readonly totalAmount: string;
     readonly items: CheckoutCreateItemData[];
   }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
+    try {
+      return await this.insertCheckout(params);
+    } catch (error) {
+      // Hai checkout cùng slot tới đồng thời: SELECT ... FOR UPDATE không khoá được dòng chưa tồn
+      // tại, nên cả hai qua bước kiểm tra và ràng buộc CSDL chặn bên tới sau. Đó là kết quả đúng
+      // (FR-SLT-35) — trả "đã bị giữ", không để thành lỗi 500.
+      if (isSlotHoldConflict(error)) return { occupied: true };
+      throw error;
+    }
+  }
+
+  private async insertCheckout(params: {
+    readonly brandId: string;
+    readonly createdBy: string;
+    readonly holdExpiresAt: Date;
+    readonly totalAmount: string;
+    readonly items: CheckoutCreateItemData[];
+  }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
     return this.db.transaction().execute(async (tx) => {
       const slotIds = params.items.map((i) => i.slotId);
 
@@ -355,7 +382,10 @@ export class SltQueries {
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      for (const item of params.items) {
+      // Chèn theo thứ tự slot cố định: hai giỏ chung slot nhưng khác thứ tự ([X, Y] và [Y, X]) không
+      // chờ chéo nhau trên ràng buộc chồng lấn (deadlock).
+      const ordered = [...params.items].sort((a, b) => a.slotId.localeCompare(b.slotId));
+      for (const item of ordered) {
         await tx
           .insertInto('slot_rentals')
           .values({

@@ -21,20 +21,24 @@ cùng một máy lẫn trên nhiều máy. Dữ liệu kinh doanh được cô l
 Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 
 - Nền tảng sở hữu và vận hành toàn bộ máy, địa điểm và nhân sự vận hành/kỹ thuật/kho (BR-004, BR-011).
+- Thương hiệu **tự đăng ký** (tên, email, mật khẩu → xác minh email → đồng ý hợp đồng khung) rồi thuê slot được ngay; Super Admin xác minh pháp nhân trước lần chi trả doanh thu đầu tiên và vẫn tạo được tài khoản Brand Admin thủ công. Tài khoản nhân sự nền tảng chỉ do Super Admin tạo (ADR-0013).
 - Thương hiệu tự mua gói thuê slot, quản lý danh mục sản phẩm, giá mỗi lượt xịt trên slot mình thuê, báo cáo của mình và yêu cầu bổ sung (BR-007, BR-011).
-- Thuê slot tự phục vụ, không ký hợp đồng, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, đã duyệt 2026-09-29).
+- Thuê slot tự phục vụ, không duyệt tay: xem slot trống → chọn slot → chọn gói thuê 3/6/12 tháng và một gói bảo quản bắt buộc → đồng ý phụ lục → thanh toán hết một lần → nhận hóa đơn → cấu hình slot. Thời hạn tính từ lúc lắp chai đầu tiên (ADR-0006, đã duyệt 2026-09-29). Căn cứ pháp lý là hợp đồng khung đồng ý một lần cộng phụ lục tự sinh mỗi phiên, không thương lượng riêng (ADR-0013).
+- Đã thanh toán thì không hủy, không hoàn tiền; được đổi sang slot trống cùng giá một lần trong `SLOT_SWAP_WINDOW_HOURS` nếu chưa lắp chai. Một thương hiệu giữ chỗ tối đa `BRAND_MAX_HELD_SLOTS` slot chưa thanh toán (ADR-0014).
 - Một hóa đơn thuê slot (`SlotRental`) ứng với đúng một slot; thương hiệu thuê 3 slot có 3 hóa đơn độc lập (BR-009). "Hóa đơn" là thuật ngữ tiếng Việt; định danh kỹ thuật vẫn là `SlotRental`.
 - Nhiều slot được chọn và trả tiền **một lần** trong một **phiên thanh toán** (`RentalCheckout`): phiên gom giữ chỗ, tổng tiền và thanh toán; mỗi slot vẫn nhận hóa đơn và số hóa đơn riêng (ADR-0008, đã duyệt 2026-09-30).
 - Giá tự do — không có giá sàn hay giá trần (FR-SLT-08).
-- Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009).
-- Khi hóa đơn hết hạn: ân hạn có tính phí trước, sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
+- Doanh thu nền tảng = tiền bán gói thuê trả trước (gói dài có ưu đãi) + gói bảo quản; không ăn chia doanh thu lượt xịt (BR-009). Nền tảng thu hộ tiền lượt xịt và chi trả cho thương hiệu theo kỳ tháng (`DRAFT → CONFIRMED → PAID`), tính đơn `BRAND` ở `DISPENSED` + `FORFEITED`; phí cổng và khoản hoàn cho khách do nền tảng chịu (ADR-0013).
+- Khi hóa đơn hết hạn có hai luồng (ADR-0014): thương hiệu **báo không gia hạn** trước hạn → không ân hạn, không phí, tháo chai trả hàng (chờ nhận tối đa `RETURN_PICKUP_MAX_DAYS`); thương hiệu **không làm gì** → ân hạn có tính phí (mặc định `GRACE_PERIOD_DEFAULT_DAYS`), sau đó thanh lý về sở hữu nền tảng nếu không gia hạn (BR-013) — xem state machine `SlotRental` trong `spec/glossary.md`.
 - Khách **bấm nút vật lý** để nhận lượt xịt (ADR-0007, đã duyệt 2026-09-29): mỗi slot một nút có đèn; thanh toán xong máy **không tự xịt** mà sáng đèn nút slot đích, khách bấm trong `DISPENSE_PRESS_WINDOW_SEC` thì xịt. Không bấm → đơn `FORFEITED`, không hoàn tiền. Mỗi máy chỉ một lượt chờ bấm tại một thời điểm.
+- **Dừng bán an toàn** (ADR-0015): mỗi máy một đơn chờ thanh toán, kiosk hủy được đơn khi khách rời màn QR; đơn đã trả tiền chờ lượt quá `PAID_QUEUE_MAX_SEC` → `FAILED` + kiểm tra thủ công; thiết bị từ chối trước khi đèn sáng cũng gắn cờ kiểm tra thủ công; slot tự `MAINTENANCE` sau `CONSECUTIVE_FAIL_ALERT` lượt lỗi liên tiếp; phiếu nạp mở → cả máy dừng nhận đơn; yêu cầu bảo trì → máy `DRAINING` phục vụ nốt rồi mới `MAINTENANCE`.
+- Khách hoàn tiền **thủ công qua phiếu khiếu nại** (QR sự cố trên kiosk, ADR-0012); cổng thanh toán là PayOS (ADR-0016).
 
 ## 2. Đọc trước khi làm bất cứ việc gì
 
 | # | File | Chứa gì | Mở khi nào |
 |---|---|---|---|
-| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 286 FR + 52 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
+| 1 | `docs/FR_NFR_SCENTSTATION.md` | Toàn bộ 320 FR hiệu lực (không tính mức X) + 52 NFR, lý do BR, danh sách vai trò, thứ tự cắt scope | Cần nội dung yêu cầu thật, mã BR hoặc độ ưu tiên của nó |
 | 2 | `spec/glossary.md` | Thực thể và mọi state machine | Đụng tới vòng đời của một thực thể, hoặc viết truy vấn có phạm vi |
 | 3 | `spec/constraints.md` | Tên mọi hằng ngưỡng số | Cần một timeout, TTL, giới hạn hay tỷ lệ — không bao giờ hardcode |
 | 4 | `spec/errors.md` | Danh mục mã lỗi đầy đủ | Cần trả về hoặc kiểm tra một mã lỗi |
@@ -49,7 +53,10 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (thuê slot theo gói trả trước, hóa
 > đơn, bảo hiểm hàng hóa) và `spec/decisions/0007-nut-bam-vat-ly-kich-hoat-luot-xit.md` (nút bấm vật
 > lý), cùng `spec/decisions/0008-thanh-toan-nhieu-slot-mot-lan.md` (phiên thanh toán nhiều slot, bổ
-> sung ADR-0006). Các ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
+> sung ADR-0006). Sau đợt rà soát nghiệp vụ 2026-10-13 còn bốn ADR nữa: `0012-*` (hoàn tiền qua phiếu
+> khiếu nại), `0013-*` (thương hiệu tự đăng ký, hợp đồng hai lớp, chi trả doanh thu), `0014-*` (ân hạn mặc
+> định, chủ động không gia hạn, đổi slot, giới hạn giữ chỗ), `0015-*` (dừng bán an toàn); và `0016-*`
+> (tích hợp PayOS). Các ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
 > và mọi ghi nhớ cũ về "hợp đồng thuê", "yêu cầu thuê", "phí cố định", "ăn chia", "xịt ngay sau
 > thanh toán" đều đã lỗi thời.
 
@@ -71,6 +78,12 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17), `DSP` (chỉ
 >   FR-DSP-21..27 — nút bấm vật lý, ADR-0007)
 > - **Còn rỗng:** `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
+>
+> **Lệch từ 2026-10-14:** ADR-0013, 0014, 0015 thêm 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
+> FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16) **chưa có AC**, và viết lại
+> câu yêu cầu của FR-USR-01, 05, FR-SLT-17, 18, 44, FR-EXP-06, 07, FR-INV-04, 30, 31, FR-ORD-19,
+> FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04, FR-AUTH-09 — AC cũ của các FR này trong
+> `spec/modules/` có thể còn theo nghĩa cũ, phải soát lại khi hiện thực ADR tương ứng.
 >
 > Đừng bịa acceptance criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở
 > `spec/modules/SLT.md`, hoặc nêu rõ là còn thiếu. Header của mỗi file ghi số FR và trạng thái; đếm

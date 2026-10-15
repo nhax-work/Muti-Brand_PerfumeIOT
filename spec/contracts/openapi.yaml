@@ -367,6 +367,12 @@ components:
       type: string
       enum: [PENDING, PAID]
       description: Trạng thái chi trả khoản bồi thường hàng hóa (FR-SLT-45, ADR-0006).
+    RefundClaimStatus:
+      type: string
+      enum: [OPEN, REFUNDED, REJECTED, EXPIRED]
+      description: >-
+        Trạng thái phiếu khiếu nại hoàn tiền (ADR-0012). REFUNDED, REJECTED, EXPIRED đều là đã đóng —
+        tài khoản nhận hoàn tiền bị xóa ngay khi phiếu đóng.
     RentalInvoiceStage:
       type: string
       enum:
@@ -1544,6 +1550,13 @@ components:
           type: string
           format: uuid
           description: Phiên kiosk ẩn danh, xoay vòng — không chứa định danh khách hàng.
+    OrderCancel:
+      type: object
+      required: [machineSerial]
+      description: >-
+        Máy đang hiện đơn (ADR-0015). Đơn không thuộc máy này được trả như không tồn tại (404).
+      properties:
+        machineSerial: { type: string }
     OrderCreated:
       type: object
       required: [order, qrPayload]
@@ -1582,6 +1595,12 @@ components:
           description: >-
             Mã tham chiếu sự cố hiển thị cho khách khi đã thanh toán nhưng lượt xịt thất bại
             (FR-ORD-21).
+        claimToken:
+          type: [string, 'null']
+          description: >-
+            Mã khiếu nại dùng một lần, có khi đơn đủ điều kiện khiếu nại hoàn tiền và chưa có phiếu
+            (FR-ORD-28, ADR-0012). Kiosk ghép với mã đơn thành mã QR sự cố dẫn tới trang khiếu nại.
+            Null ở mọi trường hợp khác.
     OrderStatusHistoryEntry:
       type: object
       required: [id, toStatus, actorType, occurredAt]
@@ -1616,10 +1635,124 @@ components:
       properties:
         result:
           type: string
-          enum: [PROCESSED, WEBHOOK_ALREADY_PROCESSED]
+          enum: [PROCESSED, WEBHOOK_ALREADY_PROCESSED, UNKNOWN_REFERENCE]
           description: >-
             WEBHOOK_ALREADY_PROCESSED trả kèm HTTP 200 — webhook trùng KHÔNG phải lỗi
-            (spec/errors.md, FR-ORD-15).
+            (spec/errors.md, FR-ORD-15). UNKNOWN_REFERENCE: chữ ký đúng nhưng mã tham chiếu không
+            khớp payment nào (ví dụ giao dịch mẫu lúc đăng ký URL webhook) — đã ghi lại để đối soát,
+            không đổi dữ liệu nghiệp vụ (ADR-0016).
+    RefundAccountInput:
+      type: object
+      required: [bankBin, accountNumber, accountName]
+      description: Tài khoản nhận hoàn tiền. Chỉ lưu mã hóa trong phiếu, xóa khi phiếu đóng (NFR-DAT-04).
+      properties:
+        bankBin:
+          type: string
+          pattern: '^[0-9]{6}$'
+          description: Mã BIN ngân hàng theo VietQR
+        accountNumber:
+          type: string
+          pattern: '^[0-9]{6,19}$'
+        accountName:
+          type: string
+          minLength: 1
+          maxLength: 100
+    RefundClaimCreate:
+      type: object
+      required: [orderId, claimToken, contact, refundAccount, consent]
+      properties:
+        orderId: { type: string, format: uuid }
+        claimToken: { type: string, minLength: 1, maxLength: 200 }
+        contact:
+          type: string
+          minLength: 5
+          maxLength: 200
+          description: >-
+            Số điện thoại hoặc email để nhận kết quả. Mã hóa; xóa sau
+            REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng.
+        refundAccount: { $ref: '#/components/schemas/RefundAccountInput' }
+        consent:
+          type: boolean
+          const: true
+          description: Khách đồng ý cho nền tảng xử lý dữ liệu cá nhân để hoàn tiền. Bắt buộc là true.
+    RefundClaimReceipt:
+      type: object
+      required: [id, status, amount, currency, createdAt]
+      description: Phản hồi cho khách sau khi gửi khiếu nại — không chứa dữ liệu cá nhân.
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/RefundClaimStatus' }
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        createdAt: { type: string, format: date-time }
+    RefundClaim:
+      type: object
+      required:
+        - id
+        - orderId
+        - paymentReference
+        - status
+        - refundOrder
+        - amount
+        - currency
+        - hasRefundAccount
+        - createdAt
+        - slaDueAt
+      description: >-
+        Phiếu khiếu nại cho Operations Staff và Super Admin. Không bao giờ chứa tài khoản nhận hoàn
+        tiền hay thông tin liên hệ — xem tài khoản qua endpoint riêng, chỉ người được phân công.
+      properties:
+        id: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        paymentReference: { type: string }
+        status: { $ref: '#/components/schemas/RefundClaimStatus' }
+        refundOrder:
+          type: boolean
+          description: true = hoàn cả tiền đơn; false = chỉ hoàn tiền chuyển khoản thừa.
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        hasRefundAccount: { type: boolean }
+        assignedTo: { type: [string, 'null'], format: uuid }
+        assignedAt: { type: [string, 'null'], format: date-time }
+        payoutReference: { type: [string, 'null'] }
+        resolutionNote: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        slaDueAt:
+          type: string
+          format: date-time
+          description: createdAt + REFUND_CLAIM_SLA_HOURS — mục tiêu xử lý của BR-002.
+    RefundAccountView:
+      type: object
+      required: [bankBin, accountNumber, accountName, contact]
+      properties:
+        bankBin: { type: string }
+        accountNumber: { type: string }
+        accountName: { type: string }
+        contact: { type: [string, 'null'] }
+    RefundClaimAssign:
+      type: object
+      required: [assigneeId]
+      properties:
+        assigneeId:
+          type: string
+          format: uuid
+          description: Tài khoản Operations Staff nhận xử lý
+    RefundClaimPayout:
+      type: object
+      required: [payoutReference]
+      properties:
+        payoutReference:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Mã giao dịch chuyển khoản hoàn tiền
+        note: { type: string, maxLength: 1000 }
+    RefundClaimReject:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
     RefundRequest:
       type: object
       required: [reason]
@@ -4058,7 +4191,7 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '409': { $ref: '#/components/responses/Conflict' }
         '429':
-          description: Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06)
+          description: Vượt ORDER_RATE_LIMIT_PER_MIN cho máy này (NFR-SEC-06) — mã RATE_LIMITED
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -4082,6 +4215,40 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrderStatusView' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /kiosk/orders/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ORD]
+      summary: Khách hủy đơn đang chờ thanh toán trên kiosk
+      operationId: cancelKioskOrder
+      security: []
+      description: >-
+        FR-ORD-33 (ADR-0015 mục 3): kiosk gọi khi khách xác nhận rời màn QR. Hệ thống hủy link
+        thanh toán ở cổng để khách không trả được nữa, rồi chuyển đơn PENDING_PAYMENT → EXPIRED với
+        lý do CUSTOMER_CANCELLED — không có trạng thái đơn riêng cho việc hủy; payment chuyển
+        CANCELLED.
+
+        Cổng báo đã hoặc đang nhận tiền → không hủy, trả ORDER_NOT_CANCELLABLE (409); kiosk tiếp tục
+        chờ kết quả thanh toán. Không liên lạc được cổng → vẫn hủy phía hệ thống. Tiền về sau khi
+        đã hủy → đơn REFUND_PENDING như tiền về sau hạn, không xịt (FR-ORD-16 AC3).
+
+        Gọi lại với đơn đã EXPIRED trả 200 cùng trạng thái hiện tại.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderCancel' }
+      responses:
+        '200':
+          description: Trạng thái đơn sau khi hủy (EXPIRED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderStatusView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /kiosk/interactions:
     post:
@@ -4273,7 +4440,10 @@ paths:
       tags: [ORD]
       summary: Khởi tạo hoàn tiền
       operationId: refundOrder
+      deprecated: true
       description: >-
+        DEPRECATED theo ADR-0012: ghi nhận hoàn tiền chỉ qua phiếu khiếu nại
+        (POST /refund-claims/{id}/refund). Giữ để không phá client cũ.
         FR-ORD-20: Operations Staff khởi tạo hoàn tiền cho đơn cần kiểm tra thủ công. Đơn không ở
         trạng thái cho hoàn tiền trả ORDER_NOT_REFUNDABLE. Thao tác nhạy cảm — cần xác thực lại
         (FR-AUTH-09). Ghi nhật ký (FR-AUD-06).
@@ -4291,6 +4461,178 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  # -----------------------------------------------------------------------------------
+  # ORD — Phiếu khiếu nại hoàn tiền thủ công (ADR-0012)
+  # -----------------------------------------------------------------------------------
+  /public/refund-claims:
+    post:
+      tags: [ORD]
+      summary: Khách gửi khiếu nại hoàn tiền
+      operationId: createRefundClaim
+      security: []
+      description: >-
+        FR-ORD-29: trang công khai mở từ QR sự cố trên kiosk. Mã khiếu nại sai, đã dùng, hoặc không
+        khớp đơn trả NOT_FOUND để không lộ đơn nào tồn tại. Giới hạn REFUND_CLAIM_RATE_LIMIT_PER_MIN
+        lần mỗi phút cho mỗi địa chỉ IP.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundClaimCreate' }
+      responses:
+        '201':
+          description: Đã tiếp nhận khiếu nại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaimReceipt' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429':
+          description: Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED
+
+  /refund-claims:
+    get:
+      tags: [ORD]
+      summary: Danh sách phiếu khiếu nại hoàn tiền
+      operationId: listRefundClaims
+      description: >-
+        FR-ORD-20, FR-ORD-32: hàng việc của Operations Staff. Không trả tài khoản hay liên hệ. Cũ
+        nhất trước.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/RefundClaimStatus' }
+        - name: assignedToMe
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Danh sách phiếu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RefundClaim' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /refund-claims/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [ORD]
+      summary: Chi tiết phiếu khiếu nại
+      operationId: getRefundClaim
+      responses:
+        '200':
+          description: Phiếu khiếu nại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaim' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refund-claims/{id}/assign:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ORD]
+      summary: Phân công người xử lý phiếu
+      operationId: assignRefundClaim
+      description: Operations Staff hoặc Super Admin phân công; người nhận phải là Operations Staff.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundClaimAssign' }
+      responses:
+        '200':
+          description: Đã phân công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaim' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refund-claims/{id}/refund-account:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    get:
+      tags: [ORD]
+      summary: Xem tài khoản nhận hoàn tiền
+      operationId: getRefundClaimAccount
+      description: >-
+        FR-ORD-30: chỉ Operations Staff đang được phân công, sau khi xác thực lại. Người khác, kể cả
+        Super Admin, nhận CLAIM_NOT_ASSIGNED. Mỗi lần gọi ghi AuditLog không kèm dữ liệu tài khoản.
+        Phiếu đã đóng thì không còn dữ liệu (VALIDATION_ERROR).
+      responses:
+        '200':
+          description: Tài khoản nhận hoàn tiền và liên hệ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundAccountView' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /refund-claims/{id}/refund:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [ORD]
+      summary: Ghi nhận đã hoàn tiền
+      operationId: recordRefundClaimPayout
+      description: >-
+        FR-ORD-20: người được phân công nhập mã giao dịch chuyển khoản. Phiếu đóng REFUNDED, tài
+        khoản bị xóa (FR-ORD-31); nếu refundOrder thì đơn chuyển REFUNDED. Ghi AuditLog (FR-AUD-06).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundClaimPayout' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaim' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refund-claims/{id}/reject:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ORD]
+      summary: Từ chối phiếu khiếu nại
+      operationId: rejectRefundClaim
+      description: Người được phân công từ chối kèm lý do. Phiếu đóng REJECTED, tài khoản bị xóa.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefundClaimReject' }
+      responses:
+        '200':
+          description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaim' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   # -----------------------------------------------------------------------------------
   # DSP — Điều khiển lượt xịt

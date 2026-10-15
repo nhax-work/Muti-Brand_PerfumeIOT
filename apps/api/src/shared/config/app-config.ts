@@ -28,6 +28,11 @@ export interface AppConfig {
    */
   readonly paymentWebhookSecret: string | null;
   /**
+   * Thông tin kênh thanh toán PayOS (ADR-0016). `null` khi chưa cấu hình — cổng PayOS không được
+   * đăng ký. `PAYMENT_PROVIDER=payos` mà thiếu thì API không khởi động.
+   */
+  readonly payos: PayosConfig | null;
+  /**
    * Địa chỉ broker MQTT (MQTT_URL), ví dụ `mqtt://localhost:1883`. `null` thì cửa vào MQTT và vòng
    * điều phối lệnh xịt không chạy — API vẫn phục vụ HTTP bình thường (test tích hợp chạy kiểu này).
    */
@@ -44,10 +49,32 @@ export interface AppConfig {
    * chủ động bật.
    */
   readonly swaggerEnabled: boolean;
+  /**
+   * Khóa AES-256 (32 byte, base64) mã hóa tài khoản nhận hoàn tiền và liên hệ trong phiếu khiếu nại
+   * (REFUND_ACCOUNT_ENC_KEY, ADR-0012, NFR-DAT-04). `null` khi chưa cấu hình ở máy dev: tính năng
+   * khiếu nại tắt (kiosk không hiện QR sự cố). Production bắt buộc có.
+   */
+  readonly refundAccountEncKey: Buffer | null;
+  /**
+   * Bí mật ký mã khiếu nại dùng một lần trên QR sự cố (REFUND_CLAIM_TOKEN_SECRET, ADR-0012). Cùng
+   * quy tắc với khóa trên: thiếu ở dev thì tính năng tắt, production bắt buộc có.
+   */
+  readonly refundClaimTokenSecret: string | null;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
+export interface PayosConfig {
+  readonly baseUrl: string;
+  readonly clientId: string;
+  readonly apiKey: string;
+  /** Khóa checksum: ký yêu cầu tạo link và kiểm chữ ký webhook. */
+  readonly checksumKey: string;
+  readonly returnUrl: string;
+  readonly cancelUrl: string;
+}
+
 const PLACEHOLDER_SECRET = 'doi_gia_tri_nay';
+const PAYOS_DEFAULT_BASE_URL = 'https://api-merchant.payos.vn';
 const MIN_PRODUCTION_SECRET_LENGTH = 32;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -72,16 +99,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const paymentProvider = env['PAYMENT_PROVIDER'] || 'mock';
   const paymentWebhookSecret = env['PAYMENT_WEBHOOK_SECRET'] || null;
+  const payos = loadPayosConfig(env);
+  if (paymentProvider === 'payos' && !payos) {
+    throw new Error(
+      'PAYMENT_PROVIDER=payos cần đủ PAYOS_CLIENT_ID, PAYOS_API_KEY, PAYOS_CHECKSUM_KEY, PAYOS_RETURN_URL, PAYOS_CANCEL_URL (ADR-0016).',
+    );
+  }
   if (appEnv === 'production') {
     if (paymentProvider === 'mock') {
       throw new Error(
         'PAYMENT_PROVIDER=mock không được dùng ở production — ai cũng tự ký được webhook.',
       );
     }
+    // PayOS ký webhook bằng khóa checksum riêng; PAYMENT_WEBHOOK_SECRET chỉ dành cho cổng khác.
     if (
-      !paymentWebhookSecret ||
-      paymentWebhookSecret === PLACEHOLDER_SECRET ||
-      paymentWebhookSecret.length < MIN_PRODUCTION_SECRET_LENGTH
+      paymentProvider !== 'payos' &&
+      (!paymentWebhookSecret ||
+        paymentWebhookSecret === PLACEHOLDER_SECRET ||
+        paymentWebhookSecret.length < MIN_PRODUCTION_SECRET_LENGTH)
     ) {
       throw new Error(
         `PAYMENT_WEBHOOK_SECRET ở production phải có, khác giá trị mẫu và dài tối thiểu ${MIN_PRODUCTION_SECRET_LENGTH} ký tự.`,
@@ -105,6 +140,23 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const swaggerEnabled =
     rawSwagger === 'true' || ((rawSwagger ?? '') === '' && appEnv !== 'production');
 
+  const refundAccountEncKey = parseAesKey(env['REFUND_ACCOUNT_ENC_KEY']);
+  const rawClaimSecret = env['REFUND_CLAIM_TOKEN_SECRET'];
+  const refundClaimTokenSecret =
+    rawClaimSecret && rawClaimSecret !== PLACEHOLDER_SECRET ? rawClaimSecret : null;
+  if (appEnv === 'production') {
+    if (!refundAccountEncKey) {
+      throw new Error(
+        'REFUND_ACCOUNT_ENC_KEY ở production phải là khóa AES-256 32 byte dạng base64 (ADR-0012).',
+      );
+    }
+    if (!refundClaimTokenSecret || refundClaimTokenSecret.length < MIN_PRODUCTION_SECRET_LENGTH) {
+      throw new Error(
+        `REFUND_CLAIM_TOKEN_SECRET ở production phải có và dài tối thiểu ${MIN_PRODUCTION_SECRET_LENGTH} ký tự.`,
+      );
+    }
+  }
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -124,13 +176,50 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     jwtSecret,
     paymentProvider,
     paymentWebhookSecret,
+    payos,
     mqttUrl,
     dispenseSigningKey,
     swaggerEnabled,
+    refundAccountEncKey,
+    refundClaimTokenSecret,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
   };
+}
+
+/** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */
+function loadPayosConfig(env: NodeJS.ProcessEnv): PayosConfig | null {
+  const read = (name: string) => {
+    const value = env[name];
+    return value && value !== PLACEHOLDER_SECRET ? value : null;
+  };
+  const clientId = read('PAYOS_CLIENT_ID');
+  const apiKey = read('PAYOS_API_KEY');
+  const checksumKey = read('PAYOS_CHECKSUM_KEY');
+  const returnUrl = read('PAYOS_RETURN_URL');
+  const cancelUrl = read('PAYOS_CANCEL_URL');
+  if (!clientId || !apiKey || !checksumKey || !returnUrl || !cancelUrl) return null;
+  return {
+    baseUrl: read('PAYOS_BASE_URL') ?? PAYOS_DEFAULT_BASE_URL,
+    clientId,
+    apiKey,
+    checksumKey,
+    returnUrl,
+    cancelUrl,
+  };
+}
+
+/** Khóa AES-256 dạng base64; trống hoặc giá trị mẫu → `null`; sai độ dài → lỗi khởi động. */
+function parseAesKey(raw: string | undefined): Buffer | null {
+  if (!raw || raw === PLACEHOLDER_SECRET) return null;
+  const key = Buffer.from(raw, 'base64');
+  if (key.length !== 32) {
+    throw new Error(
+      `REFUND_ACCOUNT_ENC_KEY phải là đúng 32 byte mã hóa base64, nhận được ${key.length} byte.`,
+    );
+  }
+  return key;
 }
 
 /** Token DI để inject AppConfig trong Nest. */

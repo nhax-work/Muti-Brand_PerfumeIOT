@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **40 bảng**, **25 kiểu enum**.
+Tổng: **41 bảng**, **26 kiểu enum**.
 
 ---
 
@@ -40,6 +40,7 @@ Tổng: **40 bảng**, **25 kiểu enum**.
 | `refill_request_reason` | `LOW_STOCK` · `EXPIRING` · `PRODUCT_CHANGE` |
 | `refill_request_status` | `SUBMITTED` · `ACCEPTED` · `REJECTED` · `SCHEDULED` · `COMPLETED` · `CANCELLED` |
 | `refill_status` | `STARTED` · `COMPLETED` · `CANCELLED` |
+| `refund_claim_status` | `OPEN` · `REFUNDED` · `REJECTED` · `EXPIRED` |
 | `revenue_owner_type` | `BRAND` · `PLATFORM` |
 | `shipment_declaration_status` | `DECLARED` · `RECEIVED` · `DISCREPANCY` · `CANCELLED` |
 | `slot_rental_request_status` | `REQUESTED` · `APPROVED` · `REJECTED` · `CONVERTED` · `CANCELLED` |
@@ -853,6 +854,7 @@ Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc n�
 - `orders_idempotency_key_key` (UNIQUE) — `USING btree (idempotency_key)`
 - `orders_payment_reference_key` (UNIQUE) — `USING btree (payment_reference)`
 - `orders_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_order_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
 
 ### `order_status_histories`
 
@@ -883,7 +885,7 @@ Toàn bộ lịch sử chuyển trạng thái đơn (FR-ORD-18).
 
 ### `payments`
 
-Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của khách (NFR-DAT-04). raw_response chỉ chứa phản hồi của cổng thanh toán đã loại dữ liệu nhạy cảm.
+Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân hàng của khách — tài khoản nhận hoàn tiền chỉ nằm trong refund_claims (NFR-DAT-04, ADR-0012). raw_response chỉ chứa phản hồi của cổng thanh toán đã loại dữ liệu nhạy cảm, kể cả tài khoản người chuyển.
 
 | Cột | Kiểu | Null | Mặc định | Mô tả |
 |---|---|---|---|---|
@@ -892,7 +894,7 @@ Không lưu bất kỳ thông tin thẻ hay tài khoản ngân hàng nào của 
 | `order_id` | `uuid` | có |  | Đơn kiosk được thanh toán. Đúng một trong order_id, rental_checkout_id có giá trị (chk_payment_single_target). |
 | `provider` | `character varying(50)` | — |  |  |
 | `provider_transaction_id` | `character varying(200)` | có |  |  |
-| `provider_reference` | `character varying(200)` | có |  | Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009). |
+| `provider_reference` | `character varying(200)` | có |  | Mã tham chiếu cổng thanh toán gửi lại trong webhook (FR-ORD-14). Cổng có mã riêng thì lưu mã của cổng — PayOS: orderCode (số nguyên, ADR-0016); cổng không có (mock) thì lưu mã hệ thống: đơn kiosk bằng orders.payment_reference, phiên thuê slot mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009). |
 | `amount` | `numeric(19,4)` | — |  |  |
 | `currency` | `character(3)` | — |  |  |
 | `status` | `payment_status` | — | `'PENDING'::payment_status` |  |
@@ -1351,4 +1353,62 @@ Telemetry theo FR-IOT-04, lưu lịch sử phục vụ báo cáo và phân tích
 
 - `idx_sensor_readings` — `USING btree (machine_id, slot_id, measured_at)`
 - `sensor_readings_pkey` (UNIQUE) — `USING btree (id)`
+
+## Bảng chưa xếp nhóm
+
+Những bảng sau có trong CSDL nhưng chưa được xếp vào nhóm nào trong `scripts/gen-data-dictionary.ts`. Bổ sung vào `GROUPS` rồi sinh lại.
+
+### `refund_claims`
+
+Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT được lưu tài khoản ngân hàng của khách (NFR-DAT-04): mã hóa tầng ứng dụng, xóa khi phiếu đóng. Không ghi dữ liệu tài khoản vào audit_logs, log, payment_events hay notifications.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `order_id` | `uuid` | — |  |  |
+| `brand_id` | `uuid` | — |  |  |
+| `status` | `refund_claim_status` | — | `'OPEN'::refund_claim_status` |  |
+| `refund_order` | `boolean` | — |  | TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên. |
+| `amount` | `numeric(19,4)` | — |  | Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa. |
+| `currency` | `character(3)` | — |  |  |
+| `account_ciphertext` | `bytea` | có |  | Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng. |
+| `contact_ciphertext` | `bytea` | có |  | Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa. |
+| `pii_key_version` | `smallint` | — |  | Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ. |
+| `consented_at` | `timestamp with time zone` | — |  | Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại. |
+| `assigned_to` | `uuid` | có |  |  |
+| `assigned_at` | `timestamp with time zone` | có |  |  |
+| `payout_reference` | `character varying(100)` | có |  | Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED. |
+| `resolution_note` | `text` | có |  |  |
+| `resolved_by` | `uuid` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `closed_at` | `timestamp with time zone` | có |  |  |
+| `account_purged_at` | `timestamp with time zone` | có |  |  |
+| `contact_purged_at` | `timestamp with time zone` | có |  |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_refund_claim_account_purged_on_close` — `CHECK (((status = 'OPEN'::refund_claim_status) OR ((account_ciphertext IS NULL) AND (account_purged_at IS NOT NULL))))`
+- `chk_refund_claim_amount_positive` — `CHECK ((amount > (0)::numeric))`
+- `chk_refund_claim_assignment` — `CHECK (((assigned_to IS NULL) = (assigned_at IS NULL)))`
+- `chk_refund_claim_closed_at` — `CHECK (((status = 'OPEN'::refund_claim_status) = (closed_at IS NULL)))`
+- `chk_refund_claim_contact_purge` — `CHECK (((contact_purged_at IS NULL) OR (contact_ciphertext IS NULL)))`
+- `chk_refund_claim_open_has_account` — `CHECK (((status <> 'OPEN'::refund_claim_status) OR (account_ciphertext IS NOT NULL)))`
+- `chk_refund_claim_refunded_has_payout` — `CHECK (((status <> 'REFUNDED'::refund_claim_status) OR (payout_reference IS NOT NULL)))`
+- `chk_refund_claim_rejected_has_note` — `CHECK (((status <> 'REJECTED'::refund_claim_status) OR (resolution_note IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `fk_refund_claim_order_same_brand` — `FOREIGN KEY (order_id, brand_id) REFERENCES orders(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `refund_claims_assigned_to_fkey` — `FOREIGN KEY (assigned_to) REFERENCES users(id)`
+- `refund_claims_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `refund_claims_resolved_by_fkey` — `FOREIGN KEY (resolved_by) REFERENCES users(id)`
+
+**Index**
+
+- `idx_refund_claims_assigned` — `USING btree (assigned_to, status)`
+- `idx_refund_claims_contact_purge` — `USING btree (closed_at) WHERE (contact_ciphertext IS NOT NULL)`
+- `idx_refund_claims_status` — `USING btree (status, created_at)`
+- `refund_claims_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_refund_claim_order` (UNIQUE) — `USING btree (order_id)`
 

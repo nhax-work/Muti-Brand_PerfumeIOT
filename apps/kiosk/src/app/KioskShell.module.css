@@ -130,8 +130,18 @@
   color: #ffffff;
 }
 
-.langGlobe {
-  font-size: 14px;
+.flag {
+  flex-shrink: 0;
+  width: 21px;
+  height: 14px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.langOptionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .langChevron {

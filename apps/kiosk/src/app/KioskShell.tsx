@@ -7,12 +7,15 @@ import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
+import { LanguageFlag } from './LanguageFlag';
 import type { KioskRouteHandle } from './route-handle';
 import styles from './KioskShell.module.css';
 
+// Tên ngôn ngữ viết bằng chính ngôn ngữ đó (endonym) để khách nhận ra dù đang ở ngôn ngữ nào —
+// cố ý không đi qua i18n.
 const LANGUAGE_LABELS: Record<string, string> = {
   vi: 'Tiếng Việt',
-  en: 'Tiếng Anh',
+  en: 'English',
 };
 
 function getLanguageLabel(l: string): string {
@@ -115,7 +118,7 @@ export function KioskShell() {
             aria-haspopup="listbox"
             aria-label="Chọn ngôn ngữ"
           >
-            <span className={styles.langGlobe}>🌐</span>
+            <LanguageFlag locale={locale} />
             <span>{getLanguageLabel(locale)}</span>
             <span className={styles.langChevron}>{isLangOpen ? '▲' : '▼'}</span>
           </button>
@@ -134,7 +137,10 @@ export function KioskShell() {
                   role="option"
                   aria-selected={l === locale}
                 >
-                  <span>{getLanguageLabel(l)}</span>
+                  <span className={styles.langOptionLabel}>
+                    <LanguageFlag locale={l} />
+                    <span>{getLanguageLabel(l)}</span>
+                  </span>
                   {l === locale && <span className={styles.checkIcon}>✓</span>}
                 </button>
               ))}

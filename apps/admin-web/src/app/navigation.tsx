@@ -1,4 +1,9 @@
-import { AppstoreOutlined, DashboardOutlined, ShopOutlined } from '@ant-design/icons';
+import {
+  AppstoreOutlined,
+  DashboardOutlined,
+  RollbackOutlined,
+  ShopOutlined,
+} from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
 import type { ReactNode } from 'react';
@@ -21,6 +26,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/machines',
     label: 'ui.machines',
     icon: <AppstoreOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
+  {
+    path: '/refund-claims',
+    label: 'ui.refundClaims',
+    icon: <RollbackOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
   },
   {

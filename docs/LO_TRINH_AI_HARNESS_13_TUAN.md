@@ -1,8 +1,16 @@
-# Kế hoạch 13 tuần — ScentStation
+# Kế hoạch 12 tuần — ScentStation
 
-14/09/2026 → 13/12/2026 · 4 người · AI coding harness
+14/09/2026 → **06/12/2026** · 4 người · AI coding harness
 
-> **Cập nhật 21/09/2026 — điều chỉnh track phần cứng.** Phần mềm giữ nguyên. Xem mục "Nhật ký thay đổi" ở cuối file.
+> **Cập nhật 15/10/2026 — rút lịch từ 13 xuống 12 tuần, áp ADR-0009 ÷ 0016.** Kết thúc ngày 06/12 thay
+> vì 13/12. Tuần 13 cũ bị bỏ: đóng băng tính năng và kiểm thử dồn vào **T10**, pilot cùng video demo ở
+> **T11**, tài liệu và tập bảo vệ ở **T12**. Phần việc mới của đợt rà soát nghiệp vụ 13/10 (ADR-0012 ÷
+> 0015) và của PayOS (ADR-0016) được chia vào T6–T9. Tính năng chỉ được thêm tới hết T9. Dòng đổi đánh
+> dấu theo ADR, ví dụ **[ADR-0015]**. Xem "Nhật ký thay đổi" ở cuối file.
+>
+> **Tiến độ 15/10/2026:** T5 đã xong toàn bộ, Gate 3 đạt; nhóm **đang làm T6 sớm hơn lịch khoảng một
+> tuần** (theo lịch 15/10 vẫn thuộc T5). Ngày ở bảng "Lịch tuần" là **hạn chót**, không dời theo; tuần
+> đi trước là vùng đệm cho phần việc ADR-0013 ÷ 0015 dồn vào T6.
 >
 > **Cập nhật 30/09/2026 — thanh toán một lần cho nhiều slot (ADR-0008, TV1 đã duyệt 30/09).** Brand Admin chọn nhiều slot vào một **phiên thanh toán** và trả tiền một lần; mỗi slot vẫn là một hóa đơn có số hóa đơn riêng. Thanh toán trỏ tới phiên (`payments.rental_checkout_id`), giờ giữ chỗ nằm trên phiên. Dòng đổi đánh dấu **[ADR-0008]**.
 >
@@ -10,16 +18,31 @@
 >
 > **Cập nhật 29/09/2026 — thuê slot theo gói trả trước (ADR-0006).** Bỏ luồng xin thuê/duyệt tay và phí cố định + ăn chia; thay bằng mua gói 3/6/12 tháng + gói bảo quản, thanh toán một lần, nhận hóa đơn. "Hợp đồng thuê slot" gọi là **hóa đơn thuê slot**. Phần cứng giữ nguyên. Các dòng đổi từ T3 trở đi đánh dấu **[ADR-0006]**; T1–T2 đã xong, giữ nguyên làm lịch sử.
 
+**Ký hiệu trạng thái** (từ T5): ✓ đã xong, có commit · ◐ đang làm · không ký hiệu = chưa làm.
+
+---
+
+## Lịch tuần
+
+| Tuần | Ngày | Tuần | Ngày |
+|---|---|---|---|
+| T1 | 14/09 – 20/09 | T7 | 26/10 – 01/11 |
+| T2 | 21/09 – 27/09 | T8 | 02/11 – 08/11 |
+| T3 | 28/09 – 04/10 | T9 | 09/11 – 15/11 |
+| T4 | 05/10 – 11/10 | T10 | 16/11 – 22/11 |
+| T5 | 12/10 – 18/10 *(đã xong sớm)* | T11 | 23/11 – 29/11 |
+| T6 | 19/10 – 25/10 *(đang làm từ 12/10)* | **T12** | **30/11 – 06/12 — kết thúc** |
+
 ---
 
 ## Phân công
 
 | | Sở hữu |
 |---|---|
-| **TV1** | Harness, CI, contract · ORD, DSP, REV, IOT backend · **Device Simulator (nhận từ TV2 từ T3)** · webhook thanh toán dùng chung cho đơn kiosk và hóa đơn thuê slot **[ADR-0006]** |
+| **TV1** | Harness, CI, contract · ORD, DSP, REV, IOT backend · **Device Simulator (nhận từ TV2 từ T3)** · webhook thanh toán dùng chung cho đơn kiosk và hóa đơn thuê slot **[ADR-0006]** · cổng PayOS **[ADR-0016]** · phiếu khiếu nại hoàn tiền **[ADR-0012]** · dừng bán an toàn phía ORD/DSP **[ADR-0015]** · kỳ chi trả doanh thu **[ADR-0013]** · **RefillRequest (nhận từ TV3 ở T9)** |
 | **TV2** | Phần cứng toàn thời gian: cơ khí, mạch, firmware, hiệu chuẩn |
-| **TV3** | SLT, EXP, RFQ, AUTH, BND, USR · bảng giá gói, mua gói, hóa đơn, bảo hiểm hàng hóa **[ADR-0006]** |
-| **TV4** | INV, ALR, MNT, RPT, PRD, MCH · QA lead · hỗ trợ TV2 1–2 ngày/tuần (T2–T7) |
+| **TV3** | SLT, EXP, RFQ (đặc tả), AUTH, BND, USR · bảng giá gói, mua gói, hóa đơn, bảo hiểm hàng hóa **[ADR-0006]** · tự đăng ký, hợp đồng khung + phụ lục, xác minh pháp nhân **[ADR-0013]** · không gia hạn, trả hàng, đổi slot, giới hạn giữ chỗ **[ADR-0014]** |
+| **TV4** | INV, ALR, MNT, RPT, PRD, MCH · QA lead · hỗ trợ TV2 1–2 ngày/tuần (T2–T7) · `DRAINING`, phiếu nạp dừng bán, màn hủy đơn trên kiosk **[ADR-0015]** · email thông báo tiền/hàng, giấy tờ chính hãng **[ADR-0013]** · phiếu trả hàng phía kho **[ADR-0014]** |
 
 ---
 
@@ -46,13 +69,30 @@
 
 | Ràng buộc | Nội dung |
 |---|---|
-| Luồng Brand Admin | Xem slot trống → chọn slot → chọn gói thuê + gói bảo quản → thanh toán → nhận hóa đơn → cấu hình slot (sản phẩm, giá) |
-| Giữ chỗ | Phiên thanh toán giữ **mọi** slot của nó `RENTAL_CHECKOUT_HOLD_MIN`; mỗi slot là một hóa đơn `DRAFT`; cưỡng chế bằng `excl_slot_rental_overlap`, không bằng code — một slot bị chặn là cả giỏ bị từ chối. Hết giờ chưa trả → phiên hủy, mọi hóa đơn `CANCELLED` **[ADR-0008]** |
-| Kích hoạt | **Lắp chai đầu tiên** chuyển hóa đơn đã thanh toán sang `ACTIVE` (FR-SLT-24) — phụ thuộc INV. Quá `RENTAL_MAX_STOCKING_DAYS` thì tự kích hoạt |
+| Luồng Brand Admin | Xem slot trống → chọn slot → chọn gói thuê + gói bảo quản → **đồng ý phụ lục [ADR-0013]** → thanh toán → nhận hóa đơn → cấu hình slot (sản phẩm, giá) |
+| Giữ chỗ | Phiên thanh toán giữ **mọi** slot của nó `RENTAL_CHECKOUT_HOLD_MIN`; mỗi slot là một hóa đơn `DRAFT`; cưỡng chế bằng `excl_slot_rental_overlap`, không bằng code — một slot bị chặn là cả giỏ bị từ chối. Hết giờ chưa trả → phiên hủy, mọi hóa đơn `CANCELLED` **[ADR-0008]**. Một thương hiệu giữ tối đa `BRAND_MAX_HELD_SLOTS` slot chưa thanh toán → `HOLD_LIMIT_REACHED` **[ADR-0014]** |
+| Kích hoạt | **Lắp chai đầu tiên** chuyển hóa đơn đã thanh toán sang `ACTIVE` (FR-SLT-24) — phụ thuộc INV. Quá `RENTAL_MAX_STOCKING_DAYS` thì tự kích hoạt. Chai thuộc lô chưa có giấy tờ chính hãng được duyệt thì không lắp được (FR-INV-35) **[ADR-0013]** |
 | Thanh toán | Dùng chung bảng `payments` và webhook với đơn kiosk; đúng một trong `order_id`/`rental_checkout_id` — một thanh toán cho cả phiên, webhook cấp số hóa đơn riêng cho từng hóa đơn **[ADR-0008]** |
 | Tiền | Bảng giá chụp vào hóa đơn lúc tạo, không đọc lại danh mục. Không còn phí cố định, không còn ăn chia |
 | Không dùng nữa | `slot_rental_requests`, `slot_rentals.fixed_fee`, `revenue_share_percent`, `request_id` — giữ trong lược đồ, **không** viết code mới dùng chúng |
-| Kích hoạt lượt xịt **[ADR-0007]** | Máy **không** tự xịt khi thanh toán xong: sáng đèn nút slot đích, chờ khách bấm `DISPENSE_PRESS_WINDOW_SEC`. `ACK` = đèn đã sáng. Không bấm → `PRESS_TIMEOUT` → đơn `FORFEITED`. Mỗi máy tối đa một lệnh `CUSTOMER` hiệu lực (`uq_machine_active_customer_command`); đơn trả tiền sau giữ `PAID` chờ lượt. Lệnh chẩn đoán xịt ngay |
+| Kích hoạt lượt xịt **[ADR-0007]** | Máy **không** tự xịt khi thanh toán xong: sáng đèn nút slot đích, chờ khách bấm `DISPENSE_PRESS_WINDOW_SEC`. `ACK` = đèn đã sáng. Không bấm → `PRESS_TIMEOUT` → đơn `FORFEITED`. Mỗi máy tối đa một lệnh `CUSTOMER` hiệu lực (`uq_machine_active_customer_command`); đơn trả tiền sau giữ `PAID` chờ lượt **tối đa `PAID_QUEUE_MAX_SEC` [ADR-0015]**. Lệnh chẩn đoán xịt ngay |
+
+---
+
+## Ràng buộc phần mềm từ ADR-0009 ÷ 0016
+
+Đọc trước khi giao việc ORD, DSP, SLT, EXP, INV, MCH/MNT hay kiosk cho AI harness.
+
+| ADR | Ràng buộc |
+|---|---|
+| **0009** | Cột ảnh chụp của `orders` (`revenue_owner`, `amount`, `brand_id`, `slot_rental_id`…) bị trigger `chk_order_snapshot_immutable` chặn UPDATE — code chỉ ghi cột trạng thái. `payments (provider, provider_reference)` là duy nhất |
+| **0010** | Agent **được** viết test trọng yếu, mang đúng mã FR. PR có test trọng yếu cần người review riêng phần test, đối chiếu assert với AC. Không mock đúng cơ chế cần chứng minh |
+| **0011** | `REJECT CMD_DUPLICATE` bị bỏ qua — không khép lệnh gốc, không đổi đơn |
+| **0012** | Hoàn tiền cho khách **thủ công qua phiếu khiếu nại** (QR sự cố trên kiosk). Tài khoản nhận hoàn tiền chỉ nằm trong `refund_claims`, mã hóa AES-256-GCM (`REFUND_ACCOUNT_ENC_KEY`), chỉ Operations Staff được phân công xem sau khi xác thực lại, xóa khi đóng phiếu. Không ghi vào log, `audit_logs`, `payment_events`, email. `POST /orders/{id}/refund` đã `deprecated` |
+| **0013** | Thương hiệu **tự đăng ký** → xác minh email → đồng ý hợp đồng khung → thuê ngay. Chưa đồng ý hợp đồng khung thì không tạo được phiên (`AGREEMENT_NOT_ACCEPTED`); mỗi phiên có phụ lục tự sinh phải đồng ý trước khi trả tiền. Doanh thu thương hiệu chi trả **theo tháng** `DRAFT → CONFIRMED → PAID`, tính đơn `BRAND` ở `DISPENSED` + `FORFEITED`; phí PayOS và khoản hoàn do nền tảng chịu. Chưa xác minh pháp nhân thì không chuyển `PAID` (`BRAND_NOT_VERIFIED`). Thông báo về tiền và hàng gửi **email** (FR-ALR-16, mức M). OTP xác nhận (FR-SLT-51) là mức S — **không làm** trong lịch 12 tuần |
+| **0014** | Ân hạn mặc định `GRACE_PERIOD_DEFAULT_DAYS` = 7. Thương hiệu được **báo không gia hạn** bất cứ lúc nào trước hạn → không ân hạn, không phí, tháo chai → phiếu trả hàng → chai `RETURNED_TO_BRAND`; quá `RETURN_PICKUP_MAX_DAYS` chưa nhận thì chuyển sở hữu như thanh lý. Được **đổi slot cùng giá** một lần trong `SLOT_SWAP_WINDOW_HOURS` nếu chưa lắp chai; không hoàn tiền |
+| **0015** | Mỗi máy **một đơn chờ thanh toán** (`uq_machine_open_order`); kiosk **hủy đơn + hủy link PayOS** ở mọi lối thoát màn QR; tiền về sau khi hủy → `REFUND_PENDING`. Đơn `PAID` chờ lượt quá `PAID_QUEUE_MAX_SEC` → `FAILED` `QUEUE_TIMEOUT` + kiểm tra thủ công. Từ chối **trước** `ACK` cũng gắn cờ kiểm tra thủ công. `CONSECUTIVE_FAIL_ALERT` lỗi liên tiếp → slot tự `MAINTENANCE`. Phiếu nạp mở → **cả máy** dừng nhận đơn. Yêu cầu bảo trì → máy `DRAINING` phục vụ nốt rồi mới `MAINTENANCE` (`DRAINING` chỉ có ở backend, `mqtt.md` không đổi chế độ) |
+| **0016** | Cổng là **PayOS, không có sandbox**. CI dùng webhook mẫu ký bằng khóa test; nhóm chạy lượt thật với số tiền nhỏ theo `docs/PAYOS.md`. Cổng `mock` giữ cho dev, test và Integration Day. Webhook chữ ký đúng mà mã tham chiếu lạ → 200 `UNKNOWN_REFERENCE`. Adapter bỏ `counterAccount*` trước khi lưu |
 
 ---
 
@@ -91,7 +131,7 @@
 
 ---
 
-## TUẦN 3 — Cô lập, mô phỏng và chốt mô hình thuê *(đang chạy)*
+## TUẦN 3 — Cô lập, mô phỏng và chốt mô hình thuê *(đã qua)*
 
 | TV | Việc | Tiêu chí xong |
 |---|---|---|
@@ -117,11 +157,11 @@
 
 ---
 
-## TUẦN 4 — Đơn hàng và mua gói thuê
+## TUẦN 4 — Đơn hàng và mua gói thuê *(đã qua)*
 
 | TV | Việc |
 |---|---|
-| TV1 | Order state machine · webhook idempotent · `revenue_owner` · **webhook nhận cả payment có `rental_checkout_id`** (chỉ phân nhánh, chưa xử lý nghiệp vụ phiên/hóa đơn) **[ADR-0006, ADR-0008]** |
+| TV1 | Order state machine · webhook idempotent · `revenue_owner` · **webhook nhận cả payment có `rental_checkout_id`** (chỉ phân nhánh, chưa xử lý nghiệp vụ phiên/hóa đơn) **[ADR-0006, ADR-0008]** · ảnh chụp đơn bất biến bằng trigger CSDL, mã tham chiếu thanh toán duy nhất **[ADR-0009]** |
 | TV3 | Mua gói: xem bảng giá cho slot (FR-SLT-34) · checkout `POST /rental-checkouts` tạo phiên + một hóa đơn DRAFT mỗi slot trong một transaction, chụp giá, tính tiền, giữ chỗ cả giỏ (FR-SLT-33, 35, 36) **[ADR-0008]** · chống chồng lấn · danh sách và chi tiết hóa đơn (FR-SLT-40, 41) **[ADR-0006]** |
 | TV3 | Cấu hình slot sau thanh toán: gán/đổi sản phẩm (FR-SLT-27÷29), đặt giá tự do (FR-SLT-08) — slot chưa có sản phẩm **hoặc** chưa có giá không nhận đơn **[ADR-0006]** |
 | TV4 | Kiosk đa thương hiệu: danh mục, chi tiết sản phẩm |
@@ -135,48 +175,66 @@
 
 ---
 
-## TUẦN 5 — Lệnh xịt và thanh toán hóa đơn
+## TUẦN 5 — Lệnh xịt, thanh toán hóa đơn và rà soát nghiệp vụ *(đã xong)*
 
 | TV | Việc |
 |---|---|
-| TV1 | `DispenseCommand` có chữ ký và TTL · mock payment provider **dùng chung cho đơn kiosk và hóa đơn** · simulator bổ sung chữ ký, TTL, chống lặp **[ADR-0006]** |
-| TV1 | Luồng nút bấm phía backend: `ACK` = đèn sáng, `PRESS_TIMEOUT` → đơn `FORFEITED` (không kiểm tra thủ công), mốc `UNKNOWN` sau ACK, một lệnh `CUSTOMER` mỗi máy + đơn chờ lượt · simulator giả lập **bấm nút / không bấm / bấm nhầm slot** **[ADR-0007]** |
-| TV3 | Thanh toán phiên: `POST /rental-checkouts/{id}/payments` (một PENDING/phiên) · xử lý webhook cho phiên: `paid_at` phiên và mọi hóa đơn, cấp số hóa đơn riêng từng hóa đơn, tiền về sau khi hủy → `REFUND_PENDING` (FR-SLT-37, 38) **[ADR-0008]** **[ADR-0006]** |
-| TV3 | Job hủy phiên hết giờ giữ chỗ — cả phiên và mọi hóa đơn (FR-SLT-39), có bù sau downtime · một thông báo thanh toán thành công mỗi phiên (FR-SLT-43) **[ADR-0006, ADR-0008]** |
-| TV3 | Màn hình web quản trị cho Brand Admin: slot trống → chọn một hoặc nhiều slot, gói cho từng slot → xem tổng → thanh toán một lần → các hóa đơn → cấu hình slot **[ADR-0006, ADR-0008]** |
-| TV4 | Kiosk: tạo đơn, hiện QR, theo dõi trạng thái · **màn điều khoản bấm nút trước QR, "Mời bấm nút số N" + đếm ngược, "Máy đang phục vụ khách khác" (`MACHINE_BUSY`), "Đang chờ lượt", "Hết thời gian bấm nút"** (FR-ORD-24÷27) **[ADR-0007]** |
-| TV2 | Thử bơm không chổi than: áp bít đầu ra, chất lượng sương với béc 0,15mm |
-| TV2 | Dựng ngăn thứ hai |
-| TV2 | Firmware: nhận lệnh MQTT, kiểm chữ ký, TTL, chống lặp, trả kết quả · trần 800ms bằng `esp_timer` cho cả van và bơm · **sáng đèn nút slot đích, chờ bấm `press_window_sec` bằng timer phần cứng, chống dội phím, bỏ qua nút slot khác, kiểm an toàn lần hai lúc bấm, `PRESS_TIMEOUT`, không lưu trạng thái chờ bấm qua reset; lệnh chẩn đoán xịt ngay** (FR-DSP-21÷27) **[ADR-0007]** |
-| Nhóm | Chốt kích thước bơm, van, bình, vách ngăn → **đặt gia công vỏ máy** (mất 1–2 tuần) |
+| TV1 | ✓ `DispenseCommand` có chữ ký và TTL · mock payment provider **dùng chung cho đơn kiosk và hóa đơn** · simulator bổ sung chữ ký, TTL, chống lặp **[ADR-0006]** |
+| TV1 | ✓ Luồng nút bấm phía backend: `ACK` = đèn sáng, `PRESS_TIMEOUT` → đơn `FORFEITED`, mốc `UNKNOWN` sau ACK, một lệnh `CUSTOMER` mỗi máy + đơn chờ lượt · simulator giả lập **bấm nút / không bấm / bấm nhầm slot** **[ADR-0007]** · `CMD_DUPLICATE` không khép lệnh gốc **[ADR-0011]** |
+| TV1 | ✓ Test trọng yếu idempotency webhook và TTL lệnh xịt do agent viết, người review **[ADR-0010]** |
+| TV1 | ✓ Danh sách đơn cần kiểm tra thủ công `GET /orders/manual-review` · ✓ **phiếu khiếu nại hoàn tiền trọn gói** — backend, mã hóa tài khoản, job hết hạn/xóa liên hệ, QR sự cố trên kiosk, trang khiếu nại công khai, màn xử lý phiếu (FR-ORD-20, 21, 28÷32) **[ADR-0012]** |
+| TV1 | ✓ **Kéo sớm từ T6:** cổng PayOS cho đơn kiosk và phiên thuê slot — ký yêu cầu, kiểm chữ ký webhook, `orderCode`, bỏ `counterAccount*` **[ADR-0016]** |
+| TV1 | ✓ Ghi ADR-0013, 0014, 0015 (đã duyệt 13/10) · áp đặc tả: FR, `errors.md`, `constraints.md`, glossary (14/10) — contract chuyển sang T6 |
+| TV3 | ✓ Thanh toán phiên `POST /rental-checkouts/{id}/payments` · webhook cho phiên: `paid_at`, số hóa đơn riêng từng hóa đơn, tiền về sau khi hủy → `REFUND_PENDING` (FR-SLT-37, 38) · job hủy phiên hết giờ (FR-SLT-39) · màn hình mua gói nhiều slot trên web quản trị **[ADR-0006, ADR-0008]** |
+| TV4 | ✓ Kiosk: tạo đơn, hiện QR, theo dõi trạng thái · màn điều khoản bấm nút trước QR, "Mời bấm nút số N" + đếm ngược, `MACHINE_BUSY`, "Đang chờ lượt", "Hết thời gian bấm nút" (FR-ORD-24÷27) **[ADR-0007]** |
+| TV2 | ✓ Thử bơm không chổi than: áp bít đầu ra, chất lượng sương với béc 0,15mm |
+| TV2 | ✓ Dựng ngăn thứ hai |
+| TV2 | ✓ Firmware: nhận lệnh MQTT, kiểm chữ ký, TTL, chống lặp, trả kết quả · trần 800ms bằng `esp_timer` cho cả van và bơm · **sáng đèn nút slot đích, chờ bấm `press_window_sec` bằng timer phần cứng, chống dội phím, bỏ qua nút slot khác, kiểm an toàn lần hai lúc bấm, `PRESS_TIMEOUT`, không lưu trạng thái chờ bấm qua reset; lệnh chẩn đoán xịt ngay** (FR-DSP-21÷27) **[ADR-0007]** |
+| Nhóm | ✓ Chốt kích thước bơm, van, bình, vách ngăn → **đặt gia công vỏ máy** (mất 1–2 tuần) |
 
-**Gate 3:** E2E chạy với mock payment + simulator · webhook gửi lại 5 lần chỉ tạo 1 lệnh · **bấm nút thì xịt đúng 1 lần; không bấm thì đèn tắt sau 60 giây và đơn `FORFEITED`; đơn thứ hai trong lúc chờ bấm bị `MACHINE_BUSY`** **[ADR-0007]** · **Brand Admin mua gói bằng mock payment: giữ chỗ → thanh toán → có số hóa đơn; hóa đơn không trả tiền tự hủy sau `RENTAL_CHECKOUT_HOLD_MIN`; webhook hóa đơn gửi lại 5 lần chỉ ghi nhận 1 lần** **[ADR-0006]** · **2 ngăn thật xịt đúng ngăn, 2 ngăn còn lại qua simulator**
+**Gate 3 — ✓ đạt:** E2E chạy với mock payment + simulator · webhook gửi lại 5 lần chỉ tạo 1 lệnh · **bấm nút thì xịt đúng 1 lần; không bấm thì đèn tắt sau 60 giây và đơn `FORFEITED`; đơn thứ hai trong lúc chờ bấm bị `MACHINE_BUSY`** **[ADR-0007]** · **Brand Admin mua gói bằng mock payment: giữ chỗ → thanh toán → có số hóa đơn; hóa đơn không trả tiền tự hủy sau `RENTAL_CHECKOUT_HOLD_MIN`; webhook hóa đơn gửi lại 5 lần chỉ ghi nhận 1 lần** **[ADR-0006]** · **2 ngăn thật xịt đúng ngăn, 2 ngăn còn lại qua simulator**
 
 ---
 
-## TUẦN 6 — Thanh toán thật
+## TUẦN 6 — Contract mới, PayOS thật và dừng bán an toàn *(đang chạy — bắt đầu sớm từ 12/10, hạn 25/10)*
+
+Việc "thay mock bằng sandbox" của tuần này đã làm xong sớm ở T5 (ADR-0016). PayOS không có sandbox, nên
+thời gian giải phóng dùng cho phần việc ADR-0013 ÷ 0015. Tuần này nặng hơn tuần thường, bù lại nhóm có
+gần hai tuần lịch (12/10 → 25/10) nhờ đi trước.
+
+**Mốc giữa tuần — PR contract ADR-0013/14/15 merge trước thứ 6 16/10.** Mỗi máy một đơn chờ thanh toán,
+tự đăng ký, hợp đồng khung ở tuần này — và không gia hạn, đổi slot, `DRAINING` ở các tuần sau — chờ
+bước này.
 
 | TV | Việc |
 |---|---|
-| TV1+TV4 | Thay mock bằng sandbox thật · xác minh chữ ký, số tiền, mã tham chiếu — **cho cả đơn kiosk và hóa đơn thuê slot** **[ADR-0006]** |
-| TV3 | Viết AC cho RFQ (12 FR) |
-| TV3 | `RefillRequest` · thông báo hết hạn T−7 và T−3 **kèm nút gia hạn (mua gói mới)** **[ADR-0006]** |
+| TV1 | **PR contract ADR-0013/0014/0015**: migration enum riêng (`machine_operating_mode` + `DRAINING`, `bottle_status` + `RETURNED_TO_BRAND`) · `uq_machine_open_order` · cột mới `brands`, `slot_rentals`, `rental_checkouts` · bảng `agreement_versions`, `agreement_acceptances`, `email_verifications`, `brand_payouts`, `bottle_returns` · endpoint mới trong `openapi.yaml` · `mqtt.md` §6 (từ chối trước `ACK` gắn cờ). Kiểm cả DB trống lẫn DB có dữ liệu, `make test-contract` xanh **[ADR-0013, 0014, 0015]** |
+| TV1+TV3+TV4 | Viết AC cho 28 FR mới, soát AC của FR viết lại — xong trước khi giao agent hiện thực. TV1: FR-ORD-34, 35, soát FR-ORD-19 · TV3: FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56, FR-EXP-23 ÷ 28, soát FR-USR-01, 05, FR-SLT-17, 18, 44, FR-EXP-06, 07, FR-AUTH-09 · TV4: FR-INV-32 ÷ 35, FR-MCH-18, FR-MNT-17, FR-ALR-16, soát FR-INV-04, 30, 31, FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04 **[ADR-0013, 0014, 0015]** |
+| TV1 | ◐ Hủy đơn từ kiosk `POST /kiosk/orders/{id}/cancel` + hủy link PayOS, tiền về sau khi hủy → `REFUND_PENDING` (FR-ORD-33) **[ADR-0015]** |
+| TV1 | **Lượt chạy PayOS thật với số tiền nhỏ** theo `docs/PAYOS.md` — đơn kiosk và phiên thuê slot; đăng ký URL webhook (giao dịch mẫu trả 200) **[ADR-0016]** |
+| TV1 | Dừng bán an toàn phía ORD/DSP: mỗi máy một đơn chờ thanh toán (FR-ORD-35) · job chờ lượt quá `PAID_QUEUE_MAX_SEC` → `FAILED` `QUEUE_TIMEOUT` có bù sau downtime (FR-ORD-34) · từ chối trước `ACK` gắn cờ kiểm tra thủ công (FR-ORD-19) · `CONSECUTIVE_FAIL_ALERT` lỗi liên tiếp → slot tự `MAINTENANCE` + AuditLog (FR-ALR-04) · simulator thêm kịch bản từ chối trước `ACK`, lỗi liên tiếp **[ADR-0015]** |
+| TV3 | Thương hiệu tự đăng ký + xác minh email (FR-USR-06, 07; sửa FR-USR-01, 05) · hợp đồng khung có phiên bản, đồng ý một lần kèm phiên bản, người, thời điểm, IP, mã băm (FR-SLT-48, 49) · `POST /rental-checkouts` từ chối khi chưa xác minh email hoặc chưa đồng ý (`EMAIL_NOT_VERIFIED`, `AGREEMENT_NOT_ACCEPTED`) · giới hạn tần suất đăng ký **[ADR-0013]** |
+| TV3 | Viết AC cho RFQ (12 FR) — để TV1 hiện thực ở T9 |
+| TV4 | Kiosk theo ADR-0015: gọi hủy đơn ở **mọi** lối thoát màn QR (khách xác nhận rời, phiên kiosk reset, hết giờ) · `MACHINE_BUSY` khi máy đã có đơn chờ thanh toán · màn sự cố `QUEUE_TIMEOUT` kèm QR khiếu nại · màn tạm ngưng khi `MACHINE_IN_MAINTENANCE` **[ADR-0015]** |
 | TV2+TV4 | Hiệu chuẩn lượng xịt từng ngăn bằng cân 0,01g · lưu tham số hiệu chuẩn vào NVS |
 | TV2 | Chuyển mạch từ breadboard sang **bo hàn lỗ đa năng** |
 | TV2 | Lắp thử vách ngăn và quạt hút khoang ướt |
 
 ---
 
-## TUẦN 7 — Luồng vàng
+## TUẦN 7 — Luồng vàng *(26/10 – 01/11)*
 
 | TV | Việc |
 |---|---|
-| Nhóm | Chạy luồng vàng trên máy vật lý |
+| Nhóm | Chạy luồng vàng trên máy vật lý với **PayOS thật, số tiền nhỏ** **[ADR-0016]** |
 | TV2 | Kiểm thử 500 chu kỳ/ngăn · nút dừng khẩn cấp cắt cứng đường 12V |
-| TV1 | Xử lý timeout, kết quả không xác định |
-| TV3 | Mua gói bằng **sandbox thật** trên web quản trị, chạy song song luồng vàng **[ADR-0006]** |
+| TV1 | Xử lý timeout, kết quả không xác định · **chốt chặn "máy dừng nhận đơn" dùng chung trong ORD/DSP**: máy `DRAINING`/`MAINTENANCE` hoặc có phiếu nạp mở → `MACHINE_IN_MAINTENANCE`, không ghi lệnh cho đơn chờ lượt; điều kiện `DRAINING` tự sang `MAINTENANCE` (hết lệnh `CUSTOMER`, đơn chờ thanh toán, đơn chờ lượt) **[ADR-0015]** |
+| TV3 | Phụ lục tự sinh cho mỗi phiên từ ảnh chụp giá, đồng ý trước khi thanh toán (FR-SLT-50) · giới hạn `BRAND_MAX_HELD_SLOTS` (FR-SLT-56) · đổi slot cùng giá trong `SLOT_SWAP_WINDOW_HOURS` (FR-SLT-55) **[ADR-0013, ADR-0014]** |
+| TV3 | Mua gói bằng **PayOS thật** trên web quản trị, chạy song song luồng vàng — thương hiệu tự đăng ký → hợp đồng khung → phụ lục → trả tiền **[ADR-0006, ADR-0013, ADR-0016]** |
+| TV4 | `DRAINING` phía MCH/MNT: yêu cầu bảo trì đưa máy vào `DRAINING`, ép chuyển ngay kèm lý do bắt buộc, màn quản trị hiển thị chế độ (FR-MNT-05, 06, FR-MCH-09) **[ADR-0015]** |
+| TV4 | Hạ tầng email cho thông báo tiền/hàng, lưu trạng thái gửi làm bằng chứng (FR-ALR-16) — nối vào thông báo thanh toán thuê slot (FR-SLT-43) trước; các thông báo khác nối dần ở T8–T9 **[ADR-0013]** |
 
-**Gate 4 — MỐC SỐNG CÒN:** chọn hương → QR sandbox → thanh toán → xác minh webhook → phát lệnh có chữ ký → **đèn nút sáng → khách bấm** → máy thật xịt đúng 1 lần → kết quả về → đơn `DISPENSED` **[ADR-0007]**
+**Gate 4 — MỐC SỐNG CÒN:** chọn hương → **QR PayOS thật** → thanh toán → xác minh webhook → phát lệnh có chữ ký → **đèn nút sáng → khách bấm** → máy thật xịt đúng 1 lần → kết quả về → đơn `DISPENSED` **[ADR-0007, ADR-0016]** · kèm hai nhánh an toàn: **khách rời màn QR → đơn hủy, link PayOS bị hủy** và **xịt lỗi → kiosk hiện QR sự cố → gửi được phiếu khiếu nại** **[ADR-0012, ADR-0015]**
 
 > **[ADR-0006]** Slot trong luồng vàng dùng hóa đơn `ACTIVE` từ seed. Hóa đơn mua qua web chỉ tự kích
 > hoạt khi **lắp chai đầu tiên** (FR-SLT-24), mà luồng lắp chai thuộc INV ở T8 — nên G4 **không** phụ
@@ -184,89 +242,85 @@
 
 **Điều kiện dịch:** chạy bằng nước hoa thật **chỉ khi** đã có đủ bơm không chổi than, vách ngăn hai khoang và quạt hút. Thiếu bất kỳ thứ nào → chạy bằng dịch giả lập và ghi rõ trong biên bản.
 
-**Trượt Gate 4 → bỏ hết FR ưu tiên S, TV4 chuyển sang hỗ trợ phần cứng toàn thời gian đến khi đạt.**
+**Trượt Gate 4 → bỏ hết FR ưu tiên S, TV4 chuyển sang hỗ trợ phần cứng toàn thời gian đến khi đạt.** Lịch 12 tuần không còn tuần dự phòng: trượt G4 quá thứ 6 của T8 thì cắt tiếp theo thứ tự ở "Phạm vi cắt khi rút lịch".
 
 ---
 
-## TUẦN 8 — Tồn kho, cảnh báo và kích hoạt hóa đơn
+## TUẦN 8 — Tồn kho, cảnh báo, kích hoạt hóa đơn và chi trả doanh thu *(02/11 – 08/11)*
 
 | TV | Việc |
 |---|---|
-| TV3 | Ân hạn: chuyển trạng thái GRACE, tính phí lưu kho · **gia hạn tự phục vụ: mua gói mới khi EXPIRING/GRACE, phí ân hạn cộng vào hóa đơn gia hạn, hóa đơn cũ → RENEWED đúng lúc hóa đơn mới hiệu lực** (FR-SLT-12, FR-EXP-12, 13) **[ADR-0006]** |
-| TV3+TV4 | **Kích hoạt hóa đơn khi lắp chai đầu tiên** (FR-SLT-24): TV4 gọi service SLT trong cùng transaction đóng phiếu nạp · job tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42) · thông báo hóa đơn bắt đầu hiệu lực **[ADR-0006]** |
-| TV1 | ~~Quyết toán hai luồng doanh thu~~ → **Bảng đối soát doanh thu chuyển trả cho thương hiệu** (FR-SLT-17, 18 — không còn phí thuê, ăn chia) · tách doanh thu BRAND/PLATFORM (FR-REV) **[ADR-0006]** |
-| TV4 | INV: chai, lô, phiên nạp, checklist · brand khai báo lô hàng gửi kho + Inventory Staff đối soát (FR-INV-22÷28) · phiếu nạp mở trước khi thao tác (FR-INV-29÷31) · **chỉ lắp chai vào slot có hóa đơn đã thanh toán** **[ADR-0006]** · ALR: 5 loại cảnh báo, cửa mở quá hạn phải loại trừ cả phiên nạp đang mở, không chỉ phiên bảo trì (FR-ALR-03 đã sửa) |
+| TV3 | Ân hạn: chuyển `GRACE` với thời hạn mặc định `GRACE_PERIOD_DEFAULT_DAYS`, Super Admin sửa được từng hóa đơn (FR-EXP-06, 07), tính phí lưu kho · **gia hạn tự phục vụ: mua gói mới khi EXPIRING/GRACE, phí ân hạn cộng vào hóa đơn gia hạn, hóa đơn cũ → RENEWED đúng lúc hóa đơn mới hiệu lực** (FR-SLT-12, FR-EXP-12, 13) **[ADR-0006, ADR-0014]** |
+| TV3 | **Báo không gia hạn** kèm cách nhận hàng, rút lại trước hạn, hóa đơn không vào `GRACE`, không phí (FR-EXP-23 ÷ 25) · thông báo hết hạn T−7 và T−3 **kèm nút gia hạn và nút không gia hạn**, gửi email (FR-ALR-16) **[ADR-0006, ADR-0013, ADR-0014]** |
+| TV3 | Thương hiệu khai mã số thuế, giấy phép, tài khoản nhận doanh thu (mã hóa) · Super Admin ghi nhận xác minh pháp nhân (FR-BND-09, 10) **[ADR-0013]** |
+| TV3+TV4 | **Kích hoạt hóa đơn khi lắp chai đầu tiên** (FR-SLT-24): TV4 gọi service SLT trong cùng transaction đóng phiếu nạp · job tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42) · thông báo hóa đơn bắt đầu hiệu lực, gửi email **[ADR-0006, ADR-0013]** |
+| TV1 | ~~Bảng đối soát doanh thu chuyển trả~~ → **Kỳ chi trả doanh thu hằng tháng** `DRAFT → CONFIRMED → PAID`: tính đơn `BRAND` ở `DISPENSED` + `FORFEITED`, loại `FAILED`/`REFUND_PENDING`/`REFUNDED`; chuyển `PAID` kèm mã giao dịch sau xác thực lại, chặn khi chưa xác minh pháp nhân (`BRAND_NOT_VERIFIED`); khiếu nại số liệu trên kỳ `CONFIRMED` (FR-SLT-17, 18, 52 ÷ 54) · tách doanh thu BRAND/PLATFORM (FR-REV) **[ADR-0006, ADR-0013]** |
+| TV1 | Test trọng yếu `revenue_owner` (`test_revenue_attribution`, chưa có): gồm UPDATE `revenue_owner` bị trigger chặn **[ADR-0009, ADR-0010]** |
+| TV4 | INV: chai, lô, phiên nạp, checklist · brand khai báo lô hàng gửi kho + Inventory Staff đối soát (FR-INV-22÷28) · **giấy tờ chính hãng của lô: nộp, duyệt/từ chối, chặn lắp chai lô chưa duyệt** (FR-INV-33 ÷ 35) **[ADR-0013]** · phiếu nạp mở trước khi thao tác (FR-INV-29÷31) — **mở phiếu thì cả máy dừng nhận đơn qua chốt chặn của TV1; từ chối mở khi máy còn lệnh hoặc đơn chờ thanh toán** (FR-INV-30, 32) **[ADR-0015]** · **chỉ lắp chai vào slot có hóa đơn đã thanh toán** **[ADR-0006]** · ALR: 5 loại cảnh báo, cửa mở quá hạn loại trừ cả phiên nạp đang mở (FR-ALR-03 đã sửa) |
 | TV2 | **Vẽ PCB đế** (chỗ cắm ESP32 DevKit, module MOSFET, module hạ áp, domino cho từng tải) và gửi gia công |
 | TV2 | Load cell + HX711 |
 
 ---
 
-## TUẦN 9 — Thanh lý, bảo hiểm hàng hóa và dashboard
+## TUẦN 9 — Thanh lý, trả hàng, bảo hiểm hàng hóa và dashboard · **hạn chót thêm tính năng** *(09/11 – 15/11)*
 
 | TV | Việc |
 |---|---|
 | TV3 | Thanh lý: chuyển quyền sở hữu chai, đóng hóa đơn |
-| TV3 | **Bảo hiểm hàng hóa:** tính bồi thường khi chai chuyển DAMAGED (FR-SLT-44) · Super Admin ghi nhận chi trả có xác thực lại (FR-SLT-45) · Brand Admin xem khoản bồi thường (FR-SLT-46) **[ADR-0006]** |
-| TV1 | Test biên `revenue_owner` quanh mốc thanh lý |
-| TV1 | Tối ưu truy vấn báo cáo · bổ sung index theo EXPLAIN |
-| TV4 | MNT: phiếu bảo trì · Dashboard · AuditLog · **báo cáo doanh thu bán gói (FR-SLT-47)** **[ADR-0006]** |
-| TV2 | Lắp PCB và cơ cấu vào vỏ máy · lên 4 ngăn thật nếu còn thời gian và ngân sách |
+| TV3+TV4 | **Trả hàng khi không gia hạn:** tháo chai → phiếu trả hàng ghi khối lượng còn lại, chai `RETURNED_TO_BRAND`, thông báo kèm danh sách chai (FR-EXP-26) · bàn giao: người nhận, thời điểm, mã vận đơn (FR-EXP-27) · job quá `RETURN_PICKUP_MAX_DAYS` chuyển sở hữu như thanh lý, báo trước 3 ngày, có bù sau downtime (FR-EXP-28) · hóa đơn `CLOSED`. TV3 phần SLT/EXP và job; TV4 màn hình và thao tác kho **[ADR-0014]** |
+| TV3 | **Bảo hiểm hàng hóa:** tính bồi thường khi chai chuyển DAMAGED theo `coverage_cap` (FR-SLT-44) · Super Admin ghi nhận chi trả có xác thực lại (FR-SLT-45) · Brand Admin xem khoản bồi thường (FR-SLT-46) **[ADR-0006, ADR-0013]** |
+| TV1 | **RefillRequest** (nhận từ TV3, theo AC TV3 viết ở T6) |
+| TV1 | Test biên `revenue_owner` quanh mốc thanh lý · tối ưu truy vấn báo cáo · bổ sung index theo EXPLAIN · test trọng yếu job chuyển trạng thái còn thiếu (`test_rental_scheduler`: tự kích hoạt, ân hạn, quá hạn nhận hàng) |
+| TV4 | MNT: phiếu bảo trì · Dashboard · AuditLog · **báo cáo doanh thu bán gói (FR-SLT-47)** **[ADR-0006]** · tỉ lệ thành công / thất bại / `FORFEITED` **theo từng máy** (FR-RPT-04) **[ADR-0015]** |
+| TV2 | Lắp PCB và cơ cấu vào vỏ máy · ~~lên 4 ngăn thật nếu còn thời gian~~ **bỏ — giữ 2 ngăn thật + 2 simulator** |
+| Nhóm | Mỗi người nộp **dàn ý chương báo cáo** của mình (xem T12) — để T12 chỉ còn hoàn thiện, không viết từ đầu |
 
-**Gate 5:** **hóa đơn đi hết vòng đời: mua gói → thanh toán sandbox → lắp chai kích hoạt → bán → hết hạn → ân hạn → gia hạn hoặc LIQUIDATED** **[ADR-0006]** · doanh thu tách đúng hai nguồn · refill request hoàn tất · **một chai DAMAGED sinh đúng một khoản bồi thường theo gói**
-
----
-
-## TUẦN 10 — Đóng băng tính năng, kiểm thử
-
-Từ tuần này chỉ sửa lỗi, không thêm chức năng.
-
-| TV | Việc |
-|---|---|
-| TV1 | Test cô lập chéo trên 100% endpoint — **gồm hóa đơn, bồi thường, bảng giá cho slot** · test tranh chấp đồng thời **[ADR-0006]** |
-| TV3 | Kịch bản lỗi: webhook lặp, sai chữ ký, mất mạng, hóa đơn hết hạn giữa lúc có đơn chờ · **hai thương hiệu giữ chỗ cùng slot · tiền về sau khi hóa đơn đã hủy · đổi bảng giá khi hóa đơn đang chờ thanh toán** **[ADR-0006]** |
-| TV4 | UAT với người ngoài nhóm — **gồm luồng Brand Admin mua gói** · bắt đầu viết Test Report **[ADR-0006]** |
-| TV2 | Kiểm thử phần cứng tiếp tục tới 1.000 chu kỳ |
+**Gate 5:** **hóa đơn đi hết vòng đời theo cả hai nhánh, bắt đầu từ thương hiệu tự đăng ký: đăng ký → hợp đồng khung → phụ lục → thanh toán PayOS → lắp chai kích hoạt → bán → (a) hết hạn → ân hạn 7 ngày → gia hạn hoặc LIQUIDATED; (b) báo không gia hạn → tháo chai → trả hàng → CLOSED** **[ADR-0006, ADR-0013, ADR-0014]** · doanh thu tách đúng hai nguồn · **một kỳ chi trả tháng đi tới `PAID` cho thương hiệu đã xác minh, kỳ của thương hiệu chưa xác minh bị chặn** **[ADR-0013]** · refill request hoàn tất · **một chai DAMAGED sinh đúng một khoản bồi thường theo gói**
 
 ---
 
-## TUẦN 11 — Hoàn tất kiểm thử
+## TUẦN 10 — Đóng băng tính năng, kiểm thử và bảo mật *(16/11 – 22/11)*
+
+Từ tuần này chỉ sửa lỗi, không thêm chức năng. Tuần này gộp việc của T10 và T11 cũ: pilot ở T11 thu
+tiền thật qua PayOS và giữ tài khoản hoàn tiền thật của khách, nên **bảo mật và sao lưu phải xong trước
+pilot**.
 
 | TV | Việc |
 |---|---|
-| TV1 | Bảo mật: TLS, secret, rate limit · sửa bug nghiêm trọng |
-| TV1 | Test tải 50 simulator |
-| TV3 | Sửa bug · hoàn thiện tài liệu module |
-| TV4 | Thiết lập sao lưu CSDL hằng ngày (NFR-DAT-05) |
-| TV4 | Hoàn tất Test Report · ma trận truy vết |
-| TV2 | Kiểm thử mất điện giữa lệnh: van phải đóng, bơm phải dừng |
+| TV1 | Bảo mật: TLS, secret (`PAYOS_*`, `REFUND_ACCOUNT_ENC_KEY` — khóa sao lưu riêng, tách khỏi bản sao lưu CSDL), rate limit (`RATE_LIMITED` cho đăng ký thương hiệu, gửi khiếu nại, tạo đơn kiosk) **[ADR-0012, ADR-0013]** |
+| TV1 | Test cô lập chéo trên 100% endpoint — **gồm hóa đơn, bồi thường, bảng giá cho slot, kỳ chi trả, phiếu trả hàng, phụ lục** · test tranh chấp đồng thời · test tải 50 simulator **[ADR-0006, ADR-0013, ADR-0014]** |
+| TV3 | Kịch bản lỗi: webhook lặp, sai chữ ký, mất mạng, hóa đơn hết hạn giữa lúc có đơn chờ · hai thương hiệu giữ chỗ cùng slot · tiền về sau khi hóa đơn đã hủy · đổi bảng giá khi hóa đơn đang chờ thanh toán **[ADR-0006]** · **đổi slot đồng thời với thương hiệu khác giữ slot đích · giỏ vượt 5 slot · báo không gia hạn sát `ends_at` · đổi phiên bản hợp đồng khung khi thương hiệu đang giữ chỗ** **[ADR-0013, ADR-0014]** · sửa bug · hoàn thiện tài liệu module |
+| TV4 | UAT với người ngoài nhóm — **gồm luồng thương hiệu tự đăng ký → mua gói, khách gửi khiếu nại → nhân viên ghi nhận hoàn tiền, khách rời màn QR** **[ADR-0006, ADR-0012, ADR-0013, ADR-0015]** · thiết lập sao lưu CSDL hằng ngày (NFR-DAT-05) · hoàn tất Test Report · ma trận truy vết |
+| TV2 | Kiểm thử phần cứng tiếp tục tới 1.000 chu kỳ · **kiểm thử mất điện giữa lệnh: van phải đóng, bơm phải dừng** (dời từ T11 cũ) |
 
-**Gate 6:** 100% FR ưu tiên M có test đạt · CI xanh · không còn bug nghiêm trọng
+**Gate 6:** 100% FR ưu tiên M có test đạt · CI xanh · không còn bug nghiêm trọng · **TLS, secret, rate limit, sao lưu hằng ngày đã chạy trên môi trường pilot**
 
 ---
 
-## TUẦN 12 — Chạy thử thực tế
+## TUẦN 11 — Chạy thử thực tế và video demo *(23/11 – 29/11)*
 
 | TV | Việc |
 |---|---|
-| Nhóm | Đặt máy 5–7 ngày, cấu hình 2 brand × 2 slot — **mỗi brand tự mua gói qua web, không seed tay** **[ADR-0006]** |
-| TV4 | Thu số liệu: lượt/ngày, tỷ lệ thanh toán, tỷ lệ xịt lỗi, sai số lượng xịt |
-| TV2 | Trực xử lý sự cố phần cứng |
-| Nhóm | **Quay video demo trong tuần này** · phỏng vấn 10–15 người dùng |
+| Nhóm | Đặt máy **tối thiểu 5 ngày** (thứ 2 → thứ 6, kéo tới thứ 7 nếu được), cấu hình 2 brand × 2 slot — **mỗi brand tự đăng ký và tự mua gói qua web bằng PayOS thật, không seed tay**; bảng giá pilot đặt mức nhỏ **[ADR-0006, ADR-0013, ADR-0016]** |
+| TV4 | Thu số liệu: lượt/ngày, tỷ lệ thanh toán, tỷ lệ xịt lỗi, sai số lượng xịt, **tỉ lệ `FORFEITED` theo máy** (vượt 10% thì nhóm xem lại ADR-0007), **số phiếu khiếu nại và thời gian xử lý so với `REFUND_CLAIM_SLA_HOURS`**, số đơn khách hủy trên kiosk **[ADR-0012, ADR-0015]** |
+| TV1 | Trực backend và PayOS · chỉ sửa bug chặn pilot (hotfix vẫn có review), bug khác ghi vào Test Report · xuất `docs/` từ `spec/` · sinh ma trận truy vết bằng script |
+| TV3 | Trực vai Operations Staff: xử lý phiếu khiếu nại, đơn kiểm tra thủ công · viết chương phương pháp AI-assisted development |
+| TV2 | Trực xử lý sự cố phần cứng · viết chương thiết kế phần cứng và firmware |
+| Nhóm | **Quay video demo giữa tuần, khi pilot đã ổn định** · phỏng vấn 10–15 người dùng |
 
-**Gate 7:** pilot có số liệu · video demo đã quay
+**Gate 7:** pilot có số liệu ≥ 5 ngày (brand tự đăng ký, tự mua gói) · video demo đã quay
 
 ---
 
-## TUẦN 13 — Tài liệu và bảo vệ
+## TUẦN 12 — Tài liệu và bảo vệ *(30/11 – 06/12)*
 
 | TV | Việc |
 |---|---|
-| TV1 | Xuất `docs/` từ `spec/` · sinh ma trận truy vết bằng script |
-| TV1 | Chương Database Design · xuất data dictionary tự động từ schema |
-| TV3 | Chương phương pháp AI-assisted development · **chương mô hình kinh doanh: vì sao đổi từ đàm phán hợp đồng sang gói trả trước (ADR-0005 → ADR-0006)** **[ADR-0006]** |
-| TV4 | Ráp báo cáo cuối |
-| TV2 | Chương thiết kế phần cứng và firmware · so sánh phương án bơm (R385, DP-521, bơm không chổi than) bằng số liệu đo |
-| Nhóm | 2 buổi tập bảo vệ, có người ngoài đóng vai hội đồng |
+| TV1 | Chương Database Design · xuất data dictionary tự động từ schema · chương kiến trúc thanh toán (PayOS, idempotency, hoàn tiền thủ công) |
+| TV3 | Hoàn tất chương AI-assisted development · **chương mô hình kinh doanh: từ đàm phán hợp đồng sang gói trả trước (ADR-0005 → ADR-0006), rồi hợp đồng hai lớp, chi trả doanh thu và các luồng kết thúc hóa đơn (ADR-0013, ADR-0014)** |
+| TV4 | Ráp báo cáo cuối · chương kiểm thử và số liệu pilot |
+| TV2 | Hoàn tất chương phần cứng · so sánh phương án bơm (R385, DP-521, bơm không chổi than) bằng số liệu đo |
+| Nhóm | Buổi tập bảo vệ 1 (giữa tuần) → sửa → **đóng băng báo cáo** → buổi tập bảo vệ 2 (cuối tuần), có người ngoài đóng vai hội đồng |
 
 **Gate 8:** tài liệu đủ · sẵn sàng bảo vệ
 
@@ -279,12 +333,24 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 | G1 | 1 | Contract đóng băng, linh kiện đã đặt, sandbox đã nộp |
 | G2 | 3 | Cô lập slot có test chứng minh (đỏ khi gỡ bộ lọc), **ADR-0006 duyệt + migration sạch**, 1 ngăn xịt đúng thời gian bằng nước, có số liệu 20 lượt |
 | **HW-A** | **4** | **Kiến trúc cơ cấu chốt bằng số liệu: áp, độ lệch chuẩn, đuôi phun, ảnh vệt sương** |
-| G3 | 5 | E2E với mock, idempotency chứng minh được, **mua gói bằng mock payment + tự hủy khi hết giữ chỗ**, 2 ngăn thật + 2 ngăn simulator |
-| **G4** | **7** | **Luồng vàng trên phần cứng thật với sandbox thật, kích hoạt bằng nút bấm · nước hoa thật chỉ khi đủ điều kiện an toàn** (slot dùng hóa đơn seed) |
-| G5 | 9 | **Hóa đơn đi hết vòng đời từ mua gói tới gia hạn hoặc LIQUIDATED**, doanh thu tách hai nguồn, **bồi thường hàng hóa chạy** |
-| G6 | 11 | 100% FR ưu tiên M có test đạt, CI xanh |
-| G7 | 12 | Pilot có số liệu (brand tự mua gói), video demo đã quay |
-| G8 | 13 | Tài liệu đủ, sẵn sàng bảo vệ |
+| G3 ✓ | 5 | E2E với mock, idempotency chứng minh được, **mua gói bằng mock payment + tự hủy khi hết giữ chỗ**, 2 ngăn thật + 2 ngăn simulator — **đã đạt** |
+| **G4** | **7** | **Luồng vàng trên phần cứng thật với PayOS thật (số tiền nhỏ), kích hoạt bằng nút bấm · hủy đơn khi rời QR, QR sự cố dẫn tới khiếu nại · nước hoa thật chỉ khi đủ điều kiện an toàn** (slot dùng hóa đơn seed) |
+| G5 | 9 | **Hóa đơn đi hết vòng đời theo cả nhánh ân hạn lẫn nhánh không gia hạn, từ thương hiệu tự đăng ký**, doanh thu tách hai nguồn, **kỳ chi trả tới `PAID`**, **bồi thường hàng hóa chạy** · hết hạn thêm tính năng |
+| G6 | **10** | 100% FR ưu tiên M có test đạt, CI xanh, **bảo mật và sao lưu xong trước pilot** |
+| G7 | **11** | Pilot ≥ 5 ngày có số liệu (brand tự đăng ký, tự mua gói), video demo đã quay |
+| G8 | **12** | Tài liệu đủ, sẵn sàng bảo vệ |
+
+---
+
+## Phạm vi cắt khi rút lịch
+
+Rút từ 13 xuống 12 tuần mà phạm vi lại tăng (ADR-0012 ÷ 0015 thêm 28 FR), nên chốt trước:
+
+| | Nội dung |
+|---|---|
+| **Không làm** | FR-SLT-51 (OTP xác nhận hợp đồng, mức S) · FR-ALR-15 (email cảnh báo vận hành, mức W) · lên 4 ngăn thật |
+| **Rút gọn** | Pilot tối thiểu 5 ngày thay vì 5–7 · hai buổi tập bảo vệ dồn vào T12 |
+| **Thứ tự cắt tiếp nếu trễ** | Theo `docs/FR_NFR_SCENTSTATION.md` Phần D: nhóm W → nhóm S trong RPT, MNT → FR-EXP-10 ÷ 12 (phí ân hạn) → nhóm S trong INV. **Không cắt** DSP, FR-REV-01 ÷ 03, và các FR dừng bán an toàn / hoàn tiền thủ công (ADR-0012, 0015) — đó là điều kiện để thu tiền thật trong pilot |
 
 ---
 
@@ -294,48 +360,71 @@ Từ tuần này chỉ sửa lỗi, không thêm chức năng.
 - Mọi PR phải có người review, kể cả PR do AI sinh
 - PR quá 400 dòng phải tách nhỏ
 - CI fail nếu FR ưu tiên M chưa có test mang đúng mã
-- Tài liệu viết dần mỗi tuần, không dồn về T13
+- Tài liệu viết dần mỗi tuần, không dồn về T12 — dàn ý chương nộp ở T9, bản nháp xong trong T11
+- **Hết T9 không thêm tính năng.** Bug tìm thấy trong pilot chỉ sửa nếu chặn pilot; còn lại ghi vào Test Report
 - Không rút TV2 khỏi phần cứng vì bất kỳ lý do gì
 - **Bơm có motor chổi than chỉ chạy với nước hoặc nước pha nước rửa chén. Nước hoa thật chỉ dùng khi đủ bơm không chổi than, vách ngăn hai khoang và quạt hút**
 - **Mọi thay đổi phần cứng được ghi vào sổ đo: bơm, béc, ống, áp, số liệu 20 lượt, ảnh vệt sương**
 - **[ADR-0006] Migration thêm giá trị enum: kiểm cả DB trống lẫn DB đã có lược đồ cũ** — node-pg-migrate chạy mọi migration đang chờ trong một transaction (`docs/MIGRATIONS.md`)
 - **[ADR-0006] Không viết code mới dùng `slot_rental_requests`, `fixed_fee`, `revenue_share_percent`**
+- **[ADR-0012] Không ghi tài khoản nhận hoàn tiền ra ngoài `refund_claims`** — kể cả log, AuditLog, email, fixture test
+- **[ADR-0016] Không có sandbox PayOS:** lượt chạy thật chỉ dùng số tiền nhỏ và kênh thanh toán của nhóm; Integration Day dùng cổng `mock`
 
 ---
 
-## Chín chỗ test trọng yếu
+## Các chỗ test trọng yếu
 
-> ADR-0010 (2026-10-07): bỏ quy định "tự viết, không giao AI". Agent được viết test cho chín chỗ này;
+> ADR-0010 (2026-10-07): bỏ quy định "tự viết, không giao AI". Agent được viết test cho các chỗ này;
 > PR có test trọng yếu cần người review riêng phần test, đối chiếu từng assert với yêu cầu ở bảng dưới.
+> Trạng thái file test theo dõi ở `spec/testing.md`. Còn thiếu tới 15/10: `revenue_owner` (T8), phần tự
+> kích hoạt / ân hạn / quá hạn nhận hàng của job chuyển trạng thái (T9), hard timeout firmware (phần cứng).
 
 | Chỗ | Test bắt buộc |
 |---|---|
-| Idempotency webhook | Gửi 2 webhook song song, phải có unique constraint ở CSDL — **cho cả đơn kiosk và phiên thanh toán thuê slot; phiên nhiều hóa đơn không được cấp số hóa đơn lần hai** **[ADR-0006, ADR-0008]** |
-| Cô lập mức slot | Brand A truy vấn slot Brand B **trên cùng máy** — **gồm hóa đơn, bồi thường; danh sách slot trống có đúng 7 trường** **[ADR-0006]** |
-| `revenue_owner` | Tạo đơn → thanh lý → đơn cũ vẫn phải thuộc BRAND |
+| Idempotency webhook | Gửi 2 webhook song song, phải có unique constraint ở CSDL — **cho cả đơn kiosk và phiên thanh toán thuê slot; phiên nhiều hóa đơn không được cấp số hóa đơn lần hai** **[ADR-0006, ADR-0008]** · **webhook PayOS gửi lại cùng `orderCode:reference` chỉ ghi nhận 1 lần; mã tham chiếu lạ có chữ ký đúng → 200 `UNKNOWN_REFERENCE`, không đổi dữ liệu** **[ADR-0016]** |
+| Cô lập mức slot | Brand A truy vấn slot Brand B **trên cùng máy** — **gồm hóa đơn, bồi thường; danh sách slot trống có đúng 7 trường** **[ADR-0006]** · **kỳ chi trả, phiếu trả hàng, phụ lục của B không lọt sang A** **[ADR-0013, ADR-0014]** |
+| `revenue_owner` | Tạo đơn → thanh lý → đơn cũ vẫn phải thuộc BRAND · **`UPDATE orders SET revenue_owner = …` bị CSDL từ chối với `chk_order_snapshot_immutable`** **[ADR-0009]** |
 | Unique constraint slot | Cho thuê slot đang bán hàng thanh lý → phải bị từ chối |
-| TTL lệnh xịt | Gửi lệnh hết hạn thẳng tới thiết bị → thiết bị phải từ chối · **bấm nút sau `DISPENSE_PRESS_WINDOW_SEC` → không xịt, `PRESS_TIMEOUT`** **[ADR-0007]** |
+| TTL lệnh xịt | Gửi lệnh hết hạn thẳng tới thiết bị → thiết bị phải từ chối · **bấm nút sau `DISPENSE_PRESS_WINDOW_SEC` → không xịt, `PRESS_TIMEOUT`** **[ADR-0007]** · **broker gửi lại lệnh đã `ACK` → `REJECT CMD_DUPLICATE` không làm đơn `FAILED`** **[ADR-0011]** |
 | Hard timeout firmware | Lệnh sai định dạng → van và bơm vẫn dừng ở 800ms |
-| Chuyển trạng thái theo lịch | Tắt dịch vụ qua mốc chuyển trạng thái, bật lại → phải bù — **gồm hủy phiên hết giờ giữ chỗ cùng mọi hóa đơn của nó (FR-SLT-39) và tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42)** **[ADR-0006]** |
-| ~~Yêu cầu thuê slot trùng lặp~~ → **Giữ chỗ slot đồng thời** | ~~Gửi 2 yêu cầu thuê cùng slot đồng thời (FR-SLT-26)~~ → Hai thương hiệu checkout cùng slot đồng thời → chỉ 1 hóa đơn DRAFT được tạo, do `excl_slot_rental_overlap` chặn (FR-SLT-35) **[ADR-0006]** · **giỏ nhiều slot có một slot đã bị giữ → cả phiên bị từ chối, không sót hóa đơn nào; hai giỏ chồng nhau một slot checkout đồng thời → chỉ một giỏ thành công** **[ADR-0008]** |
+| Chuyển trạng thái theo lịch | Tắt dịch vụ qua mốc chuyển trạng thái, bật lại → phải bù — **gồm hủy phiên hết giờ giữ chỗ cùng mọi hóa đơn của nó (FR-SLT-39) và tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42)** **[ADR-0006]** · **hết ân hạn mặc định 7 ngày, quá `RETURN_PICKUP_MAX_DAYS` chưa nhận hàng** **[ADR-0014]** · **đơn chờ lượt quá `PAID_QUEUE_MAX_SEC`** **[ADR-0015]** · **phiếu khiếu nại quá `REFUND_CLAIM_MAX_OPEN_DAYS`, xóa liên hệ sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS`** **[ADR-0012]** |
+| ~~Yêu cầu thuê slot trùng lặp~~ → **Giữ chỗ slot đồng thời** | Hai thương hiệu checkout cùng slot đồng thời → chỉ 1 hóa đơn DRAFT được tạo, do `excl_slot_rental_overlap` chặn (FR-SLT-35) **[ADR-0006]** · **giỏ nhiều slot có một slot đã bị giữ → cả phiên bị từ chối, không sót hóa đơn nào; hai giỏ chồng nhau một slot checkout đồng thời → chỉ một giỏ thành công** **[ADR-0008]** · **đổi slot đồng thời với thương hiệu khác giữ slot đích → chỉ một bên thành công; giỏ làm tổng slot chưa thanh toán vượt 5 → `HOLD_LIMIT_REACHED`** **[ADR-0014]** |
 | **Mất điện giữa lúc xịt** | **Ngắt nguồn hoặc reset ESP32 khi van đang mở → van phải đóng, bơm phải dừng, lệnh không được thực hiện lại khi khởi động** · **reset khi đèn nút đang sáng → khởi động lại không sáng đèn, bấm nút không xịt** **[ADR-0007]** |
+| **Một đơn chờ thanh toán mỗi máy** **[ADR-0015]** | Hai đơn tạo đồng thời trên một máy → chỉ một thành công, CSDL chặn bằng `uq_machine_open_order` · hủy đơn rồi tiền vẫn về → `REFUND_PENDING` · mở phiếu nạp khi đèn đang sáng → `MACHINE_BUSY` · `DRAINING` tự sang `MAINTENANCE` khi hết đơn |
+| **Tài khoản hoàn tiền** **[ADR-0012]** | Đóng phiếu ở cả ba trạng thái → khối tài khoản bị xóa; UPDATE sang trạng thái đóng mà còn dữ liệu bị CSDL từ chối · sau một vòng khiếu nại → hoàn tiền, không bảng nào ngoài `refund_claims` chứa số tài khoản · người không được phân công (kể cả Super Admin) xem tài khoản → `CLAIM_NOT_ASSIGNED` · webhook PayOS có `counterAccount*` → không có trong `payment_events.payload` · mã khiếu nại dùng lại hoặc đoán bừa → `NOT_FOUND` |
 
 ---
 
-## Làm ngay tuần 3
+## Làm ngay tuần 6
 
-1. TV2 bàn giao simulator cho TV1 trong ngày đầu tuần
-2. TV2 hoàn thành bàn thử nút → đèn → bơm, đổi đường đẩy sang PTFE, cân phần đuôi phun
-3. Đặt van UD-08 bản 12VDC, xác nhận ảnh nhãn DC 12V
-4. Tìm ít nhất một bơm màng không chổi than đạt đủ 4 tiêu chí
-5. TV1 viết bộ test cô lập slot, chạy phép thử gỡ bộ lọc để chứng minh test có tác dụng
-6. ~~TV1 review và duyệt ADR-0006~~ **Đã duyệt 29/09** — còn merge PR contract; mọi việc SLT từ T4 chờ bước merge **[ADR-0006]**
-7. **TV1 cập nhật test FR-AUTH-07 (slot trống 7 trường), rồi TV3 sửa `listAvailableSlots`** **[ADR-0006]**
-8. **TV3 dựng bảng giá (gói thuê, gói bảo quản, giá niêm yết) và seed dữ liệu mẫu** **[ADR-0006]**
+1. TV1 merge PR contract ADR-0013/0014/0015 trước thứ 6 16/10 — mọi việc tự đăng ký, không gia hạn, đổi slot, `DRAINING` chờ bước này **[ADR-0013, 0014, 0015]**
+2. TV1 xong hủy đơn từ kiosk + hủy link PayOS (đang làm), rồi `uq_machine_open_order` và job chờ lượt **[ADR-0015]**
+3. TV3, TV4, TV1 viết AC cho 28 FR mới và soát AC của các FR viết lại — xong trước khi giao agent hiện thực **[ADR-0013, 0014, 0015]**
+4. TV1 chạy một lượt PayOS thật với số tiền nhỏ cho cả đơn kiosk và phiên thuê slot, ghi kết quả vào `docs/PAYOS.md` **[ADR-0016]**
+5. TV2 chuyển mạch sang bo hàn lỗ, lắp thử vách ngăn và quạt hút — điều kiện để G4 chạy được nước hoa thật
 
 ---
 
 ## Nhật ký thay đổi
+
+### 15/10/2026 — Rút lịch xuống 12 tuần, áp ADR-0009 ÷ 0016
+
+| Thay đổi | Lý do |
+|---|---|
+| Kết thúc 06/12 thay vì 13/12; bỏ T13. T10 gộp đóng băng + kiểm thử + bảo mật (T10, T11 cũ); T11 là pilot + video (T12 cũ); T12 là tài liệu + bảo vệ (T13 cũ) | Yêu cầu hoàn thành trong 12 tuần |
+| Bảo mật, sao lưu CSDL, kiểm thử mất điện dời lên T10, trước pilot | Pilot thu tiền thật qua PayOS và giữ tài khoản hoàn tiền thật của khách (ADR-0012, ADR-0016) |
+| T9 là hạn chót thêm tính năng; nộp dàn ý chương báo cáo ở T9 | Không còn tuần dự phòng; T12 chỉ đủ để hoàn thiện tài liệu |
+| Thêm mục "Phạm vi cắt khi rút lịch": bỏ FR-SLT-51 (S), FR-ALR-15 (W), 4 ngăn thật; pilot tối thiểu 5 ngày | Phạm vi tăng 28 FR mà lịch ngắn đi một tuần |
+| T5 đánh dấu đã xong toàn bộ, Gate 3 đạt; ghi thêm việc làm vượt kế hoạch: PayOS kéo sớm từ T6, phiếu khiếu nại trọn gói, danh sách kiểm tra thủ công, test trọng yếu idempotency và TTL | Nhóm đã hoàn thành T5 và đang làm T6 từ 12/10, đi trước lịch khoảng một tuần; ADR-0010, 0011, 0012, 0016 đã hiện thực 07/10 – 14/10 |
+| Ngày trong "Lịch tuần" giữ làm hạn chót, không dời theo tiến độ | Tuần đi trước là vùng đệm; không rút thêm mốc kết thúc |
+| T6 thêm: PR contract ADR-0013/14/15 (mốc giữa tuần 16/10), AC cho 28 FR mới, hủy đơn từ kiosk (đang làm) | Đặc tả đã áp 14/10 nhưng chưa có migration và endpoint; việc chưa xong không thuộc T5 cũ |
+| T6: "sandbox" → lượt PayOS thật số tiền nhỏ; thêm dừng bán an toàn (TV1), tự đăng ký + hợp đồng khung (TV3), kiosk hủy đơn ở mọi lối thoát (TV4) | PayOS không có sandbox (ADR-0016); thời gian giải phóng dùng cho ADR-0013, 0015 |
+| T7: chốt chặn "máy dừng nhận đơn" (TV1), `DRAINING` (TV4), phụ lục + giới hạn giữ chỗ + đổi slot (TV3), hạ tầng email FR-ALR-16 (TV4); G4 dùng PayOS thật và thêm hai nhánh an toàn | ADR-0013, 0014, 0015; email phải có trước các thông báo T8–T9 |
+| T8: ân hạn mặc định 7 ngày, báo không gia hạn, xác minh pháp nhân (TV3); kỳ chi trả tháng thay bảng đối soát (TV1); giấy tờ chính hãng và phiếu nạp dừng bán cả máy (TV4) | ADR-0013, 0014, 0015 |
+| T9: trả hàng khi không gia hạn (TV3+TV4); FR-RPT-04 theo máy (TV4); G5 kiểm cả hai nhánh kết thúc hóa đơn và kỳ chi trả | ADR-0014, 0015, 0013 |
+| RefillRequest chuyển từ TV3 sang TV1 (T9); TV3 vẫn viết AC RFQ ở T6 | TV3 nhận thêm phần lớn việc của ADR-0013, 0014 |
+| Bảng test trọng yếu thêm hai chỗ "Một đơn chờ thanh toán mỗi máy", "Tài khoản hoàn tiền" và ca mới cho các chỗ cũ | ADR-0009, 0011, 0012, 0014, 0015, 0016 |
+| Thêm bảng "Ràng buộc phần mềm từ ADR-0009 ÷ 0016" | Agent cần đọc trước khi nhận việc |
 
 ### 30/09/2026 — Thanh toán một lần cho nhiều slot (ADR-0008)
 

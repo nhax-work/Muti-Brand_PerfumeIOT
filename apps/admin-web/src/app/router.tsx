@@ -15,6 +15,11 @@ export const router = createBrowserRouter([
         path: '/login',
         lazy: () => import('@/routes/login/LoginPage').then((m) => ({ Component: m.default })),
       },
+      {
+        // Công khai: khách mở từ QR sự cố trên kiosk, không đăng nhập (ADR-0012).
+        path: '/claim',
+        lazy: () => import('@/routes/claim/ClaimPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
   {
@@ -52,6 +57,11 @@ export const router = createBrowserRouter([
         path: '/rentals/checkouts/:id',
         lazy: () =>
           import('@/routes/rentals/CheckoutDetailPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/refund-claims',
+        lazy: () =>
+          import('@/routes/refund-claims/RefundClaimsPage').then((m) => ({ Component: m.default })),
       },
       {
         path: '/rentals/:id',

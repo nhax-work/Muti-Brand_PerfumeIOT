@@ -1,11 +1,21 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { recordKioskInteraction, useKioskCatalog } from '@/shared/api';
+import { ApiRequestError, recordKioskInteraction, useKioskCatalog } from '@/shared/api';
 import { I18nProvider } from '@/shared/i18n';
 import { KioskSessionProvider } from '@/shared/session';
 import CatalogScreen from './CatalogScreen';
 
 const mockNavigate = vi.fn();
+const mockMutate = vi.fn();
+const mockReset = vi.fn();
+let mockCreated: unknown = undefined;
+type CancelCallbacks = { onSuccess?: () => void; onError?: (error: unknown) => void };
+let mockCancelError: unknown = null;
+/** Mặc định máy chủ hủy thành công; test đổi bằng `mockCancelError`. */
+const mockCancel = vi.fn((_orderId: string, callbacks?: CancelCallbacks) => {
+  if (mockCancelError) callbacks?.onError?.(mockCancelError);
+  else callbacks?.onSuccess?.();
+});
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useParams: () => ({}),
@@ -19,13 +29,19 @@ vi.mock('@/shared/api', async (importOriginal) => {
     useKioskCatalog: vi.fn(),
     recordKioskInteraction: vi.fn(),
     useCreateOrder: () => ({
-      mutate: vi.fn(),
-      reset: vi.fn(),
-      data: undefined,
+      mutate: mockMutate,
+      reset: mockReset,
+      data: mockCreated,
       isPending: false,
       isError: false,
     }),
     useOrderStatus: () => ({ data: undefined }),
+    useCancelOrder: () => ({
+      mutate: mockCancel,
+      reset: vi.fn(),
+      isPending: false,
+      error: mockCancelError,
+    }),
   };
 });
 
@@ -97,6 +113,8 @@ function renderCatalog() {
 describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCreated = undefined;
+    mockCancelError = null;
     vi.mocked(useKioskCatalog).mockReturnValue({
       data: mockCatalogData,
       isLoading: false,
@@ -166,5 +184,130 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
       }),
     );
     expect(mockNavigate).toHaveBeenCalledWith('/products/1');
+  });
+
+  function openDetail(name: string) {
+    fireEvent.click(screen.getByText(name).closest('article')!);
+  }
+
+  it('test_FR_ORD_25_show_press_terms_before_qr — điều khoản bấm nút hiện ở modal chi tiết, chưa tạo đơn', () => {
+    renderCatalog();
+    openDetail('Chanel No 5');
+
+    expect(screen.getByText(/đèn nút số 1/)).toBeTruthy();
+    expect(screen.getByText(/60 giây/)).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
+    expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('test_FR_ORD_08_agree_goes_straight_to_qr — đồng ý là vào thẳng mã QR, không có bước chọn phương thức', () => {
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ slotId: 'slot-1' }));
+    expect(screen.getByRole('heading', { name: 'Quét mã để thanh toán' })).toBeTruthy();
+    expect(screen.queryByText(/phương thức thanh toán/i)).toBeNull();
+    expect(screen.queryByText(/Visa|NFC/)).toBeNull();
+  });
+
+  it('test_FR_ORD_08_qr_countdown_follows_order_expiry — đồng hồ đếm theo hạn của đơn, không đếm cục bộ', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261014-ABC123',
+        amount: '35000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 90_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+    expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
+    expect(screen.getByText(/Thời gian hiệu lực: 01:(30|29)/)).toBeTruthy();
+    expect(screen.getByText('ORD-20261014-ABC123')).toBeTruthy();
+  });
+
+  it('test_FR_ORD_08_cancel_with_qr_asks_for_confirmation — đã có mã QR thì hủy phải xác nhận lại', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261014-ABC123',
+        amount: '35000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 90_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+    mockReset.mockClear();
+
+    // Nút hủy và nút X đều chỉ mở hộp xác nhận, không bỏ đơn.
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    expect(screen.getByText(/đã quét mã và chuyển khoản/)).toBeTruthy();
+    expect(mockReset).not.toHaveBeenCalled();
+
+    // Ở lại: mã QR vẫn còn, hộp xác nhận đóng.
+    fireEvent.click(screen.getByRole('button', { name: 'Tiếp tục thanh toán' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Vẫn hủy' }));
+    // FR-ORD-33: hủy đơn ở máy chủ rồi mới đóng.
+    expect(mockCancel).toHaveBeenCalledWith('order-1', expect.any(Object));
+    expect(mockReset).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenLastCalledWith('/');
+  });
+
+  it('test_FR_ORD_33_stay_on_qr_when_payment_already_received — tiền đã về thì ở lại màn QR', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261014-ABC123',
+        amount: '35000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 90_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    mockCancelError = new ApiRequestError(409, {
+      code: 'ORDER_NOT_CANCELLABLE',
+      message: 'Hệ thống đã nhận được tiền của bạn nên không hủy đơn được nữa.',
+      details: { messageKey: 'ord.orderNotCancellable' },
+    });
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    mockReset.mockClear();
+    mockNavigate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Vẫn hủy' }));
+
+    expect(mockReset).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
+    expect(screen.getByRole('status').textContent).toMatch(/đã nhận được tiền/);
+  });
+
+  it('test_FR_ORD_08_switching_product_discards_previous_order — đổi sản phẩm/hủy là bỏ đơn cũ', () => {
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    expect(mockReset).toHaveBeenCalled();
+
+    mockReset.mockClear();
+    openDetail('Sauvage');
+    expect(mockReset).toHaveBeenCalled();
+    expect(screen.getByText(/đèn nút số 2/)).toBeTruthy();
   });
 });

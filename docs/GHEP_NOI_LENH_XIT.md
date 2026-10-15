@@ -29,10 +29,12 @@ Trong ≤ 1 giây đèn nút sáng, kiosk hiện "Mời bấm nút số N" và �
 ### Không có ESP32: dùng simulator Node
 
 ```powershell
-npm run sim                              # M001, tự bấm nút sau 2 giây → đơn DISPENSED
-npm run sim -- --no-press                # không bấm → sau 60 giây PRESS_TIMEOUT → FORFEITED
-npm run sim -- --wrong-slot 3            # bấm nhầm nút slot 3 (bị bỏ qua, FR-DSP-22) rồi bấm đúng → DISPENSED
-npm run sim -- --wrong-slot 3 --no-press # chỉ bấm nhầm → sau 60 giây PRESS_TIMEOUT → FORFEITED
+npm run sim                              # M001, KHÔNG tự bấm — bấm tay ở cửa sổ khác: npm run sim:press 2
+npm run sim -- --press-after 2           # tự bấm nút sau 2 giây → đơn DISPENSED
+npm run sim -- --auto-press              # tự bấm nút sau 45 giây → đơn DISPENSED
+npm run sim -- --no-press                # không bao giờ tự bấm → sau 60 giây PRESS_TIMEOUT → FORFEITED
+npm run sim -- --wrong-slot 3 --press-after 2 # bấm nhầm nút slot 3 (bị bỏ qua, FR-DSP-22) rồi bấm đúng → DISPENSED
+npm run sim:press 3                      # (sim không tự bấm) bấm tay nút slot 3 — nhầm slot thì bị bỏ qua, sau 60 giây PRESS_TIMEOUT → FORFEITED
 npm run sim -- --fail ACTUATOR_FAULT     # bấm nhưng cơ cấu hỏng → FAILED + cần kiểm tra
 npm run sim -- --fail-on-press DOOR_OPEN # bấm nhưng kiểm an toàn lần hai không đạt (FR-DSP-23) → FAILED + cần kiểm tra
 npm run sim -- --reject DOOR_OPEN        # từ chối ngay khi nhận lệnh

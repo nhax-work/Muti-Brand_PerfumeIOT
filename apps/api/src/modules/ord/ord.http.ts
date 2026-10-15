@@ -3,6 +3,7 @@
  *
  *   /kiosk/*  — @Public: kiosk không đăng nhập (security: [] trong contract).
  *   /orders/* — web quản trị, quyền `order.view`, phạm vi qua brandScopedOrders.
+ *               Riêng /orders/manual-review cần `order.refund` (việc nội bộ nền tảng).
  */
 
 import {
@@ -28,6 +29,7 @@ import {
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { OrdService } from './ord.service.js';
+import { RefundClaimsService } from './refund-claims/refund-claims.service.js';
 
 const ORDER_STATUSES = [
   'CREATED',
@@ -48,12 +50,18 @@ const OrderCreateBody = z.object({
   kioskSessionId: z.string().uuid().optional(),
 });
 
+/** openapi `OrderCancel` — máy đang hiện đơn; sai máy thì như không có đơn. */
+const OrderCancelBody = z.object({ machineSerial: z.string().min(1).max(100) });
+
 /** Header Idempotency-Key bắt buộc (openapi `parameters.idempotencyKey`). */
 const IdempotencyHeader = z.object({ 'idempotency-key': z.string().min(1).max(150) });
 
-const SearchQuery = z.object({
+const PageQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
+});
+
+const SearchQuery = PageQuery.extend({
   from: z.coerce.date().optional(),
   to: z.coerce.date().optional(),
   machineId: z.string().uuid().optional(),
@@ -92,7 +100,10 @@ interface StatusReply {
 @Controller('kiosk')
 @Public()
 export class KioskController {
-  constructor(@Inject(OrdService) private readonly service: OrdService) {}
+  constructor(
+    @Inject(OrdService) private readonly service: OrdService,
+    @Inject(RefundClaimsService) private readonly claims: RefundClaimsService,
+  ) {}
 
   @Get('machines/:serialNumber/catalog')
   catalog(@Param() params: unknown) {
@@ -117,10 +128,22 @@ export class KioskController {
     return created;
   }
 
+  /** FR-ORD-11; kèm mã khiếu nại cho QR sự cố khi đơn đủ điều kiện (FR-ORD-28, ADR-0012). */
   @Get('orders/:id/status')
-  status(@Param() params: unknown) {
+  async status(@Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
-    return this.service.getKioskOrderStatus(id);
+    const view = await this.service.getKioskOrderStatus(id);
+    return { ...view, claimToken: await this.claims.claimTokenForOrder(id) };
+  }
+
+  /** FR-ORD-33 (ADR-0015 mục 3): khách hủy trên kiosk; trả trạng thái đơn sau khi hủy. */
+  @Post('orders/:id/cancel')
+  @HttpCode(200)
+  async cancel(@Param() params: unknown, @Body() body: unknown) {
+    const { id } = parseBody(IdParam, params);
+    const { machineSerial } = parseBody(OrderCancelBody, body);
+    const view = await this.service.cancelKioskOrder(id, machineSerial);
+    return { ...view, claimToken: await this.claims.claimTokenForOrder(id) };
   }
 
   /** FR-RPT-06: 202 — đã tiếp nhận, không trả nội dung. */
@@ -142,6 +165,19 @@ export class OrdersController {
     const query = parseBody(SearchQuery, rawQuery);
     const { items, total } = await this.service.search(scope, query);
     return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
+  }
+
+  /**
+   * FR-ORD-19, FR-RPT-05: đơn đã thanh toán mà chưa nhận được lượt xịt và chưa hoàn tiền. Việc nội
+   * bộ nền tảng — cùng quyền với hoàn tiền (FR-ORD-20), Brand Admin không có. Khai báo trước
+   * `:id` để không bị nuốt thành tham số.
+   */
+  @Get('manual-review')
+  @RequirePermissions('order.refund')
+  async manualReview(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const page = parseBody(PageQuery, rawQuery);
+    const { items, total } = await this.service.listNeedingReview(scope, page);
+    return { items, meta: { page: page.page, pageSize: page.pageSize, total } };
   }
 
   @Get(':id')

@@ -10,7 +10,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { Kysely } from 'kysely';
 import type { DB } from '../../../shared/db/index.js';
 import type { PaymentStatus } from '../../../shared/db/types.generated.js';
-import { PAYMENT_GATEWAYS, type PaymentGatewayRegistry } from './payment-gateway.js';
+import {
+  PAYMENT_GATEWAYS,
+  type CancelPaymentResult,
+  type PaymentGatewayRegistry,
+} from './payment-gateway.js';
 import { PaymentQueries, type PaymentRecord, type PaymentTarget } from './payment.queries.js';
 
 /** Thứ hiển thị cho người trả tiền: QR trên kiosk, hoặc QR/đường dẫn trên web quản trị. */
@@ -65,7 +69,7 @@ export class PaymentService {
         brandId: input.brandId,
         target: input.target,
         provider: gateway.provider,
-        providerReference: input.reference,
+        providerReference: created.providerReference ?? input.reference,
         amount: input.amount,
         currency: input.currency,
         rawResponse: {
@@ -92,6 +96,27 @@ export class PaymentService {
   async findLatestIntentForOrder(orderId: string): Promise<PaymentIntent | null> {
     const record = await this.queries.findLatestForOrder(orderId);
     return record ? intentOf(record) : null;
+  }
+
+  /**
+   * Hủy payment PENDING ở đúng cổng đã tạo nó (không phải cổng hiện tại — đổi PAYMENT_PROVIDER lúc
+   * còn thanh toán dở). Không có payment PENDING thì trả `null`. Lỗi gọi cổng ném ra cho người gọi.
+   * Không đổi bảng `payments`: người gọi đóng payment trong transaction của mình (`closeCancelled`).
+   */
+  async cancelPendingAtGateway(
+    target: PaymentTarget,
+    reason: string,
+  ): Promise<CancelPaymentResult | null> {
+    const payment = await this.queries.findPending(target);
+    if (!payment?.providerReference) return null;
+    const gateway = this.gateways.get(payment.provider);
+    if (!gateway) throw new Error(`Không có cổng ${payment.provider} để hủy payment ${payment.id}`);
+    return gateway.cancelPayment({ providerReference: payment.providerReference, reason });
+  }
+
+  /** ADR-0015: khách hủy — payment PENDING → CANCELLED, trong transaction của người gọi. */
+  async closeCancelled(target: PaymentTarget, tx: Kysely<DB>): Promise<void> {
+    await this.queries.closePending(target, 'CANCELLED', tx);
   }
 
   /** FR-SLT-39 AC1: payment PENDING của phiên → EXPIRED, trong transaction của người gọi. */

@@ -22,6 +22,7 @@
 | `DISPENSE_RESULT_TIMEOUT_SEC` | 60 | FR-DSP-18 |
 | `WEBHOOK_TO_ARMED_MAX_SEC` | 5 | NFR-PER-03 |
 | `PRESS_TO_ACTUATION_MAX_MS` | 300 | NFR-PER-07 |
+| `PAID_QUEUE_MAX_SEC` | 180 | FR-ORD-34 |
 
 Theo ADR-0007 (khách bấm nút vật lý), ba mốc lệnh xịt tách bạch: `DISPENSE_CMD_TTL_SEC` đo từ lúc tạo
 lệnh tới lúc thiết bị nhận và **sáng đèn**; `DISPENSE_PRESS_WINDOW_SEC` đo từ lúc sáng đèn tới lúc
@@ -57,7 +58,11 @@ thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 | `RENTAL_NOTICE_DAYS` | [7, 3] | FR-EXP-01, FR-EXP-02 |
 | `GRACE_FEE_RATE_DEFAULT` | 0.05 | FR-EXP-10 |
 | `RENTAL_CHECKOUT_HOLD_MIN` | 15 | FR-SLT-35, FR-SLT-39 |
-| `RENTAL_MAX_STOCKING_DAYS` | 30 | FR-SLT-42 |
+| `RENTAL_MAX_STOCKING_DAYS` | 30 | FR-SLT-42, FR-INV-33 |
+| `GRACE_PERIOD_DEFAULT_DAYS` | 7 | FR-EXP-07 |
+| `RETURN_PICKUP_MAX_DAYS` | 14 | FR-EXP-28 |
+| `SLOT_SWAP_WINDOW_HOURS` | 48 | FR-SLT-55 |
+| `BRAND_MAX_HELD_SLOTS` | 5 | FR-SLT-56 |
 
 `GRACE_FEE_RATE_DEFAULT` cấu hình theo từng hóa đơn. Phí = tỷ lệ × giá chai × số chai tồn.
 
@@ -66,6 +71,23 @@ hết giờ thì phiên bị hủy và mọi hóa đơn `DRAFT` của phiên chu
 đầu tiên; quá mốc thì hóa đơn tự kích hoạt (ADR-0006). Thời hạn gói thuê, tỷ lệ ưu đãi và mức bồi
 thường **không** phải hằng ngưỡng — chúng là dữ liệu danh mục trong `rental_packages` và
 `storage_plans`, do Platform Super Admin cấu hình.
+
+Theo ADR-0014: `GRACE_PERIOD_DEFAULT_DAYS` là độ dài ân hạn mặc định khi hóa đơn vào `GRACE`, Super Admin
+vẫn sửa được cho từng hóa đơn. `RETURN_PICKUP_MAX_DAYS` tính từ lúc hàng trả về sẵn sàng; quá hạn thì hàng
+chuyển sở hữu về nền tảng. `SLOT_SWAP_WINDOW_HOURS` tính từ lúc thanh toán hóa đơn. `BRAND_MAX_HELD_SLOTS`
+đếm slot **chưa thanh toán**, cộng dồn trên mọi phiên thanh toán đang mở của một thương hiệu.
+
+## Phiếu khiếu nại hoàn tiền
+
+| Hằng | Giá trị | FR |
+|---|---|---|
+| `REFUND_CLAIM_SLA_HOURS` | 24 | FR-ORD-32 |
+| `REFUND_CLAIM_MAX_OPEN_DAYS` | 30 | FR-ORD-32 |
+| `REFUND_CLAIM_RATE_LIMIT_PER_MIN` | 5 | FR-ORD-29 |
+| `REFUND_CLAIM_CONTACT_RETENTION_DAYS` | 30 | FR-ORD-31 |
+
+Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 — quá hạn thì cảnh báo, không tự
+đóng phiếu. `REFUND_CLAIM_RATE_LIMIT_PER_MIN` tính theo địa chỉ IP gửi khiếu nại trên trang công khai.
 
 ## Tồn kho và cảnh báo
 

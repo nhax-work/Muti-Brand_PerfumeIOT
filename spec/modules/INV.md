@@ -48,7 +48,7 @@
 
 ## FR-INV-04 — Trạng thái chai
 
-**Tuyên bố:** Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED.
+**Tuyên bố:** Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED, RETURNED_TO_BRAND. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0014; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-005, BR-013 · **Ưu tiên:** M
 
@@ -391,7 +391,7 @@
 
 ## FR-INV-30 — Tạm ngưng cảnh báo cửa mở khi phiếu nạp đang mở
 
-**Tuyên bố:** Hệ thống phải tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03 cho máy có slot đang trong phiếu nạp còn mở.
+**Tuyên bố:** Hệ thống phải, khi máy có phiếu nạp còn mở: tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03, từ chối tạo đơn mới trên cả máy và không tạo lệnh xịt cho đơn đang chờ lượt. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M
 
@@ -409,7 +409,7 @@
 
 ## FR-INV-31 — Đóng phiếu nạp và khôi phục giám sát
 
-**Tuyên bố:** Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở bình thường cho slot đó.
+**Tuyên bố:** Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở và cho máy nhận đơn trở lại. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M · **API:** `POST /refill-sessions/{id}/close`
 

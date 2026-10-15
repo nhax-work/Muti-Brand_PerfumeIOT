@@ -1,0 +1,3 @@
+# Mọi file văn bản dùng LF, khớp "endOfLine": "lf" của .prettierrc.json — tránh hàng trăm file
+# "thay đổi" chỉ vì ký tự xuống dòng khi máy bật core.autocrlf=true.
+* text=auto eol=lf

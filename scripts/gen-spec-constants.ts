@@ -27,6 +27,8 @@ const HEADER = (source: string) =>
 const CONSTRAINT_TARGETS = [
   'apps/api/src/shared/config/constraints.generated.ts',
   'apps/kiosk/src/shared/config/constraints.generated.ts',
+  // Web quản trị cần ngưỡng hiện cho người dùng, ví dụ hạn xử lý khiếu nại (ADR-0012).
+  'apps/admin-web/src/shared/constraints.generated.ts',
 ] as const;
 
 const constraints = readConstraints();

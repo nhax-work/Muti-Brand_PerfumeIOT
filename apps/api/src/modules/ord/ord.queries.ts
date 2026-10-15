@@ -434,6 +434,14 @@ export class OrdQueries {
       .execute();
   }
 
+  async clearManualReview(orderId: string, executor: Executor): Promise<void> {
+    await executor
+      .updateTable('orders')
+      .set({ needs_manual_review: false })
+      .where('id', '=', orderId)
+      .execute();
+  }
+
   /** Đơn PENDING_PAYMENT đã quá hạn, cũ nhất trước — cho job FR-ORD-16. */
   async listOverduePendingOrderIds(now: Date, limit: number): Promise<string[]> {
     const rows = await this.db
@@ -513,6 +521,35 @@ export class OrdQueries {
         .orderBy('o.created_at', 'desc')
         .limit(filter.pageSize)
         .offset((filter.page - 1) * filter.pageSize)
+        .execute(),
+      base.select((eb) => eb.fn.countAll<string>().as('total')).executeTakeFirstOrThrow(),
+    ]);
+    return { items: rows.map(toOrderRecord), total: Number(count.total) };
+  }
+
+  /**
+   * FR-ORD-19, FR-RPT-05: đơn khách đã trả tiền mà chưa nhận được lượt xịt và chưa được hoàn —
+   * đơn bị gắn cờ kiểm tra thủ công, hoặc tiền về sau hạn (REFUND_PENDING). Cũ nhất trước: mục tiêu
+   * BR-002 là xử lý trong 24 giờ.
+   */
+  async listNeedingReview(
+    scope: BrandScope,
+    page: { readonly page: number; readonly pageSize: number },
+  ): Promise<{ items: OrderRecord[]; total: number }> {
+    const base = this.db
+      .selectFrom('orders as o')
+      .where(brandScopedOrders(scope, 'o'))
+      .where('o.status', '<>', 'REFUNDED')
+      .where((eb) =>
+        eb.or([eb('o.needs_manual_review', '=', true), eb('o.status', '=', 'REFUND_PENDING')]),
+      );
+
+    const [rows, count] = await Promise.all([
+      base
+        .selectAll('o')
+        .orderBy('o.created_at', 'asc')
+        .limit(page.pageSize)
+        .offset((page.page - 1) * page.pageSize)
         .execute(),
       base.select((eb) => eb.fn.countAll<string>().as('total')).executeTakeFirstOrThrow(),
     ]);

@@ -388,11 +388,22 @@ describe('ORD — webhook thanh toán', () => {
     });
     expect((await paymentOf(order.id))?.status).toBe('PENDING');
 
-    // AC3: mã tham chiếu không tồn tại → 404, không đổi dữ liệu.
-    const unknown = await sendWebhook(
-      buildMockWebhook({ reference: 'ORD-20260101-ZZZZZZ', amount: '1', currency: 'VND' }),
+    // AC3 (ADR-0016): chữ ký đúng, mã tham chiếu không tồn tại → 200 UNKNOWN_REFERENCE, không đổi
+    // dữ liệu, vẫn ghi lại để đối soát.
+    const stray = buildMockWebhook({
+      reference: `ORD-20260101-${randomUUID().slice(0, 6).toUpperCase()}`,
+      amount: '1',
+      currency: 'VND',
+    });
+    const unknown = await sendWebhook(stray);
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json()).toEqual({ result: 'UNKNOWN_REFERENCE' });
+    const logged = await client.query(
+      `SELECT 1 FROM payment_events WHERE provider = 'mock' AND processing_result = 'UNKNOWN_REFERENCE'
+         AND payload->>'reference' = $1`,
+      [stray.reference],
     );
-    expect(unknown.statusCode).toBe(404);
+    expect(logged.rowCount).toBe(1);
   });
 
   it('test_FR_ORD_16_order_expiration_timeout', async () => {
@@ -488,5 +499,53 @@ describe('ORD — tra cứu đơn', () => {
     expect(byFilters.items.every((o) => o.status === 'PAID' && o.machineId === fx.machineId)).toBe(
       true,
     );
+  });
+
+  it('test_FR_RPT_05_list_paid_orders_without_confirmed_dispense', async () => {
+    // Bốn đơn đã thanh toán: lỗi cần xem, tiền về sau hạn, đã hoàn xong, và đơn bình thường.
+    const failed = await newOrder(0);
+    const latePaid = await newOrder(0);
+    const refunded = await newOrder(0);
+    const normal = await newOrder(0);
+    for (const o of [failed, latePaid, refunded, normal]) await sendWebhook(paidWebhook(o));
+    await client.query(
+      `UPDATE orders SET status = 'FAILED', needs_manual_review = true WHERE id = $1`,
+      [failed.id],
+    );
+    await client.query(`UPDATE orders SET status = 'REFUND_PENDING' WHERE id = $1`, [latePaid.id]);
+    await client.query(
+      `UPDATE orders SET status = 'REFUNDED', needs_manual_review = true WHERE id = $1`,
+      [refunded.id],
+    );
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/orders/manual-review?pageSize=200',
+      headers: { authorization: `Bearer ${adminToken}` },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json<{ items: OrderBody[]; meta: { total: number } }>();
+    const ids = body.items.map((o) => o.id);
+
+    expect(ids).toEqual(expect.arrayContaining([failed.id, latePaid.id]));
+    expect(ids).not.toContain(refunded.id);
+    expect(ids).not.toContain(normal.id);
+    // Cũ nhất trước — mục tiêu BR-002 là xử lý trong 24 giờ.
+    expect(ids.indexOf(failed.id)).toBeLessThan(ids.indexOf(latePaid.id));
+    expect(body.meta.total).toBeGreaterThanOrEqual(2);
+
+    // Việc nội bộ nền tảng: Brand Admin không có quyền order.refund.
+    const brandToken = (await login(app, fx.brandAdminAEmail, TEST_PASSWORD)).accessToken;
+    const forbidden = await app.inject({
+      method: 'GET',
+      url: '/api/v1/orders/manual-review',
+      headers: { authorization: `Bearer ${brandToken}` },
+    });
+    expect(forbidden.statusCode).toBe(403);
+    expect(forbidden.json()).toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+
+    await client.query(`UPDATE orders SET status = 'FAILED' WHERE id = ANY($1::uuid[])`, [
+      [latePaid.id, normal.id],
+    ]);
   });
 });
