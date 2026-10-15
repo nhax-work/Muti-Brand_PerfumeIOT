@@ -44,8 +44,12 @@ import {
 
 export type WebhookResult = 'PROCESSED' | 'WEBHOOK_ALREADY_PROCESSED' | 'UNKNOWN_REFERENCE';
 
-/** Payment ở các trạng thái này mà nhận tin thành công thì có thể là tiền thật đã về. */
-const SETTLEABLE = new Set(['PENDING', 'FAILED', 'EXPIRED'] as const);
+/**
+ * Payment ở các trạng thái này mà nhận tin thành công thì có thể là tiền thật đã về. `CANCELLED`:
+ * khách hủy trên kiosk nhưng tiền vẫn tới (đã chuyển ngay trước khi hủy, hoặc cổng chưa hủy được
+ * link) — phải ghi nhận để hoàn tiền, không được bỏ qua như tin trùng (ADR-0015 mục 3).
+ */
+const SETTLEABLE = new Set(['PENDING', 'FAILED', 'EXPIRED', 'CANCELLED'] as const);
 
 type Settled =
   | { readonly kind: 'PROCESSED' }
@@ -225,7 +229,12 @@ export class PaymentWebhookService {
     const outcome = payment.orderId
       ? await this.orders.settleOrderPayment(
           tx,
-          { orderId: payment.orderId, paymentId: payment.id, transactionId: event.transactionId },
+          {
+            orderId: payment.orderId,
+            paymentId: payment.id,
+            transactionId: event.transactionId,
+            cancelledByCustomer: payment.status === 'CANCELLED',
+          },
           event.occurredAt,
         )
       : await this.checkouts.onPaymentSucceeded(tx, {
@@ -238,7 +247,7 @@ export class PaymentWebhookService {
           currency: payment.currency,
           paidAt: event.occurredAt,
           receivedAt: now,
-          paymentStatusBefore: payment.status as 'PENDING' | 'FAILED' | 'EXPIRED',
+          paymentStatusBefore: payment.status as 'PENDING' | 'FAILED' | 'EXPIRED' | 'CANCELLED',
         });
 
     const accepted = outcome.kind === 'PAID';

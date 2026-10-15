@@ -39,6 +39,20 @@ export interface CreatedPayment {
   readonly raw: Record<string, unknown>;
 }
 
+/** Hủy một thanh toán còn chờ ở cổng — khách hủy trên kiosk (ADR-0015 mục 3). */
+export interface CancelPaymentRequest {
+  /** `payments.provider_reference` — mã cổng đã nhận lúc tạo. */
+  readonly providerReference: string;
+  /** Lý do gửi cổng, chỉ để đối soát. */
+  readonly reason: string;
+}
+
+export type CancelPaymentResult =
+  /** Cổng không nhận tiền cho mã này nữa — vừa hủy, hoặc đã hủy/hết hạn từ trước. */
+  | { readonly kind: 'CANCELLED' }
+  /** Cổng đã (hoặc đang) ghi nhận tiền — không được hủy; webhook sẽ báo về như thường. */
+  | { readonly kind: 'ALREADY_PAID' };
+
 /** Sự kiện webhook đã qua kiểm chữ ký và kiểm hình dạng. */
 export interface VerifiedPaymentEvent {
   /** Khóa chống trùng — `payment_events.provider_event_id` (uq_payment_event, FR-ORD-15). */
@@ -66,6 +80,11 @@ export interface PaymentGateway {
   /** Tên trong đường dẫn `POST /webhooks/payments/{provider}` và cột `payments.provider`. */
   readonly provider: string;
   createPayment(request: CreatePaymentRequest): Promise<CreatedPayment>;
+  /**
+   * Hủy thanh toán còn chờ để khách không trả được nữa. Ném lỗi khi không hỏi được cổng (mạng,
+   * cổng trả lời lạ) — người gọi tự quyết có hủy phía hệ thống hay không.
+   */
+  cancelPayment(request: CancelPaymentRequest): Promise<CancelPaymentResult>;
   /** Phải kiểm chữ ký trên đúng các byte nhận được, không trên JSON đã parse rồi serialize lại. */
   verifyWebhook(rawBody: Buffer, headers: WebhookHeaders): WebhookVerification;
 }

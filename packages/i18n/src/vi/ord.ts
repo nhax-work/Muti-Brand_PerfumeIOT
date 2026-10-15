@@ -10,6 +10,7 @@ export const ord = {
   slotUnavailable: 'Mùi hương này tạm hết. Vui lòng chọn mùi khác.',
   machineBusy: 'Máy đang phục vụ khách khác. Vui lòng chờ trong giây lát.',
   orderNotFound: 'Không tìm thấy đơn hàng',
+  orderNotCancellable: 'Hệ thống đã nhận được tiền của bạn nên không hủy đơn được nữa.',
   idempotencyKeyReused: 'Mã yêu cầu đã được dùng cho một lựa chọn khác',
   paymentProviderUnknown: 'Cổng thanh toán không được hỗ trợ',
   webhookMalformed: 'Dữ liệu thông báo thanh toán không đọc được',

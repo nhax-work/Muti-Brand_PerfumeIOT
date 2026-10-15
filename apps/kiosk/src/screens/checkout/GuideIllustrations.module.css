@@ -1,0 +1,275 @@
+/* Hình minh họa động ba bước nhận lượt xịt — nét đen trắng, điểm nhấn vàng như trang chủ. */
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.machine {
+  fill: #121212;
+}
+
+.nozzleTip {
+  fill: var(--color-gold);
+}
+
+.nozzleIdle {
+  fill: #3a3a3a;
+}
+
+.hand {
+  fill: #ffffff;
+  stroke: #000000;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.crease {
+  fill: none;
+  stroke: #000000;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.pulsePoint {
+  fill: var(--color-gold);
+}
+
+.nail {
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.ruler {
+  fill: none;
+  stroke: var(--color-gold-dark);
+  stroke-width: 1.6;
+  stroke-dasharray: 3 3;
+}
+
+.hair {
+  fill: #121212;
+}
+
+/* Cùng màu nền ô minh họa để vai mờ dần vào nền. */
+.fadeStop {
+  stop-color: var(--color-surface-container);
+}
+
+.ear {
+  fill: none;
+  stroke: #000000;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/*
+ * Bước 1: cổ tay rồi tới cổ lần lượt tiến lại gần vòi (mỗi lượt 3 giây trong chu kỳ 6 giây), thước
+ * khoảng cách hiện ra mỗi khi đã đúng vị trí.
+ */
+.approachHand,
+.approachNeck {
+  animation: approach 6s ease-in-out infinite;
+}
+
+.approachNeck {
+  animation-delay: -3s;
+}
+
+.approachRuler {
+  animation: rulerShow 3s ease-in-out infinite;
+}
+
+@keyframes approach {
+  0%,
+  5% {
+    transform: translateX(48px);
+    opacity: 0;
+  }
+  12.5% {
+    opacity: 1;
+  }
+  27.5%,
+  45% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  50%,
+  100% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+}
+
+@keyframes rulerShow {
+  0%,
+  55% {
+    opacity: 0;
+  }
+  65%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Bước 2: nút của ô khách mua sáng, ngón tay nhấn xuống. */
+.buttonIdle {
+  fill: #2a2a2a;
+  stroke: #4a4a4a;
+  stroke-width: 1.5;
+}
+
+.buttonLit {
+  fill: var(--color-gold);
+  stroke: #f3e3c4;
+  stroke-width: 1.5;
+}
+
+.buttonNumber {
+  fill: #121212;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-variant-numeric: lining-nums;
+}
+
+.glowRing {
+  fill: none;
+  stroke: var(--color-gold);
+  stroke-width: 2;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glow 1.6s ease-out infinite;
+}
+
+.targetButton {
+  animation: pressDown 2.4s ease-in-out infinite;
+}
+
+.finger {
+  animation: fingerPress 2.4s ease-in-out infinite;
+}
+
+@keyframes glow {
+  from {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+@keyframes fingerPress {
+  0%,
+  15% {
+    transform: translateY(46px);
+  }
+  45%,
+  60% {
+    transform: translateY(0);
+  }
+  85%,
+  100% {
+    transform: translateY(46px);
+  }
+}
+
+@keyframes pressDown {
+  0%,
+  42% {
+    transform: scale(1);
+  }
+  50%,
+  58% {
+    transform: scale(0.86);
+  }
+  66%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Bước 3: sương phun lên cổ tay, vòng đếm 2–3 giây. */
+.mistDrop {
+  fill: var(--color-gold);
+  opacity: 0;
+  animation: mist 1.4s ease-out infinite;
+}
+
+@keyframes mist {
+  0% {
+    transform: translate(0, 0);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy));
+    opacity: 0;
+  }
+}
+
+.timerTrack {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.12);
+  stroke-width: 3;
+}
+
+.timerArc {
+  fill: none;
+  stroke: #000000;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 82;
+  stroke-dashoffset: 82;
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: timer 3s linear infinite;
+}
+
+@keyframes timer {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .approachNeck {
+    display: none;
+  }
+
+  .approachHand,
+  .approachRuler,
+  .glowRing,
+  .targetButton,
+  .finger,
+  .timerArc {
+    animation: none;
+  }
+
+  .approachRuler {
+    opacity: 1;
+  }
+
+  .timerArc {
+    stroke-dashoffset: 28;
+  }
+
+  .mistDrop {
+    animation: none;
+    opacity: 0.8;
+    transform: translate(var(--dx), var(--dy));
+  }
+}

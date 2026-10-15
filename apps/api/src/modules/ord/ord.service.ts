@@ -5,7 +5,7 @@
  * toán, và từ tuần 5 là từ luồng lệnh xịt (DSP) và scheduler.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import type { Kysely } from 'kysely';
 import { AuditService } from '../../shared/audit/index.js';
@@ -85,6 +85,8 @@ export type OrderPaymentOutcome =
 
 @Injectable()
 export class OrdService {
+  private readonly logger = new Logger('OrdService');
+
   constructor(
     @Inject(OrdQueries) private readonly queries: OrdQueries,
     @Inject(PaymentService) private readonly payments: PaymentService,
@@ -227,6 +229,81 @@ export class OrdService {
   }
 
   // -----------------------------------------------------------------------------------
+  // Khách hủy trên kiosk (ADR-0015 mục 3)
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Khách xác nhận rời màn QR: hủy link ở cổng để khách không trả được nữa, rồi đơn
+   * `PENDING_PAYMENT` → `EXPIRED` với lý do `CUSTOMER_CANCELLED` (không thêm trạng thái đơn mới).
+   *
+   * - Cổng báo đã/đang nhận tiền → KHÔNG hủy, ném `ORDER_NOT_CANCELLABLE`; kiosk ở lại chờ webhook.
+   * - Không hỏi được cổng → vẫn hủy phía hệ thống: khách đã bỏ đi, và nếu tiền vẫn tới thì
+   *   webhook đưa đơn vào REFUND_PENDING như tiền về sau hạn — không mất tiền, không xịt.
+   * - Gọi lại khi đơn đã EXPIRED → trả trạng thái hiện tại (idempotent).
+   *
+   * Sai máy thì trả như không có đơn — không xác nhận đơn của máy khác có tồn tại.
+   */
+  async cancelKioskOrder(orderId: string, machineSerial: string): Promise<OrderStatusView> {
+    const [order, machine] = await Promise.all([
+      this.queries.findKioskOrder(orderId),
+      this.queries.findMachineBySerial(machineSerial),
+    ]);
+    if (!order || !machine || order.machineId !== machine.id) {
+      throw new AppError('NOT_FOUND', 'ord.orderNotFound');
+    }
+    if (order.status === 'EXPIRED') return this.getKioskOrderStatus(orderId);
+    if (order.status !== 'PENDING_PAYMENT') {
+      throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+    }
+
+    // Gọi cổng NGOÀI transaction: không giữ khóa đơn trong lúc chờ mạng (webhook cần khóa đó).
+    let gatewayCancelled = false;
+    try {
+      const result = await this.payments.cancelPendingAtGateway(
+        { orderId },
+        'Customer cancelled at kiosk',
+      );
+      if (result?.kind === 'ALREADY_PAID') {
+        throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+      }
+      gatewayCancelled = result !== null;
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      this.logger.warn(
+        `Không hủy được link thanh toán của đơn ${orderId} ở cổng — vẫn hủy phía hệ thống: ${String(error)}`,
+      );
+    }
+
+    const cancelled = await this.queries.transaction(async (tx) => {
+      const locked = await this.queries.lockOrder(orderId, tx);
+      // Webhook vừa chạy xong trước khi lấy được khóa — đơn đã đi tiếp, không đụng nữa.
+      if (!locked || locked.status !== 'PENDING_PAYMENT') return false;
+      await this.transition(
+        tx,
+        {
+          orderId: locked.id,
+          brandId: locked.brandId,
+          from: 'PENDING_PAYMENT',
+          to: 'EXPIRED',
+          reason: 'CUSTOMER_CANCELLED',
+          actorType: 'DEVICE',
+          metadata: { gatewayCancelled },
+          at: this.clock.now(),
+        },
+        {},
+      );
+      await this.payments.closeCancelled({ orderId }, tx);
+      return true;
+    });
+
+    const view = await this.getKioskOrderStatus(orderId);
+    if (!cancelled && view.status !== 'EXPIRED') {
+      throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+    }
+    return view;
+  }
+
+  // -----------------------------------------------------------------------------------
   // Hết hạn thanh toán (FR-ORD-16)
   // -----------------------------------------------------------------------------------
 
@@ -320,6 +397,8 @@ export class OrdService {
       readonly orderId: string;
       readonly paymentId: string;
       readonly transactionId: string;
+      /** Payment đã bị đóng vì khách hủy trên kiosk (ADR-0015) — chỉ đổi mã lý do ghi lịch sử. */
+      readonly cancelledByCustomer?: boolean;
     },
     paidAt: Date,
   ): Promise<OrderPaymentOutcome> {
@@ -372,7 +451,7 @@ export class OrdService {
           brandId: order.brandId,
           from: 'EXPIRED',
           to: 'REFUND_PENDING',
-          reason: 'PAID_AFTER_EXPIRY',
+          reason: payment.cancelledByCustomer ? 'PAID_AFTER_CANCEL' : 'PAID_AFTER_EXPIRY',
           actorType: 'PAYMENT_PROVIDER',
           metadata,
           at: now,

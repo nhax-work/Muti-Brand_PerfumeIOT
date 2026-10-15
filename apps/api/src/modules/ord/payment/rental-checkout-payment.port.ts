@@ -46,7 +46,8 @@ export interface CheckoutPaymentSucceeded {
    * Trạng thái payment trước webhook. `EXPIRED`: job FR-SLT-39 đã hủy phiên; `FAILED`: cổng từng
    * báo thất bại rồi lại báo thành công — cả hai vẫn có thể là tiền thật đã về.
    */
-  readonly paymentStatusBefore: 'PENDING' | 'FAILED' | 'EXPIRED';
+  /** `CANCELLED` hiện chỉ đơn kiosk sinh ra (ADR-0015); phiên thuê slot chưa có đường hủy payment. */
+  readonly paymentStatusBefore: 'PENDING' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
 }
 
 export type CheckoutPaymentOutcome =

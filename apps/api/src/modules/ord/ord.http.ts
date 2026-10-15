@@ -50,6 +50,9 @@ const OrderCreateBody = z.object({
   kioskSessionId: z.string().uuid().optional(),
 });
 
+/** openapi `OrderCancel` — máy đang hiện đơn; sai máy thì như không có đơn. */
+const OrderCancelBody = z.object({ machineSerial: z.string().min(1).max(100) });
+
 /** Header Idempotency-Key bắt buộc (openapi `parameters.idempotencyKey`). */
 const IdempotencyHeader = z.object({ 'idempotency-key': z.string().min(1).max(150) });
 
@@ -130,6 +133,16 @@ export class KioskController {
   async status(@Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
     const view = await this.service.getKioskOrderStatus(id);
+    return { ...view, claimToken: await this.claims.claimTokenForOrder(id) };
+  }
+
+  /** FR-ORD-33 (ADR-0015 mục 3): khách hủy trên kiosk; trả trạng thái đơn sau khi hủy. */
+  @Post('orders/:id/cancel')
+  @HttpCode(200)
+  async cancel(@Param() params: unknown, @Body() body: unknown) {
+    const { id } = parseBody(IdParam, params);
+    const { machineSerial } = parseBody(OrderCancelBody, body);
+    const view = await this.service.cancelKioskOrder(id, machineSerial);
     return { ...view, claimToken: await this.claims.claimTokenForOrder(id) };
   }
 

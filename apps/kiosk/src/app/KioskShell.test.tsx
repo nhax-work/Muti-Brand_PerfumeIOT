@@ -121,7 +121,7 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/catalog');
   });
 
-  it('dropdown ngôn ngữ: bấm mở menu dropdown và chuyển đổi sang Tiếng Anh', () => {
+  it('dropdown ngôn ngữ: bấm mở menu dropdown và chuyển đổi sang English', () => {
     renderShell();
 
     const trigger = screen.getByRole('button', { name: /Chọn ngôn ngữ/i });
@@ -131,12 +131,13 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     // Mở dropdown
     fireEvent.click(trigger);
 
-    // Tìm và chọn Tiếng Anh trong dropdown
-    const englishOption = screen.getByRole('option', { name: /Tiếng Anh/i });
+    // Tìm và chọn English trong dropdown
+    const englishOption = screen.getByRole('option', { name: /English/i });
     expect(englishOption).toBeTruthy();
     fireEvent.click(englishOption);
 
-    // Dropdown đóng lại và ngôn ngữ đổi sang Tiếng Anh
-    expect(screen.getByText('Tiếng Anh')).toBeTruthy();
+    // Dropdown đóng lại và ngôn ngữ đổi sang English
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(screen.getByText('English')).toBeTruthy();
   });
 });

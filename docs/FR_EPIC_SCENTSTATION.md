@@ -18,7 +18,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 - **Ưu tiên của epic = ưu tiên cao nhất trong các FR thành phần** (M > S > W). Một epic chỉ ở mức S hoặc W nếu *toàn bộ* FR thành phần đều ở mức đó — vì epic đó chỉ có thể được xem là "xong" khi toàn bộ FR M bên trong đã hiện thực.
 - Vai trò nhắc trong bảng dưới đã theo tên hợp nhất: **Operations Staff** thay cho Operations Manager/Technician (xem Phần D của tài liệu chi tiết).
 
-**Thống kê:** 286 FR nguyên tử → **82 epic** (tỷ lệ nén ~3,5 lần). 79 epic mức M, 3 epic mức W (không có epic thuần S — mọi FR mức S đều gắn liền với ít nhất một FR M trong cùng epic).
+**Thống kê:** 320 FR nguyên tử hiệu lực → **91 epic** (tỷ lệ nén ~3,5 lần). 88 epic mức M, 3 epic mức W (không có epic thuần S — mọi FR mức S đều gắn liền với ít nhất một FR M trong cùng epic).
 
 ---
 
@@ -27,14 +27,14 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | # | Module | Số epic | # | Module | Số epic |
 |---|---|---|---|---|---|
 | A1 | FR-AUTH | 5 | A10 | FR-RFQ | 4 |
-| A2 | FR-BND | 3 | A11 | FR-ORD | 7 |
-| A3 | FR-USR | 1 | A12 | FR-DSP | 5 |
+| A2 | FR-BND | 4 | A11 | FR-ORD | 9 |
+| A3 | FR-USR | 2 | A12 | FR-DSP | 6 |
 | A4 | FR-PRD | 3 | A13 | FR-IOT | 6 |
-| A5 | FR-MCH | 6 | A14 | FR-ALR | 3 |
-| A6 | FR-SLT | 7 | A15 | FR-MNT | 4 |
-| A7 | FR-EXP | 7 | A16 | FR-RPT | 5 |
+| A5 | FR-MCH | 6 | A14 | FR-ALR | 4 |
+| A6 | FR-SLT | 12 | A15 | FR-MNT | 4 |
+| A7 | FR-EXP | 8 | A16 | FR-RPT | 5 |
 | A8 | FR-REV | 2 | A17 | FR-AUD | 3 |
-| A9 | FR-INV | 7 | | **Tổng** | **78** |
+| A9 | FR-INV | 8 | | **Tổng** | **91** |
 
 ---
 
@@ -45,7 +45,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | EPIC-AUTH-01 | Đăng nhập, đăng xuất và quản lý phiên | Đăng nhập bằng email/mật khẩu, cấp access token 60 phút và refresh token 7 ngày, khóa tài khoản 15 phút sau 5 lần sai, đăng xuất thu hồi refresh token, và thu hồi toàn bộ phiên trong 60 giây khi tài khoản bị vô hiệu hóa. | AUTH-01, 02, 03, 04, 10 | BR-003 | M |
 | EPIC-AUTH-02 | Gán vai trò và liên kết tài khoản với thương hiệu | Mỗi tài khoản gán một hoặc nhiều vai trò trong 4 vai trò chuẩn; Brand Admin bắt buộc liên kết đúng một thương hiệu, các vai trò nền tảng không liên kết thương hiệu nào. | AUTH-05, 06 | BR-003, BR-004 | M |
 | EPIC-AUTH-03 | Kiểm soát phạm vi truy cập dữ liệu | Người dùng thuộc thương hiệu chỉ truy cập dữ liệu của slot đang/đã từng thuê, mọi truy cập ngoài phạm vi trả về 403; Operations Staff có thể bị giới hạn theo danh sách địa điểm/máy được phân công. | AUTH-07, 08, 12 | BR-003, BR-004, BR-012 | M |
-| EPIC-AUTH-04 | Xác thực lại cho thao tác nhạy cảm | Yêu cầu nhập lại mật khẩu trước các thao tác rủi ro cao: hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn, đổi cấu hình máy. | AUTH-09 | BR-002, BR-005, BR-013 | M |
+| EPIC-AUTH-04 | Xác thực lại cho thao tác nhạy cảm | Yêu cầu nhập lại mật khẩu trước các thao tác rủi ro cao: hoàn tiền, ghi nhận chi trả bồi thường/doanh thu cho thương hiệu, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn, đổi cấu hình máy. | AUTH-09 | BR-002, BR-005, BR-013 | M |
 | EPIC-AUTH-05 | Thu hồi quyền truy cập của người dùng/thiết bị | Platform Super Admin có thể thu hồi quyền truy cập của bất kỳ người dùng hoặc thiết bị nào, bất kỳ lúc nào. | AUTH-11 | BR-003 | M |
 
 ## A2. EPIC-BND — Thương hiệu và cô lập dữ liệu
@@ -55,12 +55,14 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | EPIC-BND-01 | Quản lý hồ sơ thương hiệu | Platform Super Admin tạo/cập nhật hồ sơ thương hiệu (tên, mã, liên hệ, trạng thái); Brand Admin tự quản lý tên hiển thị, logo, mô tả, liên hệ của thương hiệu mình. | BND-01, 02, 03, 06 | BR-003 | M |
 | EPIC-BND-02 | Cô lập dữ liệu và chặn giao dịch giữa các thương hiệu | Mọi truy vấn dữ liệu của người dùng thuộc thương hiệu tự động lọc theo tập slot đang thuê; thương hiệu SUSPENDED bị chặn tạo đơn mới; không thương hiệu nào thấy được tên, sản phẩm hay sự tồn tại của thương hiệu khác. | BND-04, 05, 08 | BR-003, BR-012 | M |
 | EPIC-BND-03 | Báo cáo tổng hợp toàn nền tảng cho Super Admin | Platform Super Admin xem được dữ liệu tổng hợp của toàn bộ thương hiệu trên nền tảng. | BND-07 | BR-003, BR-009 | M |
+| EPIC-BND-04 | Pháp nhân và tài khoản nhận doanh thu | Brand Admin khai báo mã số thuế, giấy phép kinh doanh và tài khoản doanh nghiệp nhận doanh thu (lưu mã hóa); Platform Super Admin ghi nhận đã xác minh pháp nhân — điều kiện để chi trả doanh thu. (ADR-0013) | BND-09, 10 | BR-008, BR-009 | M |
 
 ## A3. EPIC-USR — Người dùng và vai trò
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
-| EPIC-USR-01 | Quản lý tài khoản nhân sự nền tảng và Brand Admin | Chỉ Platform Super Admin được tạo, sửa, vô hiệu hóa và đặt lại mật khẩu cho mọi tài khoản (Brand Admin, Operations Staff, Inventory Staff); không vai trò nào khác có quyền quản lý tài khoản. | USR-01, 02, 03, 04, 05 | BR-003, BR-004, BR-012 | M |
+| EPIC-USR-01 | Quản lý tài khoản nhân sự nền tảng và Brand Admin | Platform Super Admin tạo, sửa, vô hiệu hóa và đặt lại mật khẩu cho tài khoản Operations Staff, Inventory Staff và Brand Admin; không vai trò nào khác quản lý được tài khoản của người khác. | USR-01, 02, 03, 04, 05 | BR-003, BR-004, BR-012 | M |
+| EPIC-USR-02 | Thương hiệu tự đăng ký | Thương hiệu tự đăng ký bằng tên thương hiệu, email, mật khẩu — tạo cùng lúc thương hiệu và tài khoản Brand Admin; phải xác minh email trước khi được thuê slot. (ADR-0013) | USR-06, 07 | BR-003, BR-011 | M |
 
 ## A4. EPIC-PRD — Danh mục sản phẩm
 
@@ -76,10 +78,10 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 |---|---|---|---|---|---|
 | EPIC-MCH-01 | Đăng ký máy và quản lý địa điểm | Platform Super Admin đăng ký máy mới với số sê-ri/định danh duy nhất, cấp thông tin xác thực MQTT riêng, tạo địa điểm và gán máy vào địa điểm. | MCH-01, 02, 03, 04 | BR-004, BR-010 | M |
 | EPIC-MCH-02 | Cấu hình slot | Cấu hình số lượng slot, mã slot, liều lượng xịt và ngưỡng cảnh báo sắp hết cho từng slot; hệ thống không cho phép hai chai đang hoạt động cùng một slot. | MCH-05, 06, 07 | BR-004, BR-005 | M |
-| EPIC-MCH-03 | Giám sát trạng thái kết nối và chế độ hoạt động | Hiển thị trạng thái kết nối (ONLINE/UNSTABLE/OFFLINE), chế độ hoạt động (NORMAL/MAINTENANCE/DISABLED), phiên bản firmware/cấu hình và thời điểm liên lạc gần nhất của mỗi máy. | MCH-08, 09, 10 | BR-004, BR-006 | M |
+| EPIC-MCH-03 | Giám sát trạng thái kết nối và chế độ hoạt động | Hiển thị trạng thái kết nối (ONLINE/UNSTABLE/OFFLINE), chế độ hoạt động (NORMAL/DRAINING/MAINTENANCE/DISABLED), phiên bản firmware/cấu hình và thời điểm liên lạc gần nhất của mỗi máy. | MCH-08, 09, 10 | BR-004, BR-006 | M |
 | EPIC-MCH-04 | Điều khiển bật/tắt máy và slot từ xa | Operations Staff bật/tắt toàn bộ máy hoặc từng slot riêng lẻ từ xa. | MCH-11, 12 | BR-004 | M |
 | EPIC-MCH-05 | Lịch sử cấu hình và di chuyển máy | Lưu lịch sử mọi thay đổi cấu hình máy/slot và lịch sử di chuyển máy giữa các địa điểm. | MCH-13, 14 | BR-004, BR-008 | M |
-| EPIC-MCH-06 | Trạng thái khả dụng (AVAILABLE/UNAVAILABLE) của slot | Slot tự chuyển AVAILABLE khi đồng thời có hóa đơn hiệu lực, đã gán sản phẩm, có chai đủ lượng và không bị tắt thủ công; ngược lại tự chuyển UNAVAILABLE ngay khi một điều kiện không còn thỏa. | MCH-15, 16, 17 | BR-002, BR-005 | M |
+| EPIC-MCH-06 | Trạng thái khả dụng (AVAILABLE/UNAVAILABLE) của slot | Slot tự chuyển AVAILABLE khi đồng thời có hóa đơn hiệu lực, đã gán sản phẩm, có chai đủ lượng và không bị tắt thủ công; ngược lại tự chuyển UNAVAILABLE ngay khi một điều kiện không còn thỏa; slot tự sang MAINTENANCE sau `CONSECUTIVE_FAIL_ALERT` lượt lỗi liên tiếp và chỉ Operations Staff bật lại (ADR-0015). | MCH-15, 16, 17, 18 | BR-002, BR-005, BR-006 | M |
 
 ## A6. EPIC-SLT — Hóa đơn thuê slot
 
@@ -91,23 +93,27 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 | EPIC-SLT-02 | Vòng đời trạng thái hóa đơn và chặn đơn hàng ngoài phạm vi | Quản lý 9 trạng thái vòng đời hóa đơn (DRAFT…TERMINATED, CANCELLED); chặn tạo đơn hàng mới và chuyển slot UNAVAILABLE khi hóa đơn không còn hiệu lực. | SLT-06, 10, 11 | BR-002, BR-009, BR-013 | M |
 | EPIC-SLT-03 | Cấu hình slot: gán sản phẩm và định giá | Sau khi thanh toán, Brand Admin gán/đổi sản phẩm của mình và tự do đặt giá lượt xịt; giá mới chỉ áp dụng cho đơn tạo sau đó; slot chưa gán sản phẩm hoặc chưa đặt giá không nhận đơn hàng. | SLT-07, 08, 09, 27, 28, 29 | BR-002, BR-003, BR-009, BR-011, BR-012 | M |
 | EPIC-SLT-04 | Gia hạn, chấm dứt và đóng hóa đơn | Brand Admin tự gia hạn bằng mua gói mới khi hóa đơn sắp hết hạn hoặc đang ân hạn; Super Admin chấm dứt trước hạn (kèm lý do, không tự hoàn tiền) và đóng hóa đơn đã thanh lý xong; lưu toàn bộ lịch sử hóa đơn của slot. | SLT-12, 13, 14, 15 | BR-008, BR-009, BR-013 | M |
-| EPIC-SLT-05 | Tỷ lệ lấp đầy, đối soát và doanh thu bán gói | Tỷ lệ lấp đầy slot theo máy/địa điểm; bảng đối soát doanh thu lượt xịt chuyển trả cho từng thương hiệu; báo cáo doanh thu bán gói thuê và gói bảo quản của nền tảng. | SLT-16, 17, 18, 47 | BR-009 | M |
+| EPIC-SLT-05 | Tỷ lệ lấp đầy, đối soát và doanh thu bán gói | Tỷ lệ lấp đầy slot theo máy/địa điểm; bảng đối soát doanh thu lượt xịt theo tháng cho từng thương hiệu (tính đơn BRAND ở DISPENSED + FORFEITED, nền tảng chịu phí cổng và khoản hoàn); báo cáo doanh thu bán gói thuê và gói bảo quản của nền tảng. | SLT-16, 17, 18, 47 | BR-009 | M |
 | EPIC-SLT-06 | Bảng giá: gói thuê, gói bảo quản, giá niêm yết | Super Admin cấu hình gói 3/6/12 tháng kèm ưu đãi, các gói bảo quản (bảo hiểm hàng hóa) và giá thuê niêm yết theo tháng của từng slot; bảng giá được chụp vào hóa đơn lúc tạo. | SLT-30, 31, 32, 33 | BR-005, BR-008, BR-009, BR-011 | M |
 | EPIC-SLT-07 | Mua gói thuê tự phục vụ và nhận hóa đơn | Brand Admin xem slot trống kèm giá → chọn slot → chọn gói thuê và gói bảo quản → hệ thống giữ chỗ và tính tiền → thanh toán hết một lần qua cổng → webhook xác nhận, cấp số hóa đơn → xem/tải hóa đơn; hết giờ giữ chỗ thì hóa đơn tự hủy. | SLT-19, 34, 35, 36, 37, 38, 39, 40, 41, 43 | BR-008, BR-009, BR-011, BR-012 | M |
 | EPIC-SLT-08 | Kích hoạt hóa đơn khi lắp chai | Thời hạn hóa đơn tính từ lúc Inventory Staff lắp chai đầu tiên; quá hạn chờ nạp hàng thì tự kích hoạt. | SLT-24, 42 | BR-009 | M |
-| EPIC-SLT-09 | Bảo hiểm hàng hóa | Tính bồi thường khi chai của thương hiệu hư hỏng lúc nền tảng đang giữ theo gói bảo quản; Super Admin ghi nhận chi trả (cần xác thực lại); Brand Admin xem khoản bồi thường của mình. | SLT-44, 45, 46 | BR-005, BR-008, BR-012 | M |
+| EPIC-SLT-09 | Bảo hiểm hàng hóa | Tính bồi thường khi chai của thương hiệu hư hỏng lúc nền tảng đang giữ (kể cả lúc chờ nhận hàng trả về) = tỷ lệ của gói bảo quản × giá trị chai đã chứng minh, không vượt hạn mức còn lại; Super Admin ghi nhận chi trả (cần xác thực lại); Brand Admin xem khoản bồi thường của mình. | SLT-44, 45, 46 | BR-005, BR-008, BR-012 | M |
+| EPIC-SLT-10 | Hợp đồng khung và phụ lục | Super Admin quản lý phiên bản hợp đồng khung; thương hiệu phải đồng ý phiên bản hiện hành trước khi tạo phiên thanh toán, và đồng ý phụ lục tự sinh từ ảnh chụp giá trước khi trả tiền; lưu phiên bản, người đồng ý, thời điểm, IP, mã băm; xác nhận bằng OTP email ở mức S. (ADR-0013) | SLT-48, 49, 50, 51 | BR-008, BR-013 | M |
+| EPIC-SLT-11 | Chi trả doanh thu hằng tháng | Kỳ chi trả theo tháng dương lịch DRAFT → CONFIRMED → PAID; Brand Admin khiếu nại số liệu kỳ CONFIRMED; Super Admin chuyển PAID kèm mã giao dịch sau xác thực lại, chỉ khi thương hiệu đã xác minh pháp nhân. (ADR-0013) | SLT-52, 53, 54 | BR-008, BR-009 | M |
+| EPIC-SLT-12 | Đổi slot khi mua nhầm và giới hạn giữ chỗ | Trong `SLOT_SWAP_WINDOW_HOURS` giờ sau thanh toán và trước khi lắp chai, đổi một lần sang slot trống cùng giá, không hoàn tiền; mỗi thương hiệu giữ chỗ tối đa `BRAND_MAX_HELD_SLOTS` slot chưa thanh toán. (ADR-0014) | SLT-55, 56 | BR-011 | M |
 
 ## A7. EPIC-EXP — Ân hạn, gia hạn và thanh lý hàng tồn
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
 | EPIC-EXP-01 | Thông báo hết hạn hóa đơn | Thông báo Brand Admin ở mốc T-7 và T-3 ngày trước khi hết hạn, gộp thành một thông báo nếu nhiều hóa đơn cùng hết hạn một ngày, và ghi nhật ký kiểm toán cho mỗi lần gửi. | EXP-01, 02, 03, 04 | BR-008, BR-009, BR-013 | M |
-| EPIC-EXP-02 | Chuyển trạng thái EXPIRING và GRACE | Hóa đơn tự chuyển EXPIRING ở T-7 ngày, chuyển GRACE đúng ngày hết hạn nếu chưa gia hạn; Platform Super Admin ấn định độ dài thời gian ân hạn cho từng hóa đơn. | EXP-05, 06, 07 | BR-009, BR-013 | M |
+| EPIC-EXP-02 | Chuyển trạng thái EXPIRING và GRACE | Hóa đơn tự chuyển EXPIRING ở T-7 ngày, chuyển GRACE đúng ngày hết hạn nếu chưa gia hạn và chưa báo không gia hạn; ân hạn dài mặc định `GRACE_PERIOD_DEFAULT_DAYS` ngày, Platform Super Admin sửa được cho từng hóa đơn. | EXP-05, 06, 07 | BR-009, BR-013 | M |
 | EPIC-EXP-03 | Vận hành và tính phí trong thời gian ân hạn | Trong ân hạn, slot vẫn bán bình thường và doanh thu vẫn thuộc thương hiệu; hệ thống tính phí lưu kho theo tỷ lệ % × giá chai × số tồn, hiển thị cho Brand Admin và đưa vào quyết toán kỳ. | EXP-08, 09, 10, 11, 12 | BR-009, BR-013 | M |
 | EPIC-EXP-04 | Gia hạn thành công | Gia hạn thành công chuyển hóa đơn sang RENEWED và dừng tính phí ân hạn. | EXP-13 | BR-013 | M |
 | EPIC-EXP-05 | Thanh lý hàng tồn và chuyển quyền sở hữu | Hết ân hạn không gia hạn: hóa đơn chuyển LIQUIDATED, toàn bộ chai còn tồn của thương hiệu chuyển quyền sở hữu sang nền tảng, ghi nhận thời điểm và hóa đơn nguồn cho mỗi chai. | EXP-14, 15, 16 | BR-008, BR-013 | M |
 | EPIC-EXP-06 | Bán hàng thanh lý và cắt quyền truy cập của thương hiệu | Sau thanh lý, slot tiếp tục bán hàng thuộc sở hữu nền tảng với giá do Platform Super Admin đặt; Brand Admin được thông báo danh sách chai bị thanh lý và mất quyền truy cập dữ liệu giao dịch phát sinh sau đó. | EXP-17, 18, 19, 20 | BR-012, BR-013 | M |
 | EPIC-EXP-07 | Kiểm toán và tính độc lập giữa các hóa đơn | Mọi sự kiện chuyển ân hạn/gia hạn/thanh lý/đóng hóa đơn được ghi nhật ký kiểm toán; vòng đời ân hạn-thanh lý áp dụng độc lập cho từng hóa đơn, kể cả khi cùng thương hiệu có nhiều slot trên một máy. | EXP-21, 22 | BR-008, BR-013 | M |
+| EPIC-EXP-08 | Chủ động không gia hạn và nhận hàng trả về | Brand Admin báo không gia hạn bất cứ lúc nào trước hạn (rút lại được) và chọn tự đến kho hoặc nhận gửi về; hóa đơn không vào ân hạn, không phí, slot bán tới khi tháo chai; tháo chai lập phiếu trả hàng, chai RETURNED_TO_BRAND, hóa đơn CLOSED; ghi nhận bàn giao; quá `RETURN_PICKUP_MAX_DAYS` ngày chưa nhận thì thanh lý, có báo trước 3 ngày. (ADR-0014) | EXP-23, 24, 25, 26, 27, 28 | BR-005, BR-008, BR-009, BR-013 | M |
 
 ## A8. EPIC-REV — Phân tách doanh thu
 
@@ -120,13 +126,14 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
-| EPIC-INV-01 | Quản lý chai và lô nước hoa | Inventory Staff tạo lô nước hoa và đăng ký từng chai với mã định danh duy nhất, chủ sở hữu (thương hiệu hoặc nền tảng), trạng thái theo 7 giá trị (IN_STOCK…LIQUIDATED), và khối lượng ban đầu khi lắp. | INV-01, 02, 03, 04, 05 | BR-005, BR-013 | M |
+| EPIC-INV-01 | Quản lý chai và lô nước hoa | Inventory Staff tạo lô nước hoa và đăng ký từng chai với mã định danh duy nhất, chủ sở hữu (thương hiệu hoặc nền tảng), trạng thái theo 8 giá trị (IN_STOCK…LIQUIDATED, RETURNED_TO_BRAND), và khối lượng ban đầu khi lắp. | INV-01, 02, 03, 04, 05 | BR-005, BR-013 | M |
 | EPIC-INV-02 | Brand Admin gửi hàng, Inventory Staff đối soát khi nhận | Brand Admin khai báo lô hàng gửi đến kho; Inventory Staff đối soát số lượng thực nhận, đánh dấu DISCREPANCY nếu lệch, hệ thống tự tạo lô nước hoa liên kết khi xác nhận nhận hàng. | INV-22, 23, 24, 25, 26, 27, 28 | BR-005, BR-008 | M |
 | EPIC-INV-03 | Lắp chai vào slot (kiểm tra hóa đơn, sản phẩm, hạn dùng) | Từ chối lắp nếu thương hiệu không có hóa đơn thuê slot đó, cảnh báo nếu sản phẩm không khớp cấu hình slot, từ chối nếu chai đã quá hạn sử dụng. | INV-06, 07, 08 | BR-003, BR-005, BR-012 | M |
 | EPIC-INV-04 | Theo dõi tồn kho theo thời gian thực | Ước tính lượng còn lại theo số lượt xịt và mức tiêu thụ đã hiệu chuẩn, cập nhật sau mỗi lượt xịt, sinh cảnh báo sắp hết và chuyển slot UNAVAILABLE khi không đủ cho một lượt xịt. | INV-09, 10, 11, 12 | BR-005 | M |
-| EPIC-INV-05 | Phiên nạp và phiếu nạp (kèm chống báo động giả cửa mở) | Inventory Staff mở phiếu nạp trước khi thao tác (tạm ngưng cảnh báo cửa mở trong lúc mở phiếu), hoàn thành checklist, và đóng phiếu để khôi phục giám sát; hệ thống lưu đầy đủ chi tiết phiên nạp. | INV-13, 14, 29, 30, 31 | BR-005, BR-006, BR-008 | M |
+| EPIC-INV-05 | Phiên nạp và phiếu nạp (kèm chống báo động giả cửa mở, dừng bán khi nạp) | Inventory Staff mở phiếu nạp trước khi thao tác — không mở được khi máy còn lệnh chờ bấm hoặc đơn chờ thanh toán; trong lúc mở phiếu, cảnh báo cửa mở tạm ngưng và cả máy dừng nhận đơn; hoàn thành checklist và đóng phiếu để khôi phục giám sát và bán lại; hệ thống lưu đầy đủ chi tiết phiên nạp. (ADR-0015) | INV-13, 14, 29, 30, 31, 32 | BR-002, BR-005, BR-006, BR-008, BR-010 | M |
 | EPIC-INV-06 | Tháo chai và điều chỉnh tồn kho | Quy trình tháo chai trả về kho (ghi nhận khối lượng còn lại) và ghi nhận điều chỉnh tồn kho thủ công kèm lý do bắt buộc. | INV-15, 16 | BR-005, BR-013 | M |
 | EPIC-INV-07 | Lịch sử, đối chiếu rò rỉ và báo cáo tồn kho | Lưu lịch sử toàn bộ vòng đời từng chai; so sánh tiêu thụ tính toán với số đo load cell để cảnh báo nghi rò rỉ (lệch >20%); cảnh báo lô sắp hết hạn; xuất báo cáo tồn kho đa chiều. | INV-17, 18, 19, 20, 21 | BR-005, BR-007, BR-008 | M |
+| EPIC-INV-08 | Giấy tờ chứng minh hàng chính hãng | Brand Admin nộp giấy tờ chính hãng cho lô hàng trong `RENTAL_MAX_STOCKING_DAYS` ngày sau thanh toán; Platform Super Admin duyệt hoặc từ chối kèm lý do; chai của lô chưa được duyệt không lắp được vào slot. (ADR-0013) | INV-33, 34, 35 | BR-005, BR-008 | M |
 
 ## A10. EPIC-RFQ — Yêu cầu bổ sung nước hoa
 
@@ -143,12 +150,13 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 |---|---|---|---|---|---|
 | EPIC-ORD-01 | Duyệt danh mục và chọn slot trên kiosk | Kiosk hiển thị sản phẩm của mọi slot khả dụng trên máy kèm tên thương hiệu, chi tiết sản phẩm khi chọn slot, và cho phép lọc theo thương hiệu. | ORD-01, 02, 03 | BR-001, BR-011 | M |
 | EPIC-ORD-02 | Tạo đơn hàng và chốt dữ liệu tại thời điểm tạo | Chỉ tạo đơn khi máy ONLINE và slot AVAILABLE; đơn hàng chốt lại máy, slot, hóa đơn, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu tại thời điểm tạo, kèm mã tham chiếu duy nhất. | ORD-04, 05, 06, 07 | BR-001, BR-002, BR-008, BR-013 | M |
-| EPIC-ORD-03 | Thanh toán QR và vòng đời trạng thái đơn hàng | Sinh mã QR thanh toán, gán thời hạn thanh toán 5 phút, quản lý 9 trạng thái vòng đời đơn hàng, hiển thị trạng thái trên kiosk cập nhật trong 3 giây, tự chuyển EXPIRED nếu quá hạn. | ORD-08, 09, 10, 11, 16 | BR-001, BR-002, BR-008 | M |
+| EPIC-ORD-03 | Thanh toán QR và vòng đời trạng thái đơn hàng | Sinh mã QR thanh toán, gán thời hạn thanh toán 5 phút, quản lý 10 trạng thái vòng đời đơn hàng, hiển thị trạng thái trên kiosk cập nhật trong 3 giây, tự chuyển EXPIRED nếu quá hạn. | ORD-08, 09, 10, 11, 16 | BR-001, BR-002, BR-008 | M |
 | EPIC-ORD-04 | Xử lý webhook thanh toán an toàn và idempotent | Nhận webhook kết quả thanh toán, xác minh chữ ký, khớp mã tham chiếu/số tiền/loại tiền với đơn hàng, và đảm bảo mỗi webhook chỉ xử lý đúng một lần dù gửi lại nhiều lần. | ORD-12, 13, 14, 15 | BR-002 | M |
 | EPIC-ORD-05 | Liên kết đơn hàng với lệnh xịt | Chỉ tạo lệnh xịt từ đơn PAID (không từ FAILED/EXPIRED/REFUNDED); lưu toàn bộ lịch sử chuyển trạng thái đơn hàng kèm thời điểm và nguyên nhân. | ORD-17, 18 | BR-002, BR-008 | M |
-| EPIC-ORD-06 | Xử lý sự cố thanh toán/xịt và hoàn tiền | Đơn thanh toán thành công nhưng xịt thất bại/không rõ kết quả được đánh dấu cần kiểm tra thủ công, Operations Staff khởi tạo hoàn tiền, kiosk hiển thị hướng dẫn kèm mã sự cố cho khách. | ORD-19, 20, 21 | BR-002, BR-006 | M |
+| EPIC-ORD-06 | Xử lý sự cố và hoàn tiền thủ công qua phiếu khiếu nại | Đơn đã trả tiền mà xịt thất bại, không rõ kết quả, bị từ chối trước khi đèn sáng hoặc chờ lượt quá hạn được đánh dấu kiểm tra thủ công; kiosk hiện mã sự cố và QR dẫn tới trang khiếu nại công khai (mã dùng một lần, mỗi đơn một phiếu); khách gửi tài khoản nhận hoàn tiền kèm đồng ý xử lý dữ liệu; chỉ Operations Staff được phân công xem tài khoản (sau xác thực lại, có ghi vết) và ghi nhận đã hoàn hoặc từ chối; tài khoản bị xóa khi phiếu đóng, liên hệ xóa sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS`; phiếu quá hạn tự EXPIRED, quá SLA thì cảnh báo. (ADR-0012) | ORD-19, 20, 21, 28, 29, 30, 31, 32 | BR-002, BR-006, BR-008 | M |
 | EPIC-ORD-07 | Tìm kiếm và đối soát giao dịch | Tìm kiếm giao dịch đa tiêu chí (thời gian, máy, slot, địa điểm, sản phẩm, mã, trạng thái) và đối soát nội bộ với dữ liệu từ nhà cung cấp thanh toán. | ORD-22, 23 | BR-008, BR-009 | M |
 | EPIC-ORD-08 | Nút bấm vật lý phía kiosk và đơn bỏ lượt | Hiện điều khoản bấm nút trước mã QR; nhắc "Mời bấm nút số N" kèm đếm ngược; không nhận đơn mới khi máy đang chờ bấm (`MACHINE_BUSY`); khách không bấm trong thời gian chờ thì đơn chuyển `FORFEITED`, không hoàn tiền. (ADR-0007) | ORD-24, 25, 26, 27 | BR-001, BR-002, BR-009 | M |
+| EPIC-ORD-09 | Dừng bán an toàn phía đơn hàng | Mỗi máy tối đa một đơn chờ thanh toán (đơn thứ hai nhận `MACHINE_BUSY`); kiosk hủy đơn và hủy link thanh toán ở cổng khi khách rời màn QR, trừ khi cổng đã/đang nhận tiền; đơn đã trả tiền chờ lượt quá `PAID_QUEUE_MAX_SEC` thì FAILED (`QUEUE_TIMEOUT`) và vào kiểm tra thủ công. (ADR-0015) | ORD-33, 34, 35 | BR-001, BR-002 | M |
 
 ## A12. EPIC-DSP — Điều khiển lượt xịt an toàn
 
@@ -176,16 +184,17 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
-| EPIC-ALR-01 | Phát hiện, phân loại và chống trùng cảnh báo | Tự động sinh cảnh báo khi: máy OFFLINE, slot sắp hết/hết, cửa mở quá 5 phút ngoài phiên bảo trì/phiên nạp, 3 lượt xịt lỗi liên tiếp cùng slot, hoặc lỗi cảm biến/cơ cấu; mỗi cảnh báo được phân loại đầy đủ và không sinh trùng khi còn cảnh báo cùng loại chưa xử lý. | ALR-01, 02, 03, 04, 05, 06, 07 | BR-005, BR-006, BR-010 | M |
+| EPIC-ALR-01 | Phát hiện, phân loại và chống trùng cảnh báo | Tự động sinh cảnh báo khi: máy OFFLINE, slot sắp hết/hết, cửa mở quá 5 phút ngoài phiên bảo trì/phiên nạp, 3 lệnh xịt khách hàng liên tiếp cùng slot kết thúc FAILED/UNKNOWN/REJECTED (trừ `PRESS_TIMEOUT`, `CMD_DUPLICATE`), hoặc lỗi cảm biến/cơ cấu; mỗi cảnh báo được phân loại đầy đủ và không sinh trùng khi còn cảnh báo cùng loại chưa xử lý. | ALR-01, 02, 03, 04, 05, 06, 07 | BR-005, BR-006, BR-010 | M |
 | EPIC-ALR-02 | Vòng đời xử lý cảnh báo và thông báo thương hiệu bị ảnh hưởng | Quản lý 4 trạng thái vòng đời cảnh báo; xác định thương hiệu bị ảnh hưởng và thông báo riêng cho từng Brand Admin không lộ thông tin chéo; Operations Staff tiếp nhận/phân công/đóng, có thể tự sinh phiếu bảo trì cho cảnh báo nghiêm trọng và tự nâng mức khi trễ hạn xử lý. | ALR-08, 09, 10, 11, 12, 13, 14 | BR-006, BR-008, BR-012 | M |
-| EPIC-ALR-03 | Thông báo cảnh báo qua kênh ngoài *(Future Work)* | Gửi thông báo cảnh báo qua kênh ngoài (email, Zalo) — chưa hiện thực trong MVP. | ALR-15 | BR-006 | W |
+| EPIC-ALR-03 | Cảnh báo vận hành qua kênh ngoài *(Future Work)* | Gửi cảnh báo vận hành qua kênh ngoài (email, Zalo) — chưa hiện thực trong MVP. | ALR-15 | BR-006 | W |
+| EPIC-ALR-04 | Email thông báo về tiền và hàng cho thương hiệu | Gửi email cho Brand Admin, lưu trạng thái gửi làm bằng chứng: thanh toán thuê slot, hóa đơn bắt đầu hiệu lực, sắp hết hạn, vào ân hạn, sắp thanh lý, đã thanh lý, hàng trả về sẵn sàng, kỳ chi trả. (ADR-0013) | ALR-16 | BR-009, BR-013 | M |
 
 ## A15. EPIC-MNT — Bảo trì
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
 | EPIC-MNT-01 | Tạo, phân công và phân loại phiếu bảo trì | Operations Staff tạo phiếu bảo trì thủ công cho một máy, phân công cho tài khoản cụ thể, phân loại theo nhóm sự cố/mức nghiêm trọng/ưu tiên/hạn xử lý, quản lý theo 5 trạng thái vòng đời. | MNT-01, 02, 03, 04 | BR-004, BR-006 | M |
-| EPIC-MNT-02 | Chuyển chế độ MAINTENANCE và bảo vệ vận hành | Operations Staff chuyển máy sang MAINTENANCE; hệ thống chặn đơn hàng mới trên máy đang bảo trì và thông báo cho mọi Brand Admin có slot trên máy đó. | MNT-05, 06, 07 | BR-002, BR-006, BR-010, BR-012 | M |
+| EPIC-MNT-02 | Chuyển chế độ bảo trì và bảo vệ vận hành | Operations Staff yêu cầu bảo trì → máy DRAINING: chặn đơn mới, phục vụ nốt khách đã trả tiền, rồi tự sang MAINTENANCE; ép chuyển ngay được trong trường hợp khẩn cấp kèm lý do; thông báo cho mọi Brand Admin có slot trên máy đó. (ADR-0015) | MNT-05, 06, 07, 17 | BR-002, BR-006, BR-010, BR-012 | M |
 | EPIC-MNT-03 | Chẩn đoán và khắc phục tại hiện trường | Operations Staff xem dữ liệu cảm biến/lỗi/sự kiện gần đây, thực hiện lượt xịt chẩn đoán sau xác thực lại, và ghi kết quả chẩn đoán, nguyên nhân, biện pháp xử lý, linh kiện đã thay. | MNT-08, 09, 10 | BR-006, BR-008 | M |
 | EPIC-MNT-04 | Checklist an toàn, đóng phiếu và lịch sử bảo trì | Bắt buộc hoàn thành checklist an toàn trước khi trả máy về NORMAL, bắt buộc ghi kết quả xử lý trước khi đóng phiếu; lưu lịch sử bảo trì, cho đính kèm ghi chú/hình ảnh và đo thời gian xử lý sự cố. | MNT-11, 12, 13, 14, 15, 16 | BR-006, BR-008, BR-010 | M |
 
@@ -193,7 +202,7 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 | Mã Epic | Tên epic | Chi tiết | FR nguyên tử | BR | Ưu tiên |
 |---|---|---|---|---|---|
-| EPIC-RPT-01 | Dashboard vận hành cho Platform Super Admin | Số lượng máy theo trạng thái/chế độ, số giao dịch theo trạng thái đơn, tỷ lệ xịt thành công/thất bại, danh sách đơn đã trả tiền chưa xác nhận xịt, và thời gian hoạt động/ngừng/tần suất cảnh báo theo máy. | RPT-01, 03, 04, 05, 13 | BR-002, BR-006, BR-007 | M |
+| EPIC-RPT-01 | Dashboard vận hành cho Platform Super Admin | Số lượng máy theo trạng thái/chế độ, số giao dịch theo trạng thái đơn, tỷ lệ xịt thành công/thất bại/khách bỏ lượt (tổng và theo từng máy), danh sách đơn đã trả tiền chưa xác nhận xịt, và thời gian hoạt động/ngừng/tần suất cảnh báo theo máy. | RPT-01, 03, 04, 05, 13 | BR-002, BR-006, BR-007 | M |
 | EPIC-RPT-02 | Báo cáo doanh thu và giao dịch | Báo cáo doanh thu và số giao dịch theo ngày/tuần/tháng/khoảng tùy chọn, và theo máy/địa điểm/slot/thương hiệu cho Platform Super Admin. | RPT-02, 09 | BR-007, BR-009 | M |
 | EPIC-RPT-03 | Báo cáo marketing và tồn kho | Xếp hạng sản phẩm theo lượt chọn (lọc theo slot/máy/địa điểm/thời gian) phục vụ marketing, và hiển thị tồn kho ước tính cùng danh sách slot sắp hết. | RPT-06, 07 | BR-005, BR-007 | M |
 | EPIC-RPT-04 | Báo cáo cho Brand Admin, giới hạn phạm vi theo hóa đơn | Brand Admin xem báo cáo doanh thu/lượt xịt theo slot mình thuê, với mọi báo cáo tự động giới hạn phạm vi theo hóa đơn và không hiển thị chỉ số cho phép suy ra dữ liệu thương hiệu khác. | RPT-08, 10, 11, 12 | BR-003, BR-007, BR-009, BR-012 | M |
@@ -213,10 +222,10 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 | Ưu tiên | Số epic |
 |---|---|
-| M — Must | 79 |
+| M — Must | 88 |
 | S — Should | 0 |
 | W — Won't (Future Work) | 3 |
-| **Tổng** | **82** |
+| **Tổng** | **91** |
 
 **Danh sách epic W:** EPIC-PRD-03, EPIC-IOT-06, EPIC-ALR-03 — tương ứng đúng 3 FR nguyên tử mức W đã có ở tài liệu chi tiết (FR-PRD-06, FR-IOT-15, FR-ALR-15).
 
@@ -224,4 +233,4 @@ Mỗi epic trong tài liệu này liệt kê đầy đủ mã FR nguyên tử m�
 
 ---
 
-*Tài liệu sinh từ [FR_NFR_SCENTSTATION.md](FR_NFR_SCENTSTATION.md), phiên bản tương ứng với 286 FR hiệu lực / 52 NFR (mục A6 viết lại theo ADR-0006 ngày 2026-09-25; thêm EPIC-ORD-08, EPIC-DSP-06 theo ADR-0007 ngày 2026-09-29). Khi tài liệu chi tiết thay đổi (thêm/bớt FR nguyên tử), cần đồng bộ lại bảng epic tương ứng ở đây.*
+*Tài liệu sinh từ [FR_NFR_SCENTSTATION.md](FR_NFR_SCENTSTATION.md), phiên bản tương ứng với 320 FR hiệu lực / 52 NFR (mục A6 viết lại theo ADR-0006 ngày 2026-09-25; thêm EPIC-ORD-08, EPIC-DSP-06 theo ADR-0007 ngày 2026-09-29; ngày 2026-10-14 đồng bộ ADR-0012 ÷ 0015 — mở rộng EPIC-ORD-06, thêm EPIC-BND-04, USR-02, SLT-10 ÷ 12, EXP-08, INV-08, ORD-09, ALR-04; mục lục cũ ghi 78 epic là đếm thiếu, số đúng trước đợt này là 82). Khi tài liệu chi tiết thay đổi (thêm/bớt FR nguyên tử), cần đồng bộ lại bảng epic tương ứng ở đây.*

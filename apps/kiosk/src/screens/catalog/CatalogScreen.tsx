@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
+import { QRCodeSVG } from 'qrcode.react';
 import type { components } from '@scentstation/contracts';
 import {
+  errorMessage,
+  isNotCancellable,
   recordKioskInteraction,
+  useCancelOrder,
   useCreateOrder,
   useKioskCatalog,
   useOrderStatus,
@@ -10,7 +14,7 @@ import {
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
-import { phaseOf } from '../checkout/checkout-phase';
+import { phaseOf, secondsUntil } from '../checkout/checkout-phase';
 import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
 import styles from './CatalogScreen.module.css';
 
@@ -29,14 +33,6 @@ const FAMILIES: Record<number, string> = {
   3: 'SOLAR FLORAL',
   4: 'ORIENTAL WOOD',
   5: 'FLORAL NOBLE',
-};
-
-const PRODUCT_INTROS: Record<number, string> = {
-  1: 'Hương thơm sớm mai thanh khiết kết hợp cam bergamote và hoa cỏ Grasse, mang lại nguồn năng lượng tươi mới.',
-  2: 'Hòa quyện tinh tế giữa hổ phách phương Đông và da thuộc đen sang trọng, gợi mở chiều sâu bí ẩn đầy lôi cuốn.',
-  3: 'Nốt hương hoa sen thanh tao thuần khiết buổi sớm, hòa quyện hương phù sa mộc mạc và sương mai dịu nhẹ, mang lại cảm giác an yên, thoát tục.',
-  4: 'Hương quế cay ấm nồng nàn đặc trưng của đại ngàn Trà Bồng, đan xen thảo mộc núi rừng tạo nên chiều sâu nồng ấm và lôi cuốn.',
-  5: 'Tuyệt tác trầm hương thượng hạng từ xứ Trầm Khánh Hòa, lắng đọng khói sương huyền ảo mang lại sự tĩnh tại, tôn quý.',
 };
 
 function formatPrice(amount: string | null | undefined, currency: string): string {
@@ -60,18 +56,27 @@ function parseNoteValues(val: unknown): string[] {
   return [String(val)];
 }
 
-type PaymentStep = 'select' | 'qr' | 'pos';
+function newIdempotencyKey(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
 
 /**
  * Màn hình Kiosk duy nhất (Single-Screen Architecture):
  * - Băng chuyền nước hoa sang trọng hỗ trợ cuộn kéo vuốt mượt mà trái sang phải (Drag & Swipe).
- * - Tất cả các màn hình phụ (Chi tiết sản phẩm, Popup chọn PTTT, Popup VietQR, Popup POS/NFC)
- *   đều là MODAL hiển thị trực tiếp trên nền HomeScreen.
+ * - Các màn hình phụ (Chi tiết sản phẩm, Popup mã QR thanh toán) đều là MODAL hiển thị trực tiếp
+ *   trên nền HomeScreen. Hiện chỉ có thanh toán QR (ADR-0016) nên không có bước chọn phương thức.
  */
 export default function CatalogScreen() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const location = useLocation();
   const params = useParams<{ slotNumber?: string }>();
   const catalog = useKioskCatalog();
   const { kioskSessionId, startNewSession } = useKioskSession();
@@ -90,18 +95,16 @@ export default function CatalogScreen() {
 
   // Modal states
   const [selectedDetailItem, setSelectedDetailItem] = useState<KioskCatalogItem | null>(null);
-  const [customPaymentStep, setCustomPaymentStep] = useState<PaymentStep | null>(null);
-  const [selectedMethod, setSelectedMethod] = useState<'card' | 'qr'>('card');
-  const [countdown, setCountdown] = useState(299); // 04:59
+  // Khách đã đồng ý điều khoản bấm nút (FR-ORD-25) và đang ở modal mã QR.
+  const [paying, setPaying] = useState(false);
+  // Khách vừa bấm hủy khi đã có mã QR — đang hỏi lại trước khi bỏ đơn.
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
 
   // Hook tạo đơn và theo dõi trạng thái thanh toán từ backend
-  const [idempotencyKey, setIdempotencyKey] = useState(() =>
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
+  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
   const createOrder = useCreateOrder();
+  const cancelOrder = useCancelOrder();
   const created = createOrder.data;
   const statusQuery = useOrderStatus(created?.order.id ?? null);
   const orderStatusView = statusQuery.data;
@@ -132,24 +135,23 @@ export default function CatalogScreen() {
   }, [params.slotNumber, items]);
 
   const detailItem = selectedDetailItem ?? routeMatchedItem;
-  const isCheckoutRoute = location.pathname.startsWith('/checkout/');
-  const paymentStep = customPaymentStep ?? (isCheckoutRoute ? 'select' : null);
+  // Mở thẳng /checkout/:slot (vd. tải lại trang) vẫn phải qua modal chi tiết có điều khoản trước
+  // (FR-ORD-25): chỉ khi khách bấm đồng ý thì mới mở mã QR.
+  const paymentOpen = paying && detailItem !== null;
 
-  // Tự động gọi API tạo đơn khi khách vào bước thanh toán (qr hoặc pos)
+  // Đếm theo hạn của chính đơn đang hiện (máy chủ trả), không đếm cục bộ — đơn mới thì hạn mới.
+  const qrSecondsLeft = secondsUntil(created?.order.expiresAt, now);
+
+  // Tự động gọi API tạo đơn khi khách đã đồng ý điều khoản
   useEffect(() => {
-    if (
-      detailItem &&
-      (paymentStep === 'qr' || paymentStep === 'pos') &&
-      !created &&
-      !createOrder.isPending
-    ) {
+    if (detailItem && paymentOpen && !created && !createOrder.isPending) {
       createOrder.mutate({
         slotId: detailItem.slotId,
         kioskSessionId,
         idempotencyKey,
       });
     }
-  }, [detailItem, paymentStep, created, createOrder, kioskSessionId, idempotencyKey]);
+  }, [detailItem, paymentOpen, created, createOrder, kioskSessionId, idempotencyKey]);
 
   // Danh sách lặp vô tận (3 bộ lặp lại liên tục cho chu kỳ marquee conveyor)
   const loopItems = useMemo(() => {
@@ -207,7 +209,7 @@ export default function CatalogScreen() {
     if (import.meta.env.MODE === 'test') return;
 
     let animId: number;
-    const speed = 0.75; // Tốc độ trôi êm ái sang phải (left-to-right)
+    const speed = 0.5; // Tốc độ trôi êm ái sang phải (left-to-right)
 
     function animate() {
       if (
@@ -236,18 +238,15 @@ export default function CatalogScreen() {
     return () => cancelAnimationFrame(animId);
   }, [items]);
 
-  // Đóng modal khi nhấn ESC
+  // Đóng modal khi nhấn ESC — đi qua cùng đường đóng để bỏ đơn đang hiện, không mang sang sản phẩm khác.
+  const escCloseRef = useRef<() => void>(() => {});
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setSelectedDetailItem(null);
-        setCustomPaymentStep(null);
-        void navigate('/');
-      }
+      if (e.key === 'Escape') escCloseRef.current();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, []);
 
   // Ghi nhận lượt xem sản phẩm (FR-RPT-06, BR-007)
   useEffect(() => {
@@ -263,21 +262,6 @@ export default function CatalogScreen() {
       }
     }
   }, [items, kioskSessionId]);
-
-  // Đồng hồ đếm ngược khi mở popup VietQR
-  useEffect(() => {
-    if (paymentStep !== 'qr') return;
-    const timer = setInterval(() => {
-      setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [paymentStep]);
-
-  const formatCountdown = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-  };
 
   // Kéo vuốt chuột & cảm ứng (Pointer drag)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -395,6 +379,18 @@ export default function CatalogScreen() {
   };
 
   // Chọn sản phẩm -> Mở modal chi tiết ngay trên HomeScreen
+  // Bỏ đơn đang hiện (nếu có). Đơn chưa trả tiền tự hết hạn phía máy chủ; khách chọn lại là đơn mới,
+  // khoá idempotency mới — không bao giờ hiện lại mã QR/đồng hồ của sản phẩm trước.
+  const discardOrder = () => {
+    setPaying(false);
+    setConfirmingCancel(false);
+    cancelOrder.reset();
+    createOrder.reset();
+    setPaidSince(null);
+    setPrevStatus(null);
+    setIdempotencyKey(newIdempotencyKey());
+  };
+
   const handleSelectItem = (item: KioskCatalogItem) => {
     if (hasDraggedRef.current) return;
     if (!item.available) return;
@@ -404,57 +400,71 @@ export default function CatalogScreen() {
       slotId: item.slotId,
       kioskSessionId,
     });
+    discardOrder();
     setSelectedDetailItem(item);
-    setCustomPaymentStep(null);
     void navigate(`/products/${item.slotNumber}`);
   };
 
   const handleCloseDetailModal = () => {
     setSelectedDetailItem(null);
-    setCustomPaymentStep(null);
-    createOrder.reset();
+    discardOrder();
     startNewSession();
-    setPaidSince(null);
-    setPrevStatus(null);
-    setIdempotencyKey(
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
     isPausedRef.current = false;
     void navigate('/');
+  };
+
+  // Khách có thể đã chuyển khoản dù đang bấm hủy — đã có mã QR thì phải hỏi lại. Chưa có mã (đang
+  // tạo đơn) thì khách chưa thể trả tiền, đóng luôn.
+  const handleRequestCancel = () => {
+    if (created) setConfirmingCancel(true);
+    else handleCloseDetailModal();
+  };
+
+  // FR-ORD-33: hủy đơn ở máy chủ (máy chủ hủy luôn link ở cổng) rồi mới đóng. Cổng báo tiền đã/đang
+  // về → ở lại màn QR, poll trạng thái sẽ đưa khách sang màn nhận lượt xịt. Lỗi khác (mất mạng…) →
+  // vẫn đóng: khách đã quyết rời đi, và tiền nếu vẫn tới sẽ vào danh sách hoàn tiền.
+  const handleConfirmCancel = () => {
+    if (!created) {
+      handleCloseDetailModal();
+      return;
+    }
+    cancelOrder.mutate(created.order.id, {
+      onSuccess: handleCloseDetailModal,
+      onError: (error) => {
+        if (isNotCancellable(error)) setConfirmingCancel(false);
+        else handleCloseDetailModal();
+      },
+    });
   };
 
   const settled =
     created !== undefined && ['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase);
 
+  // Luôn trỏ tới bản đóng mới nhất để hẹn giờ/phím ESC không gọi closure cũ.
+  const closeRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    closeRef.current = handleCloseDetailModal;
+    // Màn hướng dẫn sau thanh toán không đóng bằng phím ESC — khách đang chờ lượt xịt đã trả tiền.
+    escCloseRef.current = isPostPayment
+      ? () => {}
+      : paymentOpen
+        ? confirmingCancel
+          ? () => setConfirmingCancel(false)
+          : handleRequestCancel
+        : handleCloseDetailModal;
+  });
+
   useEffect(() => {
     if (!settled) return;
-    const timer = setTimeout(handleCloseDetailModal, 60_000);
+    const timer = setTimeout(() => closeRef.current(), 60_000);
     return () => clearTimeout(timer);
   }, [settled]);
 
-  const handleBackToDetail = () => {
-    setCustomPaymentStep(null);
-    if (detailItem?.slotNumber) {
-      void navigate(`/products/${detailItem.slotNumber}`);
-    } else {
-      void navigate('/catalog');
-    }
-  };
-
+  // Khách bấm "Đồng ý và thanh toán" ở modal chi tiết (đã đọc điều khoản, FR-ORD-25) → vào thẳng mã QR.
   const handleOpenPayment = () => {
     if (!detailItem) return;
-    setCustomPaymentStep('select');
+    setPaying(true);
     void navigate(`/checkout/${detailItem.slotNumber}`);
-  };
-
-  const handleProceedPayment = () => {
-    if (selectedMethod === 'qr') {
-      setCustomPaymentStep('qr');
-    } else {
-      setCustomPaymentStep('pos');
-    }
   };
 
   // Phân tích nốt hương cho modal chi tiết
@@ -480,10 +490,8 @@ export default function CatalogScreen() {
     detailItem?.currency ?? 'VND',
   );
 
-  const detailIntro =
-    detailItem?.product?.description ||
-    (detailItem?.slotNumber ? PRODUCT_INTROS[detailItem.slotNumber] : undefined) ||
-    'Tuyệt tác hương thơm tinh tế được chắt lọc từ những nguyên liệu tự nhiên quý hiếm bậc nhất.';
+  // Mô tả giữ nguyên như thương hiệu nhập (NFR-USA-07) — không có thì không bịa mô tả thay.
+  const detailIntro = detailItem?.product?.description;
 
   return (
     <section className={styles.catalogContainer} aria-label={t('kiosk.catalogTitle')}>
@@ -510,7 +518,7 @@ export default function CatalogScreen() {
               e.stopPropagation();
               handleNudge('left');
             }}
-            aria-label="Cuộn sang trái"
+            aria-label={t('kiosk.scrollLeft')}
           >
             <span className="material-symbols-outlined">west</span>
           </button>
@@ -558,7 +566,7 @@ export default function CatalogScreen() {
                   <div className={styles.imageFrame}>
                     <img
                       src={bottleImg}
-                      alt={item.product?.name ?? 'Nước hoa Scentation'}
+                      alt={item.product?.name ?? t('kiosk.productImageAlt')}
                       className={styles.productImage}
                       loading="lazy"
                     />
@@ -587,7 +595,7 @@ export default function CatalogScreen() {
                         <>
                           <span style={{ display: 'flex', alignItems: 'center' }}>
                             <span className={styles.actionDot} />
-                            CHẠM ĐỂ THỬ HƯƠNG &amp; CHI TIẾT
+                            {t('kiosk.tapToExplore')}
                           </span>
                           <span className={`material-symbols-outlined ${styles.actionArrow}`}>
                             east
@@ -595,7 +603,7 @@ export default function CatalogScreen() {
                         </>
                       ) : (
                         <>
-                          <span>TẠM HẾT HÀNG • XEM THÔNG TIN</span>
+                          <span>{t('kiosk.outOfStockInfo')}</span>
                           <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                             info
                           </span>
@@ -616,7 +624,7 @@ export default function CatalogScreen() {
               e.stopPropagation();
               handleNudge('right');
             }}
-            aria-label="Cuộn sang phải"
+            aria-label={t('kiosk.scrollRight')}
           >
             <span className="material-symbols-outlined">east</span>
           </button>
@@ -626,7 +634,7 @@ export default function CatalogScreen() {
       {/* ========================================================
           1. MODAL CHI TIẾT SẢN PHẨM & QUICK VIEW (Stitch Screen 2)
           ======================================================== */}
-      {detailItem && !paymentStep && (
+      {detailItem && !paymentOpen && (
         <div
           className={styles.modalBackdrop}
           onClick={handleCloseDetailModal}
@@ -639,7 +647,7 @@ export default function CatalogScreen() {
               type="button"
               className={styles.closeModalBtn}
               onClick={handleCloseDetailModal}
-              aria-label="Đóng"
+              aria-label={t('kiosk.close')}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
                 close
@@ -654,7 +662,7 @@ export default function CatalogScreen() {
               <div className={styles.modalImageFrame}>
                 <img
                   src={detailBottleImg}
-                  alt={detailItem.product?.name ?? 'Flacon'}
+                  alt={detailItem.product?.name ?? t('kiosk.productImageAlt')}
                   className={styles.modalProductImage}
                 />
               </div>
@@ -675,24 +683,27 @@ export default function CatalogScreen() {
 
                 <div className={styles.modalPriceRow}>
                   <span className={styles.modalPriceTag}>
-                    {detailPriceFormatted ? `${detailPriceFormatted} / lượt xịt` : ''}
+                    {detailPriceFormatted
+                      ? t('kiosk.pricePerSpray', { price: detailPriceFormatted })
+                      : ''}
                   </span>
                 </div>
 
                 {detailIntro && <p className={styles.modalDesc}>{detailIntro}</p>}
 
                 <div className={styles.modalDetailsTable}>
-                  <div className={styles.modalDetailRow}>
-                    <span className={styles.modalDetailLabel}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                        science
+                  {/* Chỉ hiện thông tin thương hiệu đã nhập — không gán nhà chế tác/xuất xứ thay (NFR-USA-07). */}
+                  {detailItem.brandName && (
+                    <div className={styles.modalDetailRow}>
+                      <span className={styles.modalDetailLabel}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                          science
+                        </span>
+                        {t('kiosk.brandLabel')}
                       </span>
-                      Nhà Chế Tác (Master Perfumer)
-                    </span>
-                    <span className={styles.modalDetailValue}>
-                      {detailItem.brandName || 'Jean-Claude Ellena'} • Grasse, France
-                    </span>
-                  </div>
+                      <span className={styles.modalDetailValue}>{detailItem.brandName}</span>
+                    </div>
+                  )}
 
                   {notes && (
                     <div className={styles.modalDetailRow}>
@@ -700,7 +711,7 @@ export default function CatalogScreen() {
                         <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                           spa
                         </span>
-                        Tầng Hương Chính
+                        {t('kiosk.fragranceNotes')}
                       </span>
                       <div className={styles.modalDetailValue}>
                         <div
@@ -714,7 +725,7 @@ export default function CatalogScreen() {
                           {notes.top.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                Hương đầu:
+                                {t('kiosk.topNotes')}:
                               </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.top.map((n) => (
@@ -728,7 +739,7 @@ export default function CatalogScreen() {
                           {notes.heart.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                Hương giữa:
+                                {t('kiosk.heartNotes')}:
                               </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.heart.map((n) => (
@@ -742,7 +753,7 @@ export default function CatalogScreen() {
                           {notes.base.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                Hương cuối:
+                                {t('kiosk.baseNotes')}:
                               </span>
                               <div className={styles.modalNotesChips}>
                                 {notes.base.map((n) => (
@@ -757,18 +768,25 @@ export default function CatalogScreen() {
                       </div>
                     </div>
                   )}
-
-                  <div className={styles.modalDetailRow}>
-                    <span className={styles.modalDetailLabel}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                        verified_user
-                      </span>
-                      Tiêu Chuẩn &amp; Độ Tinh Khiết
-                    </span>
-                    <span className={styles.modalDetailValue}>IFRA Certified 100% Pure Origin</span>
-                  </div>
                 </div>
               </div>
+
+              {/* FR-ORD-25: điều khoản bấm nút hiện TRƯỚC mã QR; bấm đồng ý mới tạo đơn và hiện mã. */}
+              <p
+                style={{
+                  marginTop: 20,
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                  color: 'var(--color-text-secondary)',
+                  textAlign: 'left',
+                }}
+              >
+                <strong>{t('kiosk.pressTermsTitle')}: </strong>
+                {t('kiosk.pressTerms', {
+                  slot: detailItem.slotNumber,
+                  seconds: config.pressWindowSec,
+                })}
+              </p>
 
               {/* Hàng nút hành động */}
               <div className={styles.modalActionsRow}>
@@ -776,10 +794,13 @@ export default function CatalogScreen() {
                   type="button"
                   className={styles.modalCheckoutBtn}
                   onClick={handleOpenPayment}
-                  aria-label="Trải nghiệm xịt ngay"
                 >
-                  <span>Trải nghiệm xịt ngay</span>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
+                  <span>{t('kiosk.agreeAndPay')}</span>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 18 }}
+                    aria-hidden="true"
+                  >
                     arrow_forward
                   </span>
                 </button>
@@ -790,552 +811,270 @@ export default function CatalogScreen() {
       )}
 
       {/* ========================================================
-          3. MÀN HÌNH TOÀN TRANG KIOSK SAU THANH TOÁN (Stitch Screen d0590f7ae4954294b26d2f0d2b83b28f)
+          3. SAU THANH TOÁN: MÀN CHÚC MỪNG RỒI MODAL HƯỚNG DẪN BẤM NÚT
           ======================================================== */}
       {isPostPayment && created && (
         <DispenseSuccessGuide
-          item={detailItem ?? undefined}
           slot={detailItem?.slotNumber ?? 1}
           order={created.order}
           view={orderStatusView}
           phase={phase}
           now={now}
-          settled={settled}
           pressWindowSec={config.pressWindowSec}
           goHome={handleCloseDetailModal}
         />
       )}
 
       {/* ========================================================
-          2. MODAL THANH TOÁN (Stitch Screens 4, 5, 6)
+          2. MODAL MÃ QR THANH TOÁN (Stitch Screen 5)
           ======================================================== */}
-      {paymentStep && !isPostPayment && (
+      {paymentOpen && !isPostPayment && (
         <div
           className={styles.modalBackdrop}
-          onClick={handleCloseDetailModal}
+          onClick={handleRequestCancel}
           role="dialog"
           aria-modal="true"
         >
           <div className={styles.checkoutModalBox} onClick={(e) => e.stopPropagation()}>
-            {/* Nút đóng */}
+            {/* Nút đóng — cũng phải hỏi lại như nút hủy */}
             <button
               type="button"
               className={styles.closeModalBtn}
-              onClick={handleCloseDetailModal}
-              aria-label="Đóng popup thanh toán"
+              onClick={handleRequestCancel}
+              aria-label={t('kiosk.close')}
             >
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
                 close
               </span>
             </button>
 
-            {/* BƯỚC 1: CHỌN PHƯƠNG THỨC THANH TOÁN (Screen 4) */}
-            {paymentStep === 'select' && (
-              <>
-                <div className={styles.checkoutHeaderArea}>
-                  <h2 className={styles.checkoutModalTitle}>CHỌN PHƯƠNG THỨC THANH TOÁN</h2>
+            {/* Hiện chỉ có thanh toán QR (ADR-0016) nên vào thẳng mã QR, không có bước chọn phương thức. */}
+            <div className={styles.checkoutHeaderArea}>
+              <h2 className={styles.checkoutModalTitle}>{t('kiosk.scanToPay')}</h2>
 
-                  <div className={styles.checkoutSummaryBanner}>
-                    <div className={styles.checkoutSummaryLeft}>
-                      <img
-                        src={detailBottleImg}
-                        alt="Nước hoa"
-                        className={styles.checkoutSummaryThumb}
-                      />
-                      <div style={{ textAlign: 'left' }}>
-                        <div
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.14em',
-                            color: 'var(--color-text-secondary)',
-                          }}
-                        >
-                          Thanh toán 1 lượt xịt • Ngăn 0{detailItem?.slotNumber}
-                        </div>
-                        <div
-                          style={{ fontFamily: 'var(--font-serif)', fontSize: 16, fontWeight: 600 }}
-                        >
-                          {detailItem?.product?.name ?? "Nuit d'Or"}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-sans)',
-                          fontSize: 22,
-                          fontWeight: 700,
-                          color: '#000000',
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {detailPriceFormatted || '35.000 VND'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.checkoutMethodsList}>
-                  {/* Option 1: Card / POS */}
-                  <label
-                    className={`${styles.checkoutMethodItem} ${selectedMethod === 'card' ? styles.checkoutMethodItemSelected : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment_opt"
-                      value="card"
-                      checked={selectedMethod === 'card'}
-                      onChange={() => setSelectedMethod('card')}
-                      className={styles.checkoutRadio}
-                    />
-                    <div style={{ flex: 1, textAlign: 'left' }}>
-                      <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontWeight: 700,
-                            fontSize: 13.5,
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                            credit_card
-                          </span>
-                          Thẻ Visa / Mastercard / Thẻ Quốc Tế
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--color-text-secondary)',
-                          margin: '4px 0 8px',
-                        }}
-                      >
-                        Chạm NFC hoặc cắm thẻ chip vào khe đọc POS tích hợp ngay bên dưới màn hình.
-                      </div>
-                      <div className={styles.tagsRow} style={{ justifyContent: 'flex-start' }}>
-                        <span className={styles.badgeTag}>VISA</span>
-                        <span className={styles.badgeTag}>MASTERCARD</span>
-                        <span className={styles.badgeTag}>JCB</span>
-                        <span className={styles.badgeTag}>Apple Pay</span>
-                        <span className={styles.badgeTag}>Google Pay</span>
-                      </div>
-                    </div>
-                  </label>
-
-                  {/* Option 2: VietQR */}
-                  <label
-                    className={`${styles.checkoutMethodItem} ${selectedMethod === 'qr' ? styles.checkoutMethodItemSelected : ''}`}
-                  >
-                    <input
-                      type="radio"
-                      name="payment_opt"
-                      value="qr"
-                      checked={selectedMethod === 'qr'}
-                      onChange={() => setSelectedMethod('qr')}
-                      className={styles.checkoutRadio}
-                    />
-                    <div style={{ flex: 1, textAlign: 'left' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            fontWeight: 700,
-                            fontSize: 13.5,
-                          }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                            qr_code_scanner
-                          </span>
-                          Quét Mã QR (VietQR / Ngân Hàng / Ví Điện Tử)
-                        </div>
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: 'var(--color-text-secondary)',
-                          margin: '4px 0 8px',
-                        }}
-                      >
-                        Quét mã qua app Mobile Banking hoặc ví MoMo, ZaloPay, VNPay.
-                      </div>
-                      <div className={styles.tagsRow} style={{ justifyContent: 'flex-start' }}>
-                        <span className={styles.badgeTag}>VIETQR</span>
-                        <span className={styles.badgeTag}>MOMO</span>
-                        <span className={styles.badgeTag}>ZALOPAY</span>
-                        <span className={styles.badgeTag}>VNPAY</span>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-
-                <div className={styles.checkoutFooterButtons}>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnSecondary}
-                    onClick={handleBackToDetail}
-                    aria-label="Quay lại"
-                  >
-                    ← Quay lại
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnPrimary}
-                    onClick={handleProceedPayment}
-                  >
-                    Tiếp tục thanh toán →
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* BƯỚC 2A: POPUP HƯỚNG DẪN VIETQR (Screen 5) */}
-            {paymentStep === 'qr' && (
-              <>
-                <div className={styles.checkoutHeaderArea}>
-                  <h2 className={styles.checkoutModalTitle}>QUÉT MÃ QR ĐỂ THANH TOÁN</h2>
-
-                  <div className={styles.checkoutSummaryBanner}>
-                    <div className={styles.checkoutSummaryLeft}>
-                      <img
-                        src={detailBottleImg}
-                        alt="Nước hoa"
-                        className={styles.checkoutSummaryThumb}
-                      />
-                      <div style={{ textAlign: 'left' }}>
-                        <div
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            color: 'var(--color-text-secondary)',
-                          }}
-                        >
-                          Mã đơn:{' '}
-                          <strong style={{ color: '#000000' }}>
-                            {created?.order.paymentReference ??
-                              (createOrder.isPending ? 'Đang tạo đơn...' : '#SCT-8842')}
-                          </strong>
-                        </div>
-                        <div
-                          style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}
-                        >
-                          {detailItem?.product?.name ?? "Nuit d'Or"}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-sans)',
-                          fontSize: 20,
-                          fontWeight: 700,
-                          color: '#000000',
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {detailPriceFormatted || '35.000 VND'}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={styles.qrDisplayBox}>
-                  <div className={styles.qrWrapper}>
-                    <svg
-                      style={{ width: 160, height: 160 }}
-                      fill="none"
-                      viewBox="0 0 160 160"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <rect fill="#000000" height="40" rx="6" width="40" x="10" y="10" />
-                      <rect fill="white" height="24" rx="3" width="24" x="18" y="18" />
-                      <rect fill="#000000" height="14" rx="2" width="14" x="23" y="23" />
-                      <rect fill="#000000" height="40" rx="6" width="40" x="110" y="10" />
-                      <rect fill="white" height="24" rx="3" width="24" x="118" y="18" />
-                      <rect fill="#000000" height="14" rx="2" width="14" x="123" y="23" />
-                      <rect fill="#000000" height="40" rx="6" width="40" x="10" y="110" />
-                      <rect fill="white" height="24" rx="3" width="24" x="18" y="118" />
-                      <rect fill="#000000" height="14" rx="2" width="14" x="23" y="123" />
-                      <rect fill="#000000" height="8" width="8" x="60" y="15" />
-                      <rect fill="#000000" height="8" width="12" x="75" y="15" />
-                      <rect fill="#000000" height="8" width="8" x="92" y="15" />
-                      <rect fill="#000000" height="8" width="14" x="60" y="30" />
-                      <rect fill="#000000" height="8" width="18" x="82" y="28" />
-                      <rect fill="#000000" height="15" width="8" x="60" y="45" />
-                      <rect fill="#000000" height="12" width="12" x="75" y="42" />
-                      <rect fill="#000000" height="10" width="10" x="95" y="45" />
-                      <rect fill="#000000" height="8" width="10" x="15" y="60" />
-                      <rect fill="#000000" height="8" width="12" x="32" y="60" />
-                      <rect fill="#000000" height="8" width="18" x="15" y="75" />
-                      <rect fill="#000000" height="12" width="14" x="38" y="75" />
-                      <rect fill="#000000" height="8" width="12" x="15" y="92" />
-                      <rect fill="#000000" height="10" width="10" x="35" y="92" />
-                      <rect fill="#000000" height="10" width="10" x="60" y="65" />
-                      <rect fill="#000000" height="10" width="10" x="78" y="65" />
-                      <rect fill="#000000" height="8" width="15" x="95" y="65" />
-                      <rect fill="#000000" height="10" width="12" x="115" y="60" />
-                      <rect fill="#000000" height="8" width="15" x="135" y="60" />
-                      <rect fill="#000000" height="15" width="8" x="115" y="75" />
-                      <rect fill="#000000" height="8" width="18" x="130" y="78" />
-                      <rect fill="#000000" height="8" width="14" x="115" y="95" />
-                      <rect fill="#000000" height="12" width="12" x="135" y="92" />
-                      <rect fill="#000000" height="8" width="12" x="60" y="85" />
-                      <rect fill="#000000" height="14" width="10" x="80" y="82" />
-                      <rect fill="#000000" height="10" width="8" x="98" y="85" />
-                      <rect fill="#000000" height="8" width="18" x="60" y="105" />
-                      <rect fill="#000000" height="14" width="8" x="85" y="102" />
-                      <rect fill="#000000" height="8" width="12" x="100" y="105" />
-                      <rect fill="#000000" height="12" width="10" x="60" y="120" />
-                      <rect fill="#000000" height="8" width="14" x="78" y="122" />
-                      <rect fill="#000000" height="10" width="12" x="98" y="120" />
-                      <rect fill="#000000" height="8" width="15" x="60" y="138" />
-                      <rect fill="#000000" height="12" width="10" x="82" y="135" />
-                      <rect fill="#000000" height="8" width="14" x="98" y="138" />
-                      <rect fill="#000000" height="10" width="12" x="118" y="115" />
-                      <rect fill="#000000" height="8" width="14" x="135" y="115" />
-                      <rect fill="#000000" height="14" width="10" x="118" y="132" />
-                      <rect fill="#000000" height="8" width="15" x="135" y="130" />
-                      <rect fill="#000000" height="24" rx="6" width="24" x="68" y="68" />
-                      <path d="M74 80L78 74H86L82 86H74L78 80Z" fill="#ffffff" />
-                    </svg>
-                  </div>
-
-                  <div className={styles.timerRow}>
-                    <div className={styles.timerPill}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                        schedule
-                      </span>
-                      <span>Thời gian hiệu lực: {formatCountdown(countdown)}</span>
-                    </div>
-                    <div className={styles.waitingPill}>
-                      <span className={styles.waitingPulse} />
-                      <span>Đang chờ nhận diện giao dịch tự động...</span>
-                    </div>
-                  </div>
-
-                  <div className={styles.tagsRow}>
-                    <span className={styles.badgeTag}>VIETQR</span>
-                    <span className={styles.badgeTag}>MOMO</span>
-                    <span className={styles.badgeTag}>ZALOPAY</span>
-                    <span className={styles.badgeTag}>VNPAY</span>
-                    <span className={styles.badgeTag}>NAPAS 247</span>
-                  </div>
-
-                  {/* Lệnh thanh toán giả lập dành cho tester / dev */}
-                  {created?.order.paymentReference && (
+              <div className={styles.checkoutSummaryBanner}>
+                <div className={styles.checkoutSummaryLeft}>
+                  <img
+                    src={detailBottleImg}
+                    alt={detailItem?.product?.name ?? t('kiosk.productImageAlt')}
+                    className={styles.checkoutSummaryThumb}
+                  />
+                  <div style={{ textAlign: 'left' }}>
                     <div
                       style={{
-                        marginTop: 14,
-                        padding: '10px 14px',
-                        background: '#1c1b1e',
-                        borderRadius: 8,
-                        color: '#e5e0d8',
-                        textAlign: 'left',
-                        border: '1px solid #333038',
-                        width: '100%',
-                        boxSizing: 'border-box',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        color: 'var(--color-text-secondary)',
                       }}
                     >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          marginBottom: 6,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 10,
-                            color: '#d4af37',
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.06em',
-                          }}
-                        >
-                          Lệnh thanh toán giả lập (Dev / Test)
-                        </span>
-                        <button
-                          type="button"
-                          style={{
-                            background: copiedCmd ? '#e6f4ea' : '#ffffff',
-                            color: copiedCmd ? '#1e7e34' : '#131315',
-                            border: 'none',
-                            padding: '3px 8px',
-                            borderRadius: 4,
-                            fontSize: 11,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => {
-                            if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                              void navigator.clipboard.writeText(
-                                `npm run pay:mock -- ${created.order.paymentReference}`,
-                              );
-                              setCopiedCmd(true);
-                              setTimeout(() => setCopiedCmd(false), 2000);
-                            }
-                          }}
-                        >
-                          {copiedCmd ? 'Đã sao chép!' : 'Sao chép lệnh test'}
-                        </button>
-                      </div>
-                      <code
-                        style={{
-                          color: '#e2c069',
-                          fontFamily: 'monospace',
-                          fontSize: 12,
-                          wordBreak: 'break-all',
-                        }}
-                      >
-                        npm run pay:mock -- {created.order.paymentReference}
-                      </code>
+                      {t('kiosk.paymentReference')}:{' '}
+                      <strong style={{ color: '#000000' }}>
+                        {created?.order.paymentReference ?? t('kiosk.creatingOrder')}
+                      </strong>
                     </div>
-                  )}
+                    <div style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}>
+                      {detailItem?.product?.name}
+                    </div>
+                  </div>
                 </div>
-
-                <div className={styles.checkoutFooterButtons}>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnSecondary}
-                    onClick={() => setCustomPaymentStep('select')}
+                <div style={{ textAlign: 'right' }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: '#000000',
+                      letterSpacing: '-0.01em',
+                    }}
                   >
-                    ← Đổi phương thức thanh toán
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnPrimary}
-                    onClick={handleCloseDetailModal}
-                  >
-                    Hủy giao dịch
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* BƯỚC 2B: POPUP HƯỚNG DẪN POS / NFC (Screen 6) */}
-            {!isPostPayment && paymentStep === 'pos' && (
-              <>
-                <div className={styles.checkoutHeaderArea}>
-                  <h2 className={styles.checkoutModalTitle}>THANH TOÁN THẺ QUỐC TẾ / NFC</h2>
-
-                  <div className={styles.checkoutSummaryBanner}>
-                    <div className={styles.checkoutSummaryLeft}>
-                      <img
-                        src={detailBottleImg}
-                        alt="Nước hoa"
-                        className={styles.checkoutSummaryThumb}
-                      />
-                      <div style={{ textAlign: 'left' }}>
-                        <div
-                          style={{
-                            fontSize: 10,
-                            fontWeight: 700,
-                            textTransform: 'uppercase',
-                            color: 'var(--color-text-secondary)',
-                          }}
-                        >
-                          Mã đơn: #SCT-8842
-                        </div>
-                        <div
-                          style={{ fontFamily: 'var(--font-serif)', fontSize: 15, fontWeight: 600 }}
-                        >
-                          {detailItem?.product?.name ?? "Nuit d'Or"}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-sans)',
-                          fontSize: 20,
-                          fontWeight: 700,
-                          color: '#000000',
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {detailPriceFormatted || '35.000 VND'}
-                      </div>
-                    </div>
+                    {created
+                      ? formatPrice(created.order.amount, created.order.currency)
+                      : detailPriceFormatted}
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div className={styles.nfcDisplayBox}>
-                  <div className={styles.nfcRadar}>
-                    <div className={styles.radarRing} />
-                    <div className={styles.nfcIconCore}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 30 }}>
-                        contactless
-                      </span>
-                    </div>
-                  </div>
+            <div className={styles.qrDisplayBox}>
+              <div className={styles.qrWrapper}>
+                {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08). */}
+                {created?.qrPayload ? (
+                  <QRCodeSVG
+                    value={created.qrPayload}
+                    size={160}
+                    level="M"
+                    role="img"
+                    aria-label={t('kiosk.scanToPay')}
+                  />
+                ) : (
+                  <span>{t('kiosk.creatingOrder')}</span>
+                )}
+              </div>
 
-                  <div className={styles.nfcStatusPill}>
-                    <span className={styles.waitingPulse} style={{ background: '#ffffff' }} />
-                    <span>ĐANG CHỜ CHẠM THẺ HOẶC CẮM CHIP...</span>
-                  </div>
-
-                  <div className={styles.tagsRow}>
-                    <span className={styles.badgeTag}>VISA</span>
-                    <span className={styles.badgeTag}>MASTERCARD</span>
-                    <span className={styles.badgeTag}>JCB</span>
-                    <span className={styles.badgeTag}>Apple Pay</span>
-                    <span className={styles.badgeTag}>Google Pay</span>
-                  </div>
-                </div>
-
-                <div className={styles.stepsGrid}>
-                  <div className={styles.stepCard}>
-                    <span className={styles.stepBadge}>1</span>
-                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>
-                      contactless
+              <div className={styles.timerRow}>
+                {/* Đếm theo hạn của chính đơn này (máy chủ trả) — đổi sản phẩm là đơn mới, hạn mới. */}
+                {qrSecondsLeft !== null && (
+                  <div className={styles.timerPill}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                      schedule
                     </span>
-                    <span className={styles.stepTitle}>Chạm thẻ</span>
-                  </div>
-                  <div className={styles.stepCard}>
-                    <span className={styles.stepBadge}>2</span>
-                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>pin</span>
-                    <span className={styles.stepTitle}>Nhập mã PIN</span>
-                  </div>
-                  <div className={styles.stepCard}>
-                    <span className={styles.stepBadge}>3</span>
-                    <span className={`material-symbols-outlined ${styles.stepIcon}`}>
-                      receipt_long
+                    <span>
+                      {t('kiosk.paymentValidFor', { time: formatCountdown(qrSecondsLeft) })}
                     </span>
-                    <span className={styles.stepTitle}>Nhận lượt xịt tại vòi</span>
                   </div>
+                )}
+                <div className={styles.waitingPill}>
+                  <span className={styles.waitingPulse} />
+                  <span>{t('kiosk.waitingPaymentDesc')}</span>
                 </div>
+              </div>
 
-                <div className={styles.checkoutFooterButtons}>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnSecondary}
-                    onClick={() => setCustomPaymentStep('select')}
+              <div className={styles.tagsRow}>
+                <span className={styles.badgeTag}>VIETQR</span>
+                <span className={styles.badgeTag}>MOMO</span>
+                <span className={styles.badgeTag}>ZALOPAY</span>
+                <span className={styles.badgeTag}>VNPAY</span>
+                <span className={styles.badgeTag}>NAPAS 247</span>
+              </div>
+
+              {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
+              {config.showDevTools && created?.order.paymentReference && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: '10px 14px',
+                    background: '#1c1b1e',
+                    borderRadius: 8,
+                    color: '#e5e0d8',
+                    textAlign: 'left',
+                    border: '1px solid #333038',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 6,
+                    }}
                   >
-                    ← Đổi phương thức thanh toán
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.checkoutBtnPrimary}
-                    onClick={handleCloseDetailModal}
+                    <span
+                      style={{
+                        fontSize: 10,
+                        color: '#d4af37',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
+                      {t('kiosk.mockPayGuide')}
+                    </span>
+                    <button
+                      type="button"
+                      style={{
+                        background: copiedCmd ? '#e6f4ea' : '#ffffff',
+                        color: copiedCmd ? '#1e7e34' : '#131315',
+                        border: 'none',
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          void navigator.clipboard.writeText(
+                            `npm run pay:mock -- ${created.order.paymentReference}`,
+                          );
+                          setCopiedCmd(true);
+                          setTimeout(() => setCopiedCmd(false), 2000);
+                        }
+                      }}
+                    >
+                      {copiedCmd ? t('kiosk.copied') : t('kiosk.copyCommand')}
+                    </button>
+                  </div>
+                  <code
+                    style={{
+                      color: '#e2c069',
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      wordBreak: 'break-all',
+                    }}
                   >
-                    Hủy giao dịch
-                  </button>
+                    npm run pay:mock -- {created.order.paymentReference}
+                  </code>
                 </div>
-              </>
-            )}
+              )}
+            </div>
+
+            <div className={styles.checkoutFooterButtons} style={{ justifyContent: 'flex-end' }}>
+              {/* Hủy không được vì tiền đã/đang về — nói rõ để khách yên tâm đứng chờ. */}
+              {isNotCancellable(cancelOrder.error) && (
+                <p role="status" style={{ margin: 0, marginRight: 'auto', fontSize: 13 }}>
+                  {errorMessage(cancelOrder.error, t)}
+                </p>
+              )}
+              <button
+                type="button"
+                className={styles.checkoutBtnPrimary}
+                onClick={handleRequestCancel}
+              >
+                {t('kiosk.cancelOrder')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xác nhận hủy nổi trên modal QR. Chạm ra ngoài = ở lại (lựa chọn an toàn cho khách có
+          thể đã chuyển khoản), không phải hủy. */}
+      {paymentOpen && !isPostPayment && confirmingCancel && (
+        <div
+          className={styles.confirmBackdrop}
+          onClick={() => {
+            if (!cancelOrder.isPending) setConfirmingCancel(false);
+          }}
+        >
+          <div
+            className={styles.confirmBox}
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cancel-payment-title"
+            aria-describedby="cancel-payment-desc"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className={`material-symbols-outlined ${styles.confirmIcon}`} aria-hidden="true">
+              warning
+            </span>
+            <h3 id="cancel-payment-title" className={styles.confirmTitle}>
+              {t('kiosk.cancelPaymentConfirmTitle')}
+            </h3>
+            <p id="cancel-payment-desc" className={styles.confirmText}>
+              {t('kiosk.cancelPaymentConfirm')}
+            </p>
+            <div className={styles.confirmActions}>
+              <button
+                type="button"
+                className={styles.checkoutBtnSecondary}
+                onClick={handleConfirmCancel}
+                disabled={cancelOrder.isPending}
+              >
+                {cancelOrder.isPending ? t('kiosk.cancelling') : t('kiosk.cancelAnyway')}
+              </button>
+              <button
+                type="button"
+                className={styles.checkoutBtnPrimary}
+                onClick={() => setConfirmingCancel(false)}
+                disabled={cancelOrder.isPending}
+                autoFocus
+              >
+                {t('kiosk.continuePayment')}
+              </button>
+            </div>
           </div>
         </div>
       )}

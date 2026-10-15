@@ -1586,6 +1586,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/kiosk/orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khách hủy đơn đang chờ thanh toán trên kiosk
+         * @description FR-ORD-33 (ADR-0015 mục 3): kiosk gọi khi khách xác nhận rời màn QR. Hệ thống hủy link thanh toán ở cổng để khách không trả được nữa, rồi chuyển đơn PENDING_PAYMENT → EXPIRED với lý do CUSTOMER_CANCELLED — không có trạng thái đơn riêng cho việc hủy; payment chuyển CANCELLED.
+         *     Cổng báo đã hoặc đang nhận tiền → không hủy, trả ORDER_NOT_CANCELLABLE (409); kiosk tiếp tục chờ kết quả thanh toán. Không liên lạc được cổng → vẫn hủy phía hệ thống. Tiền về sau khi đã hủy → đơn REFUND_PENDING như tiền về sau hạn, không xịt (FR-ORD-16 AC3).
+         *     Gọi lại với đơn đã EXPIRED trả 200 cùng trạng thái hiện tại.
+         */
+        post: operations["cancelKioskOrder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/kiosk/interactions": {
         parameters: {
             query?: never;
@@ -3709,6 +3733,10 @@ export interface components {
              * @description Phiên kiosk ẩn danh, xoay vòng — không chứa định danh khách hàng.
              */
             kioskSessionId?: string;
+        };
+        /** @description Máy đang hiện đơn (ADR-0015). Đơn không thuộc máy này được trả như không tồn tại (404). */
+        OrderCancel: {
+            machineSerial: string;
         };
         OrderCreated: {
             order: components["schemas"]["Order"];
@@ -6672,6 +6700,35 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    cancelKioskOrder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OrderCancel"];
+            };
+        };
+        responses: {
+            /** @description Trạng thái đơn sau khi hủy (EXPIRED) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrderStatusView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     recordKioskInteractions: {

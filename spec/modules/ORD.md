@@ -1,7 +1,7 @@
 # FR-ORD — Đơn hàng và thanh toán
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 32 FR  
-> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012 — hoàn tiền thủ công qua phiếu khiếu nại)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 33 FR  
+> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012 — hoàn tiền thủ công qua phiếu khiếu nại; FR-ORD-33 thêm ngày 2026-10-14 theo ADR-0015 — khách hủy đơn trên kiosk)  
 > Phụ trách: TV1 / Tài  
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
@@ -269,7 +269,7 @@
 ---
 
 ## FR-ORD-19 — Đánh dấu đơn hàng cần kiểm tra thủ công khi xịt thất bại
-* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại hoặc không xác định, trừ trường hợp khách không bấm nút trong thời gian chờ.
+* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại, không xác định, bị thiết bị từ chối (kể cả trước khi đèn sáng) hoặc chờ lượt quá hạn (FR-ORD-34); trừ trường hợp khách không bấm nút trong thời gian chờ và trường hợp thiết bị từ chối một bản sao lệnh (`CMD_DUPLICATE`). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0011, ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-002, BR-006 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given đơn hàng `O` đã thanh toán (`PAID`), lệnh xịt được gửi đi nhưng thiết bị báo lỗi (`FAILED`) hoặc quá `DISPENSE_RESULT_TIMEOUT_SEC = 60` không có phản hồi (`UNKNOWN`),  
@@ -491,3 +491,17 @@
   * **AC1:** Given phiếu `OPEN` tạo quá `REFUND_CLAIM_MAX_OPEN_DAYS` ngày, When job chạy, Then phiếu `EXPIRED`, tài khoản bị xóa, ghi AuditLog.
   * **AC2:** Given phiếu `OPEN` quá `REFUND_CLAIM_SLA_HOURS` giờ, When job chạy, Then sinh một cảnh báo `REFUND_CLAIM_SLA_BREACHED` mức HIGH gắn máy của đơn; chạy lại không sinh cảnh báo trùng (FR-ALR-07).
 * **Test:** `test_FR_ORD_32_expire_stale_claims_and_alert_sla_breach`
+
+---
+
+## FR-ORD-33 — Khách hủy đơn đang chờ thanh toán trên kiosk
+* **Statement:** Hệ thống phải cho kiosk hủy đơn đang chờ thanh toán khi khách xác nhận rời màn mã QR: hủy link thanh toán ở cổng để khách không trả được nữa, và chuyển đơn sang EXPIRED với lý do `CUSTOMER_CANCELLED`; nếu cổng đã hoặc đang nhận tiền thì không hủy.
+* **Traces:** BR-001, BR-002 · **Priority:** M · ADR-0015 mục 3
+* **API:** `POST /kiosk/orders/{id}/cancel`
+* **Acceptance criteria:**
+  * **AC1:** Given đơn `O` ở `PENDING_PAYMENT` của máy `M`, When kiosk của `M` gọi hủy, Then hệ thống gọi cổng hủy link, đơn `EXPIRED` với lý do `CUSTOMER_CANCELLED`, payment `CANCELLED`; gọi lại lần nữa trả cùng kết quả.
+  * **AC2:** Given cổng báo link đã thanh toán hoặc đang xử lý chuyển khoản, When kiosk gọi hủy, Then trả `ORDER_NOT_CANCELLABLE`, đơn và payment giữ nguyên, kiosk tiếp tục chờ kết quả thanh toán.
+  * **AC3:** Given đơn đã bị hủy, When webhook thanh toán thành công có chữ ký hợp lệ tới, Then đơn `REFUND_PENDING` với lý do `PAID_AFTER_CANCEL`, đặt cờ kiểm tra thủ công, không tạo lệnh xịt.
+  * **AC4:** Given không liên lạc được cổng, When kiosk gọi hủy, Then hệ thống vẫn hủy đơn phía mình (AC3 bảo vệ tiền nếu khách vẫn trả).
+  * **AC5:** Given đơn không thuộc máy gửi yêu cầu, When kiosk gọi hủy, Then trả `NOT_FOUND` và đơn giữ nguyên.
+* **Test:** `test_FR_ORD_33_kiosk_cancel_pending_order`

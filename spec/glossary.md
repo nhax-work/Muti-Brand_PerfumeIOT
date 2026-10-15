@@ -46,6 +46,10 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 | `MaintenanceTicket` | Phiếu bảo trì |
 | `AuditLog` | Nhật ký kiểm toán, chỉ thêm mới |
 | `RefundClaim` | **Phiếu khiếu nại hoàn tiền**: khách gửi qua QR sự cố trên kiosk, Operations Staff chuyển khoản hoàn tay (ADR-0012). Chỗ duy nhất được lưu tài khoản ngân hàng của khách — mã hóa, xóa khi phiếu đóng |
+| `AgreementVersion` | **Hợp đồng khung** do nền tảng soạn, có phiên bản; mỗi thời điểm một phiên bản hiện hành (ADR-0013) |
+| `AgreementAcceptance` | Một lần thương hiệu đồng ý hợp đồng khung hoặc **phụ lục** của một phiên thanh toán: phiên bản, người đồng ý, thời điểm, IP, mã băm nội dung (ADR-0013) |
+| `BrandPayout` | **Kỳ chi trả doanh thu** hằng tháng của một thương hiệu: số tiền, trạng thái, mã giao dịch chuyển khoản (ADR-0013) |
+| `BottleReturn` | **Phiếu trả hàng** khi thương hiệu chủ động không gia hạn: hóa đơn, cách nhận, thời điểm sẵn sàng, hạn nhận, người nhận, mã vận đơn (ADR-0014) |
 
 ---
 
@@ -55,13 +59,21 @@ MachineSlot 1 ──── * Order ──── 1 DispenseCommand │         �
 
 ```
 CREATED ──> PENDING_PAYMENT ──> PAID ──> DISPENSE_REQUESTED ──> DISPENSED
-                │                                    │
-                ├──> EXPIRED                         ├──> FAILED
-                └──> FAILED                          ├──> FORFEITED   (khách không bấm nút, PRESS_TIMEOUT)
+                │                 │                  │
+                ├──> EXPIRED      └──> FAILED        ├──> FAILED
+                └──> FAILED      (QUEUE_TIMEOUT)     ├──> FORFEITED   (khách không bấm nút, PRESS_TIMEOUT)
                                                      └──> REFUND_PENDING ──> REFUNDED
 ```
 
 Chỉ chuyển sang `DISPENSED` khi thiết bị trả kết quả thành công (FR-DSP-17).
+
+`PAID ──> FAILED` với mã `QUEUE_TIMEOUT`: đơn chờ lượt quá `PAID_QUEUE_MAX_SEC` mà chưa tạo được lệnh
+xịt, đặt `needs_manual_review` (FR-ORD-34, ADR-0015). Mỗi máy tối đa một đơn ở `CREATED`/`PENDING_PAYMENT`
+(FR-ORD-35).
+
+`EXPIRED` có hai lý do trong lịch sử trạng thái: `ORDER_PAYMENT_TTL` (quá hạn thanh toán) và
+`CUSTOMER_CANCELLED` (khách hủy trên kiosk, FR-ORD-33, ADR-0015) — không có trạng thái riêng cho đơn bị
+hủy. Tiền về sau đó thì đơn sang `REFUND_PENDING` như tiền về sau hạn.
 
 **Khách bấm nút vật lý** (ADR-0007). `DISPENSE_REQUESTED` là lúc đèn nút của slot đã sáng và đang chờ
 khách bấm. Đơn đã `PAID` mà máy còn một lệnh khác chờ bấm thì giữ ở `PAID` — **chờ lượt** — cho tới
@@ -74,12 +86,24 @@ Lệnh ở trạng thái UNKNOWN **không** tự sinh lệnh mới (FR-DSP-19).
 
 ```
 DRAFT ──> ACTIVE ──> EXPIRING ──> GRACE ──> RENEWED
-  │                     │            │
-  │                     │            └──> LIQUIDATED ──> CLOSED
-  │                     └──> RENEWED        (gia hạn trước khi hết hạn)
+  │         │           │            │
+  │         │           │            └──> LIQUIDATED ──> CLOSED
+  │         │           ├──> RENEWED        (gia hạn trước khi hết hạn)
+  │         └───────────┴──> CLOSED         (đã báo không gia hạn, Inventory Staff tháo chai — ADR-0014)
   └──> CANCELLED   (hết giờ giữ chỗ, chưa thanh toán)
 ACTIVE ──> TERMINATED
 ```
+
+**Hai luồng kết thúc** (ADR-0014). Thương hiệu **không làm gì** → tới `ends_at` vào `GRACE`, ân hạn dài
+mặc định `GRACE_PERIOD_DEFAULT_DAYS` ngày (Super Admin sửa được), có phí, hết ân hạn mà không gia hạn thì
+`LIQUIDATED`. Thương hiệu **báo không gia hạn** trước `ends_at` → hóa đơn **không** vào `GRACE`, giữ
+`ACTIVE`/`EXPIRING` (kể cả quá `ends_at`) tới khi Inventory Staff tháo chai thực tế, không tính phí ân hạn,
+doanh thu tới lúc đó vẫn thuộc thương hiệu; tháo chai thì hóa đơn `CLOSED` và chai `RETURNED_TO_BRAND`.
+Rút lại việc báo không gia hạn được trước `ends_at`.
+
+**Đổi slot khi mua nhầm** (ADR-0014): hóa đơn `DRAFT` đã thanh toán, chưa lắp chai, trong
+`SLOT_SWAP_WINDOW_HOURS` giờ kể từ lúc thanh toán, đổi được sang slot trống cùng giá niêm yết một lần.
+Trạng thái không đổi; chỉ `slot_id` đổi và slot cũ được giải phóng.
 
 | Trạng thái | Slot bán được? | Doanh thu thuộc |
 |---|---|---|
@@ -137,7 +161,15 @@ IN_STOCK ──> INSTALLED ──> LOW ──> EMPTY
                  ├──> DAMAGED        └──> IN_STOCK (tháo về kho)
                  └──> EXPIRED
 INSTALLED ──> LIQUIDATED   (hóa đơn chuyển LIQUIDATED, chủ sở hữu -> PLATFORM)
+INSTALLED / LOW / EMPTY ──> RETURNED_TO_BRAND ──> LIQUIDATED
+                            (tháo chai của hóa đơn     (quá RETURN_PICKUP_MAX_DAYS
+                             báo không gia hạn)          chưa nhận hàng)
 ```
+
+`RETURNED_TO_BRAND` (ADR-0014): chai đã tháo, nằm trên phiếu trả hàng chờ thương hiệu nhận. Bàn giao ghi
+người nhận, thời điểm, mã vận đơn; quá `RETURN_PICKUP_MAX_DAYS` ngày kể từ lúc sẵn sàng mà chưa nhận thì
+chuyển sở hữu về nền tảng như thanh lý. Chai hỏng trong lúc chờ nhận vẫn được bồi thường theo gói bảo
+quản của hóa đơn vừa kết thúc.
 
 ### RefillRequest
 
@@ -182,7 +214,32 @@ ghi nhận hoàn đưa đơn sang `REFUNDED`; `false` (chỉ hoàn tiền chuy�
 | Trục | Giá trị |
 |---|---|
 | Kết nối | `ONLINE`, `UNSTABLE`, `OFFLINE` |
-| Chế độ | `NORMAL`, `MAINTENANCE`, `DISABLED` |
+| Chế độ | `NORMAL`, `DRAINING`, `MAINTENANCE`, `DISABLED` |
+
+```
+NORMAL ──> DRAINING ──> MAINTENANCE ──> NORMAL   (sau checklist, FR-MNT-12)
+   └──────────────────────> MAINTENANCE           (ép chuyển khẩn cấp, lý do bắt buộc — FR-MNT-17)
+```
+
+`DRAINING` (ADR-0015): Operations Staff đã yêu cầu bảo trì; máy không nhận đơn mới nhưng phục vụ nốt đơn đã
+trả tiền và lệnh đang chạy, rồi tự sang `MAINTENANCE` khi hết. Chỉ tồn tại ở backend — thiết bị vẫn thấy
+`NORMAL` tới khi máy thật sự vào `MAINTENANCE`. Máy có phiếu nạp đang mở cũng không nhận đơn mới
+(FR-INV-30), nhưng đó không phải một chế độ riêng.
+
+Slot có thêm luật tự tắt: `CONSECUTIVE_FAIL_ALERT` lệnh khách hàng liên tiếp lỗi → slot `MAINTENANCE`, chỉ
+Operations Staff bật lại (FR-MCH-18).
+
+### BrandPayout
+
+```
+DRAFT ──> CONFIRMED ──> PAID
+(cộng dồn   (khóa số liệu    (đã chuyển khoản, có mã giao dịch; cần thương hiệu
+ trong tháng) sau khi hết tháng)  đã xác minh pháp nhân và Super Admin xác thực lại)
+```
+
+Đơn được tính: `revenue_owner = BRAND` và `DISPENSED` hoặc `FORFEITED`. Không tính `FAILED`,
+`REFUND_PENDING`, `REFUNDED`. Thương hiệu khiếu nại số liệu trên kỳ `CONFIRMED`; Super Admin trả lời trước
+khi chuyển `PAID` (ADR-0013).
 
 ---
 

@@ -57,6 +57,8 @@ thử thấp tương ứng. PayOS chỉ nhận **số tiền nguyên VND**.
 | 3 | Chuyển khoản | Trong vài giây kiosk chuyển sang "Mời bấm nút số N"; đơn `PAID` |
 | 4 | Chờ quá hạn đơn rồi mới quét một QR khác | App ngân hàng báo link hết hạn — PayOS từ chối nhận tiền sau `expiredAt` |
 | 5 | Brand Admin: chọn slot, thanh toán phiên thuê bằng QR hoặc trang `checkoutUrl` | Phiên `paidAt`, mỗi hóa đơn có số `HD-…` |
+| 6 | Tạo đơn mới trên kiosk, bấm "Hủy thanh toán" → "Vẫn hủy", rồi quét lại chính QR đó | Đơn `EXPIRED` (lý do `CUSTOMER_CANCELLED`), payment `CANCELLED`; trang `checkoutUrl` của link báo đã hủy. Nếu app ngân hàng vẫn chuyển được tiền vào QR cũ thì webhook phải đưa đơn sang `REFUND_PENDING` (lý do `PAID_AFTER_CANCEL`), không xịt (FR-ORD-33) — ghi lại kết quả thực tế vào đây |
+| 7 | Quét QR và chuyển khoản, rồi bấm hủy ngay khi tiền đang về | Kiosk báo đã nhận tiền và ở lại màn QR, sau đó sang "Mời bấm nút"; đơn không bị hủy |
 
 Sau lượt chạy, kiểm CSDL:
 
@@ -74,7 +76,23 @@ Hệ thống **không** gọi API hoàn tiền của PayOS. Khách gặp sự c�
 phiếu khiếu nại; Operations Staff chuyển khoản tay rồi ghi nhận mã giao dịch (ADR-0012). Tiền thử nghiệm
 của lượt chạy trên cũng hoàn theo cách đó nếu cần.
 
+## 6. Khách hủy đơn trên kiosk
+
+`POST /kiosk/orders/{id}/cancel` (FR-ORD-33, ADR-0015 mục 3) gọi `POST /v2/payment-requests/{orderCode}/cancel`
+của PayOS trước khi hủy đơn. PayOS từ chối hủy thì hệ thống hỏi lại `GET /v2/payment-requests/{orderCode}`:
+
+| Trạng thái link | Kết quả |
+|---|---|
+| `CANCELLED`, `EXPIRED` | Hủy đơn |
+| `PAID`, `PROCESSING` | Không hủy — trả `ORDER_NOT_CANCELLABLE`, kiosk ở lại chờ webhook |
+| Không hỏi được PayOS | Vẫn hủy đơn phía hệ thống, ghi `gatewayCancelled: false` trong lịch sử trạng thái |
+
+Tiền tới sau khi đã hủy (khách chuyển ngay trước khi bấm hủy, hoặc PayOS chưa hủy được link): webhook vẫn
+được xử lý, đơn `REFUND_PENDING` với lý do `PAID_AFTER_CANCEL`, không xịt — hoàn tiền theo mục 5.
+
+Với `PAYMENT_PROVIDER=mock`, hủy luôn thành công; `npm run pay:mock -- <mã>` sau khi hủy giả lập đúng
+trường hợp tiền tới sau khi đã hủy.
+
 ## Chưa có
 
-- Hủy link thanh toán khi khách hủy đơn trên kiosk (ADR-0015 mục 3).
 - Tra trạng thái giao dịch ở PayOS để đối soát (FR-ORD-23).

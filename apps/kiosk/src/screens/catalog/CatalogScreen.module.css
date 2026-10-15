@@ -216,11 +216,13 @@
   margin: 0;
 }
 
+/* Cùng kiểu chữ với giá trong modal chi tiết (.modalPriceTag) — số tiền đọc rõ hơn chữ có chân. */
 .priceTag {
-  font-family: var(--font-serif);
-  font-size: 17px;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 700;
   color: #000000;
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
@@ -337,6 +339,57 @@
 
 .closeModalBtn:active {
   transform: scale(0.92) rotate(90deg);
+}
+
+/* Modal xác nhận hủy thanh toán — nổi trên modal mã QR */
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(0, 0, 0, 0.45);
+  animation: modalFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.confirmBox {
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 28px 24px;
+  background: #ffffff;
+  border: 1px solid #000000;
+  border-radius: var(--radius-xl);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+
+.confirmIcon {
+  font-size: 36px;
+  color: #b45309;
+}
+
+.confirmTitle {
+  margin: 8px 0 10px;
+  font-family: var(--font-serif);
+  font-size: 22px;
+  font-weight: 600;
+  color: #000000;
+}
+
+.confirmText {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 /* 1. Modal Chi Tiết Nước Hoa (Screen 2: Quick View) */

@@ -7,6 +7,7 @@
  *     (khóa checksum) trên `amount=…&cancelUrl=…&description=…&orderCode=…&returnUrl=…`.
  *   - Webhook: chữ ký nằm trong body (`signature`), tính trên `data` — khóa sắp xếp theo thứ tự chữ
  *     cái, null → chuỗi rỗng, nối `key=value` bằng `&`, HMAC-SHA256 hex.
+ *   - Hủy link: `POST /v2/payment-requests/{orderCode}/cancel`; tra link: `GET /v2/payment-requests/{orderCode}`.
  *   - Không có sandbox: chỉ có API thật. Kiểm thử xem docs/PAYOS.md.
  *
  * `orderCode` của PayOS là số nguyên nên adapter tự sinh và trả về làm `providerReference`; mã
@@ -18,6 +19,8 @@ import { z } from 'zod';
 import type { PayosConfig } from '../../../shared/config/index.js';
 import { toMinorUnits } from './money.js';
 import type {
+  CancelPaymentRequest,
+  CancelPaymentResult,
   CreatedPayment,
   CreatePaymentRequest,
   PaymentGateway,
@@ -72,6 +75,22 @@ const CreateResponse = z.object({
     .optional(),
 });
 
+/** Phản hồi của `GET /v2/payment-requests/{id}` và `POST …/{id}/cancel`. */
+const LinkInfoResponse = z.object({
+  code: z.string(),
+  desc: z.string().optional(),
+  data: z
+    .object({ status: z.string().min(1) })
+    .passthrough()
+    .nullable()
+    .optional(),
+});
+
+/** Link đã/đang nhận tiền — không được hủy. `PROCESSING`: ngân hàng đang chuyển, tiền sắp về. */
+const LINK_PAID_STATUSES = new Set(['PAID', 'PROCESSING']);
+/** Link không còn nhận tiền. */
+const LINK_CLOSED_STATUSES = new Set(['CANCELLED', 'EXPIRED']);
+
 /** Chuỗi ký dữ liệu theo quy tắc PayOS: khóa sắp xếp, null → rỗng, mảng/đối tượng → JSON. */
 export function payosSignatureOf(data: Record<string, unknown>, checksumKey: string): string {
   const canonical = Object.keys(data)
@@ -121,11 +140,7 @@ export class PayosPaymentGateway implements PaymentGateway {
 
     const response = await this.http(`${this.config.baseUrl}/v2/payment-requests`, {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-client-id': this.config.clientId,
-        'x-api-key': this.config.apiKey,
-      },
+      headers: this.headers(),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -143,6 +158,61 @@ export class PayosPaymentGateway implements PaymentGateway {
       qrPayload: qrCode,
       checkoutUrl,
       raw: { provider: PAYOS_PROVIDER, orderCode, paymentLinkId, reference: request.reference },
+    };
+  }
+
+  /**
+   * Hủy link: `POST /v2/payment-requests/{orderCode}/cancel`. PayOS từ chối hủy (thường vì link đã
+   * thanh toán) thì hỏi lại trạng thái link bằng `GET /v2/payment-requests/{orderCode}` để phân biệt
+   * "khách đã trả" với "link đã đóng từ trước". Phản hồi đi qua HTTPS kèm khóa API của chính mình
+   * nên không kiểm chữ ký như webhook; kết quả sai hướng nào cũng không mất tiền — tiền về sau khi
+   * đã hủy vẫn vào REFUND_PENDING (ADR-0015 mục 3).
+   */
+  async cancelPayment(request: CancelPaymentRequest): Promise<CancelPaymentResult> {
+    const url = `${this.config.baseUrl}/v2/payment-requests/${encodeURIComponent(request.providerReference)}`;
+    const cancelled = await this.requestLinkInfo(`${url}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ cancellationReason: request.reason }),
+    });
+    const status =
+      cancelled.ok && cancelled.status
+        ? cancelled.status
+        : (await this.requestLinkInfo(url, { method: 'GET' })).status;
+
+    if (status && LINK_PAID_STATUSES.has(status)) return { kind: 'ALREADY_PAID' };
+    if (status && LINK_CLOSED_STATUSES.has(status)) return { kind: 'CANCELLED' };
+    throw new Error(
+      `PayOS chưa hủy được link ${request.providerReference}: ${cancelled.reason}, trạng thái ${status ?? 'không rõ'}`,
+    );
+  }
+
+  private headers(): Record<string, string> {
+    return {
+      'content-type': 'application/json',
+      'x-client-id': this.config.clientId,
+      'x-api-key': this.config.apiKey,
+    };
+  }
+
+  /** Gọi một API trả thông tin link; `ok` chỉ khi PayOS trả `code: '00'` kèm trạng thái link. */
+  private async requestLinkInfo(
+    url: string,
+    init: { readonly method: 'GET' | 'POST'; readonly body?: string },
+  ): Promise<{ readonly ok: boolean; readonly status: string | null; readonly reason: string }> {
+    const response = await this.http(url, {
+      ...init,
+      headers: this.headers(),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    const parsed = LinkInfoResponse.safeParse(await response.json().catch(() => null));
+    if (!parsed.success) {
+      return { ok: false, status: null, reason: `HTTP ${response.status} phản hồi lạ` };
+    }
+    const status = parsed.data.data?.status ?? null;
+    return {
+      ok: response.ok && parsed.data.code === '00' && status !== null,
+      status: parsed.data.code === '00' ? status : null,
+      reason: `HTTP ${response.status} ${parsed.data.code} ${parsed.data.desc ?? ''}`.trim(),
     };
   }
 

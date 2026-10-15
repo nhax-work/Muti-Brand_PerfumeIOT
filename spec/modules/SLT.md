@@ -297,7 +297,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ---
 
 ## FR-SLT-17 — Tạo bảng đối soát doanh thu theo kỳ cho thương hiệu
-* **Statement:** Hệ thống phải tạo bảng đối soát doanh thu theo kỳ cho mỗi thương hiệu, gộp toàn bộ hóa đơn của thương hiệu trong kỳ, có dòng chi tiết theo từng slot.
+* **Statement:** Hệ thống phải tạo bảng đối soát doanh thu theo kỳ tháng dương lịch (giờ Việt Nam) cho mỗi thương hiệu, gộp toàn bộ hóa đơn của thương hiệu trong kỳ, có dòng chi tiết theo từng slot. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-009 · **Priority:** M
 * **API:** `GET /settlements`
 * **Acceptance criteria:**
@@ -315,7 +315,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ---
 
 ## FR-SLT-18 — Tính các khoản trong bảng đối soát
-* **Statement:** Hệ thống phải tính trong bảng đối soát: số đơn hàng, doanh thu lượt xịt thuộc thương hiệu và số tiền nền tảng phải chuyển trả cho thương hiệu.
+* **Statement:** Hệ thống phải tính trong bảng đối soát: số đơn hàng, doanh thu lượt xịt thuộc thương hiệu và số tiền nền tảng phải chuyển trả, chỉ gồm đơn có chủ sở hữu doanh thu BRAND ở trạng thái DISPENSED hoặc FORFEITED; không trừ phí cổng thanh toán hay khoản đã hoàn cho khách. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-009 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given hóa đơn `H` của thương hiệu `B` có 400 đơn hàng mang nhãn `BRAND` trong kỳ, tổng `10,000,000 VND`,  
@@ -793,7 +793,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ---
 
 ## FR-SLT-44 — Tính bồi thường hàng hóa hư hỏng
-* **Statement:** Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá bán lẻ chai, không vượt hạn mức còn lại.
+* **Statement:** Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, kể cả lúc chờ thương hiệu nhận hàng trả về, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá trị chai đã được chứng minh, không vượt hạn mức còn lại. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013, ADR-0014; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-005, BR-008 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1 (Chai đang lắp):** Given chai `X` của thương hiệu `B` đang lắp trong slot `S`, hóa đơn của `S` chụp gói bồi thường `60%`, hạn mức `5,000,000 VND` chưa dùng, giá bán lẻ chai `2,000,000 VND` (FR-PRD-05),  

@@ -1550,6 +1550,13 @@ components:
           type: string
           format: uuid
           description: Phiên kiosk ẩn danh, xoay vòng — không chứa định danh khách hàng.
+    OrderCancel:
+      type: object
+      required: [machineSerial]
+      description: >-
+        Máy đang hiện đơn (ADR-0015). Đơn không thuộc máy này được trả như không tồn tại (404).
+      properties:
+        machineSerial: { type: string }
     OrderCreated:
       type: object
       required: [order, qrPayload]
@@ -4208,6 +4215,40 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/OrderStatusView' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /kiosk/orders/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [ORD]
+      summary: Khách hủy đơn đang chờ thanh toán trên kiosk
+      operationId: cancelKioskOrder
+      security: []
+      description: >-
+        FR-ORD-33 (ADR-0015 mục 3): kiosk gọi khi khách xác nhận rời màn QR. Hệ thống hủy link
+        thanh toán ở cổng để khách không trả được nữa, rồi chuyển đơn PENDING_PAYMENT → EXPIRED với
+        lý do CUSTOMER_CANCELLED — không có trạng thái đơn riêng cho việc hủy; payment chuyển
+        CANCELLED.
+
+        Cổng báo đã hoặc đang nhận tiền → không hủy, trả ORDER_NOT_CANCELLABLE (409); kiosk tiếp tục
+        chờ kết quả thanh toán. Không liên lạc được cổng → vẫn hủy phía hệ thống. Tiền về sau khi
+        đã hủy → đơn REFUND_PENDING như tiền về sau hạn, không xịt (FR-ORD-16 AC3).
+
+        Gọi lại với đơn đã EXPIRED trả 200 cùng trạng thái hiện tại.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/OrderCancel' }
+      responses:
+        '200':
+          description: Trạng thái đơn sau khi hủy (EXPIRED)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderStatusView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   /kiosk/interactions:
     post:

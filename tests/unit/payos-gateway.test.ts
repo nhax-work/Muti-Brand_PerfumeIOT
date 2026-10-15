@@ -192,3 +192,93 @@ describe('PayosPaymentGateway.createPayment', () => {
     expect(shortDescription('AB-1')).toBe('AB1');
   });
 });
+
+describe('PayosPaymentGateway.cancelPayment (ADR-0015)', () => {
+  /** Trả lần lượt từng phản hồi, ghi lại mọi lời gọi. */
+  function scriptedFetch(
+    calls: { url: string; method: string; body?: string }[],
+    replies: { body: unknown; status?: number }[],
+  ) {
+    return (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        method: init?.method ?? 'GET',
+        ...(typeof init?.body === 'string' ? { body: init.body } : {}),
+      });
+      const reply = replies.shift();
+      if (!reply) throw new Error('không có phản hồi giả cho lời gọi này');
+      return new Response(JSON.stringify(reply.body), { status: reply.status ?? 200 });
+    }) as typeof fetch;
+  }
+
+  const request = { providerReference: '1790936400123456', reason: 'Customer cancelled at kiosk' };
+  const link = (status: string) => ({ code: '00', desc: 'success', data: { status } });
+
+  it('test_FR_ORD_33_payos_cancels_link_by_order_code', async () => {
+    const calls: { url: string; method: string; body?: string }[] = [];
+    const gateway = new PayosPaymentGateway(
+      CONFIG,
+      scriptedFetch(calls, [{ body: link('CANCELLED') }]),
+    );
+
+    await expect(gateway.cancelPayment(request)).resolves.toEqual({ kind: 'CANCELLED' });
+    expect(calls).toEqual([
+      {
+        url: 'https://payos.test.invalid/v2/payment-requests/1790936400123456/cancel',
+        method: 'POST',
+        body: JSON.stringify({ cancellationReason: 'Customer cancelled at kiosk' }),
+      },
+    ]);
+  });
+
+  it('test_FR_ORD_33_payos_refuses_cancel_when_link_paid_or_processing', async () => {
+    for (const status of ['PAID', 'PROCESSING']) {
+      const calls: { url: string; method: string }[] = [];
+      const gateway = new PayosPaymentGateway(
+        CONFIG,
+        // PayOS từ chối hủy → adapter hỏi lại trạng thái link để biết lý do.
+        scriptedFetch(calls, [
+          { body: { code: '101', desc: 'Đơn thanh toán đã hoàn thành' }, status: 400 },
+          { body: link(status) },
+        ]),
+      );
+      await expect(gateway.cancelPayment(request)).resolves.toEqual({ kind: 'ALREADY_PAID' });
+      expect(calls.map((c) => c.method)).toEqual(['POST', 'GET']);
+      expect(calls[1]?.url).toBe('https://payos.test.invalid/v2/payment-requests/1790936400123456');
+    }
+  });
+
+  it('test_FR_ORD_33_payos_link_already_closed_counts_as_cancelled', async () => {
+    const gateway = new PayosPaymentGateway(
+      CONFIG,
+      scriptedFetch(
+        [],
+        [{ body: { code: '101', desc: 'đã hủy' }, status: 400 }, { body: link('EXPIRED') }],
+      ),
+    );
+    await expect(gateway.cancelPayment(request)).resolves.toEqual({ kind: 'CANCELLED' });
+  });
+
+  it('test_FR_ORD_33_payos_unknown_state_throws_for_caller_to_decide', async () => {
+    const unknown = new PayosPaymentGateway(
+      CONFIG,
+      scriptedFetch(
+        [],
+        [{ body: { code: '20', desc: 'lỗi' }, status: 500 }, { body: link('PENDING') }],
+      ),
+    );
+    await expect(unknown.cancelPayment(request)).rejects.toThrow(/PayOS chưa hủy được link/);
+
+    const garbage = new PayosPaymentGateway(
+      CONFIG,
+      scriptedFetch(
+        [],
+        [
+          { body: 'oops', status: 502 },
+          { body: null, status: 502 },
+        ],
+      ),
+    );
+    await expect(garbage.cancelPayment(request)).rejects.toThrow(/trạng thái không rõ/);
+  });
+});

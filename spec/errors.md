@@ -36,6 +36,18 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `RENTAL_NOT_ACTIVE` | 409 | Hóa đơn không ở trạng thái cho phép thao tác |
 | `PRODUCT_NOT_OWNED` | 403 | Sản phẩm không thuộc thương hiệu thuê slot |
 | `INVALID_RENTAL_PERIOD` | 400 | Ngày kết thúc trước ngày bắt đầu |
+| `HOLD_LIMIT_REACHED` | 409 | Tạo phiên thanh toán làm số slot chưa thanh toán thương hiệu đang giữ vượt `BRAND_MAX_HELD_SLOTS` (FR-SLT-56, ADR-0014) |
+| `SLOT_SWAP_NOT_ALLOWED` | 409 | Đổi slot khi đã quá `SLOT_SWAP_WINDOW_HOURS`, đã lắp chai, đã đổi một lần hoặc slot đích khác giá niêm yết (FR-SLT-55, ADR-0014) |
+
+## Đăng ký thương hiệu, hợp đồng và chi trả
+
+Thêm ngày 2026-10-14 theo ADR-0013.
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `EMAIL_NOT_VERIFIED` | 403 | Tài khoản tự đăng ký chưa xác minh email mà tạo phiên thanh toán thuê slot (FR-USR-07) |
+| `AGREEMENT_NOT_ACCEPTED` | 403 | Tạo phiên thanh toán khi chưa đồng ý hợp đồng khung hiện hành, hoặc thanh toán khi chưa đồng ý phụ lục (FR-SLT-49, 50) |
+| `BRAND_NOT_VERIFIED` | 409 | Chuyển kỳ chi trả sang PAID khi thương hiệu chưa được xác minh pháp nhân hoặc chưa có tài khoản nhận doanh thu (FR-SLT-53) |
 
 ## Đơn hàng và thanh toán
 
@@ -43,13 +55,15 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 |---|---|---|
 | `SLOT_UNAVAILABLE` | 409 | Slot không khả dụng khi tạo đơn |
 | `MACHINE_OFFLINE` | 409 | Máy mất kết nối |
-| `MACHINE_IN_MAINTENANCE` | 409 | Máy đang bảo trì |
+| `MACHINE_IN_MAINTENANCE` | 409 | Máy đang bảo trì, đang dừng bán chờ bảo trì (`DRAINING`) hoặc đang có phiếu nạp mở (FR-MNT-06, FR-INV-30, ADR-0015) |
 | `ORDER_EXPIRED` | 409 | Quá thời hạn thanh toán |
+| `ORDER_NOT_CANCELLABLE` | 409 | Khách hủy trên kiosk nhưng đơn đã thanh toán, cổng đang nhận tiền, hoặc đơn đã kết thúc — không hủy được (FR-ORD-33, ADR-0015) |
 | `INVALID_WEBHOOK_SIGNATURE` | 401 | Chữ ký webhook không hợp lệ |
 | `WEBHOOK_ALREADY_PROCESSED` | 200 | Webhook trùng — **trả 200, không phải lỗi** |
 | `AMOUNT_MISMATCH` | 400 | Số tiền webhook lệch đơn hàng |
 | `ORDER_NOT_REFUNDABLE` | 409 | Đơn không ở trạng thái cho hoàn tiền |
-| `MACHINE_BUSY` | 409 | Máy đang có lệnh xịt chờ khách bấm nút — kiosk không nhận đơn mới (FR-ORD-24, ADR-0007) |
+| `MACHINE_BUSY` | 409 | Máy đang có lệnh xịt chờ khách bấm nút hoặc đã có một đơn chờ thanh toán — kiosk không nhận đơn mới (FR-ORD-24, FR-ORD-35, ADR-0007, ADR-0015); cũng trả khi mở phiếu nạp lúc máy còn lệnh hoặc đơn đó (FR-INV-32) |
+| `QUEUE_TIMEOUT` | — | Mã thất bại ghi trên đơn, **không qua HTTP**: đơn đã thanh toán chờ lượt quá `PAID_QUEUE_MAX_SEC` mà chưa tạo được lệnh xịt (FR-ORD-34, ADR-0015) |
 
 ## Lệnh xịt
 

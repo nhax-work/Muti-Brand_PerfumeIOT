@@ -56,7 +56,7 @@
 
 ## FR-ALR-04 — Ba lượt xịt thất bại liên tiếp
 
-**Tuyên bố:** Hệ thống phải sinh cảnh báo khi có 3 lượt xịt thất bại liên tiếp trên cùng một slot.
+**Tuyên bố:** Hệ thống phải sinh cảnh báo khi có `CONSECUTIVE_FAIL_ALERT` lệnh xịt khách hàng liên tiếp trên cùng một slot kết thúc bằng FAILED, UNKNOWN hoặc REJECTED với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`; slot đồng thời tự tắt theo FR-MCH-18. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-006 · **Ưu tiên:** M
 
@@ -199,7 +199,7 @@
 
 ## FR-ALR-15 — Thông báo qua kênh ngoài
 
-**Tuyên bố:** Hệ thống phải gửi thông báo qua kênh ngoài như email hoặc Zalo cho người chịu trách nhiệm.
+**Tuyên bố:** Hệ thống phải gửi cảnh báo vận hành qua kênh ngoài như email hoặc Zalo cho người chịu trách nhiệm (phần thông báo về tiền và hàng tách sang FR-ALR-16). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
 
 **Dấu vết:** BR-006 · **Ưu tiên:** W
 

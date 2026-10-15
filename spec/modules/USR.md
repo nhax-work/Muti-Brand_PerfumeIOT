@@ -24,7 +24,7 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ---
 
 ## FR-USR-01 — Tạo tài khoản Brand Admin
-* **Statement:** Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu.
+* **Statement:** Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu, song song với luồng thương hiệu tự đăng ký (FR-USR-06). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-003 · **Priority:** M
 * **API:** `POST /users`
 * **Acceptance criteria:**
@@ -111,7 +111,7 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ---
 
 ## FR-USR-05 — Chỉ Platform Super Admin quản trị tài khoản
-* **Statement:** Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa bất kỳ tài khoản nào.
+* **Statement:** Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa tài khoản của người khác; tự đăng ký thương hiệu (FR-USR-06) là cách duy nhất tạo tài khoản mà không cần Super Admin. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
 * **Traces:** BR-003, BR-012 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given Brand Admin, Operations Staff hoặc Inventory Staff,  

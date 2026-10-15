@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
-import { errorMessage, useCreateOrder, useKioskCatalog, useOrderStatus } from '@/shared/api';
+import {
+  errorMessage,
+  isNotCancellable,
+  useCancelOrder,
+  useCreateOrder,
+  useKioskCatalog,
+  useOrderStatus,
+} from '@/shared/api';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
@@ -111,6 +118,7 @@ export default function CheckoutScreen() {
   }, [activeOrderId, activeReference, settled, setActiveOrder]);
 
   const [confirmingLeave, setConfirmingLeave] = useState(false);
+  const cancelOrder = useCancelOrder();
 
   if (!created && (!item || !item.product || !item.available)) {
     return (
@@ -189,7 +197,7 @@ export default function CheckoutScreen() {
     </p>
   );
 
-  // Giao diện sau khi thanh toán thành công (Stitch screen d0590f7ae4954294b26d2f0d2b83b28f)
+  // Sau thanh toán: màn chúc mừng rồi modal hướng dẫn bấm nút (DispenseSuccessGuide)
   // Hiển thị ngay sau khi đơn chuyển khỏi trạng thái chờ thanh toán
   const isPostPayment = phase !== 'PAYING' && phase !== 'EXPIRED';
 
@@ -202,13 +210,11 @@ export default function CheckoutScreen() {
       >
         {connectionLost}
         <DispenseSuccessGuide
-          item={item}
           slot={slot}
           order={order}
           view={view}
           phase={phase}
           now={now}
-          settled={settled}
           pressWindowSec={config.pressWindowSec}
           goHome={goHome}
         />
@@ -285,7 +291,7 @@ export default function CheckoutScreen() {
               {t('kiosk.paymentExpiresIn', { seconds: secondsUntil(order.expiresAt, now) ?? 0 })}
             </p>
 
-            {/* Chưa có API hủy đơn: rời màn hình không hủy được đơn, nên phải dặn khách trước. */}
+            {/* Khách có thể đã chuyển khoản — hỏi lại, rồi hủy đơn ở máy chủ trước khi rời (FR-ORD-33). */}
             {confirmingLeave ? (
               <div className={styles.confirmLeave} role="alertdialog">
                 <p className={styles.body}>{t('kiosk.leavePaymentConfirm')}</p>
@@ -294,13 +300,24 @@ export default function CheckoutScreen() {
                     type="button"
                     className={styles.primary}
                     onClick={() => setConfirmingLeave(false)}
+                    disabled={cancelOrder.isPending}
                   >
                     {t('kiosk.stayHere')}
                   </button>
                   <button
                     type="button"
                     className={styles.secondary}
-                    onClick={() => void navigate(`/products/${slot}`)}
+                    disabled={cancelOrder.isPending}
+                    onClick={() =>
+                      cancelOrder.mutate(order.id, {
+                        onSuccess: () => void navigate(`/products/${slot}`),
+                        // Tiền đã/đang về: ở lại, poll đưa khách sang màn nhận lượt xịt.
+                        onError: (error) => {
+                          if (isNotCancellable(error)) setConfirmingLeave(false);
+                          else void navigate(`/products/${slot}`);
+                        },
+                      })
+                    }
                   >
                     {t('kiosk.leaveAnyway')}
                   </button>
