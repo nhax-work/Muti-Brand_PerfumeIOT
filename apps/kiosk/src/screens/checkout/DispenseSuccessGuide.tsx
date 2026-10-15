@@ -186,7 +186,7 @@ export default function DispenseSuccessGuide({
                     ? t('kiosk.dispensedTitle')
                     : phase === 'PROBLEM'
                       ? t('kiosk.orderProblemTitle')
-                      : 'KHOẢNH KHẮC HƯƠNG SẴN SÀNG'}
+                      : 'HƯỚNG DẪN NHẬN LƯỢT XỊT'}
           </h1>
 
           <div className={styles.metaSubtitle}>
@@ -328,35 +328,8 @@ export default function DispenseSuccessGuide({
           </div>
         )}
 
-        {/* Trường hợp ĐANG CHUẨN BỊ VÒI XỊT / KIỂM TRA: Hero Card kết nối */}
-        {(phase === 'PREPARING' || phase === 'CHECKING') && (
-          <div className={styles.phaseHeroCard} data-testid="preparing-hero">
-            <div className={styles.phaseHeroIconPulse} aria-hidden="true">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-              >
-                <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-              </svg>
-            </div>
-            <span className={styles.phaseHeroSlotTag}>NGĂN SỐ {view?.slotNumber ?? slot}</span>
-            <h2 className={styles.phaseHeroTitle}>ĐANG CHUẨN BỊ VÒI XỊT</h2>
-            <p className={styles.phaseHeroMessage}>
-              Đơn hàng đã thanh toán thành công. Hệ thống đang chuẩn bị buồng phun sương vi hạt cho
-              ngăn số {view?.slotNumber ?? slot}.
-            </p>
-            <div className={styles.phaseHeroHint}>
-              ✦ Đèn nút số {view?.slotNumber ?? slot} trên máy sẽ phát sáng ngay sau đây.
-            </div>
-          </div>
-        )}
-
-        {/* Chỉ hiện 2 Cards hướng dẫn nhận xịt khi đèn nút đã sáng (PRESS) hoặc khi đã xịt xong (DISPENSED) */}
-        {(phase === 'PRESS' || phase === 'DISPENSED') && (
+        {/* Hiển thị 2 Cards hướng dẫn nhận xịt trong suốt các pha chuẩn bị, bấm nút và hoàn tất */}
+        {!['WAITING_TURN', 'FORFEITED', 'PROBLEM'].includes(phase) && (
           <>
             {/* Guide Title Indicator */}
             <div className={styles.guideSectionTitle}>
