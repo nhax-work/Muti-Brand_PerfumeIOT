@@ -106,6 +106,23 @@ describe('PayosPaymentGateway.verifyWebhook', () => {
     }
   });
 
+  it('test_FR_ORD_13_payos_sample_webhook_without_success_field_is_verified', () => {
+    // Giao dịch mẫu PayOS gửi khi lưu Webhook URL: không có `success` ở cấp ngoài (gặp khi đăng ký
+    // URL thật 16/10). Chữ ký đúng thì phải qua — trước đây bị 401 và PayOS không lưu được URL.
+    const data = webhookData();
+    const body = Buffer.from(
+      JSON.stringify({
+        code: '00',
+        desc: 'success',
+        data,
+        signature: payosSignatureOf(data, CONFIG.checksumKey),
+      }),
+    );
+    const result = gateway.verifyWebhook(body, {});
+    expect(result.kind).toBe('VERIFIED');
+    expect(result.kind === 'VERIFIED' && result.event.status).toBe('SUCCEEDED');
+  });
+
   it('test_FR_ORD_12_payos_failed_transaction_maps_to_failed', () => {
     const result = gateway.verifyWebhook(
       signedBody(webhookData({ code: '01', desc: 'fail' }), CONFIG.checksumKey, { success: false }),
