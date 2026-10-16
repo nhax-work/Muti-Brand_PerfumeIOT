@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 
 import { RequireRole } from '@/app/guards/RequireRole';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import {
   useBrands,
@@ -23,9 +24,11 @@ import {
   type Product,
   type SlotRental,
 } from './api';
+import { MachineCredentialsCard } from './components/MachineCredentialsCard';
 import { MachineModeModal } from './components/MachineModeModal';
 import { SlotCard } from './components/SlotCard';
 import { SlotConfigModal } from './components/SlotConfigModal';
+import { StatusHistoryCard } from './components/StatusHistoryCard';
 
 const STATUS_COLOR_MAP = {
   ONLINE: 'success',
@@ -35,10 +38,10 @@ const STATUS_COLOR_MAP = {
 
 const MODE_COLOR_MAP = {
   NORMAL: 'blue',
+  DRAINING: 'gold',
   MAINTENANCE: 'orange',
   DISABLED: 'red',
 } as const;
-  DRAINING: 'gold',
 
 /** Danh mục loại nước hoa gắn với 5 slot buồng chứa theo chuẩn seed hệ thống */
 const FALLBACK_PRODUCTS_BY_SLOT: Record<number, { name: string; sku: string }> = {
@@ -55,6 +58,9 @@ export default function MachineDetailPage() {
   const { id: machineId } = useParams<{ id: string }>();
 
   const [modeModalOpen, setModeModalOpen] = useState(false);
+  const { user } = useAuth();
+  // Khóa MQTT cần quyền machine.manage + xác thực lại — chỉ Super Admin (FR-MCH-02).
+  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
   const [selectedSlotForConfig, setSelectedSlotForConfig] = useState<MachineSlot | null>(null);
 
   const { data: machine, isLoading: loadingMachine, error: machineError } = useMachine(machineId);
@@ -440,6 +446,9 @@ export default function MachineDetailPage() {
             ))}
           </div>
         )}
+
+        {isSuperAdmin && <MachineCredentialsCard machineId={machine.id} />}
+        <StatusHistoryCard machineId={machine.id} />
 
         {/* MODALS */}
         <MachineModeModal

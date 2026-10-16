@@ -9,13 +9,16 @@ import {
   EnvironmentOutlined,
   ArrowRightOutlined,
   ControlOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import type { MachineConnectionStatus, MachineOperatingMode } from '@scentstation/contracts';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { useLocations, useMachines, type Location, type Machine } from './api';
 import { getMachineColumns } from './columns';
 import { MachineFilterBar } from './components/MachineFilterBar';
+import { RegisterMachineModal } from './components/RegisterMachineModal';
 
 const STATUS_COLOR_MAP: Record<MachineConnectionStatus, string> = {
   ONLINE: 'success',
@@ -25,10 +28,10 @@ const STATUS_COLOR_MAP: Record<MachineConnectionStatus, string> = {
 
 const MODE_COLOR_MAP: Record<MachineOperatingMode, string> = {
   NORMAL: 'blue',
+  DRAINING: 'gold',
   MAINTENANCE: 'orange',
   DISABLED: 'red',
 };
-  DRAINING: 'gold',
 
 export default function MachinesPage() {
   const { t } = useI18n();
@@ -41,6 +44,9 @@ export default function MachinesPage() {
   const [status, setStatus] = useState<MachineConnectionStatus | undefined>(undefined);
   const [operatingMode, setOperatingMode] = useState<MachineOperatingMode | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
 
   const { data: locationsData, isLoading: loadingLocations } = useLocations();
   const { data: machinesData, isLoading: loadingMachines } = useMachines({
@@ -127,15 +133,27 @@ export default function MachinesPage() {
               {t('ui.machineListSubtitle')}
             </Typography.Text>
           </div>
-          <Segmented
-            value={viewMode}
-            onChange={(val) => setViewMode(val as 'table' | 'grid')}
-            options={[
-              { value: 'table', icon: <UnorderedListOutlined />, label: t('ui.tableView') },
-              { value: 'grid', icon: <AppstoreOutlined />, label: t('ui.gridView') },
-            ]}
-          />
+          <Space>
+            {isSuperAdmin && (
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setRegisterOpen(true)}>
+                {t('ui.machineRegister')}
+              </Button>
+            )}
+            <Segmented
+              value={viewMode}
+              onChange={(val) => setViewMode(val as 'table' | 'grid')}
+              options={[
+                { value: 'table', icon: <UnorderedListOutlined />, label: t('ui.tableView') },
+                { value: 'grid', icon: <AppstoreOutlined />, label: t('ui.gridView') },
+              ]}
+            />
+          </Space>
         </div>
+        <RegisterMachineModal
+          open={registerOpen}
+          locations={locationsData?.items ?? []}
+          onClose={() => setRegisterOpen(false)}
+        />
 
         {/* CÁC THẺ KPI / METRICS STATS */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
