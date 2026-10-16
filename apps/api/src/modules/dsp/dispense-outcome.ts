@@ -91,7 +91,8 @@ export function outcomeOf(report: DeviceReport, acknowledged: boolean): CommandO
   return {
     kind: 'CLOSED',
     commandStatus: 'REJECTED',
-    // Sau ACK: khách đã trả tiền và đã bấm mà máy từ chối → cần người xem. Trước ACK: chưa sáng đèn.
-    order: { to: 'FAILED', failureCode, manualReview: acknowledged },
+    // Trước hay sau ACK thì khách cũng đã trả tiền mà không nhận lượt xịt → cần người xem và cho
+    // khiếu nại (FR-ORD-19, ADR-0015 mục 1). Lệnh không được gửi lại tự động (FR-DSP-19).
+    order: { to: 'FAILED', failureCode, manualReview: true },
   };
 }

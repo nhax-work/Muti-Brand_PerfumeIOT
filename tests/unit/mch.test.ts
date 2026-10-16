@@ -538,12 +538,16 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(audit.entries).toHaveLength(0);
     });
 
-    it('không bật trực tiếp slot đang MAINTENANCE hoặc DISABLED', async () => {
-      for (const status of ['MAINTENANCE', 'DISABLED'] as const) {
-        queries.slots.set(slotId, { ...queries.slots.get(slotId)!, status });
-        await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, true), 'VALIDATION_ERROR');
-        expect(queries.slots.get(slotId)!.status).toBe(status);
-      }
+    it('không bật trực tiếp slot đã xóa mềm (DISABLED)', async () => {
+      queries.slots.set(slotId, { ...queries.slots.get(slotId)!, status: 'DISABLED' });
+      await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, true), 'VALIDATION_ERROR');
+      expect(queries.slots.get(slotId)!.status).toBe('DISABLED');
+    });
+
+    it('test_FR_MCH_18_ops_reenables_auto_maintenance_slot — slot tự tắt vì lỗi liên tiếp được bật lại', async () => {
+      queries.slots.set(slotId, { ...queries.slots.get(slotId)!, status: 'MAINTENANCE' });
+      await service.setSlotEnabled(SUPER_ADMIN, slotId, true, 'Đã kiểm tra bơm');
+      expect(queries.slots.get(slotId)!.status).toBe('AVAILABLE');
     });
 
     it('không bật slot khi máy chứa nó đã DISABLED', async () => {

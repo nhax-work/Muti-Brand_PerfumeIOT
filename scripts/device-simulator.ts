@@ -10,10 +10,16 @@
  *   npm run sim -- --wrong-slot 3 --press-after 5 # bấm nhầm nút slot 3 (bị bỏ qua) rồi bấm đúng nút
  *   npm run sim:press 3                          # (khi sim không tự bấm) bấm tay nút slot 3 — bấm
  *                                                #   nhầm thì bị bỏ qua, hết giờ → đơn FORFEITED
- *   npm run sim -- --reject DOOR_OPEN            # từ chối ngay khi nhận lệnh
+ *   npm run sim -- --reject DOOR_OPEN            # từ chối ngay khi nhận lệnh, đèn chưa sáng
+ *                                                #   → đơn FAILED + kiểm tra thủ công (ADR-0015)
  *   npm run sim -- --fail-on-press DOOR_OPEN     # bấm rồi nhưng kiểm an toàn lần hai không đạt
  *                                                #   (FR-DSP-23) → đơn FAILED + kiểm tra thủ công
  *   npm run sim -- --fail ACTUATOR_FAULT         # bấm rồi nhưng cơ cấu hỏng → đơn FAILED
+ *   npm run sim -- --fail ACTUATOR_FAULT --fail-count 3 --press-after 3
+ *                                                # 3 lệnh đầu hỏng liên tiếp → cảnh báo, slot tự
+ *                                                #   MAINTENANCE (FR-ALR-04, FR-MCH-18); từ lệnh thứ
+ *                                                #   4 chạy bình thường. Dùng được với --reject,
+ *                                                #   --fail-on-press
  *   npm run sim -- --public-key device.pub.pem   # kiểm chữ ký bằng khóa công khai chỉ định
  *   npm run sim:many                             # 50 máy SIM-001..SIM-050 chỉ gửi heartbeat
  *
@@ -51,6 +57,7 @@ const { values } = parseArgs({
     reject: { type: 'string' },
     'fail-on-press': { type: 'string' },
     fail: { type: 'string' },
+    'fail-count': { type: 'string' },
   },
 });
 
@@ -58,6 +65,12 @@ const broker = values.broker ?? process.env['MQTT_URL'] ?? 'mqtt://localhost:188
 const wrongSlot = values['wrong-slot'] === undefined ? null : Number(values['wrong-slot']);
 if (wrongSlot !== null && (!Number.isInteger(wrongSlot) || wrongSlot < 1)) {
   console.error(`--wrong-slot phải là số slot nguyên dương, nhận được: ${values['wrong-slot']}`);
+  process.exit(1);
+}
+
+const failCount = values['fail-count'] === undefined ? null : Number(values['fail-count']);
+if (failCount !== null && (!Number.isInteger(failCount) || failCount < 0)) {
+  console.error(`--fail-count phải là số nguyên không âm, nhận được: ${values['fail-count']}`);
   process.exit(1);
 }
 
@@ -77,6 +90,7 @@ const behavior: MachineBehavior = {
   reject: values.reject ?? null,
   failOnPress: values['fail-on-press'] ?? null,
   fail: values.fail ?? null,
+  failCount,
 };
 
 function loadVerifier(): CommandVerifier {

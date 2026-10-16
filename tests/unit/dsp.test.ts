@@ -51,14 +51,14 @@ describe('DSP — ánh xạ kết quả thiết bị (mqtt.md §6)', () => {
     });
   });
 
-  it('REJECT sau ACK (khách đã bấm) là FAILED cần kiểm tra; trước ACK thì không (FR-ORD-19)', () => {
+  it('test_FR_ORD_19_reject_before_or_after_ack_needs_review — khách đã trả tiền dù đèn chưa sáng (ADR-0015)', () => {
     expect(outcomeOf({ stage: 'REJECT', failureCode: 'DOOR_OPEN' }, true)).toMatchObject({
       commandStatus: 'REJECTED',
       order: { to: 'FAILED', failureCode: 'DOOR_OPEN', manualReview: true },
     });
     expect(outcomeOf({ stage: 'REJECT', failureCode: 'CMD_EXPIRED' }, false)).toMatchObject({
       commandStatus: 'REJECTED',
-      order: { to: 'FAILED', failureCode: 'CMD_EXPIRED', manualReview: false },
+      order: { to: 'FAILED', failureCode: 'CMD_EXPIRED', manualReview: true },
     });
   });
 

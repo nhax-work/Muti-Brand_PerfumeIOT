@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildMockWebhook,
   MOCK_SIGNATURE_HEADER,
@@ -19,6 +19,7 @@ import { createTestApp, TEST_PAYMENT_WEBHOOK_SECRET } from './helpers/app.js';
 import { openRawClient } from './helpers/db.js';
 import {
   cleanupIsolationFixture,
+  releaseOpenOrders,
   seedIsolationFixture,
   type IsolationFixture,
 } from './helpers/seed-isolation.js';
@@ -39,6 +40,11 @@ beforeAll(async () => {
   fx = await seedIsolationFixture(client);
   app = await createTestApp();
 }, 60_000);
+
+// Mỗi máy một đơn chờ thanh toán (FR-ORD-35): mỗi test bắt đầu như khi khách trước đã rời màn QR.
+beforeEach(async () => {
+  await releaseOpenOrders(client, fx.machineId);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();

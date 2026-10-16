@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildMockWebhook,
   MOCK_SIGNATURE_HEADER,
@@ -23,6 +23,7 @@ import { createTestApp, login, TEST_PAYMENT_WEBHOOK_SECRET } from './helpers/app
 import { openRawClient } from './helpers/db.js';
 import {
   cleanupIsolationFixture,
+  releaseOpenOrders,
   seedIsolationFixture,
   TEST_PASSWORD,
   type IsolationFixture,
@@ -56,6 +57,11 @@ beforeAll(async () => {
   app = await createTestApp();
   adminToken = (await login(app, fx.superAdminEmail, TEST_PASSWORD)).accessToken;
 }, 60_000);
+
+// Mỗi máy một đơn chờ thanh toán (FR-ORD-35): mỗi test bắt đầu như khi khách trước đã rời màn QR.
+beforeEach(async () => {
+  await releaseOpenOrders(client, fx.machineId);
+});
 
 afterAll(async () => {
   // Dữ liệu do test này tạo thêm, dọn trước khi fixture xóa orders.
@@ -502,12 +508,20 @@ describe('ORD — tra cứu đơn', () => {
   });
 
   it('test_FR_RPT_05_list_paid_orders_without_confirmed_dispense', async () => {
-    // Bốn đơn đã thanh toán: lỗi cần xem, tiền về sau hạn, đã hoàn xong, và đơn bình thường.
-    const failed = await newOrder(0);
-    const latePaid = await newOrder(0);
-    const refunded = await newOrder(0);
-    const normal = await newOrder(0);
-    for (const o of [failed, latePaid, refunded, normal]) await sendWebhook(paidWebhook(o));
+    // Bốn đơn đã thanh toán: lỗi cần xem, tiền về sau hạn, đã hoàn xong, và đơn bình thường. Trả
+    // tiền từng đơn trước khi mở đơn kế — mỗi máy một đơn chờ thanh toán (FR-ORD-35).
+    const paid: OrderBody[] = [];
+    for (let i = 0; i < 4; i++) {
+      const o = await newOrder(0);
+      await sendWebhook(paidWebhook(o));
+      paid.push(o);
+    }
+    const [failed, latePaid, refunded, normal] = paid as [
+      OrderBody,
+      OrderBody,
+      OrderBody,
+      OrderBody,
+    ];
     await client.query(
       `UPDATE orders SET status = 'FAILED', needs_manual_review = true WHERE id = $1`,
       [failed.id],

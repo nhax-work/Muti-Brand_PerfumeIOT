@@ -417,6 +417,26 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
  * nên mỗi lần đăng nhập là một hàng khóa vĩnh viễn thương hiệu đó lại. Mã thương hiệu có hậu tố
  * theo từng lần chạy nên vài hàng bỏ lại không làm lần chạy sau hỏng.
  */
+/**
+ * Khách trước đã rời màn QR: đơn chờ thanh toán của máy → EXPIRED, thanh toán PENDING → EXPIRED — như
+ * kiosk gọi hủy hoặc job hết hạn. Mỗi máy chỉ một đơn chờ thanh toán (FR-ORD-35, uq_machine_open_order),
+ * nên test tạo đơn mới mà không trả tiền đơn cũ phải gọi hàm này trước.
+ */
+export async function releaseOpenOrders(client: pg.Client, machineId: string): Promise<void> {
+  await client.query(
+    `UPDATE payments SET status = 'EXPIRED'
+      WHERE status = 'PENDING'
+        AND order_id IN (SELECT id FROM orders
+                          WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT'))`,
+    [machineId],
+  );
+  await client.query(
+    `UPDATE orders SET status = 'EXPIRED'
+      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
+    [machineId],
+  );
+}
+
 export async function cleanupIsolationFixture(
   client: pg.Client,
   fx: IsolationFixture,
@@ -437,6 +457,8 @@ export async function cleanupIsolationFixture(
     [`UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM sensor_readings WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_events WHERE machine_id = $1`, [fx.machineId]],
+    // Cảnh báo do test sinh ra (vd FR-ALR-04 tự tắt slot) trỏ tới máy và slot của fixture.
+    [`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM orders WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
