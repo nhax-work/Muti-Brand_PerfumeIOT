@@ -12,6 +12,7 @@ const STATUS_COLOR_MAP: Record<MachineConnectionStatus, string> = {
 
 const MODE_COLOR_MAP: Record<MachineOperatingMode, string> = {
   NORMAL: 'blue',
+  DRAINING: 'gold',
   MAINTENANCE: 'orange',
   DISABLED: 'red',
 };

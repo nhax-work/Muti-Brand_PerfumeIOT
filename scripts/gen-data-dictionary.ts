@@ -35,6 +35,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'user_roles',
       'role_permissions',
       'refresh_sessions',
+      'email_verifications',
     ],
   },
   {
@@ -54,6 +55,9 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'storage_plans',
       'rental_checkouts',
       'slot_rentals',
+      'agreement_versions',
+      'agreement_acceptances',
+      'brand_payouts',
     ],
   },
   {
@@ -68,6 +72,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'refill_sessions',
       'inventory_adjustments',
       'storage_compensations',
+      'bottle_returns',
     ],
   },
   {
@@ -84,6 +89,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'dispense_commands',
       'dispense_results',
       'kiosk_interaction_events',
+      'refund_claims',
     ],
   },
   {

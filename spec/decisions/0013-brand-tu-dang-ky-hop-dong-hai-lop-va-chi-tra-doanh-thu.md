@@ -99,3 +99,30 @@ lực, sắp hết hạn, vào ân hạn, sắp thanh lý, đã thanh lý, hàng
 - **Rủi ro:** tự đăng ký mở cửa cho tài khoản rác — cần giới hạn tần suất đăng ký và xác minh email
   trước khi thuê.
 - **Pháp lý:** nội dung hợp đồng khung và giá trị của xác nhận điện tử cần người có chuyên môn xem lại.
+
+---
+
+## Nhật ký áp dụng
+
+**2026-10-14:** áp đặc tả — FR mới và FR viết lại trong `docs/FR_NFR_SCENTSTATION.md`, `spec/errors.md`
+(`EMAIL_NOT_VERIFIED`, `AGREEMENT_NOT_ACCEPTED`, `BRAND_NOT_VERIFIED`), glossary.
+
+**2026-10-16 — PR contract chung ADR-0013/0014/0015** (nhánh `feat/business-gap-review`):
+
+| Hạng mục | Đã làm |
+|---|---|
+| Migration | `1791100060000_adr-0013-0014-0015-contract.sql` — enum `agreement_kind`, `brand_payout_status`; cột `brands.tax_code`, `business_license_number`, `payout_account_ciphertext`, `payout_account_key_version`, `legal_verified_at/by`; `rental_checkouts.agreement_version_id`; bảng `email_verifications`, `agreement_versions`, `agreement_acceptances`, `brand_payouts` |
+| `schema.sql` | Cột mới cuối bảng, §10g, REVOKE ở §11, §13 mục 13 |
+| `openapi.yaml` | `POST /auth/register-brand`, `/auth/verify-email`, `/auth/verify-email/resend`; `PUT /brands/me/legal-profile`, `POST /brands/{id}/legal-verification`; `GET/POST /agreements`, `GET /agreements/current`, `POST /agreements/{version}/publish`, `/accept`; `GET /rental-checkouts/{id}/annex`, `POST …/annex/accept`; `GET /brand-payouts`, `GET /brand-payouts/{id}`, `POST …/pay`, `…/dispute`, `…/dispute-response`; mô tả `POST /rental-checkouts` và `…/payments` thêm ba mã lỗi |
+| `erd.md`, sinh lại | Nhóm Identity và Catalog; `data-dictionary.md`, `types.generated.ts`, `packages/contracts/src/openapi.ts` |
+
+**Lệch so với bảng "Thay đổi đặc tả và contract" ở trên:**
+
+| Chỗ | ADR ghi | Đã làm | Vì sao |
+|---|---|---|---|
+| Tham chiếu phụ lục | cột trên `rental_checkouts` | `rental_checkouts.agreement_version_id` (hợp đồng khung lúc tạo phiên) + `agreement_acceptances.rental_checkout_id` (kind `ANNEX`, một hàng mỗi phiên) | Bằng chứng đồng ý tự đứng được: hàng đồng ý biết nó thuộc phiên nào; tránh khóa ngoại vòng hai chiều |
+| `payout_account` | một cột mã hoá | `payout_account_ciphertext` + `payout_account_key_version` | Cùng mẫu `refund_claims` — xoay khóa mà vẫn đọc được bản cũ |
+| Xác minh email | bảng `email_verifications` | Một hàng mỗi tài khoản (`UNIQUE user_id`); không có hàng = tài khoản Super Admin tạo, không cần xác minh | Không thêm cột vào `users`; phân biệt tài khoản tự đăng ký mà không cần cờ riêng |
+| Khiếu nại số liệu | — | Cột `dispute_*` trên `brand_payouts`, mỗi kỳ một khiếu nại; `chk_payout_paid_dispute_resolved` chặn PAID khi chưa trả lời | FR-SLT-54 ở mức M chỉ cần một vòng hỏi–đáp |
+| Hợp đồng khung bất biến | — | `trg_agreement_versions_published_immutable` | Mã băm trong bằng chứng đồng ý phải trỏ tới đúng văn bản đã công bố |
+| Endpoint thêm | — | `/auth/verify-email/resend`, `GET/POST /agreements`, `/agreements/{version}/publish`, `/brands/{id}/legal-verification`, `/brands/me/legal-profile` | Cần cho FR-USR-07, FR-SLT-48, FR-BND-09, 10 — ADR chỉ liệt kê endpoint phía thương hiệu |

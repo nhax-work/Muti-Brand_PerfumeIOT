@@ -100,6 +100,7 @@ export const en: SameKeysAs<typeof vi> = {
   machineOperatingMode: {
     NORMAL: 'normal',
     MAINTENANCE: 'maintenance',
+    DRAINING: 'draining before maintenance',
     DISABLED: 'disabled',
   },
 

@@ -28,6 +28,7 @@ const MODE_COLOR_MAP: Record<MachineOperatingMode, string> = {
   MAINTENANCE: 'orange',
   DISABLED: 'red',
 };
+  DRAINING: 'gold',
 
 export default function MachinesPage() {
   const { t } = useI18n();

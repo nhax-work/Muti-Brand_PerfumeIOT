@@ -38,6 +38,7 @@ const MODE_COLOR_MAP = {
   MAINTENANCE: 'orange',
   DISABLED: 'red',
 } as const;
+  DRAINING: 'gold',
 
 /** Danh mục loại nước hoa gắn với 5 slot buồng chứa theo chuẩn seed hệ thống */
 const FALLBACK_PRODUCTS_BY_SLOT: Record<number, { name: string; sku: string }> = {

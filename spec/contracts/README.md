@@ -43,7 +43,14 @@ CREATE UNIQUE INDEX uq_slot_active_bottle ON machine_slots (active_bottle_id)
 -- Một thanh toán đang chờ trên mỗi phiên thanh toán thuê slot (FR-SLT-37, ADR-0008)
 CREATE UNIQUE INDEX uq_checkout_payment_pending ON payments (rental_checkout_id)
   WHERE rental_checkout_id IS NOT NULL AND status = 'PENDING';
+
+-- Một đơn chờ thanh toán trên mỗi máy (FR-ORD-35, ADR-0015)
+CREATE UNIQUE INDEX uq_machine_open_order ON orders (machine_id)
+  WHERE status IN ('CREATED', 'PENDING_PAYMENT');
 ```
+
+`agreement_acceptances` (ADR-0013) chỉ thêm mới như `audit_logs`: trigger chặn UPDATE/DELETE và
+`REVOKE UPDATE, DELETE, TRUNCATE` khỏi `scent_app` (`schema.sql` §10g, §11).
 
 `excl_slot_rental_overlap` (exclusion constraint, tính cả hóa đơn `DRAFT`) là thứ giữ chỗ slot khi
 thương hiệu đang thanh toán — hai thương hiệu không thể cùng giữ một slot (FR-SLT-35, ADR-0006). Với
