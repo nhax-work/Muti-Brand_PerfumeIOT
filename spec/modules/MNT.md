@@ -1,11 +1,12 @@
 # FR-MNT — Bảo trì
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A15 · 16 FR  
-> Trạng thái AC: **đã viết**  
-> Phụ trách: Hoàng (TV4)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A15 · 17 FR  
+> Trạng thái AC: **hoàn thành** (FR-MNT-05, 06 soát lại và FR-MNT-17 thêm ngày 2026-10-17 theo ADR-0015 — dừng bán an toàn & chế độ DRAINING)  
+> Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
-Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
+Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
+`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`
 
 ## FR-MNT-01 — Tạo phiếu bảo trì thủ công
 
@@ -63,29 +64,31 @@
 
 **Kiểm tra:** `test_FR_MNT_04_ticket_status`
 
-## FR-MNT-05 — Chuyển máy sang MAINTENANCE
+## FR-MNT-05 — Yêu cầu đưa máy vào bảo trì qua chế độ DRAINING
+**Tuyên bố:** Hệ thống phải cho phép Operations Staff yêu cầu đưa máy vào bảo trì: máy chuyển sang DRAINING, phục vụ nốt đơn đã thanh toán và lệnh đang chạy, rồi tự chuyển sang MAINTENANCE khi không còn lệnh xịt khách hàng hiệu lực, đơn chờ thanh toán hay đơn chờ lượt (ADR-0015).
 
-**Tuyên bố:** Hệ thống phải cho phép Operations Staff yêu cầu đưa máy vào bảo trì: máy chuyển sang DRAINING, phục vụ nốt đơn đã thanh toán và lệnh đang chạy, rồi tự chuyển sang MAINTENANCE khi không còn lệnh xịt khách hàng hiệu lực, đơn chờ thanh toán hay đơn chờ lượt. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
-
-**Dấu vết:** BR-006 · **Ưu tiên:** M
+**Dấu vết:** BR-006, BR-010 · **Ưu tiên:** M · **API:** `PUT /machines/{id}/mode`
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho Operations Staff được phân công phiếu bảo trì, Khi chuyển máy sang MAINTENANCE, Thì hệ thống cập nhật chế độ máy thành MAINTENANCE.
-- AC2: Cho người dùng không phải Operations Staff được phân công phiếu trên máy đó, Khi yêu cầu chuyển máy sang MAINTENANCE, Thì hệ thống từ chối thao tác.
+- AC1 (Chuyển sang DRAINING): Cho Operations Staff gửi yêu cầu chuyển máy `M` sang bảo trì mềm, Khi gọi `PUT /machines/{id}/mode` với `mode = 'DRAINING'`, Thì máy chuyển `operating_mode = 'DRAINING'`, kiosk dừng nhận đơn mới và hiển thị thông báo máy chuẩn bị bảo trì.
+- AC2 (Tự chuyển MAINTENANCE khi cạn đơn): Cho máy đang ở `DRAINING`, Khi không còn lệnh xịt khách hàng nào đang gửi/chờ kết quả, không còn đơn nào ở `CREATED`/`PENDING_PAYMENT`, và không còn đơn `PAID` nào trong hàng đợi chờ lượt, Thì hệ thống tự động cập nhật `operating_mode = 'MAINTENANCE'`, sinh thông báo cho các Brand Admin có slot trên máy (FR-MNT-07) và ghi AuditLog.
+- AC3 (Chuyển thẳng nếu máy rảnh): Cho máy `M` đang không có đơn hàng dở dang hay lệnh xịt nào, Khi yêu cầu đưa vào bảo trì, Thì máy có thể tự động chuyển ngay từ `DRAINING` sang `MAINTENANCE`.
 
 **Kiểm tra:** `test_FR_MNT_05_enter_maintenance`
 
-## FR-MNT-06 — Không tạo đơn khi bảo trì
+---
 
-**Tuyên bố:** Hệ thống phải từ chối tạo đơn hàng mới trên máy đang ở chế độ DRAINING hoặc MAINTENANCE. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
+## FR-MNT-06 — Chặn tạo đơn khi máy DRAINING hoặc MAINTENANCE
+**Tuyên bố:** Hệ thống phải từ chối tạo đơn hàng mới trên máy đang ở chế độ DRAINING hoặc MAINTENANCE (ADR-0015).
 
-**Dấu vết:** BR-002, BR-010 · **Ưu tiên:** M
+**Dấu vết:** BR-002, BR-010 · **Ưu tiên:** M · **API:** `POST /kiosk/machines/{serialNumber}/orders`
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho máy đang ở MAINTENANCE, Khi kiosk yêu cầu tạo đơn hàng mới, Thì hệ thống từ chối tạo đơn.
-- AC2: Cho máy không ở MAINTENANCE và các điều kiện bán hàng khác hợp lệ, Khi tạo đơn, Thì hệ thống không từ chối chỉ vì điều kiện MAINTENANCE.
+- AC1 (Từ chối khi DRAINING): Cho máy `M` đang ở chế độ `DRAINING`, Khi khách hàng/kiosk gửi yêu cầu tạo đơn hàng mới, Thì hệ thống từ chối với HTTP 409 `MACHINE_IN_MAINTENANCE` (hoặc `MACHINE_BUSY`).
+- AC2 (Từ chối khi MAINTENANCE): Cho máy `M` đang ở chế độ `MAINTENANCE`, Khi kiosk gửi yêu cầu tạo đơn, Thì hệ thống từ chối với HTTP 409 `MACHINE_IN_MAINTENANCE`.
+- AC3 (Bình thường khi NORMAL): Cho máy `M` ở `NORMAL` và các điều kiện slot hợp lệ, Khi gửi yêu cầu tạo đơn, Thì hệ thống cho phép tạo đơn thành công.
 
 **Kiểm tra:** `test_FR_MNT_06_block_order_during_maintenance`
 
@@ -218,3 +221,19 @@
 - AC2: Cho phiếu chưa có thời điểm tiếp nhận hoặc chưa có thời điểm xử lý xong, Khi xem thời gian xử lý, Thì hệ thống không coi khoảng thời gian chưa kết thúc là thời gian hoàn tất.
 
 **Kiểm tra:** `test_FR_MNT_16_maintenance_timing`
+
+---
+
+## FR-MNT-17 — Ép máy chuyển sang MAINTENANCE khẩn cấp
+**Tuyên bố:** Hệ thống phải cho phép Operations Staff ép máy chuyển thẳng sang MAINTENANCE kèm lý do bắt buộc trong trường hợp khẩn cấp; đơn bị ảnh hưởng đi theo FR-ORD-19 (ADR-0015).
+
+**Dấu vết:** BR-006, BR-010 · **Ưu tiên:** M · ADR-0015 mục 4 · **API:** `POST /machines/{id}/force-maintenance`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Ép bảo trì khẩn cấp): Cho máy `M` đang ở `NORMAL` hoặc `DRAINING` gặp sự cố nghiêm trọng, Khi Operations Staff gửi `POST /machines/{id}/force-maintenance` kèm lý do `reason = "Cháy nổ/khẩn cấp..."` và đã xác thực lại mật khẩu (`X-Reauth-Token`), Thì máy chuyển ngay lập tức sang `operating_mode = 'MAINTENANCE'`, không chờ xịt nốt.
+- AC2 (Đơn hàng bị ảnh hưởng xử lý theo FR-ORD-19): Cho máy bị ép sang `MAINTENANCE` khi đang có đơn `PAID` chờ xịt hoặc lệnh xịt đang gửi dở dang, Khi lệnh bị hủy hoặc thiết bị từ chối, Thì toàn bộ các đơn hàng đó chuyển sang `FAILED`, đánh dấu `needs_manual_review = TRUE` và tạo Alert để hỗ trợ hoàn tiền cho khách hàng.
+- AC3 (Bắt buộc lý do): Cho yêu cầu ép bảo trì nhưng không cung cấp `reason`, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 400 `REASON_REQUIRED`.
+- AC4 (Bắt buộc xác thực lại): Cho yêu cầu thiếu `X-Reauth-Token` hợp lệ, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED` (FR-AUTH-09).
+
+**Kiểm tra:** `test_FR_MNT_17_force_emergency_maintenance`
