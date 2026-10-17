@@ -174,6 +174,7 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByText(/đèn nút số 2/)).toBeTruthy();
     expect(screen.getByText(/60 giây/)).toBeTruthy();
     expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.getByText(/42\.000 VND/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
     expect(mockMutate).toHaveBeenCalledWith(

@@ -18,7 +18,7 @@ export class DspJobs {
   ) {}
 
   /** Bỏ qua nếu nhịp trước chưa xong — tránh hai nhịp cùng publish một lệnh. */
-  async tick(): Promise<void> {
+  async tick(allowDispatch = true): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {
@@ -28,7 +28,7 @@ export class DspJobs {
       await this.dsp.failQueueTimeouts();
       // Broker mất kết nối thì không ghi lệnh mới: đơn giữ PAID "chờ lượt" thay vì sinh lệnh rồi
       // để nó EXPIRED và đẩy đơn sang FAILED.
-      if (this.gateway.connected) {
+      if (this.gateway.connected && allowDispatch) {
         await this.dsp.armQueuedOrders();
         for (const message of await this.dsp.listOutgoing()) {
           try {

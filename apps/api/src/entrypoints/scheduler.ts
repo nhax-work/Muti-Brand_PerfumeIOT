@@ -9,6 +9,7 @@ import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { DspJobs } from '../modules/dsp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { SltJobs } from '../modules/slt/index.js';
+import { IotMqttGateway } from '../modules/iot/iot.mqtt.js';
 
 /** Nhịp điều phối lệnh xịt — đủ nhanh cho WEBHOOK_TO_ARMED_MAX_SEC (NFR-PER-03). */
 const DSP_TICK_MS = 1000;
@@ -37,7 +38,21 @@ export function startScheduler(
 
   if (options.dispense) {
     const dsp = app.get(DspJobs);
-    timers.push(setInterval(() => void dsp.tick(), DSP_TICK_MS));
+    const iot = app.get(IotMqttGateway);
+    let deviceTickRunning = false;
+    const tickDevices = async () => {
+      if (deviceTickRunning) return;
+      deviceTickRunning = true;
+      try {
+        // Publish cấu hình trước lệnh đầu tiên: ESP boot ở DISABLED cho tới khi nhận config.
+        const configPublished = await iot.tick();
+        await dsp.tick(configPublished);
+      } finally {
+        deviceTickRunning = false;
+      }
+    };
+    void tickDevices();
+    timers.push(setInterval(() => void tickDevices(), DSP_TICK_MS));
   }
 
   const orders = app.get(OrdService);

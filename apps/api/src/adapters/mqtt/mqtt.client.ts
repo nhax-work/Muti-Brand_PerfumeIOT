@@ -44,7 +44,17 @@ export class MqttClientAdapter implements OnApplicationShutdown {
       this.logger.log(`Đã kết nối broker ${url} (clientId=${clientId})`);
       for (const s of this.subscriptions) this.sendSubscribe(s);
     });
-    client.on('message', (topic, payload) => void this.dispatch(topic, payload));
+    // MQTT.js chỉ gửi PUBACK sau callback: commit DB trước khi xác nhận QoS 1 với broker.
+    client.handleMessage = (packet, callback) => {
+      this.dispatch(packet.topic, packet.payload as Buffer)
+        .then(() => callback())
+        .catch((error: unknown) => {
+          const failure = error instanceof Error ? error : new Error(String(error));
+          // Phiên clean=false giữ bản tin chưa ACK để broker gửi lại sau khi DB phục hồi.
+          client.stream.destroy(failure);
+          callback(failure);
+        });
+    };
     client.on('offline', () => this.logger.warn(`Mất kết nối broker ${url}, đang thử lại…`));
     client.on('error', (error) => this.logger.error(`Lỗi MQTT: ${error.message}`));
     this.client = client;
@@ -90,6 +100,7 @@ export class MqttClientAdapter implements OnApplicationShutdown {
         this.logger.error(
           `Xử lý bản tin ${topic} lỗi: ${error instanceof Error ? error.message : String(error)}`,
         );
+        throw error;
       }
     }
   }
