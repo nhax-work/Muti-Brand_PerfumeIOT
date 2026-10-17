@@ -83,6 +83,59 @@ class FakeSltQueries {
   rentals: SlotRentalRecord[] = [];
   products: Array<{ id: string; brandId: string; status: string }> = [];
   lastFilter: SlotRentalFilter | null = null;
+  emailVerified = true;
+  currentAgreement: { id: string; version: string; title: string; content: string; contentHash: string } | null = {
+    id: 'ag-1',
+    version: 'v1.0',
+    title: 'Hợp đồng khung',
+    content: 'Nội dung',
+    contentHash: 'hash1',
+  };
+  acceptances: Array<{ id: string; brandId: string; version: string; acceptedBy: string; acceptedAt: Date; contentHash: string }> = [
+    { id: 'acc-1', brandId: BRAND_A, version: 'v1.0', acceptedBy: 'user-1', acceptedAt: new Date(), contentHash: 'hash1' },
+    { id: 'acc-2', brandId: BRAND_B, version: 'v1.0', acceptedBy: 'user-2', acceptedAt: new Date(), contentHash: 'hash1' },
+  ];
+
+  unverifiedEmail = false;
+
+  async hasUnverifiedEmailRecord(_userId: string) {
+    return this.unverifiedEmail;
+  }
+
+  async findCurrentAgreementVersion() {
+    return this.currentAgreement;
+  }
+
+  async findAgreementVersionByVersion(version: string) {
+    return this.currentAgreement?.version === version ? this.currentAgreement : null;
+  }
+
+  async findAgreementAcceptance(brandId: string, version: string) {
+    return this.acceptances.find((a) => a.brandId === brandId && a.version === version) ?? null;
+  }
+
+  async insertAgreementAcceptance(params: {
+    brandId: string;
+    agreementVersionId: string;
+    version: string;
+    acceptedBy: string;
+    acceptedAt: Date;
+    ipAddress: string | null;
+    contentHash: string;
+  }) {
+    const existing = await this.findAgreementAcceptance(params.brandId, params.version);
+    if (existing) return existing;
+    const entry = {
+      id: `acc-${Date.now()}`,
+      brandId: params.brandId,
+      version: params.version,
+      acceptedBy: params.acceptedBy,
+      acceptedAt: params.acceptedAt,
+      contentHash: params.contentHash,
+    };
+    this.acceptances.push(entry);
+    return entry;
+  }
 
   async list(scope: BrandScope, filter: SlotRentalFilter) {
     this.lastFilter = filter;
@@ -455,6 +508,82 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     await expect(
       service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '0'),
     ).rejects.toThrow();
+  });
+
+  it('test_FR_SLT_48_get_current_agreement', async () => {
+    const agreement = await service.getCurrentAgreement();
+    expect(agreement).toMatchObject({
+      version: 'v1.0',
+      title: 'Hợp đồng khung',
+      content: 'Nội dung',
+      contentHash: 'hash1',
+    });
+  });
+
+  it('test_FR_SLT_49_accept_agreement_idempotent', async () => {
+    queries.acceptances = [];
+    const origin = { ip: '127.0.0.1', userAgent: 'vitest' };
+    const res1 = await service.acceptAgreement(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'v1.0',
+      origin,
+    );
+    expect(res1.brandId).toBe(BRAND_A);
+    expect(res1.version).toBe('v1.0');
+    expect(queries.acceptances).toHaveLength(1);
+
+    // Chấp thuận lại không sinh bản ghi trùng
+    const res2 = await service.acceptAgreement(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'v1.0',
+      origin,
+    );
+    expect(res2.version).toBe('v1.0');
+    expect(queries.acceptances).toHaveLength(1);
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_email_not_verified', async () => {
+    queries.unverifiedEmail = true;
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+    queries.unverifiedEmail = false;
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_agreement_not_accepted', async () => {
+    queries.acceptances = [];
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_no_active_agreement', async () => {
+    const prev = queries.currentAgreement;
+    queries.currentAgreement = null;
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+    queries.currentAgreement = prev;
   });
 });
 

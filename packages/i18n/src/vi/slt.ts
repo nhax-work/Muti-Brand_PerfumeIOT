@@ -15,4 +15,7 @@ export const slt = {
   slotOccupied: 'Slot đã được thuê hoặc đang bị giữ chỗ',
   rentalNotActive: 'Hóa đơn chưa thanh toán hoặc đã kết thúc',
   productNotOwned: 'Sản phẩm không thuộc thương hiệu thuê slot',
+  emailNotVerified: 'Tài khoản chưa xác minh email, không thể tạo phiên thanh toán',
+  agreementNotAccepted: 'Thương hiệu chưa đồng ý phiên bản hợp đồng khung hiện hành',
+  agreementNotFound: 'Không tìm thấy phiên bản hợp đồng khung',
 } as const;

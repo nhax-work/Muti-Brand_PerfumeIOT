@@ -8,6 +8,7 @@ import {
   Col,
   Empty,
   Form,
+  Modal,
   Row,
   Select,
   Spin,
@@ -23,9 +24,18 @@ import {
   ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
-import { errorMessage } from '@/shared/api';
+import { ApiRequestError, errorMessage } from '@/shared/api';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
-import { useAvailableSlots, useCreateCheckout, useRentalQuote, type AvailableSlot } from './api';
+import {
+  useAcceptAgreement,
+  useAvailableSlots,
+  useCreateCheckout,
+  useCurrentAgreement,
+  useRentalQuote,
+  useResendVerification,
+  type AvailableSlot,
+} from './api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -147,12 +157,19 @@ function SlotQuoteSelector({
 export default function AvailableSlotsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data, isLoading, error, refetch } = useAvailableSlots({ pageSize: 50 });
   const createCheckout = useCreateCheckout();
+  const { data: currentAgreement } = useCurrentAgreement();
+  const acceptAgreement = useAcceptAgreement();
+  const resendVerification = useResendVerification();
 
   const [selectedConfigs, setSelectedConfigs] = useState<Map<string, SelectedSlotConfig>>(
     new Map(),
   );
+  const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+  const [agreementChecked, setAgreementChecked] = useState(false);
+  const [unverifiedEmailAlert, setUnverifiedEmailAlert] = useState(false);
 
   const slots = data?.items ?? [];
 
@@ -170,6 +187,27 @@ export default function AvailableSlotsPage() {
     const next = new Map(selectedConfigs);
     next.set(config.slotId, config);
     setSelectedConfigs(next);
+  };
+
+  const handleConfirmAgreement = async () => {
+    if (!currentAgreement) return;
+    try {
+      await acceptAgreement.mutateAsync(currentAgreement.version);
+      message.success(t('ui.agreementAcceptedSuccess'));
+      setIsAgreementModalOpen(false);
+    } catch (acceptErr) {
+      message.error(errorMessage(acceptErr, t));
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!user?.email) return;
+    try {
+      await resendVerification.mutateAsync(user.email);
+      message.success(t('ui.resendVerificationSuccess'));
+    } catch (resendErr) {
+      message.error(errorMessage(resendErr, t));
+    }
   };
 
   const handleCheckout = async () => {
@@ -197,6 +235,19 @@ export default function AvailableSlotsPage() {
       message.success(t('ui.holdAndCheckout'));
       void navigate(`/rentals/checkouts/${checkout.id}`);
     } catch (err: unknown) {
+      if (err instanceof ApiRequestError) {
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          setUnverifiedEmailAlert(true);
+          message.error(errorMessage(err, t));
+          return;
+        }
+        if (err.code === 'AGREEMENT_NOT_ACCEPTED') {
+          setIsAgreementModalOpen(true);
+          message.warning(t('ui.agreementRequiredNotice'));
+          return;
+        }
+      }
+
       message.error(errorMessage(err, t));
 
       // Tự động tải lại danh sách slot khả dụng từ server
@@ -237,6 +288,27 @@ export default function AvailableSlotsPage() {
           </Title>
           <Paragraph type="secondary">{t('ui.availableSlotsSubtitle')}</Paragraph>
         </div>
+
+        {unverifiedEmailAlert && (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('ui.emailNotVerifiedNotice')}
+            action={
+              <Button
+                size="small"
+                type="primary"
+                loading={resendVerification.isPending}
+                onClick={handleResendVerification}
+              >
+                {t('ui.resendVerification')}
+              </Button>
+            }
+            style={{ marginBottom: 16 }}
+            closable
+            onClose={() => setUnverifiedEmailAlert(false)}
+          />
+        )}
 
         {error && (
           <Alert
@@ -353,6 +425,55 @@ export default function AvailableSlotsPage() {
             </Col>
           </Row>
         )}
+
+        <Modal
+          title={
+            currentAgreement
+              ? `${currentAgreement.title} (${t('ui.agreementVersion', { version: currentAgreement.version })})`
+              : t('ui.frameworkAgreementTitle')
+          }
+          open={isAgreementModalOpen}
+          onCancel={() => setIsAgreementModalOpen(false)}
+          footer={[
+            <Button key="cancel" onClick={() => setIsAgreementModalOpen(false)}>
+              {t('ui.cancel')}
+            </Button>,
+            <Button
+              key="accept"
+              type="primary"
+              disabled={!agreementChecked}
+              loading={acceptAgreement.isPending}
+              onClick={handleConfirmAgreement}
+            >
+              {t('ui.agreementAcceptBtn')}
+            </Button>,
+          ]}
+          width={700}
+        >
+          <Paragraph type="secondary">{t('ui.frameworkAgreementDesc')}</Paragraph>
+          <div
+            style={{
+              maxHeight: 350,
+              overflowY: 'auto',
+              padding: '16px',
+              background: '#f9f9f9',
+              border: '1px solid #e8e8e8',
+              borderRadius: '6px',
+              marginBottom: '16px',
+              whiteSpace: 'pre-wrap',
+              fontFamily: 'monospace',
+              fontSize: 13,
+            }}
+          >
+            {currentAgreement?.content}
+          </div>
+          <Checkbox
+            checked={agreementChecked}
+            onChange={(e) => setAgreementChecked(e.target.checked)}
+          >
+            {t('ui.agreementCheckbox')}
+          </Checkbox>
+        </Modal>
       </div>
     </RequireRole>
   );

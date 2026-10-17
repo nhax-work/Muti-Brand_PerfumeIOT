@@ -36,6 +36,7 @@ export class DspJobs {
         }
       }
       await this.dsp.sweepTimeouts();
+      await this.dsp.sweepQueueTimeouts();
     } catch (error) {
       this.logger.error(`Nhịp điều phối lỗi: ${describe(error)}`);
     } finally {

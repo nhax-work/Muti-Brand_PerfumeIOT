@@ -456,6 +456,34 @@ components:
       properties:
         reauthToken: { type: string }
         expiresIn: { type: integer }
+    BrandRegisterRequest:
+      type: object
+      required: [brandName, email, password]
+      properties:
+        brandName: { type: string, minLength: 1, maxLength: 200 }
+        email: { type: string, format: email }
+        password: { type: string, minLength: 8, maxLength: 100 }
+    BrandRegisterResponse:
+      type: object
+      required: [brand, user]
+      properties:
+        brand: { $ref: '#/components/schemas/Brand' }
+        user: { $ref: '#/components/schemas/User' }
+    VerifyEmailRequest:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    VerifyEmailResponse:
+      type: object
+      required: [verified]
+      properties:
+        verified: { type: boolean }
+    ResendVerificationRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
 
     # ---------------------------------------------------------------------------------
     # BND, USR, PRD
@@ -1172,6 +1200,23 @@ components:
         storageAmount: { $ref: '#/components/schemas/Money' }
         graceFeeAmount: { $ref: '#/components/schemas/Money' }
         totalAmount: { $ref: '#/components/schemas/Money' }
+    AgreementVersionView:
+      type: object
+      required: [version, title, content, contentHash]
+      properties:
+        version: { type: string }
+        title: { type: string }
+        content: { type: string }
+        contentHash: { type: string }
+    AgreementAcceptanceView:
+      type: object
+      required: [brandId, version, acceptedBy, acceptedAt, contentHash]
+      properties:
+        brandId: { type: string, format: uuid }
+        version: { type: string }
+        acceptedBy: { type: string, format: uuid }
+        acceptedAt: { type: string, format: date-time }
+        contentHash: { type: string }
     GracePeriodUpdate:
       type: object
       required: [graceEndsAt]
@@ -2245,6 +2290,80 @@ paths:
               schema: { $ref: '#/components/schemas/CurrentUser' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
+  /auth/register-brand:
+    post:
+      tags: [AUTH]
+      summary: Thương hiệu tự đăng ký
+      operationId: registerBrand
+      security: []
+      description: >-
+        FR-USR-06 (ADR-0013): thương hiệu tự đăng ký với tên thương hiệu, email và mật khẩu. Tạo cùng
+        lúc một Brand và một tài khoản Brand Admin gắn với thương hiệu đó.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandRegisterRequest' }
+      responses:
+        '201':
+          description: Đăng ký thành công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandRegisterResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429':
+          description: Vượt giới hạn tần suất đăng ký
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/verify-email:
+    post:
+      tags: [AUTH]
+      summary: Xác minh email bằng token
+      operationId: verifyEmail
+      security: []
+      description: >-
+        FR-USR-07 (ADR-0013): xác minh email của tài khoản tự đăng ký bằng token một lần.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VerifyEmailRequest' }
+      responses:
+        '200':
+          description: Xác minh thành công
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyEmailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth/resend-verification:
+    post:
+      tags: [AUTH]
+      summary: Gửi lại email xác minh
+      operationId: resendEmailVerification
+      security: []
+      description: >-
+        ADR-0013: gửi lại token xác minh qua email cho tài khoản chưa xác minh.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResendVerificationRequest' }
+      responses:
+        '200':
+          description: Đã gửi lại email xác minh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VerifyEmailResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429':
+          description: Vượt giới hạn tần suất
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   # -----------------------------------------------------------------------------------
   # BND — Thương hiệu
   # -----------------------------------------------------------------------------------
@@ -2972,6 +3091,45 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /agreements/current:
+    get:
+      tags: [SLT]
+      summary: Phiên bản hợp đồng khung hiện hành
+      operationId: getCurrentAgreement
+      description: >-
+        FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành kèm nội dung và mã băm sha256.
+      responses:
+        '200':
+          description: Phiên bản hợp đồng khung hiện hành
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementVersionView' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agreements/{version}/accept:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        description: Mã phiên bản hợp đồng khung
+        schema: { type: string }
+    post:
+      tags: [SLT]
+      summary: Brand Admin đồng ý phiên bản hợp đồng khung
+      operationId: acceptAgreement
+      description: >-
+        FR-SLT-49 (ADR-0013): Brand Admin đồng ý phiên bản hợp đồng khung hiện hành, lưu vết người
+        đồng ý, thời điểm, địa chỉ IP và mã băm. Đồng ý lặp lại với cùng phiên bản không sinh bản ghi trùng.
+      responses:
+        '200':
+          description: Đã ghi nhận đồng ý hợp đồng khung
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementAcceptanceView' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /rental-checkouts:
     post:
       tags: [SLT]
@@ -2986,6 +3144,8 @@ paths:
         với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot
         lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả
         VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03).
+        FR-SLT-49, FR-USR-07 (ADR-0013): tài khoản chưa xác minh email bị từ chối EMAIL_NOT_VERIFIED (403);
+        thương hiệu chưa đồng ý hợp đồng khung hiện hành bị từ chối AGREEMENT_NOT_ACCEPTED (403).
       requestBody:
         required: true
         content:

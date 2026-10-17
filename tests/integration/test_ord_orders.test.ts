@@ -11,7 +11,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   buildMockWebhook,
   MOCK_SIGNATURE_HEADER,
@@ -56,6 +56,14 @@ beforeAll(async () => {
   app = await createTestApp();
   adminToken = (await login(app, fx.superAdminEmail, TEST_PASSWORD)).accessToken;
 }, 60_000);
+
+beforeEach(async () => {
+  // ADR-0015: dọn đơn mở còn sót lại để máy không bị MACHINE_BUSY giữa các test case độc lập
+  await client.query(
+    `UPDATE orders SET status = 'EXPIRED' WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
+    [fx.machineId],
+  );
+});
 
 afterAll(async () => {
   // Dữ liệu do test này tạo thêm, dọn trước khi fixture xóa orders.
@@ -504,10 +512,13 @@ describe('ORD — tra cứu đơn', () => {
   it('test_FR_RPT_05_list_paid_orders_without_confirmed_dispense', async () => {
     // Bốn đơn đã thanh toán: lỗi cần xem, tiền về sau hạn, đã hoàn xong, và đơn bình thường.
     const failed = await newOrder(0);
+    await sendWebhook(paidWebhook(failed));
     const latePaid = await newOrder(0);
+    await sendWebhook(paidWebhook(latePaid));
     const refunded = await newOrder(0);
+    await sendWebhook(paidWebhook(refunded));
     const normal = await newOrder(0);
-    for (const o of [failed, latePaid, refunded, normal]) await sendWebhook(paidWebhook(o));
+    await sendWebhook(paidWebhook(normal));
     await client.query(
       `UPDATE orders SET status = 'FAILED', needs_manual_review = true WHERE id = $1`,
       [failed.id],

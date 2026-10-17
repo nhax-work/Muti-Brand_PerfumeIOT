@@ -693,6 +693,151 @@ export class SltQueries {
       .execute();
   }
 
+  /**
+   * FR-USR-07 (ADR-0013): kiểm tra tài khoản người gọi có bản ghi email_verifications mà chưa xác minh không.
+   * Chỉ chặn khi CÓ bản ghi và verified_at là NULL (tài khoản tự đăng ký).
+   * Tài khoản do Super Admin tạo (không có bản ghi email_verifications) không bị chặn.
+   */
+  async hasUnverifiedEmailRecord(userId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .select('id')
+      .where('user_id', '=', userId)
+      .where('verified_at', 'is', null)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành (is_active = true).
+   */
+  async findCurrentAgreementVersion(): Promise<{
+    id: string;
+    version: string;
+    title: string;
+    content: string;
+    contentHash: string;
+  } | null> {
+    const row = await this.db
+      .selectFrom('agreement_versions')
+      .selectAll()
+      .where('is_active', '=', true)
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      id: row.id,
+      version: row.version,
+      title: row.title,
+      content: row.content,
+      contentHash: row.content_hash,
+    };
+  }
+
+  async findAgreementVersionByVersion(version: string): Promise<{
+    id: string;
+    version: string;
+    title: string;
+    content: string;
+    contentHash: string;
+  } | null> {
+    const row = await this.db
+      .selectFrom('agreement_versions')
+      .selectAll()
+      .where('version', '=', version)
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      id: row.id,
+      version: row.version,
+      title: row.title,
+      content: row.content,
+      contentHash: row.content_hash,
+    };
+  }
+
+  /**
+   * FR-SLT-49 (ADR-0013): tìm bản ghi chấp thuận hợp đồng khung của thương hiệu.
+   */
+  async findAgreementAcceptance(
+    brandId: string,
+    version: string,
+  ): Promise<{
+    id: string;
+    brandId: string;
+    version: string;
+    acceptedBy: string;
+    acceptedAt: Date;
+    contentHash: string;
+  } | null> {
+    const row = await this.db
+      .selectFrom('agreement_acceptances')
+      .selectAll()
+      .where('brand_id', '=', brandId)
+      .where('version', '=', version)
+      .executeTakeFirst();
+    if (!row) return null;
+    return {
+      id: row.id,
+      brandId: row.brand_id,
+      version: row.version,
+      acceptedBy: row.accepted_by,
+      acceptedAt: row.accepted_at,
+      contentHash: row.content_hash,
+    };
+  }
+
+  /**
+   * FR-SLT-49 (ADR-0013): ghi nhận chấp thuận hợp đồng khung, chống trùng lặp.
+   */
+  async insertAgreementAcceptance(params: {
+    brandId: string;
+    agreementVersionId: string;
+    version: string;
+    acceptedBy: string;
+    acceptedAt: Date;
+    ipAddress: string | null;
+    contentHash: string;
+  }): Promise<{
+    id: string;
+    brandId: string;
+    version: string;
+    acceptedBy: string;
+    acceptedAt: Date;
+    contentHash: string;
+  }> {
+    const existing = await this.findAgreementAcceptance(params.brandId, params.version);
+    if (existing) return existing;
+
+    const row = await this.db
+      .insertInto('agreement_acceptances')
+      .values({
+        brand_id: params.brandId,
+        agreement_version_id: params.agreementVersionId,
+        version: params.version,
+        accepted_by: params.acceptedBy,
+        accepted_at: params.acceptedAt,
+        ip_address: params.ipAddress,
+        content_hash: params.contentHash,
+      })
+      .onConflict((oc) => oc.columns(['brand_id', 'agreement_version_id']).doNothing())
+      .returning(['id', 'brand_id', 'version', 'accepted_by', 'accepted_at', 'content_hash'])
+      .executeTakeFirst();
+
+    if (row) {
+      return {
+        id: row.id,
+        brandId: row.brand_id,
+        version: row.version,
+        acceptedBy: row.accepted_by,
+        acceptedAt: row.accepted_at,
+        contentHash: row.content_hash,
+      };
+    }
+
+    const fallback = await this.findAgreementAcceptance(params.brandId, params.version);
+    return fallback!;
+  }
+
   private base(scope: BrandScope) {
     return this.db
       .selectFrom('slot_rentals as sr')

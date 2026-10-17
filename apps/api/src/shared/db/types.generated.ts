@@ -910,7 +910,42 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
+export interface EmailVerifications {
+  created_at: Generated<Timestamp>;
+  email: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  token_hash: string;
+  user_id: string;
+  verified_at: Timestamp | null;
+}
+
+export interface AgreementVersions {
+  content: string;
+  content_hash: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  is_active: Generated<boolean>;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  version: string;
+}
+
+export interface AgreementAcceptances {
+  accepted_at: Generated<Timestamp>;
+  accepted_by: string;
+  agreement_version_id: string;
+  brand_id: string;
+  content_hash: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  ip_address: string | null;
+  version: string;
+}
+
 export interface DB {
+  agreement_acceptances: AgreementAcceptances;
+  agreement_versions: AgreementVersions;
   alerts: Alerts;
   audit_logs: AuditLogs;
   bottles: Bottles;
@@ -920,6 +955,7 @@ export interface DB {
   device_events: DeviceEvents;
   dispense_commands: DispenseCommands;
   dispense_results: DispenseResults;
+  email_verifications: EmailVerifications;
   fragrance_products: FragranceProducts;
   inventory_adjustments: InventoryAdjustments;
   inventory_batches: InventoryBatches;

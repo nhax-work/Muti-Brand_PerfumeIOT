@@ -124,6 +124,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/register-brand": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Thương hiệu tự đăng ký
+         * @description FR-USR-06 (ADR-0013): thương hiệu tự đăng ký với tên thương hiệu, email và mật khẩu. Tạo cùng lúc một Brand và một tài khoản Brand Admin gắn với thương hiệu đó.
+         */
+        post: operations["registerBrand"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Xác minh email bằng token
+         * @description FR-USR-07 (ADR-0013): xác minh email của tài khoản tự đăng ký bằng token một lần.
+         */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/resend-verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gửi lại email xác minh
+         * @description ADR-0013: gửi lại token xác minh qua email cho tài khoản chưa xác minh.
+         */
+        post: operations["resendEmailVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/brands": {
         parameters: {
             query?: never;
@@ -658,6 +718,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agreements/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Phiên bản hợp đồng khung hiện hành
+         * @description FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành kèm nội dung và mã băm sha256.
+         */
+        get: operations["getCurrentAgreement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agreements/{version}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mã phiên bản hợp đồng khung */
+                version: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Brand Admin đồng ý phiên bản hợp đồng khung
+         * @description FR-SLT-49 (ADR-0013): Brand Admin đồng ý phiên bản hợp đồng khung hiện hành, lưu vết người đồng ý, thời điểm, địa chỉ IP và mã băm. Đồng ý lặp lại với cùng phiên bản không sinh bản ghi trùng.
+         */
+        post: operations["acceptAgreement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rental-checkouts": {
         parameters: {
             query?: never;
@@ -669,7 +772,7 @@ export interface paths {
         put?: never;
         /**
          * Chọn dịch vụ và giữ chỗ một hoặc nhiều slot
-         * @description FR-SLT-35, FR-SLT-36, FR-SLT-33, ADR-0008: Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản. Trong một transaction, hệ thống tạo một phiên thanh toán và một hóa đơn DRAFT cho mỗi slot, chụp bảng giá vào từng hóa đơn, tính tổng tiền phiên = tổng các hóa đơn, và giữ chỗ mọi slot tới lúc tạo + RENTAL_CHECKOUT_HOLD_MIN. Tất cả hoặc không có gì: một slot đang bị giữ chỗ hoặc đã có hóa đơn khác làm cả phiên bị từ chối với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03).
+         * @description FR-SLT-35, FR-SLT-36, FR-SLT-33, ADR-0008: Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản. Trong một transaction, hệ thống tạo một phiên thanh toán và một hóa đơn DRAFT cho mỗi slot, chụp bảng giá vào từng hóa đơn, tính tổng tiền phiên = tổng các hóa đơn, và giữ chỗ mọi slot tới lúc tạo + RENTAL_CHECKOUT_HOLD_MIN. Tất cả hoặc không có gì: một slot đang bị giữ chỗ hoặc đã có hóa đơn khác làm cả phiên bị từ chối với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03). FR-SLT-49, FR-USR-07 (ADR-0013): tài khoản chưa xác minh email bị từ chối EMAIL_NOT_VERIFIED (403); thương hiệu chưa đồng ý hợp đồng khung hiện hành bị từ chối AGREEMENT_NOT_ACCEPTED (403).
          */
         post: operations["createRentalCheckout"];
         delete?: never;
@@ -2740,6 +2843,26 @@ export interface components {
             reauthToken: string;
             expiresIn: number;
         };
+        BrandRegisterRequest: {
+            brandName: string;
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        BrandRegisterResponse: {
+            brand: components["schemas"]["Brand"];
+            user: components["schemas"]["User"];
+        };
+        VerifyEmailRequest: {
+            token: string;
+        };
+        VerifyEmailResponse: {
+            verified: boolean;
+        };
+        ResendVerificationRequest: {
+            /** Format: email */
+            email: string;
+        };
         Brand: {
             /** Format: uuid */
             id: string;
@@ -3363,6 +3486,22 @@ export interface components {
             storageAmount: components["schemas"]["Money"];
             graceFeeAmount: components["schemas"]["Money"];
             totalAmount: components["schemas"]["Money"];
+        };
+        AgreementVersionView: {
+            version: string;
+            title: string;
+            content: string;
+            contentHash: string;
+        };
+        AgreementAcceptanceView: {
+            /** Format: uuid */
+            brandId: string;
+            version: string;
+            /** Format: uuid */
+            acceptedBy: string;
+            /** Format: date-time */
+            acceptedAt: string;
+            contentHash: string;
         };
         /** @description Ấn định ngày kết thúc ân hạn cho từng hóa đơn (FR-EXP-07). */
         GracePeriodUpdate: {
@@ -4451,6 +4590,99 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    registerBrand: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandRegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description Đăng ký thành công */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandRegisterResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Vượt giới hạn tần suất đăng ký */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description Xác minh thành công */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+        };
+    };
+    resendEmailVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendVerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã gửi lại email xác minh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description Vượt giới hạn tần suất */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     listBrands: {
         parameters: {
             query?: {
@@ -5318,6 +5550,53 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getCurrentAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Phiên bản hợp đồng khung hiện hành */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementVersionView"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mã phiên bản hợp đồng khung */
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã ghi nhận đồng ý hợp đồng khung */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementAcceptanceView"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     createRentalCheckout: {

@@ -281,4 +281,37 @@ export const ui = {
   claimPayoutRecorded: 'Đã ghi nhận hoàn tiền',
   claimRejectedNotice: 'Đã từ chối phiếu',
   claimAssignedNotice: 'Đã phân công phiếu',
+  // Tự đăng ký & xác minh email (ADR-0013)
+  register: 'Đăng ký',
+  registerTitle: 'Đăng ký tài khoản thương hiệu',
+  registerBrandLink: 'Chưa có tài khoản? Đăng ký thương hiệu ngay',
+  brandName: 'Tên thương hiệu',
+  confirmPassword: 'Xác nhận mật khẩu',
+  passwordMismatch: 'Mật khẩu xác nhận không khớp',
+  registerSuccessTitle: 'Đăng ký thành công!',
+  registerSuccessDesc:
+    'Chúng tôi đã gửi email xác minh đến {email}. Vui lòng kiểm tra hộp thư và làm theo hướng dẫn để kích hoạt tài khoản.',
+  backToLogin: 'Quay lại đăng nhập',
+  verifyEmailTitle: 'Xác minh email',
+  verifyingEmail: 'Đang tiến hành xác minh email...',
+  verifyEmailSuccess: 'Xác minh email thành công!',
+  verifyEmailSuccessDesc:
+    'Tài khoản thương hiệu đã được kích hoạt thành công. Bạn có thể đăng nhập để sử dụng.',
+  verifyEmailFailed: 'Xác minh email thất bại',
+  verifyEmailFailedDesc: 'Mã xác minh không hợp lệ hoặc đã hết hạn.',
+  invalidToken: 'Đường dẫn xác minh thiếu mã token hợp lệ.',
+  resendVerification: 'Gửi lại email xác minh',
+  resendVerificationSuccess: 'Đã gửi lại email xác minh. Vui lòng kiểm tra hộp thư.',
+  // Hợp đồng khung (ADR-0013)
+  frameworkAgreementTitle: 'Hợp đồng khung dịch vụ',
+  frameworkAgreementDesc:
+    'Để tiếp tục tạo phiên thuê slot, thương hiệu cần đọc và đồng ý với điều khoản của hợp đồng khung hiện hành.',
+  agreementCheckbox: 'Tôi đã đọc, hiểu rõ và đồng ý với toàn bộ điều khoản của hợp đồng khung này',
+  agreementAcceptBtn: 'Đồng ý và tiếp tục',
+  agreementAcceptedSuccess: 'Đã ghi nhận sự đồng ý hợp đồng khung',
+  agreementVersion: 'Phiên bản {version}',
+  agreementRequiredNotice: 'Bạn cần đồng ý hợp đồng khung hiện hành trước khi tiếp tục thuê slot.',
+  emailNotVerifiedNotice:
+    'Email tài khoản của bạn chưa được xác minh. Vui lòng kiểm tra hộp thư hoặc nhấn gửi lại mã xác minh bên dưới.',
+  openAgreementModal: 'Xem và đồng ý hợp đồng',
 } as const;

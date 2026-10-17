@@ -7,9 +7,11 @@
 
 import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import type {
+  BrandRegisterResponse,
   CurrentUser as CurrentUserDto,
   ReauthResponse,
   TokenPair,
+  VerifyEmailResponse,
 } from '@scentstation/contracts';
 import { z } from 'zod';
 import { originOf } from '../../shared/http/request-origin.js';
@@ -35,11 +37,61 @@ const ChangePasswordBody = z.object({
 /** openapi.yaml: ReauthRequest. */
 const ReauthBody = z.object({ password: z.string().min(1) });
 
+/** openapi.yaml: BrandRegisterRequest */
+const RegisterBrandBody = z.object({
+  brandName: z.string().min(1).max(200),
+  email: z.string().email(),
+  password: z.string().min(8).max(100),
+});
+
+/** openapi.yaml: VerifyEmailRequest */
+const VerifyEmailBody = z.object({
+  token: z.string().min(1),
+});
+
+/** openapi.yaml: ResendVerificationRequest */
+const ResendVerificationBody = z.object({
+  email: z.string().email(),
+});
+
 type HttpRequest = Parameters<typeof originOf>[0];
 
 @Controller('auth')
 export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
+
+  /** FR-USR-06 */
+  @Public()
+  @Post('register-brand')
+  @HttpCode(201)
+  registerBrand(
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+  ): Promise<BrandRegisterResponse> {
+    const data = parseBody(RegisterBrandBody, body);
+    return this.auth.registerBrand(data, originOf(request));
+  }
+
+  /** FR-USR-07 */
+  @Public()
+  @Post('verify-email')
+  @HttpCode(200)
+  verifyEmail(@Body() body: unknown): Promise<VerifyEmailResponse> {
+    const { token } = parseBody(VerifyEmailBody, body);
+    return this.auth.verifyEmail(token);
+  }
+
+  /** ADR-0013 */
+  @Public()
+  @Post('resend-verification')
+  @HttpCode(200)
+  resendVerification(
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+  ): Promise<VerifyEmailResponse> {
+    const { email } = parseBody(ResendVerificationBody, body);
+    return this.auth.resendVerification(email, originOf(request));
+  }
 
   /** FR-AUTH-01, FR-AUTH-02, FR-AUTH-03 */
   @Public()

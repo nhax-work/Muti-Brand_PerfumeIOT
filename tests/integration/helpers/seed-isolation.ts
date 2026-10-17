@@ -195,6 +195,40 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
       );
     }
 
+    // ADR-0013 / FR-SLT-49: Cả hai thương hiệu seed đã đồng ý hợp đồng khung hiện hành
+    let currentAgreement = await client.query<{ id: string; version: string; content_hash: string }>(
+      `SELECT id, version, content_hash FROM agreement_versions WHERE is_active = true LIMIT 1`,
+    );
+    if (!currentAgreement.rows[0]) {
+      await client.query(`UPDATE agreement_versions SET is_active = true WHERE version = 'v1.0'`);
+      currentAgreement = await client.query<{ id: string; version: string; content_hash: string }>(
+        `SELECT id, version, content_hash FROM agreement_versions WHERE is_active = true LIMIT 1`,
+      );
+    }
+    let agreementVersionId = currentAgreement.rows[0]?.id;
+    let agreementVersion = currentAgreement.rows[0]?.version;
+    let agreementHash = currentAgreement.rows[0]?.content_hash;
+    if (!agreementVersionId) {
+      agreementVersion = 'v1.0';
+      agreementHash = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
+      const inserted = await client.query<{ id: string }>(
+        `INSERT INTO agreement_versions (version, title, content, content_hash, is_active)
+         VALUES ($1, 'Hợp đồng khung v1.0', 'Điều khoản.', $2, true)
+         ON CONFLICT (version) DO UPDATE SET is_active = true
+         RETURNING id`,
+        [agreementVersion, agreementHash],
+      );
+      agreementVersionId = inserted.rows[0]!.id;
+    }
+
+    await client.query(
+      `INSERT INTO agreement_acceptances (brand_id, agreement_version_id, version, accepted_by, content_hash)
+       VALUES ($1, $2, $3, $4, $5),
+              ($6, $2, $3, $7, $5)
+       ON CONFLICT (brand_id, agreement_version_id) DO NOTHING`,
+      [brandA, agreementVersionId, agreementVersion, brandAdminAId, agreementHash, brandB, brandAdminBId],
+    );
+
     await client.query(
       `INSERT INTO locations (id, code, name, address, status)
        VALUES ($1, $2, $3, 'Dia chi test', 'ACTIVE')`,
@@ -438,6 +472,7 @@ export async function cleanupIsolationFixture(
     [`DELETE FROM sensor_readings WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_events WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM orders WHERE machine_id = $1`, [fx.machineId]],
+    [`DELETE FROM agreement_acceptances WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],

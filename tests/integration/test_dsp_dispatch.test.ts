@@ -53,7 +53,7 @@ afterEach(async () => {
   );
   await client.query(
     `UPDATE orders SET status = 'FAILED'
-      WHERE machine_id = $1 AND status IN ('PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED')`,
+      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED')`,
     [fx.machineId],
   );
 });
@@ -173,9 +173,10 @@ describe('DSP — ghi lệnh xịt cho đơn đã thanh toán', () => {
 
   it('test_FR_DSP_26_one_active_customer_command_per_machine', async () => {
     // Hai đơn ở hai slot khác nhau cùng được thanh toán khi máy rảnh.
+    // ADR-0015: Mỗi máy tối đa 1 đơn chờ thanh toán, thanh toán đơn 1 trước khi tạo đơn 2
     const first = await flow.createOrder(0);
-    const second = await flow.createOrder(2);
     await flow.pay(first);
+    const second = await flow.createOrder(2);
     await flow.pay(second);
 
     await dsp.armQueuedOrders();
@@ -276,8 +277,8 @@ describe('DSP — kết quả từ thiết bị (mqtt.md §6)', () => {
       }>();
 
     const order = await flow.createOrder(0);
-    const queued = await flow.createOrder(2);
     await flow.pay(order);
+    const queued = await flow.createOrder(2);
     await flow.pay(queued);
     const token = await armAndSend(order.id);
 

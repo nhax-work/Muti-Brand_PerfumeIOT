@@ -388,3 +388,117 @@ describe('ORD — webhook chia nhánh sang phiên thuê slot (ADR-0008)', () => 
     expect(queries.updates).toHaveLength(0);
   });
 });
+
+describe('ORD — ADR-0015: MACHINE_BUSY và QUEUE_TIMEOUT', () => {
+  it('test_ADR_0015_machine_busy_when_open_order_exists', async () => {
+    const fakeQueries = {
+      findByIdempotencyKey: async () => null,
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work({}),
+      findMachineBySerial: async () => ({
+        id: 'm1',
+        serialNumber: 'SN001',
+        status: 'ONLINE',
+        operatingMode: 'NORMAL',
+        timeZone: 'Asia/Ho_Chi_Minh',
+      }),
+      listSlotOffers: async () => [
+        {
+          slotId: 's1',
+          slotNumber: 1,
+          slotStatus: 'AVAILABLE',
+          rentalId: 'r1',
+          rentalStatus: 'ACTIVE',
+          brandId: 'b1',
+          brandStatus: 'ACTIVE',
+          pricePerSpray: '35000.0000',
+          currency: 'VND',
+          productId: 'p1',
+          productName: 'Matinale',
+          productStatus: 'ACTIVE',
+          productDeletedAt: null,
+          calibratedDosageMl: '0.1200',
+        },
+      ],
+      machineHasOpenOrder: async () => true,
+      machineHasActiveCustomerCommand: async () => false,
+    };
+
+    const service = new OrdService(
+      fakeQueries as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      { constraint: () => 300 } as never,
+      { now: () => new Date() } as never,
+    );
+
+    await expect(
+      service.createOrder({
+        machineSerial: 'SN001',
+        slotId: 's1',
+        kioskSessionId: 'sess-1',
+        idempotencyKey: 'key-1',
+      }),
+    ).rejects.toMatchObject({ code: 'MACHINE_BUSY' });
+  });
+
+  it('test_ADR_0015_queue_timeout_fails_paid_order', async () => {
+    const now = new Date('2026-10-17T10:00:00Z');
+    const paidAt = new Date('2026-10-17T09:56:00Z');
+    let failedOrder: { id: string; code?: string } | null = null;
+    let orderStatus = 'PAID';
+
+    const fakeQueries = {
+      findKioskOrder: async (id: string) => ({
+        id,
+        status: orderStatus,
+        paymentReference: 'ORD-1',
+        commandStatus: null,
+        failureCode: failedOrder?.code ?? null,
+        needsManualReview: failedOrder !== null,
+        paidAt,
+        expiresAt: new Date('2026-10-17T10:05:00Z'),
+        revenueOwner: 'BRAND',
+        slotNumber: 1,
+        commandAcknowledgedAt: null,
+      }),
+      lockOrder: async (id: string) => ({
+        id,
+        brandId: 'b1',
+        status: orderStatus,
+      }),
+      applyTransition: async (
+        change: { orderId: string; toStatus: string },
+        columns: { failureCode?: string },
+      ) => {
+        failedOrder = { id: change.orderId, code: columns.failureCode };
+        orderStatus = 'FAILED';
+        return {
+          id: change.orderId,
+          status: 'FAILED',
+        };
+      },
+      transaction: async (work: (tx: unknown) => Promise<unknown>) => work({}),
+    };
+
+    const fakeAudit = { log: async () => {} };
+    const fakeConfig = {
+      constraint: (name: string) =>
+        name === 'PAID_QUEUE_MAX_SEC' ? 180 : name === 'DISPENSE_PRESS_WINDOW_SEC' ? 60 : 300,
+    };
+
+    const service = new OrdService(
+      fakeQueries as never,
+      {} as never,
+      {} as never,
+      fakeAudit as never,
+      fakeConfig as never,
+      { now: () => now } as never,
+    );
+
+    const view = await service.getKioskOrderStatus('order-paid-timed-out');
+    expect(view.status).toBe('FAILED');
+    expect(view.failureCode).toBe('QUEUE_TIMEOUT');
+    expect(failedOrder).toMatchObject({ code: 'QUEUE_TIMEOUT' });
+  });
+});

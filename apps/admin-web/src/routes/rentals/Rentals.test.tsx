@@ -39,6 +39,7 @@ vi.mock('@/shared/auth', () => ({
     user: {
       userId: 'user-1',
       brandId: 'brand-1',
+      email: 'admin@brand1.vn',
       roles: ['BRAND_ADMIN'],
     },
     hasRole: (role: string) => role === 'BRAND_ADMIN',
@@ -169,6 +170,23 @@ vi.mock('./api', async () => {
     }),
     useCancelCheckout: () => ({
       mutateAsync: vi.fn(),
+      isPending: false,
+    }),
+    useCurrentAgreement: () => ({
+      data: {
+        version: '1.0',
+        title: 'Hợp đồng khung dịch vụ',
+        content: 'Nội dung hợp đồng khung mẫu',
+        contentHash: 'hash-sample-123',
+      },
+      isLoading: false,
+    }),
+    useAcceptAgreement: () => ({
+      mutateAsync: vi.fn().mockResolvedValue({ version: '1.0' }),
+      isPending: false,
+    }),
+    useResendVerification: () => ({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
       isPending: false,
     }),
   };

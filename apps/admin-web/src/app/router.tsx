@@ -16,6 +16,16 @@ export const router = createBrowserRouter([
         lazy: () => import('@/routes/login/LoginPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/register',
+        lazy: () =>
+          import('@/routes/register/RegisterPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/verify-email',
+        lazy: () =>
+          import('@/routes/verify-email/VerifyEmailPage').then((m) => ({ Component: m.default })),
+      },
+      {
         // Công khai: khách mở từ QR sự cố trên kiosk, không đăng nhập (ADR-0012).
         path: '/claim',
         lazy: () => import('@/routes/claim/ClaimPage').then((m) => ({ Component: m.default })),

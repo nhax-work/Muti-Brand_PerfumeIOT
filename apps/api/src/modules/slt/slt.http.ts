@@ -9,12 +9,15 @@
  * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { z } from 'zod';
+import { originOf } from '../../shared/http/request-origin.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { CurrentBrandScope, CurrentUser, type AuthenticatedUser } from '../auth/index.js';
 import { SltService } from './slt.service.js';
+
+type HttpRequest = Parameters<typeof originOf>[0];
 
 const RENTAL_STATUSES = [
   'DRAFT',
@@ -179,5 +182,31 @@ export class SlotRentalQuoteController {
   getQuote(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
     return this.service.getQuote(actor, id);
+  }
+}
+
+const AgreementVersionParam = z.object({ version: z.string().min(1) });
+
+@Controller('agreements')
+export class AgreementsController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  /** FR-SLT-48 (ADR-0013) */
+  @Get('current')
+  getCurrentAgreement() {
+    return this.service.getCurrentAgreement();
+  }
+
+  /** FR-SLT-49 (ADR-0013) */
+  @Post(':version/accept')
+  @HttpCode(200)
+  acceptAgreement(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Req() request: HttpRequest,
+  ) {
+    const { version } = parseBody(AgreementVersionParam, params);
+    return this.service.acceptAgreement(actor, scope, version, originOf(request));
   }
 }

@@ -275,6 +275,17 @@ export class OrdQueries {
     return row !== undefined;
   }
 
+  /** ADR-0015: máy đang có đơn chờ thanh toán (CREATED hoặc PENDING_PAYMENT). */
+  async machineHasOpenOrder(machineId: string, executor: Executor = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('orders')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', ['CREATED', 'PENDING_PAYMENT'])
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   // -----------------------------------------------------------------------------------
   // Kiosk: tương tác (FR-RPT-06)
   // -----------------------------------------------------------------------------------

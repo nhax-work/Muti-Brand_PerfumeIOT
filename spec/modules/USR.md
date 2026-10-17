@@ -1,12 +1,13 @@
 # FR-USR — Người dùng và vai trò
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A3 · 5 FR
-> Trạng thái AC: **hoàn thành** — đã hiện thực ở `apps/api/src/modules/usr`
-> Phụ trách: TV1
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A3 · 7 FR
+> Trạng thái AC: **hoàn thành** — đã hiện thực ở `apps/api/src/modules/usr` và `apps/api/src/modules/auth`
+> Phụ trách: TV1, TV3 (bổ sung FR-USR-06, 07 theo ADR-0013)
+> Cập nhật: 2026-10-17
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
 Đọc kèm: `spec/modules/AUTH.md`, `spec/errors.md`,
-`spec/decisions/0004-cap-mat-khau-tam-va-bat-doi.md`, `spec/contracts/openapi.yaml` (tag USR)
+`spec/decisions/0004-cap-mat-khau-tam-va-bat-doi.md`, `spec/decisions/0013-brand-tu-dang-ky-hop-dong-hai-lop-va-chi-tra-doanh-thu.md`, `spec/contracts/openapi.yaml` (tag USR, AUTH)
 
 ---
 
@@ -24,7 +25,7 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ---
 
 ## FR-USR-01 — Tạo tài khoản Brand Admin
-* **Statement:** Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu, song song với luồng thương hiệu tự đăng ký (FR-USR-06). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
+* **Statement:** Hệ thống phải cho phép Platform Super Admin tạo tài khoản Brand Admin và gán cho một thương hiệu, song song với luồng thương hiệu tự đăng ký (FR-USR-06).
 * **Traces:** BR-003 · **Priority:** M
 * **API:** `POST /users`
 * **Acceptance criteria:**
@@ -40,6 +41,9 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
   * **AC4 (Mật khẩu tạm chỉ xuất hiện một lần):** Given tài khoản vừa tạo,  
     When đọc lại bằng `GET /users/{id}`,  
     Then phản hồi **không** có `temporaryPassword`.
+  * **AC5 (Không cần xác minh email):** Given tài khoản do Super Admin tạo,  
+    When tạo xong,  
+    Then tài khoản không có dòng trong `email_verifications` và không bị chặn bởi kiểm tra xác minh email khi thuê slot (ADR-0013).
 * **Test:** `tests/unit/usr.test.ts` — các test `test_FR_USR_01_*`
 
 > Luật liên kết thương hiệu — Brand Admin bắt buộc có `brandId`, vai trò nền tảng bắt buộc không
@@ -111,8 +115,8 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ---
 
 ## FR-USR-05 — Chỉ Platform Super Admin quản trị tài khoản
-* **Statement:** Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa tài khoản của người khác; tự đăng ký thương hiệu (FR-USR-06) là cách duy nhất tạo tài khoản mà không cần Super Admin. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
-* **Traces:** BR-003, BR-012 · **Priority:** M
+* **Statement:** Hệ thống phải ngăn tài khoản không có vai trò Platform Super Admin tạo, sửa hoặc vô hiệu hóa tài khoản của người khác; tự đăng ký thương hiệu (FR-USR-06) là cách duy nhất tạo tài khoản mà không cần Super Admin.
+* **Traces:** BR-003, BR-012, ADR-0013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given Brand Admin, Operations Staff hoặc Inventory Staff,  
     When gọi bất kỳ endpoint nào dưới `/users`,  
@@ -120,4 +124,56 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
   * **AC2 (Cưỡng chế ở một chỗ):** Given controller `UsrController`,  
     When đọc metadata phân quyền,  
     Then quyền `user.manage` được gắn ở cấp lớp, áp cho mọi endpoint — thêm endpoint mới vào controller không thể quên kiểm quyền.
+  * **AC3 (Ngoại lệ tự đăng ký):** Given người dùng chưa có tài khoản,  
+    When gọi `POST /auth/register-brand` (FR-USR-06),  
+    Then hệ thống cho phép tạo tài khoản Brand Admin mà không đòi hỏi quyền `user.manage` hay sự can thiệp của Super Admin.
 * **Test:** `tests/unit/usr.test.ts` — `test_FR_USR_05_user_endpoints_require_user_manage_permission`
+
+---
+
+## FR-USR-06 — Thương hiệu tự đăng ký
+* **Statement:** Hệ thống phải cho phép thương hiệu tự đăng ký bằng tên thương hiệu, email và mật khẩu, tạo cùng lúc một thương hiệu và một tài khoản Brand Admin gắn với thương hiệu đó (ADR-0013).
+* **Traces:** BR-011, ADR-0013 · **Priority:** M
+* **API:** `POST /auth/register-brand`
+* **Acceptance criteria:**
+  * **AC1:** Given tên thương hiệu, email hợp lệ và mật khẩu hợp lệ (tối thiểu 8 ký tự),  
+    When gọi `POST /auth/register-brand`,  
+    Then trong cùng một transaction: tạo `Brand` ở trạng thái `ACTIVE` (với `code` tự sinh từ tên thương hiệu), tạo `User` ở trạng thái `ACTIVE` (không qua `INVITED`) với vai trò `BRAND_ADMIN`, tạo bản ghi `email_verifications` với `expires_at = now() + 24 giờ`, và trả về `201 Created` kèm thông tin thương hiệu và người dùng.
+  * **AC2 (Ca biên - Email trùng):** Given email đã tồn tại trong hệ thống (không phân biệt hoa thường),  
+    When gọi đăng ký,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`, chỉ ra lỗi ở trường `email`.
+  * **AC3 (Ca biên - Giới hạn tần suất đăng ký):** Given một địa chỉ IP đã gửi quá `BRAND_REGISTER_RATE_LIMIT_PER_MIN` (5 lần/phút) yêu cầu đăng ký trong vòng 1 phút,  
+    When gửi tiếp yêu cầu đăng ký,  
+    Then hệ thống từ chối với HTTP 429 `RATE_LIMITED`.
+  * **AC4 (Bảo mật nhật ký):** Given yêu cầu đăng ký thành công,  
+    When kiểm tra AuditLog `auth.brand.registered`,  
+    Then nhật ký ghi nhận nguồn IP và user-agent nhưng **tuyệt đối không** chứa mật khẩu hay mã xác minh email gốc.
+* **Test:** `tests/unit/auth.test.ts` — các test `test_FR_USR_06_*`
+
+---
+
+## FR-USR-07 — Xác minh email của tài khoản tự đăng ký
+* **Statement:** Hệ thống phải yêu cầu xác minh email của tài khoản tự đăng ký trước khi cho phép tạo phiên thanh toán thuê slot (ADR-0013).
+* **Traces:** BR-003, BR-011, ADR-0013 · **Priority:** M
+* **API:** `POST /auth/verify-email`, `POST /auth/resend-verification`
+* **Acceptance criteria:**
+  * **AC1:** Given tài khoản tự đăng ký có mã xác minh chưa hết hạn,  
+    When gọi `POST /auth/verify-email` với mã xác minh hợp lệ,  
+    Then hệ thống cập nhật `verified_at = now()` và trả về `200` với `{ verified: true }`.
+  * **AC2 (Idempotency):** Given email đã được xác minh thành công trước đó,  
+    When gọi lại `POST /auth/verify-email` với cùng mã xác minh,  
+    Then hệ thống vẫn trả về `200` với `{ verified: true }`, không báo lỗi.
+  * **AC3 (Ca biên - Mã sai hoặc quá hạn):** Given mã xác minh không tồn tại hoặc đã quá thời hạn `EMAIL_VERIFICATION_TOKEN_TTL_HOURS` (24 giờ),  
+    When gọi xác minh,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+  * **AC4 (Gửi lại mã xác minh):** Given tài khoản chưa xác minh email,  
+    When gọi `POST /auth/resend-verification`,  
+    Then hệ thống sinh mã ngẫu nhiên mới thay thế mã cũ trên bản ghi, cập nhật lại hạn dùng `expires_at = now() + 24 giờ`, và mã cũ lập tức mất hiệu lực.
+  * **AC5 (Chặn tạo phiên thuê slot khi chưa xác minh):** Given tài khoản tự đăng ký có bản ghi `email_verifications` mà `verified_at` đang NULL,  
+    When gọi `POST /rental-checkouts`,  
+    Then hệ thống từ chối với HTTP 403 `EMAIL_NOT_VERIFIED`.
+  * **AC6 (Tài khoản Super Admin tạo không bị chặn):** Given tài khoản Brand Admin do Platform Super Admin tạo (không có dòng `email_verifications`),  
+    When gọi `POST /rental-checkouts`,  
+    Then hệ thống **không** từ chối lỗi `EMAIL_NOT_VERIFIED`.
+* **Test:** `tests/unit/auth.test.ts` — các test `test_FR_USR_07_*`, `tests/unit/slt.test.ts`
+

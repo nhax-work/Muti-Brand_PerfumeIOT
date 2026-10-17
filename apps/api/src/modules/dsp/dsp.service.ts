@@ -261,6 +261,27 @@ export class DspService {
     return handled;
   }
 
+  /**
+   * ADR-0015 mục 2: quét các đơn PAID quá hạn chờ lượt (PAID_QUEUE_MAX_SEC = 180s)
+   * và chuyển sang FAILED với failureCode = QUEUE_TIMEOUT.
+   */
+  async sweepQueueTimeouts(): Promise<number> {
+    const queueTimeoutSec = this.config.constraint('PAID_QUEUE_MAX_SEC');
+    const cutoff = new Date(this.clock.now().getTime() - queueTimeoutSec * 1000);
+    const timedOutIds = await this.queries.listQueueTimedOutOrders(cutoff);
+    let handled = 0;
+    for (const orderId of timedOutIds) {
+      const done = await this.queries.transaction(async (tx) => {
+        return this.orders.failBeforeDispense(tx, orderId, 'QUEUE_TIMEOUT');
+      });
+      if (done) {
+        handled++;
+        this.logger.warn(`Đơn ${orderId} quá hạn chờ lượt (> ${queueTimeoutSec}s) → FAILED (QUEUE_TIMEOUT)`);
+      }
+    }
+    return handled;
+  }
+
   private buildPayload(command: OutgoingCommand): CommandPayload {
     const unsigned = {
       schema_version: 1 as const,

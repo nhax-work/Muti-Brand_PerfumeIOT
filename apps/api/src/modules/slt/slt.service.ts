@@ -5,12 +5,17 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { Schema } from '@scentstation/contracts';
+import type {
+  AgreementAcceptanceView,
+  AgreementVersionView,
+  Schema,
+} from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import type { RequestOrigin } from '../../shared/http/request-origin.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { MchQueries } from '../mch/mch.queries.js';
@@ -111,6 +116,23 @@ export class SltService {
   ): Promise<RentalCheckout> {
     if (scope.kind !== 'BRAND' || !scope.brandId) {
       throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const unverified = await this.queries.hasUnverifiedEmailRecord(actor.userId);
+    if (unverified) {
+      throw new AppError('EMAIL_NOT_VERIFIED', 'slt.emailNotVerified');
+    }
+
+    const currentAgreement = await this.queries.findCurrentAgreementVersion();
+    if (!currentAgreement) {
+      throw new AppError('AGREEMENT_NOT_ACCEPTED', 'slt.agreementNotAccepted');
+    }
+    const accepted = await this.queries.findAgreementAcceptance(
+      scope.brandId,
+      currentAgreement.version,
+    );
+    if (!accepted) {
+      throw new AppError('AGREEMENT_NOT_ACCEPTED', 'slt.agreementNotAccepted');
     }
 
     if (!input.items || input.items.length === 0) {
@@ -463,6 +485,72 @@ export class SltService {
     });
 
     return dto;
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): lấy thông tin hợp đồng khung hiện hành.
+   */
+  async getCurrentAgreement(): Promise<AgreementVersionView> {
+    const version = await this.queries.findCurrentAgreementVersion();
+    if (!version) {
+      throw new AppError('NOT_FOUND', 'slt.agreementNotFound');
+    }
+    return {
+      version: version.version,
+      title: version.title,
+      content: version.content,
+      contentHash: version.contentHash,
+    };
+  }
+
+  /**
+   * FR-SLT-49 (ADR-0013): Brand Admin đồng ý hợp đồng khung hiện hành.
+   */
+  async acceptAgreement(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    version: string,
+    origin: RequestOrigin,
+  ): Promise<AgreementAcceptanceView> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const agreementVersion = await this.queries.findAgreementVersionByVersion(version);
+    if (!agreementVersion) {
+      throw new AppError('NOT_FOUND', 'slt.agreementNotFound');
+    }
+
+    const now = this.clock.now();
+    const result = await this.queries.insertAgreementAcceptance({
+      brandId: scope.brandId,
+      agreementVersionId: agreementVersion.id,
+      version: agreementVersion.version,
+      acceptedBy: actor.userId,
+      acceptedAt: now,
+      ipAddress: origin.ip ?? null,
+      contentHash: agreementVersion.contentHash,
+    });
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId: scope.brandId,
+      action: 'slt.agreement.accepted',
+      targetType: 'agreement',
+      targetId: result.id,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+      metadata: { version: result.version, contentHash: result.contentHash },
+    });
+
+    return {
+      brandId: result.brandId,
+      version: result.version,
+      acceptedBy: result.acceptedBy,
+      acceptedAt: result.acceptedAt.toISOString(),
+      contentHash: result.contentHash,
+    };
   }
 }
 

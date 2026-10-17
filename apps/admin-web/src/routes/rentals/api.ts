@@ -222,3 +222,40 @@ export function useSetPricePerSpray() {
     },
   });
 }
+
+/** Lấy thông tin hợp đồng khung hiện hành (FR-SLT-48, ADR-0013). */
+export function useCurrentAgreement() {
+  return useQuery({
+    queryKey: ['current-agreement'],
+    queryFn: () => unwrap(api.GET('/agreements/current')),
+    retry: false,
+  });
+}
+
+/** Đồng ý phiên bản hợp đồng khung (FR-SLT-49, ADR-0013). */
+export function useAcceptAgreement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      unwrap(
+        api.POST('/agreements/{version}/accept', {
+          params: { path: { version } },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['current-agreement'] });
+    },
+  });
+}
+
+/** Gửi lại email xác minh tài khoản (FR-USR-07, ADR-0013). */
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: (email: string) =>
+      unwrap(
+        api.POST('/auth/resend-verification', {
+          body: { email },
+        }),
+      ),
+  });
+}

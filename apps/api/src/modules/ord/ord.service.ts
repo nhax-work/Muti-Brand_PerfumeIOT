@@ -188,6 +188,9 @@ export class OrdService {
           const winner = await this.queries.findByIdempotencyKey(input.idempotencyKey);
           if (winner) return { replayed: true, body: await this.replay(winner, input) };
         }
+        if (constraint === 'uq_machine_open_order') {
+          throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
+        }
         const referenceClash =
           constraint === 'orders_payment_reference_key' ||
           constraint === 'uq_payment_provider_reference';
@@ -207,6 +210,17 @@ export class OrdService {
     if (order.status === 'PENDING_PAYMENT' && order.expiresAt <= this.clock.now()) {
       await this.expireOrder(order.id);
       order = (await this.queries.findKioskOrder(orderId)) ?? order;
+    }
+
+    if (order.status === 'PAID') {
+      const queueTimeoutMs = this.config.constraint('PAID_QUEUE_MAX_SEC') * 1000;
+      if (order.paidAt && this.clock.now().getTime() - order.paidAt.getTime() >= queueTimeoutMs) {
+        const timedOutOrderId = order.id;
+        await this.queries.transaction(async (tx) => {
+          await this.failBeforeDispense(tx, timedOutOrderId, 'QUEUE_TIMEOUT');
+        });
+        order = (await this.queries.findKioskOrder(orderId)) ?? order;
+      }
     }
 
     const pressWindowMs = this.config.constraint('DISPENSE_PRESS_WINDOW_SEC') * 1000;
@@ -683,6 +697,9 @@ export class OrdService {
       const [offer] = await this.queries.listSlotOffers(machine.id, input.slotId, tx);
       if (!offer) throw new AppError('NOT_FOUND', 'ord.slotNotFound');
       if (!isSellable(offer)) throw new AppError('SLOT_UNAVAILABLE', 'ord.slotUnavailable');
+      if (await this.queries.machineHasOpenOrder(machine.id, tx)) {
+        throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
+      }
       if (await this.queries.machineHasActiveCustomerCommand(machine.id, tx)) {
         throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
       }

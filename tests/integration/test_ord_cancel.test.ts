@@ -61,6 +61,10 @@ afterAll(async () => {
 });
 
 async function newOrder(slotIndex: number): Promise<OrderBody> {
+  await client.query(
+    `UPDATE orders SET status = 'EXPIRED' WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
+    [fx.machineId],
+  );
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/kiosk/orders',

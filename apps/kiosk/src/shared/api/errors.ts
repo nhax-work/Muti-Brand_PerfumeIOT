@@ -83,3 +83,7 @@ export function errorMessage(error: unknown, t: Translate): string {
   }
   return t('common.internalError');
 }
+
+export function isMachineInMaintenance(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === 'MACHINE_IN_MAINTENANCE';
+}

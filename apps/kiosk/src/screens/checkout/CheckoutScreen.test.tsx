@@ -237,6 +237,38 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
   });
 
+  it('test_ADR_0015_cancel_order_on_qr_countdown_timeout — hết hạn QR thì gọi hủy đơn tại máy chủ', () => {
+    vi.useFakeTimers();
+    const shortLivedCreated = {
+      ...created,
+      order: {
+        ...created.order,
+        expiresAt: new Date(Date.now() + 2_000).toISOString(),
+      },
+    };
+    mockOrder(shortLivedCreated, view({ status: 'PENDING_PAYMENT' }));
+    renderScreen();
+
+    act(() => {
+      vi.advanceTimersByTime(3_000);
+    });
+
+    expect(mockCancel).toHaveBeenCalledWith('order-1');
+  });
+
+  it('test_ADR_0015_maintenance_screen_when_machine_in_maintenance — hiện màn hình bảo trì khi lỗi MACHINE_IN_MAINTENANCE', () => {
+    mockOrderError(
+      new ApiRequestError(503, {
+        code: 'MACHINE_IN_MAINTENANCE',
+        message: 'Thiết bị đang bảo trì',
+      }),
+    );
+    renderScreen();
+
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(screen.getByText('Máy đang tạm ngưng phục vụ')).toBeTruthy();
+  });
+
   it('mất liên lạc khi đang chờ bấm nút thì vẫn giữ mã đơn trên màn hình (FR-ORD-21)', () => {
     vi.useFakeTimers();
     mockOrder(

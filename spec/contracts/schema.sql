@@ -866,6 +866,8 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_brand         ON orders (brand_id, created_at);
 CREATE INDEX idx_orders_brand_status  ON orders (brand_id, status, created_at);
 CREATE INDEX idx_orders_machine       ON orders (machine_id, created_at);
+CREATE UNIQUE INDEX uq_machine_open_order ON orders (machine_id)
+    WHERE status IN ('CREATED', 'PENDING_PAYMENT');
 
 COMMENT ON COLUMN orders.brand_id IS
     'Thương hiệu sở hữu sản phẩm trong danh mục tại thời điểm tạo đơn — LUÔN có giá trị, kể cả với '
@@ -1716,6 +1718,52 @@ COMMENT ON COLUMN refund_claims.consented_at IS
     'Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại.';
 COMMENT ON COLUMN refund_claims.payout_reference IS
     'Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED.';
+
+-- =====================================================================================
+-- §10g. BẢNG — XÁC MINH EMAIL VÀ HỢP ĐỒNG KHUNG (ADR-0013)
+-- =====================================================================================
+
+CREATE TABLE email_verifications (
+    id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id      uuid         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    email        citext       NOT NULL,
+    token_hash   text         NOT NULL UNIQUE,
+    expires_at   timestamptz  NOT NULL,
+    verified_at  timestamptz,
+    created_at   timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_email_verifications_user_status ON email_verifications (user_id, verified_at);
+CREATE INDEX idx_email_verifications_email ON email_verifications (email);
+
+CREATE TABLE agreement_versions (
+    id           uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    version      varchar(50)  NOT NULL UNIQUE,
+    title        varchar(255) NOT NULL,
+    content      text         NOT NULL,
+    content_hash varchar(64)  NOT NULL,
+    is_active    boolean      NOT NULL DEFAULT false,
+    created_at   timestamptz  NOT NULL DEFAULT now(),
+    updated_at   timestamptz  NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX uq_agreement_versions_active ON agreement_versions (is_active) WHERE is_active = true;
+
+CREATE TABLE agreement_acceptances (
+    id                   uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
+    brand_id             uuid         NOT NULL REFERENCES brands (id) ON DELETE CASCADE,
+    agreement_version_id uuid         NOT NULL REFERENCES agreement_versions (id),
+    version              varchar(50)  NOT NULL,
+    accepted_by          uuid         NOT NULL REFERENCES users (id),
+    accepted_at          timestamptz  NOT NULL DEFAULT now(),
+    ip_address           inet,
+    content_hash         varchar(64)  NOT NULL,
+    created_at           timestamptz  NOT NULL DEFAULT now(),
+
+    CONSTRAINT uq_brand_agreement_version UNIQUE (brand_id, agreement_version_id)
+);
+
+CREATE INDEX idx_agreement_acceptances_brand ON agreement_acceptances (brand_id);
 
 
 -- =====================================================================================

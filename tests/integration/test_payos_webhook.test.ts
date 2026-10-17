@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { payosSignatureOf } from '../../apps/api/src/modules/ord/payment/payos-gateway.js';
 import { asUser, createTestApp, login, TEST_PAYOS_CHECKSUM_KEY } from './helpers/app.js';
 import { openRawClient } from './helpers/db.js';
@@ -80,6 +80,14 @@ beforeAll(async () => {
     [vacantSlot, fx.machineId],
   );
 }, 60_000);
+
+beforeEach(async () => {
+  await client.query(
+    `UPDATE orders SET status = 'FAILED'
+      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
+    [fx.machineId],
+  );
+});
 
 afterAll(async () => {
   vi.unstubAllGlobals();

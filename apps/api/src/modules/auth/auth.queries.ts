@@ -264,4 +264,194 @@ export class AuthQueries {
       .where('id', '=', userId)
       .execute();
   }
+
+  async emailExists(email: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async brandCodeExists(code: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('brands')
+      .select('id')
+      .where('code', '=', code)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async registerBrandAndAdmin(params: {
+    brandName: string;
+    brandCode: string;
+    email: string;
+    fullName: string;
+    passwordHash: string;
+  }): Promise<{
+    brand: { id: string; code: string; name: string; status: 'ACTIVE'; createdAt: Date };
+    user: {
+      id: string;
+      brandId: string;
+      email: string;
+      fullName: string;
+      status: 'ACTIVE';
+      roles: RoleCode[];
+      createdAt: Date;
+    };
+  }> {
+    return this.db.transaction().execute(async (tx) => {
+      const brand = await tx
+        .insertInto('brands')
+        .values({
+          code: params.brandCode,
+          name: params.brandName,
+          status: 'ACTIVE',
+        })
+        .returning(['id', 'code', 'name', 'status', 'created_at'])
+        .executeTakeFirstOrThrow();
+
+      const user = await tx
+        .insertInto('users')
+        .values({
+          brand_id: brand.id,
+          email: params.email,
+          full_name: params.fullName,
+          password_hash: params.passwordHash,
+          status: 'ACTIVE',
+        })
+        .returning(['id', 'brand_id', 'email', 'full_name', 'status', 'created_at'])
+        .executeTakeFirstOrThrow();
+
+      const role = await tx
+        .selectFrom('roles')
+        .select('id')
+        .where('code', '=', 'BRAND_ADMIN')
+        .executeTakeFirst();
+
+      if (role) {
+        await tx
+          .insertInto('user_roles')
+          .values({
+            user_id: user.id,
+            role_id: role.id,
+            scope_type: 'BRAND',
+            scope_id: brand.id,
+          })
+          .execute();
+      }
+
+      return {
+        brand: {
+          id: brand.id,
+          code: brand.code,
+          name: brand.name,
+          status: brand.status as 'ACTIVE',
+          createdAt: brand.created_at,
+        },
+        user: {
+          id: user.id,
+          brandId: user.brand_id as string,
+          email: user.email,
+          fullName: user.full_name,
+          status: user.status as 'ACTIVE',
+          roles: ['BRAND_ADMIN' as RoleCode],
+          createdAt: user.created_at,
+        },
+      };
+    });
+  }
+
+  async createEmailVerification(
+    userId: string,
+    email: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<string> {
+    const row = await this.db
+      .insertInto('email_verifications')
+      .values({
+        user_id: userId,
+        email,
+        token_hash: tokenHash,
+        expires_at: expiresAt,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async findEmailVerificationByTokenHash(tokenHash: string): Promise<
+    | {
+        id: string;
+        userId: string;
+        email: string;
+        tokenHash: string;
+        expiresAt: Date;
+        verifiedAt: Date | null;
+      }
+    | undefined
+  > {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .selectAll()
+      .where('token_hash', '=', tokenHash)
+      .executeTakeFirst();
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      email: row.email,
+      tokenHash: row.token_hash,
+      expiresAt: row.expires_at,
+      verifiedAt: row.verified_at,
+    };
+  }
+
+  async markEmailVerified(verificationId: string, verifiedAt: Date): Promise<void> {
+    await this.db
+      .updateTable('email_verifications')
+      .set({ verified_at: verifiedAt })
+      .where('id', '=', verificationId)
+      .execute();
+  }
+
+  async findLatestUnverifiedByEmail(email: string): Promise<
+    | {
+        id: string;
+        userId: string;
+        email: string;
+        tokenHash: string;
+        expiresAt: Date;
+        verifiedAt: Date | null;
+      }
+    | undefined
+  > {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .selectAll()
+      .where('email', '=', email)
+      .orderBy('created_at', 'desc')
+      .executeTakeFirst();
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      email: row.email,
+      tokenHash: row.token_hash,
+      expiresAt: row.expires_at,
+      verifiedAt: row.verified_at,
+    };
+  }
+
+  async findUserByEmail(email: string): Promise<{ id: string; brandId: string | null } | undefined> {
+    const row = await this.db
+      .selectFrom('users')
+      .select(['id', 'brand_id'])
+      .where('email', '=', email)
+      .executeTakeFirst();
+    return row ? { id: row.id, brandId: row.brand_id } : undefined;
+  }
 }
+

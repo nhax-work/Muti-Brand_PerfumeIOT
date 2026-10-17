@@ -24,7 +24,7 @@ import {
   type UserStatus,
 } from '../../apps/api/src/modules/auth/auth.queries.js';
 import { PrincipalLoader } from '../../apps/api/src/modules/auth/principal.loader.js';
-import { TokenService, hashRefreshToken } from '../../apps/api/src/modules/auth/tokens.js';
+import { TokenService, hashRefreshToken, hashVerificationToken } from '../../apps/api/src/modules/auth/tokens.js';
 
 const PASSWORD = 'correct-password-1';
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
@@ -132,6 +132,100 @@ class FakeQueries {
     if (u) u.permissionVersion += 1;
   }
   async touchLastLogin() {}
+  brands = new Map<string, { id: string; code: string; name: string; status: 'ACTIVE'; createdAt: Date }>();
+  verifications = new Map<string, { id: string; userId: string; email: string; tokenHash: string; expiresAt: Date; verifiedAt: Date | null }>();
+
+  async emailExists(email: string) {
+    return [...this.users.values()].some((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  async brandCodeExists(code: string) {
+    return [...this.brands.values()].some((b) => b.code.toLowerCase() === code.toLowerCase());
+  }
+
+  async registerBrandAndAdmin(params: {
+    brandName: string;
+    brandCode: string;
+    email: string;
+    fullName: string;
+    passwordHash: string;
+  }) {
+    const brandId = `brand-${Date.now()}`;
+    const userId = `user-${Date.now()}`;
+    const brand = {
+      id: brandId,
+      code: params.brandCode,
+      name: params.brandName,
+      status: 'ACTIVE' as const,
+      createdAt: this.clock.now(),
+    };
+    this.brands.set(brandId, brand);
+
+    const user: FakeUser = {
+      id: userId,
+      brandId,
+      email: params.email,
+      fullName: params.fullName,
+      passwordHash: params.passwordHash,
+      status: 'ACTIVE',
+      permissionVersion: 1,
+      roles: ['BRAND_ADMIN'],
+      permissions: ['bnd.self.update', 'slt.view'],
+    };
+    this.users.set(userId, user);
+
+    return {
+      brand,
+      user: {
+        id: user.id,
+        brandId: user.brandId!,
+        email: user.email,
+        fullName: user.fullName,
+        status: user.status as 'ACTIVE',
+        roles: user.roles,
+        createdAt: this.clock.now(),
+      },
+    };
+  }
+
+  async createEmailVerification(
+    userId: string,
+    email: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ) {
+    const id = `ev-${Date.now()}-${Math.random()}`;
+    this.verifications.set(id, {
+      id,
+      userId,
+      email,
+      tokenHash,
+      expiresAt,
+      verifiedAt: null,
+    });
+    return id;
+  }
+
+  async findEmailVerificationByTokenHash(tokenHash: string) {
+    return [...this.verifications.values()].find((v) => v.tokenHash === tokenHash);
+  }
+
+  async markEmailVerified(id: string, verifiedAt: Date) {
+    const v = this.verifications.get(id);
+    if (v) v.verifiedAt = verifiedAt;
+  }
+
+  async findLatestUnverifiedByEmail(email: string) {
+    return [...this.verifications.values()]
+      .filter((v) => v.email.toLowerCase() === email.toLowerCase())
+      .pop();
+  }
+
+  async findUserByEmail(email: string) {
+    const u = [...this.users.values()].find((x) => x.email.toLowerCase() === email.toLowerCase());
+    return u ? { id: u.id, brandId: u.brandId } : undefined;
+  }
+
   async setPassword(userId: string, passwordHash: string, status: UserStatus) {
     const u = this.users.get(userId);
     if (u) {
@@ -552,6 +646,130 @@ describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
     await expectAppError(loader.load(tokens.verifyAccess(pair.accessToken)), 'UNAUTHENTICATED');
     await expect(auth.login('ops@scentstation.local', temporary, origin)).resolves.toMatchObject({
       user: { mustChangePassword: true },
+    });
+  });
+
+  describe('FR-USR-06, FR-USR-07 — Thương hiệu tự đăng ký và xác minh email (ADR-0013)', () => {
+    it('test_FR_USR_06_brand_self_registration_success', async () => {
+      const res = await auth.registerBrand(
+        { brandName: 'Brand Test', email: 'brand@test.local', password: 'Password123!' },
+        { ip: '10.0.0.1', userAgent: 'vitest' },
+      );
+      expect(res.brand.name).toBe('Brand Test');
+      expect(res.brand.status).toBe('ACTIVE');
+      expect(res.user.email).toBe('brand@test.local');
+      expect(res.user.roles).toContain('BRAND_ADMIN');
+      expect(queries.verifications.size).toBe(1);
+      const verification = [...queries.verifications.values()][0]!;
+      expect(verification.email).toBe('brand@test.local');
+      expect(verification.verifiedAt).toBeNull();
+    });
+
+    it('test_FR_USR_06_brand_registration_rate_limiting', async () => {
+      const ip = '10.0.0.99';
+      for (let i = 0; i < 5; i++) {
+        await auth.registerBrand(
+          { brandName: `Brand ${i}`, email: `brand${i}@test.local`, password: 'Password123!' },
+          { ip, userAgent: 'vitest' },
+        );
+      }
+      // 6th attempt within same minute is rejected with RATE_LIMITED
+      await expectAppError(
+        auth.registerBrand(
+          { brandName: 'Brand 6', email: 'brand6@test.local', password: 'Password123!' },
+          { ip, userAgent: 'vitest' },
+        ),
+        'RATE_LIMITED',
+      );
+    });
+
+    it('test_FR_USR_06_duplicate_email_rejected', async () => {
+      await auth.registerBrand(
+        { brandName: 'Brand Original', email: 'dup@test.local', password: 'Password123!' },
+        { ip: '10.0.0.2', userAgent: 'vitest' },
+      );
+      await expectAppError(
+        auth.registerBrand(
+          { brandName: 'Brand Dup', email: 'dup@test.local', password: 'Password123!' },
+          { ip: '10.0.0.2', userAgent: 'vitest' },
+        ),
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('test_FR_USR_07_verify_email_success_and_idempotent', async () => {
+      const rawToken = 'my-secret-verification-token';
+      const tokenHash = hashVerificationToken(rawToken);
+      const userId = 'usr-test-verify';
+      queries.users.set(userId, {
+        id: userId,
+        brandId: 'brand-1',
+        email: 'verify@test.local',
+        fullName: 'Verify Test',
+        passwordHash: 'hash',
+        status: 'ACTIVE',
+        permissionVersion: 1,
+        roles: ['BRAND_ADMIN'],
+        permissions: [],
+      });
+      await queries.createEmailVerification(
+        userId,
+        'verify@test.local',
+        tokenHash,
+        new Date(clock.now().getTime() + 24 * 3600_000),
+      );
+
+      const res = await auth.verifyEmail(rawToken);
+      expect(res.verified).toBe(true);
+
+      // Idempotent: gọi lại vẫn trả verified: true
+      const res2 = await auth.verifyEmail(rawToken);
+      expect(res2.verified).toBe(true);
+    });
+
+    it('test_FR_USR_07_verify_email_invalid_token_rejected', async () => {
+      await expectAppError(auth.verifyEmail('invalid-token-123'), 'VALIDATION_ERROR');
+    });
+
+    it('test_FR_USR_07_verify_email_expired_token_rejected', async () => {
+      const rawToken = 'expired-token';
+      const tokenHash = hashVerificationToken(rawToken);
+      const userId = 'usr-test-expired';
+      await queries.createEmailVerification(
+        userId,
+        'expired@test.local',
+        tokenHash,
+        new Date(clock.now().getTime() - 1000),
+      );
+
+      await expectAppError(auth.verifyEmail(rawToken), 'VALIDATION_ERROR');
+    });
+
+    it('test_ADR_0013_resend_verification', async () => {
+      const userId = 'usr-resend';
+      queries.users.set(userId, {
+        id: userId,
+        brandId: 'brand-resend',
+        email: 'resend@test.local',
+        fullName: 'Resend Test',
+        passwordHash: 'hash',
+        status: 'ACTIVE',
+        permissionVersion: 1,
+        roles: ['BRAND_ADMIN'],
+        permissions: [],
+      });
+
+      const res = await auth.resendVerification('resend@test.local', {
+        ip: '10.0.0.5',
+        userAgent: 'vitest',
+      });
+      expect(res.verified).toBe(false);
+
+      // Non-existent email
+      await expectAppError(
+        auth.resendVerification('unknown@test.local', { ip: '10.0.0.5', userAgent: 'vitest' }),
+        'NOT_FOUND',
+      );
     });
   });
 });

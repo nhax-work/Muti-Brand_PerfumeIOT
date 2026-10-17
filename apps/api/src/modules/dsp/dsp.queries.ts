@@ -121,6 +121,17 @@ export class DspQueries {
     }));
   }
 
+  /** ADR-0015 mục 2: tìm các đơn PAID quá hạn chờ lượt (PAID_QUEUE_MAX_SEC = 180s). */
+  async listQueueTimedOutOrders(cutoff: Date): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('orders')
+      .select('id')
+      .where('status', '=', 'PAID')
+      .where('paid_at', '<=', cutoff)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
   async insertCommand(command: NewCommand, executor: Executor): Promise<string> {
     const row = await executor
       .insertInto('dispense_commands')
