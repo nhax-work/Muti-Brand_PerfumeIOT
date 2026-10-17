@@ -9,7 +9,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
-import type { CommandStatus, Json } from '../../shared/db/types.generated.js';
+import type {
+  CommandStatus,
+  DispenseType,
+  Json,
+  SlotStatus,
+} from '../../shared/db/types.generated.js';
 import { ACTIVE_COMMAND_STATUSES } from './dispense-outcome.js';
 
 type Executor = Kysely<DB>;
@@ -51,6 +56,8 @@ export interface LockedCommand {
   readonly id: string;
   readonly orderId: string | null;
   readonly brandId: string | null;
+  readonly slotId: string;
+  readonly commandType: DispenseType;
   readonly status: CommandStatus;
   readonly acknowledgedAt: Date | null;
 }
@@ -72,8 +79,19 @@ export interface NewResult {
 export interface StaleCommand {
   readonly id: string;
   readonly orderId: string | null;
+  readonly brandId: string | null;
+  readonly slotId: string;
+  readonly commandType: DispenseType;
   readonly commandToken: string;
   readonly status: CommandStatus;
+}
+
+/** Lệnh CUSTOMER đã kết thúc trên một slot, mới nhất trước — đếm lỗi liên tiếp (FR-ALR-04). */
+export interface FinishedCustomerCommand {
+  readonly commandToken: string;
+  readonly status: CommandStatus;
+  /** `orders.failure_code` — phân biệt REJECTED vì khách không bấm (PRESS_TIMEOUT) với lỗi máy. */
+  readonly orderFailureCode: string | null;
 }
 
 @Injectable()
@@ -198,7 +216,15 @@ export class DspQueries {
     const row = await executor
       .selectFrom('dispense_commands as dc')
       .innerJoin('machines as m', 'm.id', 'dc.machine_id')
-      .select(['dc.id', 'dc.order_id', 'dc.brand_id', 'dc.status', 'dc.acknowledged_at'])
+      .select([
+        'dc.id',
+        'dc.order_id',
+        'dc.brand_id',
+        'dc.slot_id',
+        'dc.command_type',
+        'dc.status',
+        'dc.acknowledged_at',
+      ])
       .where('dc.command_token', '=', commandToken)
       .where('m.serial_number', '=', machineSerial)
       .forUpdate('dc')
@@ -208,6 +234,8 @@ export class DspQueries {
       id: row.id,
       orderId: row.order_id,
       brandId: row.brand_id,
+      slotId: row.slot_id,
+      commandType: row.command_type,
       status: row.status,
       acknowledgedAt: row.acknowledged_at,
     };
@@ -280,7 +308,7 @@ export class DspQueries {
     const ackedBefore = new Date(now.getTime() - (pressWindowSec + resultTimeoutSec) * 1000);
     const rows = await this.db
       .selectFrom('dispense_commands')
-      .select(['id', 'order_id', 'command_token', 'status'])
+      .select(['id', 'order_id', 'brand_id', 'slot_id', 'command_type', 'command_token', 'status'])
       .where((eb) =>
         eb.or([
           eb.and([eb('status', '=', 'CREATED'), eb('expires_at', '<=', now)]),
@@ -292,6 +320,9 @@ export class DspQueries {
     return rows.map((r) => ({
       id: r.id,
       orderId: r.order_id,
+      brandId: r.brand_id,
+      slotId: r.slot_id,
+      commandType: r.command_type,
       commandToken: r.command_token,
       status: r.status,
     }));
@@ -311,5 +342,114 @@ export class DspQueries {
       .forUpdate()
       .executeTakeFirst();
     return row ?? null;
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Dừng bán an toàn (ADR-0015)
+  // -----------------------------------------------------------------------------------
+
+  /** FR-ORD-34: đơn PAID trả tiền từ trước `paidBefore` mà vẫn chưa có lệnh — cũ nhất trước. */
+  async listQueueTimedOutOrderIds(paidBefore: Date, limit: number): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('orders')
+      .select('id')
+      .where('status', '=', 'PAID')
+      .where('paid_at', '<=', paidBefore)
+      .orderBy('paid_at')
+      .limit(limit)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Lệnh CUSTOMER đã kết thúc trên slot, tạo sau `since`, mới nhất trước. Bỏ EXPIRED: lệnh chưa tới
+   * được thiết bị (broker mất kết nối) không nói gì về tình trạng slot.
+   */
+  async listFinishedCustomerCommands(
+    slotId: string,
+    since: Date | null,
+    limit: number,
+    executor: Executor,
+  ): Promise<FinishedCustomerCommand[]> {
+    let query = executor
+      .selectFrom('dispense_commands as dc')
+      .leftJoin('orders as o', 'o.id', 'dc.order_id')
+      .select(['dc.command_token', 'dc.status', 'o.failure_code'])
+      .where('dc.slot_id', '=', slotId)
+      .where('dc.command_type', '=', 'CUSTOMER')
+      .where('dc.status', 'in', ['SUCCEEDED', 'FAILED', 'REJECTED', 'UNKNOWN']);
+    if (since) query = query.where('dc.created_at', '>', since);
+    const rows = await query.orderBy('dc.created_at', 'desc').limit(limit).execute();
+    return rows.map((r) => ({
+      commandToken: r.command_token,
+      status: r.status,
+      orderFailureCode: r.failure_code,
+    }));
+  }
+
+  /**
+   * Lần gần nhất slot bị tự tắt vì lỗi liên tiếp. Chuỗi lỗi đếm lại từ mốc này, nên slot vừa được
+   * Operations Staff bật lại không bị tắt ngay ở lượt lỗi kế tiếp chỉ vì ba lỗi cũ.
+   */
+  async lastAutoMaintenanceAt(
+    slotId: string,
+    action: string,
+    executor: Executor,
+  ): Promise<Date | null> {
+    const row = await executor
+      .selectFrom('audit_logs')
+      .select((eb) => eb.fn.max('occurred_at').as('at'))
+      .where('target_type', '=', 'machine_slot')
+      .where('target_id', '=', slotId)
+      .where('action', '=', action)
+      .executeTakeFirst();
+    return row?.at ?? null;
+  }
+
+  /**
+   * FR-MCH-18: đưa slot sang MAINTENANCE nếu đang bán được hoặc tạm tắt. Slot đã MAINTENANCE/DISABLED
+   * giữ nguyên. Trả trạng thái cũ, hoặc `null` khi không đổi gì.
+   */
+  async putSlotInMaintenance(
+    slotId: string,
+    executor: Executor,
+  ): Promise<{ readonly machineId: string; readonly from: SlotStatus } | null> {
+    const slot = await executor
+      .selectFrom('machine_slots')
+      .select(['machine_id', 'status'])
+      .where('id', '=', slotId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!slot || (slot.status !== 'AVAILABLE' && slot.status !== 'UNAVAILABLE')) return null;
+    await executor
+      .updateTable('machine_slots')
+      .set((eb) => ({ status: 'MAINTENANCE', version: eb('version', '+', 1) }))
+      .where('id', '=', slotId)
+      .execute();
+    return { machineId: slot.machine_id, from: slot.status };
+  }
+
+  /**
+   * Cảnh báo FR-ALR-04. Chống trùng bằng `uq_alert_dedup_unresolved` (FR-ALR-07): còn cảnh báo chưa
+   * xử lý cùng slot thì không tạo thêm.
+   */
+  async raiseConsecutiveFailAlert(
+    alert: {
+      readonly brandId: string | null;
+      readonly machineId: string;
+      readonly slotId: string;
+      readonly title: string;
+      readonly description: string;
+      readonly at: Date;
+    },
+    executor: Executor,
+  ): Promise<void> {
+    await sql`
+      INSERT INTO alerts (brand_id, machine_id, slot_id, type, severity, deduplication_key, title,
+                          description, first_occurred_at, last_occurred_at)
+      VALUES (${alert.brandId}, ${alert.machineId}, ${alert.slotId}, 'CONSECUTIVE_DISPENSE_FAILURES',
+              'HIGH', ${`CONSECUTIVE_DISPENSE_FAILURES:${alert.slotId}`}, ${alert.title},
+              ${alert.description}, ${alert.at}, ${alert.at})
+      ON CONFLICT DO NOTHING`.execute(executor);
   }
 }

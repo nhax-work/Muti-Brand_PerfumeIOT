@@ -86,3 +86,24 @@ không tính vào giới hạn.
   thái"); đổi slot đồng thời với thương hiệu khác giữ slot đích (nhóm "Giữ chỗ slot đồng thời"); giỏ
   thứ hai vượt 5 slot bị từ chối.
 - **Kiosk:** không đổi — slot đã tháo chai tự `UNAVAILABLE` theo FR-MCH-17.
+
+---
+
+## Nhật ký áp dụng
+
+**2026-10-14:** áp đặc tả — FR mới và FR viết lại, `spec/constraints.md` (4 hằng), `spec/errors.md`
+(`HOLD_LIMIT_REACHED`, `SLOT_SWAP_NOT_ALLOWED`), glossary.
+
+**2026-10-16 — PR contract chung ADR-0013/0014/0015** (nhánh `feat/business-gap-review`):
+
+| Hạng mục | Đã làm |
+|---|---|
+| Migration | `1791100000000_adr-0014-0015-enum-values.sql` — `bottle_status` thêm `RETURNED_TO_BRAND` (file riêng); `1791100060000_*` — enum `bottle_return_method`, cột `slot_rentals.non_renewal_requested_at/by`, `return_method`, `swapped_from_slot_id`, `swapped_at`; bảng `bottle_returns`; `bottles.bottle_return_id` |
+| `schema.sql`, `erd.md` | Cột mới cuối bảng, §10g; nhóm Catalog và Inventory |
+| `openapi.yaml` | `POST/DELETE /slot-rentals/{id}/non-renewal`, `POST /slot-rentals/{id}/swap-slot`, `GET/POST /bottle-returns`, `GET /bottle-returns/{id}`, `POST /bottle-returns/{id}/handover`; enum `BottleStatus`, `BottleReturnMethod` |
+
+**Lệch:** thêm `non_renewal_requested_by` (ai báo — FR-AUD-03), `shipping_address` và `reminder_sent_at` trên
+`bottle_returns` (ảnh chụp địa chỉ lúc lập phiếu; chống gửi trùng thông báo trước hạn 3 ngày của FR-EXP-28).
+Khóa ngoại kép `(slot_rental_id, brand_id)` và `(bottle_return_id, brand_id)` chặn phiếu gom chai của thương
+hiệu khác. Ràng buộc kiểm có chai ở `RETURNED_TO_BRAND` thì phải có phiếu so sánh qua `::text` vì giá trị enum
+mới có thể chạy chung transaction (`docs/MIGRATIONS.md`).

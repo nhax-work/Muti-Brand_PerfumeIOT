@@ -38,6 +38,7 @@ export const machineStatus = {
 /** Nhãn hiển thị của `machine_operating_mode`. */
 export const machineOperatingMode = {
   NORMAL: 'bình thường',
+  DRAINING: 'đang dừng bán chờ bảo trì',
   MAINTENANCE: 'bảo trì',
   DISABLED: 'vô hiệu hóa',
 } as const;

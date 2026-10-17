@@ -74,7 +74,21 @@ const ID = {
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000004',
     'aaaaaaaa-aaaa-4aaa-8aaa-000000000005',
   ] as const,
+
+  /** Một phiên thanh toán đã trả tiền cho mỗi thương hiệu (ADR-0008). */
+  checkoutA: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000001',
+  checkoutB: 'bbbbbbbb-bbbb-4bbb-8bbb-000000000002',
 } as const;
+
+/** Phiên thanh toán của từng thương hiệu và Brand Admin đã tạo nó. */
+const CHECKOUT_OF: Record<string, { readonly id: string; readonly createdBy: string }> = {
+  [ID.brandA]: { id: ID.checkoutA, createdBy: ID.userBrandAdminA },
+  [ID.brandB]: { id: ID.checkoutB, createdBy: ID.userBrandAdminB },
+};
+
+/** Gói mẫu mà mọi hóa đơn seed đã mua — tên khớp seedRentalCatalog. */
+const SEED_PACKAGE = 'Gói 12 tháng';
+const SEED_STORAGE_PLAN = 'Cơ bản';
 
 /**
  * Năm slot: 1-2 thuộc Maison Aurore, 3-5 thuộc Nhà Hương Việt.
@@ -167,8 +181,9 @@ async function main(): Promise<void> {
     await seedLocationAndMachine(client);
     await seedProducts(client);
     await seedInventory(client);
-    await seedRentalsAndBottles(client);
+    // Danh mục gói trước: hóa đơn seed chụp giá từ gói thuê, gói bảo quản và giá niêm yết slot.
     await seedRentalCatalog(client);
+    await seedRentalsAndBottles(client);
 
     await client.query('COMMIT');
 
@@ -389,7 +404,13 @@ async function seedRentalCatalog(client: pg.Client): Promise<void> {
 
   // Bốn slot mẫu đang được thuê nên chưa hiện trong danh sách slot trống; giá có sẵn để khi một
   // hóa đơn kết thúc thì slot quay lại thị trường ngay (FR-SLT-19).
-  const rentPrices = ['1500000.0000', '1500000.0000', '1200000.0000', '1200000.0000'];
+  const rentPrices = [
+    '1500000.0000',
+    '1500000.0000',
+    '1200000.0000',
+    '1200000.0000',
+    '1200000.0000',
+  ];
   for (const [index, price] of rentPrices.entries()) {
     await client.query(
       `UPDATE machine_slots SET monthly_rent_price = $2
@@ -476,24 +497,128 @@ async function seedInventory(client: pg.Client): Promise<void> {
   }
 }
 
+/** Ảnh chụp giá của một hóa đơn seed — đúng công thức SltService (FR-SLT-33, FR-SLT-36). */
+interface RentalSnapshot {
+  readonly monthlyRentPrice: string;
+  readonly rentAmount: string;
+  readonly storageAmount: string;
+  readonly totalAmount: string;
+}
+
+/**
+ * Hóa đơn seed theo mô hình mua gói (ADR-0006, ADR-0008): mỗi thương hiệu một phiên thanh toán đã
+ * trả tiền, mỗi slot một hóa đơn ACTIVE đủ bộ chụp giá, số hóa đơn và `paid_at` — để Brand Admin cấu
+ * hình được sản phẩm và giá (FR-SLT-27, FR-SLT-08 chỉ cho hóa đơn đã thanh toán).
+ *
+ * DB đã seed theo mô hình cũ (không gói, không `paid_at`) được nâng cấp tại chỗ: chạy lại
+ * `make seed` là đủ, không cần reset. Giá lượt xịt và sản phẩm đã cấu hình được giữ nguyên.
+ */
 async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
+  const pkg = (
+    await client.query<{ id: string; duration_months: number; discount_percent: string }>(
+      `SELECT id, duration_months, discount_percent FROM rental_packages WHERE name = $1`,
+      [SEED_PACKAGE],
+    )
+  ).rows[0];
+  const storage = (
+    await client.query<{
+      id: string;
+      monthly_price: string;
+      coverage_percent: string;
+      coverage_cap: string;
+    }>(
+      `SELECT id, monthly_price, coverage_percent, coverage_cap FROM storage_plans WHERE name = $1`,
+      [SEED_STORAGE_PLAN],
+    )
+  ).rows[0];
+  if (!pkg || !storage) throw new Error('Thiếu gói mẫu — seedRentalCatalog phải chạy trước');
+
+  const snapshots = new Map<string, RentalSnapshot>();
   for (const plan of SLOT_PLAN) {
-    // Hợp đồng ACTIVE, kỳ hạn 1 năm. Slot bán được, doanh thu thuộc BRAND (spec/glossary.md).
+    const slot = await client.query<{ monthly_rent_price: string }>(
+      `SELECT monthly_rent_price FROM machine_slots WHERE id = $1`,
+      [ID.slots[plan.slot]],
+    );
+    const monthlyRent = Number(slot.rows[0]?.monthly_rent_price);
+    const duration = pkg.duration_months;
+    const rent = monthlyRent * duration * (1 - Number(pkg.discount_percent) / 100);
+    const store = Number(storage.monthly_price) * duration;
+    snapshots.set(ID.rentals[plan.rental], {
+      monthlyRentPrice: monthlyRent.toFixed(4),
+      rentAmount: rent.toFixed(4),
+      storageAmount: store.toFixed(4),
+      totalAmount: (rent + store).toFixed(4),
+    });
+  }
+
+  // Phiên trước, hóa đơn sau; constraint trigger §10d kiểm tổng tiền và trạng thái lúc COMMIT.
+  for (const [brandId, checkout] of Object.entries(CHECKOUT_OF)) {
+    const total = SLOT_PLAN.filter((p) => p.brand === brandId)
+      .map((p) => Number(snapshots.get(ID.rentals[p.rental])?.totalAmount))
+      .reduce((a, b) => a + b, 0);
+    await client.query(
+      `INSERT INTO rental_checkouts (id, brand_id, currency, total_amount, hold_expires_at, paid_at,
+                                     created_by, created_at, agreement_version_id)
+       VALUES ($1, $2, 'VND', $3, now() - interval '31 days' + interval '15 minutes',
+               now() - interval '31 days', $4, now() - interval '31 days', NULL)
+       ON CONFLICT (id) DO NOTHING`,
+      [checkout.id, brandId, total.toFixed(4), checkout.createdBy],
+    );
+  }
+
+  for (const plan of SLOT_PLAN) {
+    const snap = snapshots.get(ID.rentals[plan.rental]) as RentalSnapshot;
+    // ACTIVE từ 30 ngày trước, đã lắp chai. Slot bán được, doanh thu thuộc BRAND (spec/glossary.md).
+    // Hàng cũ chưa có gói (mô hình trước ADR-0006) → điền gói, chụp giá, phiên và số hóa đơn.
     await client.query(
       `INSERT INTO slot_rentals (id, slot_id, brand_id, fragrance_product_id, product_assigned_at,
-                                 status, starts_at, ends_at, price_per_spray, currency,
-                                 fixed_fee, revenue_share_percent, created_by)
+                                 status, starts_at, ends_at, price_per_spray, currency, created_by,
+                                 invoice_number, rental_package_id, storage_plan_id, duration_months,
+                                 monthly_rent_price, discount_percent, storage_monthly_price,
+                                 storage_coverage_percent, storage_coverage_cap, rent_amount,
+                                 storage_amount, total_amount, paid_at, checkout_id)
        VALUES ($1, $2, $3, $4, now(), 'ACTIVE',
-               now() - interval '30 days', now() + interval '335 days',
-               $5, 'VND', 1500000.0000, 10.00, $6)
-       ON CONFLICT (id) DO NOTHING`,
+               now() - interval '30 days', now() - interval '30 days' + interval '12 months',
+               $5, 'VND', $6,
+               $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+               now() - interval '31 days', $19)
+       ON CONFLICT (id) DO UPDATE SET
+           fixed_fee = 0, revenue_share_percent = 0,
+           invoice_number = EXCLUDED.invoice_number,
+           rental_package_id = EXCLUDED.rental_package_id,
+           storage_plan_id = EXCLUDED.storage_plan_id,
+           duration_months = EXCLUDED.duration_months,
+           monthly_rent_price = EXCLUDED.monthly_rent_price,
+           discount_percent = EXCLUDED.discount_percent,
+           storage_monthly_price = EXCLUDED.storage_monthly_price,
+           storage_coverage_percent = EXCLUDED.storage_coverage_percent,
+           storage_coverage_cap = EXCLUDED.storage_coverage_cap,
+           rent_amount = EXCLUDED.rent_amount,
+           storage_amount = EXCLUDED.storage_amount,
+           total_amount = EXCLUDED.total_amount,
+           paid_at = EXCLUDED.paid_at,
+           checkout_id = EXCLUDED.checkout_id
+         WHERE slot_rentals.rental_package_id IS NULL`,
       [
         ID.rentals[plan.rental],
         ID.slots[plan.slot],
         plan.brand,
         ID.products[plan.product],
         plan.price,
-        ID.userSuperAdmin,
+        CHECKOUT_OF[plan.brand]?.createdBy,
+        `HD-SEED-${String(plan.rental + 1).padStart(6, '0')}`,
+        pkg.id,
+        storage.id,
+        pkg.duration_months,
+        snap.monthlyRentPrice,
+        pkg.discount_percent,
+        storage.monthly_price,
+        storage.coverage_percent,
+        storage.coverage_cap,
+        snap.rentAmount,
+        snap.storageAmount,
+        snap.totalAmount,
+        CHECKOUT_OF[plan.brand]?.id,
       ],
     );
 

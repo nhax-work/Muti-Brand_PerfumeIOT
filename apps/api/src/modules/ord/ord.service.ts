@@ -170,7 +170,7 @@ export class OrdService {
   }
 
   /**
-   * FR-ORD-04..09, FR-REV-01/02, FR-ORD-24: tạo đơn, chụp ảnh dữ liệu, mở thanh toán.
+   * FR-ORD-04..09, FR-REV-01/02, FR-ORD-24, FR-ORD-35: tạo đơn, chụp ảnh dữ liệu, mở thanh toán.
    *
    * @returns `replayed = true` khi Idempotency-Key đã dùng — trả lại đúng đơn và QR cũ (HTTP 200).
    */
@@ -187,6 +187,11 @@ export class OrdService {
           // Hai yêu cầu cùng khóa tới đồng thời: yêu cầu kia đã thắng, trả lại đơn của nó.
           const winner = await this.queries.findByIdempotencyKey(input.idempotencyKey);
           if (winner) return { replayed: true, body: await this.replay(winner, input) };
+        }
+        if (constraint === 'uq_machine_open_order') {
+          // Hai khách tạo đơn cùng lúc trên một máy: cả hai qua bước kiểm ở createNew, CSDL chỉ cho
+          // một đơn chờ thanh toán (FR-ORD-35) — người chậm hơn nhận đúng mã như khi kiểm thấy.
+          throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
         }
         const referenceClash =
           constraint === 'orders_payment_reference_key' ||
@@ -309,26 +314,29 @@ export class OrdService {
 
   /** Chuyển một đơn quá hạn sang EXPIRED; không làm gì nếu đơn đã rời PENDING_PAYMENT. */
   async expireOrder(orderId: string): Promise<boolean> {
-    return this.queries.transaction(async (tx) => {
-      const order = await this.queries.lockOrder(orderId, tx);
-      const now = this.clock.now();
-      if (!order || order.status !== 'PENDING_PAYMENT' || order.expiresAt > now) return false;
-      await this.transition(
-        tx,
-        {
-          orderId: order.id,
-          brandId: order.brandId,
-          from: 'PENDING_PAYMENT',
-          to: 'EXPIRED',
-          reason: 'ORDER_PAYMENT_TTL',
-          actorType: 'SYSTEM',
-          at: now,
-        },
-        {},
-      );
-      await this.paymentQueries.closePending({ orderId: order.id }, 'EXPIRED', tx);
-      return true;
-    });
+    return this.queries.transaction((tx) => this.expireIfOverdue(tx, orderId));
+  }
+
+  /** Thân của `expireOrder`, chạy trong `tx` của người gọi — khóa đơn rồi mới xét hạn. */
+  private async expireIfOverdue(tx: Executor, orderId: string): Promise<boolean> {
+    const order = await this.queries.lockOrder(orderId, tx);
+    const now = this.clock.now();
+    if (!order || order.status !== 'PENDING_PAYMENT' || order.expiresAt > now) return false;
+    await this.transition(
+      tx,
+      {
+        orderId: order.id,
+        brandId: order.brandId,
+        from: 'PENDING_PAYMENT',
+        to: 'EXPIRED',
+        reason: 'ORDER_PAYMENT_TTL',
+        actorType: 'SYSTEM',
+        at: now,
+      },
+      {},
+    );
+    await this.paymentQueries.closePending({ orderId: order.id }, 'EXPIRED', tx);
+    return true;
   }
 
   /**
@@ -599,8 +607,9 @@ export class OrdService {
 
   /**
    * PAID → FAILED + kiểm tra thủ công khi không thể ghi lệnh xịt cho đơn đã trả tiền — ví dụ slot
-   * mất hiệu chuẩn giữa lúc thanh toán và lúc sáng đèn. Khách đã trả tiền nên phải có người hoàn
-   * (FR-ORD-19, FR-ORD-20); để đơn nằm PAID thì khách đứng chờ một lượt không bao giờ tới.
+   * mất hiệu chuẩn giữa lúc thanh toán và lúc sáng đèn, hoặc chờ lượt quá PAID_QUEUE_MAX_SEC
+   * (`QUEUE_TIMEOUT`, FR-ORD-34). Khách đã trả tiền nên phải có người hoàn (FR-ORD-19, FR-ORD-20);
+   * để đơn nằm PAID thì khách đứng chờ một lượt không bao giờ tới.
    *
    * @returns `false` nếu đơn không còn ở PAID — không đổi gì
    */
@@ -685,6 +694,15 @@ export class OrdService {
       if (!isSellable(offer)) throw new AppError('SLOT_UNAVAILABLE', 'ord.slotUnavailable');
       if (await this.queries.machineHasActiveCustomerCommand(machine.id, tx)) {
         throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
+      }
+      // FR-ORD-35 (ADR-0015): mỗi máy một đơn chờ thanh toán. Đơn đã quá hạn mà job chưa quét thì
+      // hết hạn ngay tại đây — khách sau không phải đứng chờ nhịp job. Đơn còn hạn → khách trước
+      // vẫn đang ở màn QR.
+      const open = await this.queries.findOpenOrderOnMachine(machine.id, tx);
+      if (open) {
+        if (open.expiresAt > this.clock.now())
+          throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
+        await this.expireIfOverdue(tx, open.id);
       }
 
       const revenueOwner = revenueOwnerFor(

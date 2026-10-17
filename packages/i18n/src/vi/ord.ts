@@ -23,7 +23,8 @@ export const ord = {
   claimAlreadyOpen: 'Đơn này đã được gửi khiếu nại. Chúng tôi sẽ liên hệ bạn sớm.',
   claimNotAssigned: 'Chỉ nhân viên được phân công cho phiếu này mới thực hiện được thao tác',
   claimClosed: 'Phiếu khiếu nại đã đóng',
-  claimFeatureDisabled: 'Chưa cấu hình khóa mã hóa cho phiếu khiếu nại (REFUND_ACCOUNT_ENC_KEY)',
+  claimFeatureDisabled:
+    'Chức năng khiếu nại hoàn tiền chưa được bật. Vui lòng liên hệ bộ phận kỹ thuật.',
   assigneeNotOperations: 'Người nhận xử lý phải là Operations Staff đang hoạt động',
   claimRateLimited: 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau một phút.',
 } as const;

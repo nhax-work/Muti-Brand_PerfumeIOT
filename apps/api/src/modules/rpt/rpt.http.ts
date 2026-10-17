@@ -3,7 +3,7 @@
  * Đường dẫn và dữ liệu theo spec/contracts/openapi.yaml, nhóm tag RPT.
  */
 
-import { Controller, Get, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
@@ -18,6 +18,14 @@ import { RptService } from './rpt.service.js';
 const REPORT_BRAND = 'report.brand';
 
 const IdParam = z.string().uuid();
+
+/** openapi `components.parameters.from/to` — ISO-8601 có offset; `from` bao gồm, `to` không. */
+const PeriodQuery = z
+  .object({
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+  })
+  .strict();
 
 @Controller('reports')
 export class RptController {
@@ -38,5 +46,12 @@ export class RptController {
     @Param('machineId') machineId: string,
   ) {
     return this.reports.getMachineMap(actor, scope, parseBody(IdParam, machineId));
+  }
+
+  /** FR-RPT-08, FR-RPT-10: số đơn và doanh thu theo từng slot thương hiệu thuê. */
+  @Get('brand-slots')
+  @RequirePermissions(REPORT_BRAND)
+  getBrandSlots(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    return this.reports.getBrandSlotReport(scope, parseBody(PeriodQuery, query));
   }
 }

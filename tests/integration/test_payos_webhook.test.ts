@@ -9,13 +9,14 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { payosSignatureOf } from '../../apps/api/src/modules/ord/payment/payos-gateway.js';
 import { asUser, createTestApp, login, TEST_PAYOS_CHECKSUM_KEY } from './helpers/app.js';
 import { openRawClient } from './helpers/db.js';
 import { kioskFlow } from './helpers/kiosk-flow.js';
 import {
   cleanupIsolationFixture,
+  releaseOpenOrders,
   seedIsolationFixture,
   TEST_PASSWORD,
   type IsolationFixture,
@@ -80,6 +81,11 @@ beforeAll(async () => {
     [vacantSlot, fx.machineId],
   );
 }, 60_000);
+
+// Mỗi máy một đơn chờ thanh toán (FR-ORD-35): mỗi test bắt đầu như khi khách trước đã rời màn QR.
+beforeEach(async () => {
+  await releaseOpenOrders(client, fx.machineId);
+});
 
 afterAll(async () => {
   vi.unstubAllGlobals();

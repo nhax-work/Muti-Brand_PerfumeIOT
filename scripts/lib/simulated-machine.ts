@@ -39,6 +39,11 @@ export interface MachineBehavior {
   readonly failOnPress?: string | null;
   /** Bấm rồi, cơ cấu chạy nhưng hỏng → RESULT success=false. */
   readonly fail?: string | null;
+  /**
+   * Chỉ áp ba lỗi trên cho chừng này lệnh đầu tiên, sau đó chạy bình thường — diễn lại chuỗi lỗi
+   * liên tiếp làm slot tự tắt rồi bán lại sau khi bật (FR-ALR-04, FR-MCH-18). `null` = mọi lệnh.
+   */
+  readonly failCount?: number | null;
 }
 
 export interface SimulatedMachineOptions {
@@ -73,6 +78,8 @@ export class SimulatedMachine {
   private readonly executed = new Set<string>();
   private pending: Pending | null = null;
   private eventSeq = 0;
+  /** Số lỗi giả lập đã dùng — so với `behavior.failCount`. */
+  private faultsInjected = 0;
   private readonly clock: DeviceClock;
   private readonly startedAt: number;
   private readonly log: (line: string) => void;
@@ -109,9 +116,10 @@ export class SimulatedMachine {
     const reason = this.validate(message as Record<string, unknown>, command, token);
     if (reason) return this.reject(token, reason);
     const { behavior } = this.options;
-    if (behavior.reject) {
+    const rejectCode = this.takeFault(behavior.reject);
+    if (rejectCode) {
       this.executed.add(token);
-      return this.reject(token, behavior.reject);
+      return this.reject(token, rejectCode);
     }
 
     if (command.dispense_type === 'DIAGNOSTIC') {
@@ -166,13 +174,13 @@ export class SimulatedMachine {
     }
     const { token, slot } = this.finishPending();
     const pressedAt = this.clock.now();
-    const { behavior } = this.options;
-    if (behavior.failOnPress) {
+    const failOnPress = this.takeFault(this.options.behavior.failOnPress);
+    if (failOnPress) {
       // FR-DSP-23: kiểm lần hai lúc bấm không đạt — không kích hoạt.
       this.log(
         `[${this.serial}] 👆 khách bấm nút slot ${slot} nhưng kiểm an toàn lần hai không đạt`,
       );
-      return this.reject(token, behavior.failOnPress);
+      return this.reject(token, failOnPress);
     }
     this.log(`[${this.serial}] 👆 khách bấm nút slot ${slot} → bơm chạy`);
     this.actuate(token, slot, pressedAt);
@@ -223,7 +231,7 @@ export class SimulatedMachine {
   private actuate(token: string, slot: number, pressedAt: number | null): void {
     this.actuations.set(slot, (this.actuations.get(slot) ?? 0) + 1);
     const executedAt = this.clock.now();
-    const failureCode = this.options.behavior.fail ?? undefined;
+    const failureCode = this.takeFault(this.options.behavior.fail) ?? undefined;
     const success = failureCode === undefined;
     this.log(`[${this.serial}] ${success ? '✔' : '✖'} RESULT ${success ? 'OK' : failureCode}`);
     this.publish('command/result', {
@@ -237,6 +245,15 @@ export class SimulatedMachine {
       result_code: success ? 'OK' : null,
       failure_code: success ? null : failureCode,
     });
+  }
+
+  /** Mã lỗi giả lập nếu còn trong `failCount`; hết lượt (hoặc không cấu hình lỗi) thì `null`. */
+  private takeFault(code: string | null | undefined): string | null {
+    if (!code) return null;
+    const limit = this.options.behavior.failCount;
+    if (limit != null && this.faultsInjected >= limit) return null;
+    this.faultsInjected++;
+    return code;
   }
 
   private base(): Record<string, unknown> {

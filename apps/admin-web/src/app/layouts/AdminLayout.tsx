@@ -1,4 +1,4 @@
-import { GlobalOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
+import { GlobalOutlined, LockOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons';
 import { LOCALES, translate, type Locale } from '@scentstation/i18n';
 import { Avatar, Button, Layout, Menu, Select, Space, Typography } from 'antd';
 import { Outlet, useLocation, useNavigate } from 'react-router';
@@ -70,6 +70,13 @@ export function AdminLayout() {
                 style={{ width: 130 }}
                 prefix={<GlobalOutlined style={{ color: '#64748b' }} />}
               />
+              <Button
+                icon={<LockOutlined />}
+                onClick={() => void navigate('/change-password')}
+                style={{ borderRadius: 8 }}
+              >
+                {t('ui.changePassword')}
+              </Button>
               <Button
                 icon={<LogoutOutlined />}
                 onClick={() => void logout()}

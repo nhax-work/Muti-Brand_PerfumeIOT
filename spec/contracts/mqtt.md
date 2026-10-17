@@ -331,7 +331,7 @@ toàn lúc bấm không đạt).
 | `stage = REJECT`, `failure_code = PRESS_TIMEOUT` | `REJECTED` | **`FORFEITED`** — không hoàn tiền, **không** đặt `needs_manual_review` (FR-ORD-27) |
 | `stage = REJECT`, `failure_code = CMD_DUPLICATE` | giữ nguyên | giữ nguyên — thiết bị từ chối một **bản sao** broker gửi lại, không phải lệnh gốc; kết quả gốc bị mất thì mốc `UNKNOWN` bên dưới xử lý (ADR-0011) |
 | `stage = REJECT`, mã khác, **sau** `ACK` | `REJECTED` | `FAILED`, đặt `needs_manual_review` (FR-ORD-19) — khách đã trả tiền và đã bấm |
-| `stage = REJECT`, mã khác, **trước** `ACK` | `REJECTED` | `FAILED` |
+| `stage = REJECT`, mã khác, **trước** `ACK` | `REJECTED` | `FAILED`, đặt `needs_manual_review` (FR-ORD-19, ADR-0015) — khách đã trả tiền dù đèn chưa sáng; lệnh **không** được gửi lại tự động (FR-DSP-19) |
 | `stage = RESULT`, `success = true` | `SUCCEEDED` | `DISPENSED` (FR-DSP-17) |
 | `stage = RESULT`, `success = false` | `FAILED` | `FAILED`, đặt `needs_manual_review` nếu đã thanh toán (FR-ORD-19) |
 | Không nhận `ACK`/`REJECT` trong `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc gửi | `UNKNOWN` (FR-DSP-18) | đặt `needs_manual_review` |
@@ -345,9 +345,14 @@ Hai điều tuyệt đối không được làm:
    xịt mà kết quả bị mất trên đường về, lệnh thứ hai sẽ xịt lần hai — vi phạm BR-002. Trường hợp này
    đi qua luồng kiểm tra thủ công và hoàn tiền (FR-ORD-20).
 
-`REJECTED` khác `FAILED`: `REJECTED` là thiết bị từ chối **trước khi** kích hoạt cơ cấu nên khách
-chưa mất lượt xịt; `FAILED` là đã kích hoạt mà hỏng. FR-ALR-04 (3 lượt thất bại liên tiếp trên cùng
-slot) chỉ đếm `FAILED` (xem `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`).
+`REJECTED` khác `FAILED`: `REJECTED` là thiết bị từ chối **trước khi** kích hoạt cơ cấu nên cơ cấu
+chưa chạy; `FAILED` là đã kích hoạt mà hỏng (xem `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`).
+Với khách thì cả hai đều là đã trả tiền mà không nhận lượt xịt, nên đều đặt `needs_manual_review`.
+
+FR-ALR-04 và FR-MCH-18 (ADR-0015) đếm `CONSECUTIVE_FAIL_ALERT` lệnh `CUSTOMER` **liên tiếp** trên cùng
+slot kết thúc bằng `FAILED`, `UNKNOWN`, hoặc `REJECTED` với mã khác `PRESS_TIMEOUT` (khách không bấm —
+không phải lỗi máy). `CMD_DUPLICATE` không khép lệnh nên không bao giờ được đếm. Đủ ngưỡng thì nền tảng
+sinh cảnh báo và chuyển slot sang `MAINTENANCE`; slot chỉ bán lại khi Operations Staff bật lại.
 
 Mỗi bản tin `RESULT` ghi một hàng `dispense_results`, liên kết 1-1 với `dispense_commands` qua
 `command_id` (FR-IOT-07, cưỡng chế bằng `UNIQUE` trên `dispense_results.command_id`).
@@ -387,7 +392,7 @@ Cấu hình đẩy xuống, retain để thiết bị lấy được ngay khi k�
 
 | Trường | FR |
 |---|---|
-| `operating_mode` | Bật/tắt máy từ xa (FR-MCH-11), chuyển chế độ bảo trì (FR-MNT-05) |
+| `operating_mode` | Bật/tắt máy từ xa (FR-MCH-11), chuyển chế độ bảo trì (FR-MNT-05). Máy `DRAINING` ở backend (ADR-0015) vẫn gửi `NORMAL` — thiết bị phải tiếp tục xử lý lệnh của đơn đã trả tiền; chỉ gửi `MAINTENANCE` khi máy thật sự vào bảo trì |
 | `press_window_sec` | Thời gian chờ khách bấm nút = `DISPENSE_PRESS_WINDOW_SEC` (FR-DSP-22, FR-DSP-24, ADR-0007) |
 | `slots[].enabled` | Bật/tắt từng slot từ xa (FR-MCH-12) |
 | `slots[].calibrated_dosage_ml`, `actuator_run_ms` | Hiệu chuẩn liều lượng theo slot (FR-MCH-06) |

@@ -112,3 +112,36 @@ PayOS chỉ nhận chuyển khoản VietQR, nên khách không có tài khoản 
 - **Đánh đổi:** một đơn chờ thanh toán mỗi máy nghĩa là khách bỏ dở màn QR mà kiosk không kịp hủy sẽ chặn
   khách sau tới khi đơn hết hạn (`ORDER_PAYMENT_TTL_SEC`). Kiosk phải gọi hủy ở mọi lối thoát; đây là lý
   do mục 3 đi kèm API hủy.
+
+---
+
+## Nhật ký áp dụng
+
+**2026-10-14:** áp đặc tả — FR mới và FR viết lại, `PAID_QUEUE_MAX_SEC`, `QUEUE_TIMEOUT`, mô tả
+`MACHINE_BUSY`/`MACHINE_IN_MAINTENANCE`, glossary. `POST /kiosk/orders/{id}/cancel` hiện thực cùng ngày
+(FR-ORD-33, commit `461caf0`).
+
+**2026-10-16 — PR contract chung ADR-0013/0014/0015** (nhánh `feat/business-gap-review`):
+
+| Hạng mục | Đã làm |
+|---|---|
+| Migration | `1791100000000_*` — `machine_operating_mode` thêm `DRAINING` sau `NORMAL` (file riêng); `1791100060000_*` — dọn đơn chờ thanh toán trùng trên cùng máy (giữ đơn mới nhất, đơn cũ → `EXPIRED` + lịch sử + payment `EXPIRED`), rồi `uq_machine_open_order`; `idx_orders_paid_queue`, `idx_commands_slot_customer` |
+| `mqtt.md` | §6: từ chối trước `ACK` đặt `needs_manual_review`; đoạn FR-ALR-04 đếm `FAILED`, `UNKNOWN`, `REJECTED` trừ `PRESS_TIMEOUT`; §7: máy `DRAINING` vẫn gửi `NORMAL` |
+| `openapi.yaml` | `MachineOperatingMode` thêm `DRAINING`; `MachineModeUpdate.force`; mô tả `PUT /machines/{id}/mode`, `POST /kiosk/orders`, `OrderStatusView.failureCode` |
+
+Đã kiểm trên PostgreSQL 16: migration `up` trên DB đã có lược đồ cũ (hai file chạy chung một transaction),
+`down 2` rồi `up` lại sạch; nhánh dọn đơn trùng chạy đúng trên dữ liệu dựng tay (3 đơn mở → 1); `pg_dump
+--schema-only` của DB nạp `schema.sql` trùng khít DB chạy hết migration.
+
+**2026-10-16 — hiện thực phía ORD/DSP (TV1):**
+
+| FR | Hiện thực | Test |
+|---|---|---|
+| FR-ORD-35 | `OrdService.createNew`: đơn chờ còn hạn → `MACHINE_BUSY`; đơn đã quá hạn mà job chưa quét → `EXPIRED` ngay trong transaction tạo đơn; vi phạm `uq_machine_open_order` khi hai yêu cầu tới cùng lúc → `MACHINE_BUSY` | `test_safe_stop.test.ts` (4 test, gồm tranh chấp đồng thời và chèn thẳng CSDL) |
+| FR-ORD-34 | `DspService.failQueueTimeouts`, chạy đầu mỗi nhịp `DspJobs.tick` kể cả khi broker mất kết nối; quét `paid_at <= now − PAID_QUEUE_MAX_SEC` nên bù được sau downtime | `test_safe_stop.test.ts` (3 test) |
+| FR-ORD-19 | `outcomeOf`: `REJECT` mã khác trước `ACK` → `needs_manual_review` | `dsp.test.ts`, `test_dsp_dispatch.test.ts` |
+| FR-ALR-04, FR-MCH-18 | `DspService.afterCommandFinished` trong cùng transaction khép lệnh: đủ `CONSECUTIVE_FAIL_ALERT` lệnh lỗi máy liên tiếp → cảnh báo `CONSECUTIVE_DISPENSE_FAILURES` (chống trùng), slot `MAINTENANCE`, AuditLog `dsp.slot.auto_maintenance`. Chuỗi đếm lại từ lần tự tắt gần nhất. `MchService.setSlotEnabled` cho bật lại slot `MAINTENANCE` | `test_safe_stop.test.ts` (3 test), `mch.test.ts` |
+| Simulator | `--reject` (từ chối trước `ACK`) đã có; thêm `--fail-count N` cho chuỗi lỗi liên tiếp có giới hạn | `simulated-machine.test.ts` |
+
+Còn lại cho T7 (lộ trình): chốt chặn "máy dừng nhận đơn" dùng chung khi có phiếu nạp mở (FR-INV-30), `DRAINING`
+tự sang `MAINTENANCE` (FR-MNT-05), ép chuyển (FR-MNT-17).
