@@ -2,6 +2,7 @@ import { HistoryOutlined } from '@ant-design/icons';
 import { Card, Space, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
+import { codeLabel } from '@/shared/codes';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import { type MachineStatusHistoryEntry, useMachineStatusHistory } from '../api';
@@ -15,10 +16,15 @@ export function StatusHistoryCard({ machineId }: { machineId: string }) {
   const [page, setPage] = useState(1);
   const { data, isLoading } = useMachineStatusHistory(machineId, page);
 
-  const change = (from: string | null | undefined, to: string | null | undefined) =>
+  const change = (
+    axis: 'machineStatus' | 'machineOperatingMode',
+    from: string | null | undefined,
+    to: string | null | undefined,
+  ) =>
     to ? (
       <Space size={4}>
-        {from ? <Tag>{from}</Tag> : null}→<Tag color="blue">{to}</Tag>
+        {from ? <Tag>{codeLabel(t, axis, from)}</Tag> : null}→
+        <Tag color="blue">{codeLabel(t, axis, to)}</Tag>
       </Space>
     ) : null;
 
@@ -28,10 +34,14 @@ export function StatusHistoryCard({ machineId }: { machineId: string }) {
       title: t('ui.statusHistoryChange'),
       key: 'change',
       render: (_, h) =>
-        change(h.fromConnectionStatus, h.toConnectionStatus) ??
-        change(h.fromOperatingMode, h.toOperatingMode),
+        change('machineStatus', h.fromConnectionStatus, h.toConnectionStatus) ??
+        change('machineOperatingMode', h.fromOperatingMode, h.toOperatingMode),
     },
-    { title: t('ui.statusHistorySource'), dataIndex: 'source', key: 'source' },
+    {
+      title: t('ui.statusHistorySource'),
+      key: 'source',
+      render: (_, h) => codeLabel(t, 'statusSource', h.source),
+    },
     { title: t('ui.statusHistoryReason'), key: 'reason', render: (_, h) => h.reason ?? '—' },
   ];
 

@@ -117,6 +117,58 @@ export const en: SameKeysAs<typeof vi> = {
     CANCELLED: 'cancelled',
   },
 
+  orderCode: {
+    ORDER_CREATED: 'Order created',
+    PAYMENT_REQUESTED: 'Payment QR shown',
+    PAYMENT_CONFIRMED: 'Payment received',
+    DISPENSE_REQUESTED: 'Spray command sent to the machine',
+    DISPENSE_CONFIRMED: 'Machine confirmed the spray',
+    ORDER_PAYMENT_TTL: 'Payment time ran out',
+    CUSTOMER_CANCELLED: 'Customer cancelled at the kiosk',
+    PAID_AFTER_EXPIRY: 'Money arrived after the order expired',
+    PAID_AFTER_CANCEL: 'Money arrived after the customer cancelled',
+    REFUND_CLAIM_ACCEPTED: 'Refund claim accepted',
+    MANUAL_REFUND_RECORDED: 'Refund recorded',
+    QUEUE_TIMEOUT: 'Waited too long, the machine could not serve it',
+    PRESS_TIMEOUT: 'Customer did not press the button in time',
+    ACTUATOR_FAULT: 'The pump failed',
+    NO_CURRENT: 'The pump did not run',
+    HARD_TIMEOUT: 'The pump ran too long and was cut off',
+    DOOR_OPEN: 'The machine door is open',
+    SLOT_EMPTY: 'The compartment is empty',
+    SLOT_UNAVAILABLE: 'The compartment is not ready',
+    MACHINE_IN_MAINTENANCE: 'The machine is under maintenance',
+    CMD_EXPIRED: 'The spray command reached the machine too late',
+    CMD_INVALID_SIGNATURE: 'The machine rejected an invalid command',
+    CMD_WRONG_MACHINE: 'The command was sent to the wrong machine',
+    CMD_DUPLICATE: 'The command was sent twice',
+    UNKNOWN: 'The result could not be determined',
+  },
+
+  actorType: {
+    SYSTEM: 'System',
+    USER: 'Staff',
+    DEVICE: 'Machine',
+    PAYMENT_PROVIDER: 'Payment gateway',
+  },
+
+  revenueOwner: {
+    BRAND: 'Brand',
+    PLATFORM: 'Platform',
+  },
+
+  credentialStatus: {
+    ACTIVE: 'In use',
+    REVOKED: 'Revoked',
+    EXPIRED: 'Expired',
+  },
+
+  statusSource: {
+    HEARTBEAT: 'Reported by the machine',
+    OPERATOR: 'Staff',
+    SYSTEM: 'System',
+  },
+
   bnd: {
     codeTaken: 'Brand code already exists',
     brandAccountOnly: 'Only brand-scoped accounts have a brand of their own',
@@ -167,8 +219,7 @@ export const en: SameKeysAs<typeof vi> = {
       'A claim has already been submitted for this order. We will contact you soon.',
     claimNotAssigned: 'Only the staff member assigned to this claim can perform this action',
     claimClosed: 'This claim is closed',
-    claimFeatureDisabled:
-      'The refund claim encryption key is not configured (REFUND_ACCOUNT_ENC_KEY)',
+    claimFeatureDisabled: 'Refund claims are not enabled yet. Please contact technical support.',
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
   },
@@ -479,14 +530,14 @@ export const en: SameKeysAs<typeof vi> = {
     pricingOffSale: 'Not on sale',
     pricingSaved: 'Pricing saved',
     pricingNotAffectInvoices:
-      'Changes apply to future purchases only; existing invoices keep their captured prices (FR-SLT-33).',
+      'New prices apply to future purchases only. Existing invoices keep the price at the time of purchase.',
     pricingSelectMachine: 'Select a machine',
     pricingMonthlyRentPrice: 'Monthly rent',
     pricingNotForRent: 'Not open for rent',
     pricingSetRentPrice: 'Set rent',
     pricingCloseForRent: 'Close for rent',
     pricingRentPriceHint:
-      'Only slots with a list price appear among vacant slots (FR-SLT-19). "Close for rent" removes the slot from that list; existing invoices are not affected.',
+      'Only slots with a rent price are offered to brands. "Close for rent" hides the slot from that list; existing invoices are not affected.',
     mySlots: 'My slots',
     mySlotsIntro:
       'How each slot your brand rents is doing: selling or paused, sprays left and revenue for the period.',
@@ -502,7 +553,7 @@ export const en: SameKeysAs<typeof vi> = {
     mySlotsPaused: 'Paused',
     mySlotsNotConfigured: 'Not configured',
     mySlotsNotConfiguredHint:
-      'A slot without a product or a price does not take orders (FR-SLT-29).',
+      'A slot needs a product and a price per spray before the kiosk sells it. Click "Configure" to finish.',
     mySlotsRemainingSprays: 'Sprays left',
     mySlotsOrders: 'Orders in period',
     mySlotsRevenue: 'Revenue in period',
@@ -511,7 +562,7 @@ export const en: SameKeysAs<typeof vi> = {
     mySlotsTotalSlots: 'Rented slots',
     mySlotsEmpty: 'Your brand has not rented any slot yet.',
     mySlotsRevenueNote:
-      'Revenue counts dispensed orders and orders the customer forfeited, by payment time — the same rule as payouts (ADR-0013).',
+      'Revenue includes sprays delivered and paid sprays the customer did not press for, counted by payment date — the same way as the monthly amount the platform pays you.',
     createdAt: 'Created',
     products: 'Products',
     productAdd: 'Add product',
@@ -519,10 +570,10 @@ export const en: SameKeysAs<typeof vi> = {
     productName: 'Product name',
     productDefaultPrice: 'Suggested price per spray',
     productDefaultPriceHint:
-      'The actual price of each slot is set on its rental invoice (FR-SLT-08).',
+      'A suggested price for your slots. The actual selling price of each slot is set on its rental invoice page.',
     productRetailPrice: 'Full-bottle retail price',
     productRetailPriceHint:
-      'Used for grace-period storage fees and goods compensation (FR-PRD-05).',
+      'Used to calculate storage fees after the rental ends and compensation if a bottle is damaged.',
     productVolumeMl: 'Bottle volume',
     productImageUrl: 'Product image (URL)',
     productActive: 'Active',
@@ -550,8 +601,7 @@ export const en: SameKeysAs<typeof vi> = {
     brandDisabled: 'Disabled',
     brandSuspend: 'Suspend',
     brandActivate: 'Reactivate',
-    brandSuspendConfirm:
-      'Suspend this brand? All its slots stop taking orders immediately (FR-BND-04).',
+    brandSuspendConfirm: 'Suspend this brand? All of its slots stop selling immediately.',
     brandActivateConfirm: 'Reactivate this brand? Configured slots will take orders again.',
     brandSaved: 'Brand saved',
     brandProfile: 'Brand profile',
@@ -588,7 +638,7 @@ export const en: SameKeysAs<typeof vi> = {
     orderSearchTab: 'Search',
     orderReviewTab: 'Needs manual review',
     orderReviewHint:
-      'Paid orders whose spray did not happen, oldest first — handle within 24 hours (BR-002). Refunds go through refund claims.',
+      'The customer paid but did not get a spray. Oldest orders are at the top — handle them within 24 hours. Refunds are made under Refund claims.',
     orderReference: 'Payment reference',
     orderAmount: 'Amount',
     orderFailureCode: 'Failure code',
@@ -614,26 +664,27 @@ export const en: SameKeysAs<typeof vi> = {
     locationTimezone: 'Time zone',
     locationSaved: 'Location saved',
     machineRegister: 'Register machine',
-    machineRegistered:
-      'Machine registered — issue its MQTT credential on the detail page so it can connect',
-    machineSerialHint: 'Must match the serial flashed into the firmware; used in MQTT topics.',
-    credentialTitle: 'Machine MQTT credential',
-    credentialIdentifier: 'MQTT username',
+    machineRegistered: 'Machine registered. Open its detail page to issue a connection key.',
+    machineSerialHint: 'Must match the serial number installed in the machine.',
+    credentialTitle: 'Machine connection key',
+    credentialIdentifier: 'Machine username',
     credentialIssuedAt: 'Issued at',
     credentialLastAuth: 'Last connected',
-    credentialNone: 'No credential issued yet — the machine cannot connect to the platform.',
+    credentialNone:
+      'No connection key has been issued, so the machine cannot connect to the platform yet.',
     credentialIssue: 'Issue credential',
     credentialReissue: 'Reissue credential',
-    credentialIssueConfirm: 'Issue an MQTT credential for this machine?',
+    credentialIssueConfirm: 'Issue a connection key for this machine?',
     credentialReissueConfirm:
-      'Issue a new credential? The current one is revoked — the machine disconnects until the new one is loaded.',
+      'Issue a new key? The current key is revoked — the machine disconnects until the new key is entered.',
     credentialRevoke: 'Revoke',
-    credentialRevokeConfirm: 'Revoke the credential? The broker rejects this machine immediately.',
+    credentialRevokeConfirm:
+      'Revoke the key? The machine loses its connection to the platform immediately.',
     credentialRevoked: 'Credential revoked',
-    credentialSecretTitle: 'New MQTT credential',
-    credentialSecret: 'MQTT password',
+    credentialSecretTitle: 'New connection key',
+    credentialSecret: 'Machine password',
     credentialSecretWarning:
-      'Shown only once. Load it into the machine firmware now; closing this dialog means reissuing.',
+      'Shown only once. Enter it in the machine settings now; closing this dialog means issuing a new key.',
     statusHistoryTitle: 'Status history',
     statusHistoryAt: 'Time',
     statusHistoryChange: 'Change',

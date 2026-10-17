@@ -14,6 +14,7 @@ import {
 import { useState } from 'react';
 import { errorMessage } from '@/shared/api';
 import { ReauthCancelled } from '@/shared/auth';
+import { codeLabel } from '@/shared/codes';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import { useIssueCredential, useMachineCredential, useRevokeCredential } from '../api';
@@ -94,7 +95,9 @@ export function MachineCredentialsCard({ machineId }: { machineId: string }) {
             <Typography.Text copyable>{current.credentialIdentifier}</Typography.Text>
           </Descriptions.Item>
           <Descriptions.Item label={t('ui.pricingStatus')}>
-            <Tag color={active ? 'green' : 'default'}>{current.status}</Tag>
+            <Tag color={active ? 'green' : 'default'}>
+              {codeLabel(t, 'credentialStatus', current.status)}
+            </Tag>
           </Descriptions.Item>
           <Descriptions.Item label={t('ui.credentialIssuedAt')}>
             {formatDateTime(current.issuedAt)}

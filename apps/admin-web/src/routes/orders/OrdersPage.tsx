@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useAuth } from '@/shared/auth';
+import { codeLabel } from '@/shared/codes';
 import { formatDateTime, formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import {
@@ -101,7 +102,7 @@ export default function OrdersPage() {
       title: t('ui.orderFailureCode'),
       dataIndex: 'failureCode',
       key: 'failureCode',
-      render: (c: string | null) => (c ? <Tag>{c}</Tag> : '—'),
+      render: (c: string | null) => (c ? <Tag>{codeLabel(t, 'orderCode', c)}</Tag> : '—'),
     },
     ...(isPlatform
       ? [
@@ -109,7 +110,7 @@ export default function OrdersPage() {
             title: t('ui.orderRevenueOwner'),
             dataIndex: 'revenueOwner',
             key: 'revenueOwner',
-            render: (r: string) => <Tag>{r}</Tag>,
+            render: (r: string) => <Tag>{codeLabel(t, 'revenueOwner', r)}</Tag>,
           },
         ]
       : []),
@@ -279,7 +280,7 @@ function OrderDrawer({
           {formatDateTime(order.dispensedAt)}
         </Descriptions.Item>
         <Descriptions.Item label={t('ui.orderFailureCode')}>
-          {order.failureCode ?? '—'}
+          {codeLabel(t, 'orderCode', order.failureCode)}
         </Descriptions.Item>
       </Descriptions>
       <Typography.Title level={5} style={{ marginTop: 24 }}>
@@ -292,8 +293,8 @@ function OrderDrawer({
             <Space direction="vertical" size={0}>
               <Typography.Text strong>{t(STATUS_TAGS[h.toStatus].label)}</Typography.Text>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {formatDateTime(h.occurredAt)} · {h.actorType}
-                {h.reason ? ` · ${h.reason}` : ''}
+                {formatDateTime(h.occurredAt)} · {codeLabel(t, 'actorType', h.actorType)}
+                {h.reason ? ` · ${codeLabel(t, 'orderCode', h.reason)}` : ''}
               </Typography.Text>
             </Space>
           ),

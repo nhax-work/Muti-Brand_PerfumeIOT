@@ -83,7 +83,7 @@ describe('OrdersPage (FR-ORD-18, 19, 22)', () => {
 
     fireEvent.click(screen.getAllByText('Chi tiết')[0]!);
     expect(await screen.findByText(/đã trả tiền nhưng không nhận được lượt xịt/)).toBeTruthy();
-    expect(screen.getByText(/SYSTEM · QUEUE_TIMEOUT/)).toBeTruthy();
+    expect(screen.getByText(/Hệ thống · Chờ lượt quá lâu/)).toBeTruthy();
   });
 
   it('Brand Admin không có tab kiểm tra thủ công, không thấy cột chủ sở hữu doanh thu', () => {

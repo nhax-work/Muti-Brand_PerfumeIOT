@@ -1,11 +1,13 @@
 import { PlusOutlined } from '@ant-design/icons';
 import {
   Button,
+  Col,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
+  Row,
   Select,
   Space,
   Table,
@@ -247,20 +249,24 @@ export default function ProductsPage() {
               extra={t('ui.productDefaultPriceHint')}
               rules={[{ required: true, message: t('validation.required') }]}
             >
-              <InputNumber min={0} precision={0} addonAfter="VND" style={{ width: '100%' }} />
+              <InputNumber min={0} precision={0} suffix="VND" style={{ width: '100%' }} />
             </Form.Item>
-            <Space style={{ display: 'flex' }} align="start">
-              <Form.Item
-                name="fullBottleRetailPrice"
-                label={t('ui.productRetailPrice')}
-                extra={t('ui.productRetailPriceHint')}
-              >
-                <InputNumber min={0} precision={0} addonAfter="VND" style={{ width: 240 }} />
-              </Form.Item>
-              <Form.Item name="fullBottleVolumeMl" label={t('ui.productVolumeMl')}>
-                <InputNumber min={0} addonAfter="ml" style={{ width: 160 }} />
-              </Form.Item>
-            </Space>
+            {/* Lưới co theo bề rộng modal — chiều rộng cố định từng làm ô dung tích tràn ra ngoài. */}
+            <Row gutter={12}>
+              <Col xs={24} sm={14}>
+                <Form.Item name="fullBottleRetailPrice" label={t('ui.productRetailPrice')}>
+                  <InputNumber min={0} precision={0} suffix="VND" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} sm={10}>
+                <Form.Item name="fullBottleVolumeMl" label={t('ui.productVolumeMl')}>
+                  <InputNumber min={0} suffix="ml" style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Typography.Paragraph type="secondary" style={{ marginTop: -12 }}>
+              {t('ui.productRetailPriceHint')}
+            </Typography.Paragraph>
           </Form>
         </Modal>
       </div>

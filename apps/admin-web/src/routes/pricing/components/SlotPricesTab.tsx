@@ -146,7 +146,7 @@ export function SlotPricesTab() {
           min={0}
           precision={0}
           style={{ width: '100%' }}
-          addonAfter="VND"
+          suffix="VND"
           value={price}
           onChange={(v) => setPriceInput(v)}
           placeholder={t('ui.pricingMonthlyRentPrice')}
