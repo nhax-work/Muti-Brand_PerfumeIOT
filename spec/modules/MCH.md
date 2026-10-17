@@ -1,12 +1,27 @@
 # FR-MCH — Máy và slot
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 17 FR
-> Trạng thái AC: **một phần** — chỉ FR-MCH-15÷17 có AC; FR-MCH-01÷14 chưa viết
-> Phụ trách: TV4
-> Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 18 FR  
+> Trạng thái AC: **một phần** — FR-MCH-09 (soát lại), FR-MCH-15÷17, và FR-MCH-18 (thêm mới theo ADR-0015) đã hoàn thành; FR-MCH-01÷08, 10÷14 dạng CRUD/phát biểu  
+> Phụ trách: TV4 / Tài  
+> Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu  
 
-Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
-Mẫu định dạng AC: xem `spec/modules/SLT.md`
+Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
+`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`
+
+---
+
+## FR-MCH-09 — Hiển thị chế độ vận hành máy
+* **Statement:** Hệ thống phải hiển thị chế độ hoạt động của máy theo tập: NORMAL, DRAINING, MAINTENANCE trên màn hình quản trị và cập nhật ngay khi thay đổi (ADR-0015).
+* **Traces:** BR-004, BR-006 · **Priority:** M
+* **API:** `GET /machines`, `GET /machines/{id}`
+* **Acceptance criteria:**
+  * **AC1:** Given máy `M` đang ở chế độ `operating_mode` thuộc enum (`'NORMAL'`, `'DRAINING'`, `'MAINTENANCE'`),  
+    When người dùng xem thông tin máy trên web quản trị,  
+    Then hệ thống hiển thị chính xác nhãn chế độ tương ứng kèm số lượng đơn đang phục vụ nốt (nếu đang `DRAINING`).
+  * **AC2:** Given máy `M` vừa chuyển từ `DRAINING` sang `MAINTENANCE` do hết đơn dở dang,  
+    When truy vấn lại thông tin máy,  
+    Then trạng thái phản hồi cập nhật thành `MAINTENANCE` ngay lập tức.
+* **Test:** `test_FR_MCH_09_display_operating_mode`
 
 ---
 
@@ -48,10 +63,6 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
     Then slot `S` vẫn chuyển `AVAILABLE` — doanh thu từ đó thuộc nền tảng (FR-EXP-17, FR-REV-02).
 * **Test:** `test_FR_MCH_16_slot_becomes_available`
 
-> FR này hợp nhất các điều kiện vốn nằm rải rác ở FR-SLT-11, FR-SLT-29 và FR-INV-12 thành một
-> định nghĩa duy nhất. Khi hiện thực, tính trạng thái ở **một chỗ** rồi gọi lại từ mọi luồng làm
-> thay đổi bốn điều kiện trên; đừng lặp lại logic ở từng luồng.
-
 ---
 
 ## FR-MCH-17 — Chuyển slot sang UNAVAILABLE khi mất điều kiện
@@ -77,17 +88,17 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 
 ---
 
-<!-- Chép FR từ docs/ mục A5, bổ sung Acceptance criteria theo mẫu:
-
-## FR-MCH-01 — <tên ngắn>
-
-**Statement:** ...
-**Traces:** BR-xxx · **Priority:** M
-
-**Acceptance criteria**
-- AC1: Given ..., When ..., Then ...
-- AC2: Given ..., When ..., Then ... (ca biên)
-
-**Test:** `test_FR_MCH_01_<mo_ta>`
-
--->
+## FR-MCH-18 — Tự chuyển slot sang MAINTENANCE khi lỗi xịt liên tiếp
+* **Statement:** Hệ thống phải tự chuyển slot sang MAINTENANCE khi `CONSECUTIVE_FAIL_ALERT` lệnh xịt khách hàng liên tiếp trên slot kết thúc bằng FAILED, UNKNOWN hoặc REJECTED với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`; slot chỉ bán lại khi Operations Staff bật lại (FR-MCH-12) (ADR-0015).
+* **Traces:** BR-002, BR-006 · **Priority:** M · ADR-0015 mục 4
+* **Acceptance criteria:**
+  * **AC1 (Tự khóa sang MAINTENANCE):** Given slot `S` trên máy `M` gặp `CONSECUTIVE_FAIL_ALERT = 3` lượt xịt khách hàng liên tiếp thất bại (`FAILED`, `UNKNOWN` timeout, hoặc thiết bị từ chối với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`),  
+    When lượt thất bại thứ 3 được ghi nhận,  
+    Then hệ thống tự động cập nhật trạng thái slot `S` sang `MAINTENANCE`, đồng thời sinh cảnh báo `CONSECUTIVE_FAIL_ALERT` (FR-ALR-04) và ghi AuditLog.
+  * **AC2 (Loại trừ PRESS_TIMEOUT và CMD_DUPLICATE):** Given lượt xịt thất bại do khách không bấm nút (`PRESS_TIMEOUT`) hoặc bản sao lệnh (`CMD_DUPLICATE`),  
+    When ghi nhận kết quả,  
+    Then bộ đếm lỗi liên tiếp của slot không bị tăng và không kích hoạt tự động khóa bảo trì.
+  * **AC3 (Chỉ mở lại bằng thao tác thủ công):** Given slot đang ở trạng thái `MAINTENANCE` do lỗi liên tiếp,  
+    When máy vẫn hoạt động,  
+    Then slot tuyệt đối không tự động mở lại bán hàng cho đến khi Operations Staff kiểm tra, khắc phục và chủ động bật lại thủ công qua API bật slot (FR-MCH-12).
+* **Test:** `test_FR_MCH_18_auto_slot_maintenance_on_consecutive_fails`

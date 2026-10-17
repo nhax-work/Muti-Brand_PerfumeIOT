@@ -1,11 +1,13 @@
 # FR-ALR — Cảnh báo
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A14 · 15 FR  
-> Trạng thái AC: **đã viết**  
-> Phụ trách: Hoàng (TV4)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A14 · 16 FR  
+> Trạng thái AC: **hoàn thành** (FR-ALR-04, 15 soát lại và FR-ALR-16 thêm ngày 2026-10-17 theo ADR-0013, ADR-0015)  
+> Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
-Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
+Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
+`spec/decisions/0013-brand-tu-dang-ky-hop-dong-hai-lop-va-chi-tra-doanh-thu.md`,
+`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`
 
 ## FR-ALR-01 — Cảnh báo máy OFFLINE
 
@@ -54,16 +56,16 @@
 
 **Kiểm tra:** `test_FR_ALR_03_door_open_alert`
 
-## FR-ALR-04 — Ba lượt xịt thất bại liên tiếp
+## FR-ALR-04 — Cảnh báo xịt thất bại liên tiếp và tự tắt slot
+**Tuyên bố:** Hệ thống phải sinh cảnh báo khi có `CONSECUTIVE_FAIL_ALERT` lệnh xịt khách hàng liên tiếp trên cùng một slot kết thúc bằng FAILED, UNKNOWN hoặc REJECTED với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`; slot đồng thời tự tắt theo FR-MCH-18 (ADR-0015).
 
-**Tuyên bố:** Hệ thống phải sinh cảnh báo khi có `CONSECUTIVE_FAIL_ALERT` lệnh xịt khách hàng liên tiếp trên cùng một slot kết thúc bằng FAILED, UNKNOWN hoặc REJECTED với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`; slot đồng thời tự tắt theo FR-MCH-18. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
-
-**Dấu vết:** BR-006 · **Ưu tiên:** M
+**Dấu vết:** BR-006 · **Ưu tiên:** M · ADR-0015 mục 4
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho cùng một slot có 3 lượt xịt thất bại liên tiếp, Khi kết quả thất bại thứ ba được ghi nhận, Thì hệ thống sinh cảnh báo.
-- AC2: Cho chuỗi thất bại chưa đạt 3 lượt liên tiếp, Khi ghi nhận kết quả, Thì hệ thống chưa sinh cảnh báo theo điều kiện này.
+- AC1 (Sinh cảnh báo và tự tắt slot): Cho cùng một slot có `CONSECUTIVE_FAIL_ALERT = 3` lượt xịt khách hàng liên tiếp kết thúc bằng `FAILED`, `UNKNOWN` (timeout không có phản hồi) hoặc bị thiết bị từ chối trước/sau `ACK`, Khi kết quả thất bại thứ ba được ghi nhận, Thì hệ thống sinh cảnh báo loại `CONSECUTIVE_FAIL_ALERT` mức độ `HIGH`, gửi thông báo đến Operations Staff, đồng thời tự động cập nhật slot sang `MAINTENANCE` (FR-MCH-18).
+- AC2 (Loại trừ không bấm nút và trùng lệnh): Cho lượt xịt kết thúc bằng `PRESS_TIMEOUT` (khách không bấm nút) hoặc bị từ chối với `CMD_DUPLICATE`, Khi ghi nhận kết quả, Thì chuỗi thất bại liên tiếp không bị tính tăng và không kích hoạt cảnh báo này.
+- AC3: Cho chuỗi thất bại chưa chạm ngưỡng 3 lượt liên tiếp hoặc có 1 lượt xịt thành công xen giữa, Khi ghi nhận kết quả, Thì bộ đếm lỗi được reset về 0 và hệ thống không sinh cảnh báo.
 
 **Kiểm tra:** `test_FR_ALR_04_three_failed_dispenses`
 
@@ -197,15 +199,38 @@
 
 **Kiểm tra:** `test_FR_ALR_14_escalate_overdue`
 
-## FR-ALR-15 — Thông báo qua kênh ngoài
-
-**Tuyên bố:** Hệ thống phải gửi cảnh báo vận hành qua kênh ngoài như email hoặc Zalo cho người chịu trách nhiệm (phần thông báo về tiền và hàng tách sang FR-ALR-16). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
+## FR-ALR-15 — Cảnh báo vận hành qua kênh ngoài
+**Tuyên bố:** Hệ thống phải gửi cảnh báo vận hành qua kênh ngoài như email hoặc Zalo cho người chịu trách nhiệm (phần thông báo về tiền và hàng tách sang FR-ALR-16) (ADR-0013).
 
 **Dấu vết:** BR-006 · **Ưu tiên:** W
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho cảnh báo cần thông báo qua kênh ngoài và có người chịu trách nhiệm, Khi hệ thống phát hành thông báo, Thì hệ thống gửi thông báo qua kênh ngoài được cấu hình.
-- AC2: Cho kênh ngoài chưa được cấu hình hoặc không khả dụng, Khi phát hành thông báo, Thì hệ thống không coi việc gửi qua kênh ngoài là thành công.
+- AC1: Cho cảnh báo vận hành nghiêm trọng (như máy offline, lỗi cảm biến, xịt lỗi liên tiếp), Khi hệ thống sinh cảnh báo, Thì hệ thống gửi thông báo qua kênh ngoài (Email/Zalo) được cấu hình cho nhân sự vận hành phụ trách.
+- AC2: Cho kênh ngoài chưa được cấu hình hoặc gặp sự cố mạng, Khi phát hành thông báo, Thì hệ thống ghi nhận lỗi gửi và không làm gián đoạn luồng xử lý cảnh báo trong hệ thống.
 
 **Kiểm tra:** `test_FR_ALR_15_external_notification`
+
+---
+
+## FR-ALR-16 — Gửi email thông báo tiền và hàng cho Brand Admin
+**Tuyên bố:** Hệ thống phải gửi email cho Brand Admin, và lưu trạng thái gửi làm bằng chứng, các thông báo: thanh toán thuê slot thành công, hóa đơn bắt đầu hiệu lực, sắp hết hạn, vào ân hạn, sắp thanh lý, đã thanh lý, hàng trả về sẵn sàng và kỳ chi trả doanh thu (ADR-0013).
+
+**Dấu vết:** BR-009, BR-013 · **Ưu tiên:** M · ADR-0013 mục 4
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Danh sách 8 sự kiện bắt buộc gửi email): Cho Brand Admin của thương hiệu, Khi phát sinh một trong 8 sự kiện sau:
+  1. Thanh toán phiên thuê slot thành công (FR-SLT-43)
+  2. Hóa đơn bắt đầu có hiệu lực sau khi lắp chai (FR-SLT-24, 43)
+  3. Hóa đơn sắp hết hạn mốc 7 ngày và 3 ngày (FR-EXP-01, 02)
+  4. Hóa đơn chuyển sang trạng thái ân hạn GRACE (FR-EXP-06)
+  5. Cảnh báo sắp thanh lý hàng tồn mốc 3 ngày trước hạn (FR-EXP-28)
+  6. Hàng tồn bị thanh lý chuyển sở hữu về nền tảng (FR-EXP-19)
+  7. Phiếu trả hàng sẵn sàng tại kho để nhận (FR-EXP-26)
+  8. Kỳ chi trả doanh thu được chốt số liệu hoặc đã chuyển khoản (FR-SLT-52, 53)
+  Thì hệ thống tự động tạo bản ghi thông báo với `channel = 'EMAIL'`, gửi email đến hòm thư đã xác minh của Brand Admin và lưu trạng thái gửi (`SENT`, `FAILED`) làm bằng chứng đối soát pháp lý.
+- AC2 (Lưu vết bằng chứng gửi): Cho mỗi email được gửi đi, Khi gửi qua SMTP/nhà cung cấp email, Thì hệ thống lưu thông tin người nhận, thời điểm gửi, tiêu đề, mã tham chiếu sự kiện và phản hồi của dịch vụ email vào bảng `notifications`.
+- AC3 (Chống thất lạc): Cho trường hợp dịch vụ gửi email tạm thời gián đoạn, Khi gửi thất bại, Thì bản ghi được đánh dấu `FAILED` và job định kỳ tự động thử gửi lại để bảo đảm quyền lợi thông tin của thương hiệu.
+
+**Kiểm tra:** `test_FR_ALR_16_send_brand_email_notifications`
