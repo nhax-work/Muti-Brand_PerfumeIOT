@@ -6,6 +6,7 @@ import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { DspModule } from './modules/dsp/index.js';
 import { MchModule } from './modules/mch/index.js';
+import { IotModule } from './modules/iot/iot.module.js';
 import { OrdModule, PaymentModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
 import { RptModule } from './modules/rpt/index.js';
@@ -30,6 +31,7 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     // Kết nối broker dùng chung (@Global) — chỉ kết nối khi entrypoints/mqtt.ts gọi connect().
     MqttModule,
     DspModule,
+    IotModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })

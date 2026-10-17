@@ -1,0 +1,15 @@
+Reference,Quantity,Part,Package_or_interface,Status,Notes
+Q1-Q15,15,AOD4184A,TO-252 DPAK,CANDIDATE,Requires 5 V gate buffer and thermal/transient verification
+U1-U2,2,SN74AHCT541,To be selected,CANDIDATE,5 V buffer; confirm power sequencing and OE default OFF
+U3,1,MCP23017,To be selected,PROPOSED,3.3 V I2C valve expansion; firmware not implemented
+U4,1,12 V to 5 V regulator,To be selected,TBD,ESP supply current and USB backfeed protection required
+RG1-RG15,15,Gate series resistor,To be selected,TBD,Value selected from gate charge and switching tests
+RPD1-RPD15,15,Gate to source pulldown,To be selected,TBD,Required default OFF independently of GPIO
+RBTN1-RBTN5,5,10 kOhm button pullup,To be selected,VALUE_SET,Pull to 3V3 only
+D1-D5,5,Pump flyback diode or clamp,To be selected,TBD,Rate for measured pump turn-off current repetitive pulses temperature and energy; 1N5819 not approved here
+D6-D10,5,1N5819 Schottky 1 A 40 V,DO-41,CANDIDATE,Valve 0.5 A nominal; check thermal repetitive pulses release time and actual manufacturer
+J1-J15,15,Load output connector,2 pin,TBD,Confirm polarity pitch cable and current ratings
+BTN1-BTN5,5,Momentary illuminated button,16 mm body 5 pin,VOLTAGE_SET,LED 12-24 VDC; LED current at 12 V unknown; COM NO NC independent
+VAL1-VAL5,5,2W025-08 12 VDC 6 W solenoid valve,DN08 G1/4 with 8 mm tube fittings,RATING_SET,Calculated nominal current 0.5 A each; verify built-in suppression polarity release time and duty rating
+F1,1,5 A main fuse,To be measured,USER_PRESENT,Verify time current curve and DC interruption rating
+JESP,1,ESP32 WROOM 38 pin carrier,To be measured,TBD,Do not assign row spacing from photo
