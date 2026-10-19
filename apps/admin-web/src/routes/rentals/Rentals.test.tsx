@@ -171,6 +171,30 @@ vi.mock('./api', async () => {
       mutateAsync: vi.fn(),
       isPending: false,
     }),
+    useCurrentAgreement: () => ({
+      data: {
+        agreement: {
+          id: 'agreement-1',
+          version: '1.0',
+          title: 'Hợp đồng khung dịch vụ',
+          content: 'Nội dung hợp đồng khung mẫu',
+          contentHash: 'a'.repeat(64),
+          isCurrent: true,
+          publishedAt: '2026-10-01T00:00:00.000Z',
+          createdAt: '2026-10-01T00:00:00.000Z',
+        },
+        acceptance: null,
+      },
+      isLoading: false,
+    }),
+    useAcceptAgreement: () => ({
+      mutateAsync: vi.fn().mockResolvedValue({ agreementVersionId: 'agreement-1' }),
+      isPending: false,
+    }),
+    useResendVerification: () => ({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
+    }),
   };
 });
 

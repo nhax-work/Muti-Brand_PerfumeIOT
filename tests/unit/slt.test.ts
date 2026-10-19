@@ -33,10 +33,15 @@ import { SltJobs } from '../../apps/api/src/modules/slt/slt.jobs.js';
 import type { Clock } from '../../apps/api/src/shared/clock.js';
 import type { Database } from '../../apps/api/src/shared/db/index.js';
 import type { PaymentService } from '../../apps/api/src/modules/ord/index.js';
-import type { RentalCheckoutRecord } from '../../apps/api/src/modules/slt/slt.queries.js';
+import type {
+  AgreementAcceptanceRecord,
+  AgreementVersionRecord,
+  RentalCheckoutRecord,
+} from '../../apps/api/src/modules/slt/slt.queries.js';
 
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
 const BRAND_B = '11111111-1111-4111-8111-000000000002';
+const HASH_V1 = 'a'.repeat(64);
 
 function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRentalRecord {
   return {
@@ -83,6 +88,68 @@ class FakeSltQueries {
   rentals: SlotRentalRecord[] = [];
   products: Array<{ id: string; brandId: string; status: string }> = [];
   lastFilter: SlotRentalFilter | null = null;
+  currentAgreement: AgreementVersionRecord | null = {
+    id: 'ag-1',
+    version: 'v1.0',
+    title: 'Hợp đồng khung',
+    content: 'Nội dung',
+    contentHash: HASH_V1,
+    isCurrent: true,
+    publishedAt: new Date('2026-10-01T00:00:00Z'),
+    createdAt: new Date('2026-10-01T00:00:00Z'),
+  };
+  acceptances: AgreementAcceptanceRecord[] = [BRAND_A, BRAND_B].map((brandId, i) => ({
+    id: `acc-${i + 1}`,
+    brandId,
+    acceptedBy: `user-${i + 1}`,
+    kind: 'FRAMEWORK' as const,
+    agreementVersionId: 'ag-1',
+    rentalCheckoutId: null,
+    contentHash: HASH_V1,
+    acceptedAt: new Date('2026-10-02T00:00:00Z'),
+  }));
+
+  unverifiedEmail = false;
+
+  async hasUnverifiedEmailRecord(_userId: string) {
+    return this.unverifiedEmail;
+  }
+
+  async findCurrentAgreementVersion() {
+    return this.currentAgreement;
+  }
+
+  async findFrameworkAcceptance(brandId: string, agreementVersionId: string) {
+    return (
+      this.acceptances.find(
+        (a) => a.brandId === brandId && a.agreementVersionId === agreementVersionId,
+      ) ?? null
+    );
+  }
+
+  async insertFrameworkAcceptance(params: {
+    brandId: string;
+    agreementVersionId: string;
+    acceptedBy: string;
+    contentHash: string;
+    ipAddress: string;
+    userAgent: string | null;
+  }) {
+    const existing = await this.findFrameworkAcceptance(params.brandId, params.agreementVersionId);
+    if (existing) return { acceptance: existing, created: false };
+    const acceptance: AgreementAcceptanceRecord = {
+      id: `acc-${this.acceptances.length + 1}`,
+      brandId: params.brandId,
+      acceptedBy: params.acceptedBy,
+      kind: 'FRAMEWORK',
+      agreementVersionId: params.agreementVersionId,
+      rentalCheckoutId: null,
+      contentHash: params.contentHash,
+      acceptedAt: new Date('2026-10-03T00:00:00Z'),
+    };
+    this.acceptances.push(acceptance);
+    return { acceptance, created: true };
+  }
 
   async list(scope: BrandScope, filter: SlotRentalFilter) {
     this.lastFilter = filter;
@@ -455,6 +522,101 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     await expect(
       service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '0'),
     ).rejects.toThrow();
+  });
+
+  it('test_FR_SLT_48_get_current_agreement', async () => {
+    const current = await service.getCurrentAgreement({ kind: 'BRAND', brandId: BRAND_A });
+    expect(current.agreement).toMatchObject({
+      version: 'v1.0',
+      title: 'Hợp đồng khung',
+      content: 'Nội dung',
+      contentHash: HASH_V1,
+      isCurrent: true,
+    });
+    expect(current.acceptance).toMatchObject({ brandId: BRAND_A, kind: 'FRAMEWORK' });
+
+    // Tài khoản mức nền tảng luôn nhận acceptance = null
+    const platform = await service.getCurrentAgreement({ kind: 'UNRESTRICTED' });
+    expect(platform.acceptance).toBeNull();
+  });
+
+  it('test_FR_SLT_49_accept_agreement_idempotent', async () => {
+    queries.acceptances = [];
+    const origin = { ip: '127.0.0.1', userAgent: 'vitest' };
+    const scope: BrandScope = { kind: 'BRAND', brandId: BRAND_A };
+    const input = { version: 'v1.0', contentHash: HASH_V1 };
+
+    const first = await service.acceptAgreement(brandAdmin, scope, input, origin);
+    expect(first.created).toBe(true);
+    expect(first.body).toMatchObject({ brandId: BRAND_A, agreementVersionId: 'ag-1' });
+    expect(queries.acceptances).toHaveLength(1);
+
+    // Đồng ý lại: trả bản ghi cũ (HTTP 200), không sinh bản ghi trùng
+    const again = await service.acceptAgreement(brandAdmin, scope, input, origin);
+    expect(again.created).toBe(false);
+    expect(again.body.id).toBe(first.body.id);
+    expect(queries.acceptances).toHaveLength(1);
+  });
+
+  it('test_FR_SLT_49_accept_rejects_non_current_version_or_changed_content', async () => {
+    queries.acceptances = [];
+    const origin = { ip: '127.0.0.1', userAgent: 'vitest' };
+    const scope: BrandScope = { kind: 'BRAND', brandId: BRAND_A };
+
+    await expect(
+      service.acceptAgreement(brandAdmin, scope, { version: 'v0.9', contentHash: HASH_V1 }, origin),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      service.acceptAgreement(
+        brandAdmin,
+        scope,
+        { version: 'v1.0', contentHash: 'b'.repeat(64) },
+        origin,
+      ),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    expect(queries.acceptances).toHaveLength(0);
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_email_not_verified', async () => {
+    queries.unverifiedEmail = true;
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+    queries.unverifiedEmail = false;
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_agreement_not_accepted', async () => {
+    queries.acceptances = [];
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+  });
+
+  it('test_FR_SLT_49_checkout_rejected_when_no_active_agreement', async () => {
+    const prev = queries.currentAgreement;
+    queries.currentAgreement = null;
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+    queries.currentAgreement = prev;
   });
 });
 

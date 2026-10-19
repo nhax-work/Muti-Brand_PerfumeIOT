@@ -221,7 +221,7 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
 ---
 
 ## FR-AUTH-09 — Xác thực lại trước thao tác nhạy cảm
-* **Statement:** Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, ghi nhận chi trả bồi thường hoặc doanh thu cho thương hiệu, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013; AC bên dưới cần soát lại cho khớp.)*
+* **Statement:** Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, ghi nhận chi trả bồi thường hoặc doanh thu cho thương hiệu, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy.
 * **Traces:** BR-002, BR-005, BR-013 · **Priority:** M
 * **API:** `POST /auth/reauth` cấp token ngắn hạn, truyền qua header `X-Reauth-Token`
 * **Acceptance criteria:**

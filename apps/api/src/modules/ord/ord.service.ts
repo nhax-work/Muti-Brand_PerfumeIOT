@@ -214,6 +214,17 @@ export class OrdService {
       order = (await this.queries.findKioskOrder(orderId)) ?? order;
     }
 
+    if (order.status === 'PAID') {
+      const queueTimeoutMs = this.config.constraint('PAID_QUEUE_MAX_SEC') * 1000;
+      if (order.paidAt && this.clock.now().getTime() - order.paidAt.getTime() >= queueTimeoutMs) {
+        const timedOutOrderId = order.id;
+        await this.queries.transaction(async (tx) => {
+          await this.failBeforeDispense(tx, timedOutOrderId, 'QUEUE_TIMEOUT');
+        });
+        order = (await this.queries.findKioskOrder(orderId)) ?? order;
+      }
+    }
+
     const pressWindowMs = this.config.constraint('DISPENSE_PRESS_WINDOW_SEC') * 1000;
     const pressDeadline =
       order.commandStatus === 'ACKNOWLEDGED' && order.commandAcknowledgedAt

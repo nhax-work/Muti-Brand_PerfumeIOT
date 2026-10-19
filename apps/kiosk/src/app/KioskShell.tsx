@@ -2,6 +2,7 @@ import { DEFAULT_LOCALE, LOCALES } from '@scentstation/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
+import { cancelKioskOrder } from '@/shared/api';
 import { config } from '@/shared/config';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
@@ -44,11 +45,14 @@ export function KioskShell() {
   const keepAwake = matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
 
   const resetSession = useCallback(() => {
+    if (activeOrder?.id) {
+      void cancelKioskOrder(activeOrder.id).catch(() => {});
+    }
     setLocale(DEFAULT_LOCALE);
     startNewSession();
     setIsLangOpen(false);
     void navigate('/', { replace: true });
-  }, [navigate, setLocale, startNewSession]);
+  }, [navigate, setLocale, startNewSession, activeOrder]);
 
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
 

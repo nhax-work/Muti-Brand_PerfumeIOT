@@ -45,19 +45,22 @@ export function useCreateOrder() {
   });
 }
 
+export function cancelKioskOrder(orderId: string) {
+  return unwrap(
+    api.POST('/kiosk/orders/{id}/cancel', {
+      params: { path: { id: orderId } },
+      body: { machineSerial: config.machineSerial },
+    }),
+  );
+}
+
 /**
  * FR-ORD-33 (ADR-0015): khách xác nhận rời màn QR — hủy đơn đang chờ thanh toán, máy chủ hủy luôn
  * link ở cổng để khách không trả được nữa.
  */
 export function useCancelOrder() {
   return useMutation({
-    mutationFn: (orderId: string) =>
-      unwrap(
-        api.POST('/kiosk/orders/{id}/cancel', {
-          params: { path: { id: orderId } },
-          body: { machineSerial: config.machineSerial },
-        }),
-      ),
+    mutationFn: (orderId: string) => cancelKioskOrder(orderId),
   });
 }
 

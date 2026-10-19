@@ -61,6 +61,10 @@ export const en: SameKeysAs<typeof vi> = {
     wrongCurrentPassword: 'Current password is incorrect',
     newPasswordMustDiffer: 'The new password must differ from the current one',
     newPasswordSameAsCurrent: 'Same as the current password',
+    registerRateLimited: 'Too many registration requests. Please try again in a few minutes.',
+    invalidVerificationToken: 'Invalid or nonexistent verification token',
+    verificationTokenExpired: 'Verification token has expired',
+    brandCodeTaken: 'Brand code is already taken',
   },
 
   mch: {
@@ -195,6 +199,12 @@ export const en: SameKeysAs<typeof vi> = {
     slotOccupied: 'Slot is already rented or held',
     rentalNotActive: 'Rental invoice is unpaid or ended',
     productNotOwned: 'Product is not owned by the renting brand',
+    emailNotVerified: 'Account email has not been verified. Cannot create checkout.',
+    agreementNotAccepted: 'The brand has not accepted the current framework agreement version',
+    agreementNotFound: 'Framework agreement version not found',
+    agreementNotCurrent: 'Only the current framework agreement version can be accepted',
+    agreementContentChanged:
+      'The framework agreement has changed. Please reopen it to review the new version',
   },
 
   ord: {
@@ -701,6 +711,39 @@ export const en: SameKeysAs<typeof vi> = {
     passwordMismatch: 'Passwords do not match',
     passwordChanged: 'Password changed — sign in again with the new password',
     claimAssignedNotice: 'Claim assigned',
+    // Self-registration & email verification (ADR-0013)
+    register: 'Register',
+    registerTitle: 'Brand Self-Registration',
+    registerBrandLink: "Don't have an account? Register your brand now",
+    registerConfirmPassword: 'Confirm password',
+    registerSuccessTitle: 'Registration successful!',
+    registerSuccessDesc:
+      'We have sent a verification code to {email}. You can sign in now; verify your email before renting slots.',
+    backToLogin: 'Back to login',
+    verifyEmailTitle: 'Verify Email',
+    verifyingEmail: 'Verifying email...',
+    verifyEmailSuccess: 'Email verified successfully!',
+    verifyEmailSuccessDesc:
+      'Your email has been verified. You can now create slot rental checkouts.',
+    verifyEmailFailed: 'Email verification failed',
+    verifyEmailFailedDesc: 'The verification token is invalid or has expired.',
+    invalidToken: 'Verification link is missing a valid token.',
+    resendVerification: 'Resend verification email',
+    resendVerificationSuccess: 'Verification email resent. Please check your inbox.',
+    // Framework agreement (ADR-0013)
+    frameworkAgreementTitle: 'Master Framework Agreement',
+    frameworkAgreementDesc:
+      'To proceed with slot rental checkout, your brand must review and accept the current terms of the framework agreement.',
+    agreementCheckbox:
+      'I have read, understood, and agreed to all terms and conditions of this framework agreement',
+    agreementAcceptBtn: 'Accept and continue',
+    agreementAcceptedSuccess: 'Framework agreement accepted successfully',
+    agreementVersion: 'Version {version}',
+    agreementRequiredNotice:
+      'You need to accept the current framework agreement before renting slots.',
+    emailNotVerifiedNotice:
+      'Your account email is not yet verified. Please check your inbox or click below to resend verification.',
+    openAgreementModal: 'View and accept agreement',
   },
 
   kiosk: {

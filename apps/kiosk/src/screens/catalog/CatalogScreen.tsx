@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { components } from '@scentstation/contracts';
 import {
   errorMessage,
+  isMachineInMaintenance,
   isNotCancellable,
   recordKioskInteraction,
   useCancelOrder,
@@ -11,6 +12,7 @@ import {
   useKioskCatalog,
   useOrderStatus,
 } from '@/shared/api';
+import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
@@ -152,6 +154,27 @@ export default function CatalogScreen() {
       });
     }
   }, [detailItem, paymentOpen, created, createOrder, kioskSessionId, idempotencyKey]);
+
+  const timeoutCancelledRef = useRef(false);
+  useEffect(() => {
+    if (!paymentOpen) {
+      timeoutCancelledRef.current = false;
+    }
+  }, [paymentOpen]);
+
+  useEffect(() => {
+    if (
+      created &&
+      paymentOpen &&
+      phase === 'PAYING' &&
+      qrSecondsLeft !== null &&
+      qrSecondsLeft <= 0 &&
+      !timeoutCancelledRef.current
+    ) {
+      timeoutCancelledRef.current = true;
+      cancelOrder.mutate(created.order.id);
+    }
+  }, [created, paymentOpen, phase, qrSecondsLeft, cancelOrder]);
 
   // Danh sách lặp vô tận (3 bộ lặp lại liên tục cho chu kỳ marquee conveyor)
   const loopItems = useMemo(() => {
@@ -492,6 +515,10 @@ export default function CatalogScreen() {
 
   // Mô tả giữ nguyên như thương hiệu nhập (NFR-USA-07) — không có thì không bịa mô tả thay.
   const detailIntro = detailItem?.product?.description;
+
+  if (isMachineInMaintenance(createOrder.error)) {
+    return <OutOfServiceScreen />;
+  }
 
   return (
     <section className={styles.catalogContainer} aria-label={t('kiosk.catalogTitle')}>

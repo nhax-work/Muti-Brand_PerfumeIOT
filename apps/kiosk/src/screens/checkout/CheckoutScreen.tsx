@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import {
   errorMessage,
+  isMachineInMaintenance,
   isNotCancellable,
   useCancelOrder,
   useCreateOrder,
   useKioskCatalog,
   useOrderStatus,
 } from '@/shared/api';
+import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
@@ -119,6 +121,26 @@ export default function CheckoutScreen() {
 
   const [confirmingLeave, setConfirmingLeave] = useState(false);
   const cancelOrder = useCancelOrder();
+  const timeoutCancelledRef = useRef(false);
+  const remainingSec = secondsUntil(created?.order.expiresAt ?? null, now);
+
+  useEffect(() => {
+    if (
+      created &&
+      phase === 'PAYING' &&
+      remainingSec !== null &&
+      remainingSec <= 0 &&
+      !timeoutCancelledRef.current &&
+      created.order.id
+    ) {
+      timeoutCancelledRef.current = true;
+      cancelOrder.mutate(created.order.id);
+    }
+  }, [created, phase, remainingSec, cancelOrder]);
+
+  if (isMachineInMaintenance(createOrder.error)) {
+    return <OutOfServiceScreen />;
+  }
 
   if (!created && (!item || !item.product || !item.available)) {
     return (

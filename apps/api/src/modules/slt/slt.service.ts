@@ -5,12 +5,13 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { Schema } from '@scentstation/contracts';
+import type { AgreementAcceptance, AgreementCurrent, Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import type { RequestOrigin } from '../../shared/http/request-origin.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { MchQueries } from '../mch/mch.queries.js';
@@ -20,6 +21,7 @@ import { toPlanDto } from './catalog.service.js';
 import {
   SltQueries,
   stageOf,
+  type AgreementAcceptanceRecord,
   type CheckoutCreateItemData,
   type RentalCheckoutRecord,
   type SlotRentalFilter,
@@ -113,6 +115,20 @@ export class SltService {
       throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
     }
 
+    const unverified = await this.queries.hasUnverifiedEmailRecord(actor.userId);
+    if (unverified) {
+      throw new AppError('EMAIL_NOT_VERIFIED', 'slt.emailNotVerified');
+    }
+
+    const currentAgreement = await this.queries.findCurrentAgreementVersion();
+    if (!currentAgreement) {
+      throw new AppError('AGREEMENT_NOT_ACCEPTED', 'slt.agreementNotAccepted');
+    }
+    const accepted = await this.queries.findFrameworkAcceptance(scope.brandId, currentAgreement.id);
+    if (!accepted) {
+      throw new AppError('AGREEMENT_NOT_ACCEPTED', 'slt.agreementNotAccepted');
+    }
+
     if (!input.items || input.items.length === 0) {
       throw invalidField('items', 'slt.emptyCart');
     }
@@ -194,6 +210,7 @@ export class SltService {
       createdBy: actor.userId,
       holdExpiresAt,
       totalAmount: checkoutTotal.toFixed(4),
+      agreementVersionId: currentAgreement.id,
       items: itemDatas,
     });
 
@@ -464,6 +481,102 @@ export class SltService {
 
     return dto;
   }
+
+  /**
+   * FR-SLT-48, FR-SLT-49 (ADR-0013): phiên bản hiện hành kèm lần đồng ý của thương hiệu người gọi.
+   * Tài khoản mức nền tảng luôn nhận `acceptance = null`.
+   */
+  async getCurrentAgreement(scope: BrandScope): Promise<AgreementCurrent> {
+    const agreement = await this.queries.findCurrentAgreementVersion();
+    if (!agreement) {
+      throw new AppError('NOT_FOUND', 'slt.agreementNotFound');
+    }
+    const acceptance =
+      scope.kind === 'BRAND' && scope.brandId
+        ? await this.queries.findFrameworkAcceptance(scope.brandId, agreement.id)
+        : null;
+    return {
+      agreement: {
+        id: agreement.id,
+        version: agreement.version,
+        title: agreement.title,
+        content: agreement.content,
+        contentHash: agreement.contentHash,
+        isCurrent: agreement.isCurrent,
+        publishedAt: iso(agreement.publishedAt),
+        createdAt: agreement.createdAt.toISOString(),
+      },
+      acceptance: acceptance ? toAcceptanceDto(acceptance) : null,
+    };
+  }
+
+  /**
+   * FR-SLT-49 (ADR-0013): Brand Admin đồng ý hợp đồng khung hiện hành cho thương hiệu mình. Phiên bản
+   * không phải bản hiện hành, hoặc contentHash lệch (văn bản đã đổi sau khi mở) → VALIDATION_ERROR.
+   *
+   * @returns `created = false` khi thương hiệu đã đồng ý từ trước — trả lại bản ghi cũ (HTTP 200).
+   */
+  async acceptAgreement(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    input: { version: string; contentHash: string },
+    origin: RequestOrigin,
+  ): Promise<{ created: boolean; body: AgreementAcceptance }> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const current = await this.queries.findCurrentAgreementVersion();
+    if (!current) {
+      throw new AppError('NOT_FOUND', 'slt.agreementNotFound');
+    }
+    if (input.version !== current.version) {
+      throw invalidField('version', 'slt.agreementNotCurrent');
+    }
+    if (input.contentHash !== current.contentHash) {
+      throw invalidField('contentHash', 'slt.agreementContentChanged');
+    }
+
+    const { acceptance, created } = await this.queries.insertFrameworkAcceptance({
+      brandId: scope.brandId,
+      agreementVersionId: current.id,
+      acceptedBy: actor.userId,
+      contentHash: current.contentHash,
+      // Cột NOT NULL; Fastify luôn có request.ip — dự phòng cho lời gọi không qua HTTP.
+      ipAddress: origin.ip ?? '0.0.0.0',
+      userAgent: origin.userAgent,
+    });
+    const body = toAcceptanceDto(acceptance);
+
+    if (created) {
+      await this.audit.log({
+        actorType: 'USER',
+        actorId: actor.userId,
+        brandId: scope.brandId,
+        action: 'slt.agreement.accepted',
+        targetType: 'agreement_acceptance',
+        targetId: acceptance.id,
+        sourceIp: origin.ip,
+        userAgent: origin.userAgent,
+        metadata: { version: current.version, contentHash: acceptance.contentHash },
+      });
+    }
+
+    return { created, body };
+  }
+}
+
+function toAcceptanceDto(record: AgreementAcceptanceRecord): AgreementAcceptance {
+  return {
+    id: record.id,
+    brandId: record.brandId,
+    acceptedBy: record.acceptedBy,
+    kind: record.kind,
+    agreementVersionId: record.agreementVersionId,
+    rentalCheckoutId: record.rentalCheckoutId,
+    contentHash: record.contentHash,
+    acceptedAt: record.acceptedAt.toISOString(),
+  };
 }
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
