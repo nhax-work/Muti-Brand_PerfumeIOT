@@ -23,8 +23,15 @@ import {
   type SessionRow,
   type UserStatus,
 } from '../../apps/api/src/modules/auth/auth.queries.js';
-import { PrincipalLoader } from '../../apps/api/src/modules/auth/principal.loader.js';
-import { TokenService, hashRefreshToken } from '../../apps/api/src/modules/auth/tokens.js';
+import {
+  PrincipalLoader,
+  type AuthenticatedUser,
+} from '../../apps/api/src/modules/auth/principal.loader.js';
+import {
+  TokenService,
+  hashRefreshToken,
+  hashVerificationToken,
+} from '../../apps/api/src/modules/auth/tokens.js';
 
 const PASSWORD = 'correct-password-1';
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
@@ -52,6 +59,15 @@ interface FakeUser {
   permissionVersion: number;
   roles: PrincipalRow['roles'];
   permissions: string[];
+}
+
+interface FakeVerification {
+  id: string;
+  userId: string;
+  email: string;
+  tokenHash: string;
+  expiresAt: Date;
+  verifiedAt: Date | null;
 }
 
 class FakeQueries {
@@ -132,6 +148,79 @@ class FakeQueries {
     if (u) u.permissionVersion += 1;
   }
   async touchLastLogin() {}
+  brandCodes = new Set<string>();
+  /** Một dòng mỗi tài khoản, như uq_email_verification_user. */
+  verifications = new Map<string, FakeVerification>();
+
+  async emailExists(email: string) {
+    return [...this.users.values()].some((u) => u.email.toLowerCase() === email.toLowerCase());
+  }
+
+  async brandCodeExists(code: string) {
+    return this.brandCodes.has(code);
+  }
+
+  async registerBrandAndAdmin(params: {
+    brandName: string;
+    brandCode: string;
+    email: string;
+    fullName: string;
+    passwordHash: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }) {
+    const brandId = `brand-${this.brandCodes.size + 1}`;
+    const userId = `user-${this.users.size + 1}`;
+    this.brandCodes.add(params.brandCode);
+    this.users.set(userId, {
+      id: userId,
+      brandId,
+      email: params.email,
+      fullName: params.fullName,
+      passwordHash: params.passwordHash,
+      status: 'ACTIVE',
+      permissionVersion: 1,
+      roles: ['BRAND_ADMIN'],
+      permissions: ['bnd.self.update', 'slt.view'],
+    });
+    this.addVerification(userId, params.email, params.tokenHash, params.expiresAt);
+    return { brandId, userId, email: params.email };
+  }
+
+  addVerification(userId: string, email: string, tokenHash: string, expiresAt: Date) {
+    const row: FakeVerification = {
+      id: `ev-${this.verifications.size + 1}`,
+      userId,
+      email,
+      tokenHash,
+      expiresAt,
+      verifiedAt: null,
+    };
+    this.verifications.set(userId, row);
+    return row;
+  }
+
+  async findEmailVerificationByTokenHash(tokenHash: string) {
+    return [...this.verifications.values()].find((v) => v.tokenHash === tokenHash) ?? null;
+  }
+
+  async findEmailVerificationByUser(userId: string) {
+    return this.verifications.get(userId) ?? null;
+  }
+
+  async markEmailVerified(id: string, verifiedAt: Date) {
+    const v = [...this.verifications.values()].find((x) => x.id === id);
+    if (v) v.verifiedAt = verifiedAt;
+  }
+
+  async replaceEmailVerificationToken(id: string, tokenHash: string, expiresAt: Date) {
+    const v = [...this.verifications.values()].find((x) => x.id === id);
+    if (v && v.verifiedAt === null) {
+      v.tokenHash = tokenHash;
+      v.expiresAt = expiresAt;
+    }
+  }
+
   async setPassword(userId: string, passwordHash: string, status: UserStatus) {
     const u = this.users.get(userId);
     if (u) {
@@ -552,6 +641,131 @@ describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
     await expectAppError(loader.load(tokens.verifyAccess(pair.accessToken)), 'UNAUTHENTICATED');
     await expect(auth.login('ops@scentstation.local', temporary, origin)).resolves.toMatchObject({
       user: { mustChangePassword: true },
+    });
+  });
+
+  describe('FR-USR-06, FR-USR-07 — Thương hiệu tự đăng ký và xác minh email (ADR-0013)', () => {
+    const registration = (i: number | string) => ({
+      brandName: `Brand ${i}`,
+      fullName: `Người đại diện ${i}`,
+      email: `brand${i}@test.local`,
+      password: 'Password123!',
+    });
+    const actorOf = (userId: string) => ({ userId }) as AuthenticatedUser;
+
+    it('test_FR_USR_06_brand_self_registration_success', async () => {
+      const res = await auth.registerBrand(
+        { ...registration('Test'), email: 'brand@test.local' },
+        { ip: '10.0.0.1', userAgent: 'vitest' },
+      );
+      expect(res.email).toBe('brand@test.local');
+      const user = queries.users.get(res.userId)!;
+      expect(user.brandId).toBe(res.brandId);
+      expect(user.status).toBe('ACTIVE');
+      expect(user.fullName).toBe('Người đại diện Test');
+      expect(user.roles).toContain('BRAND_ADMIN');
+      const verification = queries.verifications.get(res.userId)!;
+      expect(verification.email).toBe('brand@test.local');
+      expect(verification.verifiedAt).toBeNull();
+      expect(verification.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('test_FR_USR_06_brand_registration_rate_limiting', async () => {
+      const ip = '10.0.0.99';
+      for (let i = 0; i < 5; i++) {
+        await auth.registerBrand(registration(i), { ip, userAgent: 'vitest' });
+      }
+      // Lần thứ 6 trong cùng phút bị từ chối RATE_LIMITED
+      await expectAppError(
+        auth.registerBrand(registration(6), { ip, userAgent: 'vitest' }),
+        'RATE_LIMITED',
+      );
+    });
+
+    it('test_FR_USR_06_duplicate_email_rejected', async () => {
+      await auth.registerBrand(
+        { ...registration('Original'), email: 'dup@test.local' },
+        { ip: '10.0.0.2', userAgent: 'vitest' },
+      );
+      await expectAppError(
+        auth.registerBrand(
+          { ...registration('Dup'), email: 'dup@test.local' },
+          { ip: '10.0.0.2', userAgent: 'vitest' },
+        ),
+        'VALIDATION_ERROR',
+      );
+    });
+
+    it('test_FR_USR_07_verify_email_success_and_idempotent', async () => {
+      const rawToken = 'my-secret-verification-token';
+      queries.addVerification(
+        'usr-test-verify',
+        'verify@test.local',
+        hashVerificationToken(rawToken),
+        new Date(clock.now().getTime() + 24 * 3600_000),
+      );
+
+      await auth.verifyEmail(rawToken);
+      expect(queries.verifications.get('usr-test-verify')!.verifiedAt).not.toBeNull();
+
+      // Gọi lại với mã đã dùng của email đã xác minh vẫn thành công
+      await expect(auth.verifyEmail(rawToken)).resolves.toBeUndefined();
+    });
+
+    it('test_FR_USR_07_verify_email_invalid_token_rejected', async () => {
+      await expectAppError(auth.verifyEmail('invalid-token-123'), 'VALIDATION_ERROR');
+    });
+
+    it('test_FR_USR_07_verify_email_expired_token_rejected', async () => {
+      const rawToken = 'expired-token-123456';
+      queries.addVerification(
+        'usr-test-expired',
+        'expired@test.local',
+        hashVerificationToken(rawToken),
+        new Date(clock.now().getTime() - 1000),
+      );
+
+      await expectAppError(auth.verifyEmail(rawToken), 'VALIDATION_ERROR');
+    });
+
+    it('test_FR_USR_07_resend_replaces_token_and_old_token_stops_working', async () => {
+      const oldToken = 'old-verification-token';
+      const row = queries.addVerification(
+        'usr-resend',
+        'resend@test.local',
+        hashVerificationToken(oldToken),
+        new Date(clock.now().getTime() + 1000),
+      );
+
+      await auth.resendVerification(actorOf('usr-resend'), origin);
+
+      expect(row.tokenHash).not.toBe(hashVerificationToken(oldToken));
+      expect(row.expiresAt.getTime()).toBe(clock.now().getTime() + 24 * 3600_000);
+      await expectAppError(auth.verifyEmail(oldToken), 'VALIDATION_ERROR');
+    });
+
+    it('test_FR_USR_07_resend_noop_when_not_required_or_already_verified', async () => {
+      // Tài khoản do Super Admin tạo: không có dòng xác minh
+      await auth.resendVerification(actorOf('usr-admin-created'), origin);
+      expect(queries.verifications.has('usr-admin-created')).toBe(false);
+
+      const row = queries.addVerification(
+        'usr-verified',
+        'verified@test.local',
+        hashVerificationToken('used-token-1234567'),
+        new Date(clock.now().getTime() + 1000),
+      );
+      row.verifiedAt = clock.now();
+      const before = row.tokenHash;
+      await auth.resendVerification(actorOf('usr-verified'), origin);
+      expect(row.tokenHash).toBe(before);
+    });
+
+    it('test_FR_USR_07_resend_rate_limited_per_account', async () => {
+      for (let i = 0; i < 5; i++) {
+        await auth.resendVerification(actorOf('usr-spam'), origin);
+      }
+      await expectAppError(auth.resendVerification(actorOf('usr-spam'), origin), 'RATE_LIMITED');
     });
   });
 });

@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { I18nProvider } from '@/shared/i18n';
 import { KioskSessionProvider, useKioskSession } from '@/shared/session';
 import { KioskShell } from './KioskShell';
@@ -8,6 +9,16 @@ import { KioskShell } from './KioskShell';
 const mockNavigate = vi.fn();
 let mockPathname = '/';
 let mockOutOfService = false;
+
+const mockCancelKioskOrder = vi.fn().mockResolvedValue({});
+
+vi.mock('@/shared/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/api')>();
+  return {
+    ...actual,
+    cancelKioskOrder: (...args: unknown[]) => mockCancelKioskOrder(...args),
+  };
+});
 
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
@@ -40,6 +51,7 @@ vi.mock('@/shared/hooks/useIdleReset', () => ({
 describe('KioskShell Header Navigation & Language Dropdown', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
+    mockCancelKioskOrder.mockReset().mockResolvedValue({});
     mockPathname = '/';
     mockOutOfService = false;
   });
@@ -88,6 +100,19 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(screen.queryByTestId('out-of-service')).toBeNull();
     expect(screen.getByTestId('outlet-content')).toBeTruthy();
     expect(screen.getByText(/Mất kết nối với hệ thống/)).toBeTruthy();
+  });
+
+  it('ADR-0015: resetSession khi có activeOrder thì gọi cancelKioskOrder (Exit 2)', () => {
+    let capturedReset: (() => void) | undefined;
+    vi.mocked(useIdleReset).mockImplementation((onReset) => {
+      capturedReset = onReset;
+    });
+
+    renderShell(true);
+    expect(capturedReset).toBeDefined();
+
+    capturedReset?.();
+    expect(mockCancelKioskOrder).toHaveBeenCalledWith('order-1');
   });
 
   it('ở màn hình Home (/) hiển thị logo ScentStation và không hiện nút back', () => {

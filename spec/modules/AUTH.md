@@ -221,7 +221,7 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
 ---
 
 ## FR-AUTH-09 — Xác thực lại trước thao tác nhạy cảm
-* **Statement:** Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, ghi nhận chi trả bồi thường hoặc doanh thu cho thương hiệu, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy (ADR-0013).
+* **Statement:** Hệ thống phải yêu cầu xác thực lại mật khẩu trước khi thực hiện hoàn tiền, ghi nhận chi trả bồi thường hoặc doanh thu cho thương hiệu, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý hàng tồn hoặc thay đổi cấu hình máy.
 * **Traces:** BR-002, BR-005, BR-013 · **Priority:** M
 * **API:** `POST /auth/reauth` cấp token ngắn hạn, truyền qua header `X-Reauth-Token`
 * **Acceptance criteria:**
@@ -236,13 +236,12 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
     Then hệ thống trả HTTP 401 và không cấp reauth token.
   * **AC4 (Danh sách endpoint):** Given tập endpoint nhạy cảm,  
     When rà soát `spec/contracts/openapi.yaml`,  
-    Then các endpoint nhạy cảm khai báo `X-Reauth-Token` bao gồm đủ các nhóm thao tác:
-    * hoàn tiền & bồi thường — `POST /refund-claims/{id}/refund`, `POST /orders/{id}/refund`
-    * chi trả doanh thu cho thương hiệu — `POST /brand-payouts/{id}/pay` (ADR-0013)
+    Then **đúng 9 endpoint** khai báo `X-Reauth-Token`, phủ đủ 5 nhóm thao tác trong tuyên bố:
+    * hoàn tiền — `POST /orders/{id}/refund`
     * điều chỉnh tồn kho — `POST /inventory-adjustments`
     * xịt chẩn đoán — `POST /machines/{id}/diagnostic-dispense`
     * thanh lý hàng tồn — `POST /slot-rentals/{id}/liquidate`
-    * đổi cấu hình máy & chế độ vận hành — `PUT /machines/{id}/mode`, `PUT /slots/{id}/config`, `POST /machines/{id}/config/push`, `POST /machines/{id}/credentials`, `POST /machines/{id}/credentials/revoke`
+    * đổi cấu hình máy — `PUT /machines/{id}/mode`, `PUT /slots/{id}/config`, `POST /machines/{id}/config/push`, `POST /machines/{id}/credentials`, `POST /machines/{id}/credentials/revoke`
   * **AC5 (Ca biên - Reauth token hết hạn):** Given reauth token đã quá thời hạn ngắn của nó,  
     When gọi endpoint nhạy cảm,  
     Then hệ thống trả `REAUTH_REQUIRED` — không chấp nhận token cũ.

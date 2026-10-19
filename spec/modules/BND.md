@@ -1,13 +1,12 @@
 # FR-BND — Thương hiệu và cô lập dữ liệu
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A2 · 10 FR
-> Trạng thái AC: **một phần** — FR-BND-05, 08 (cô lập dữ liệu) và FR-BND-09, 10 (pháp nhân & tài khoản chi trả, ADR-0013) đã hoàn thành; FR-BND-01..04, 06, 07 dạng CRUD
-> Phụ trách: TV3 (hồ sơ thương hiệu) · TV1 (cô lập dữ liệu)
-> Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
+> Trạng thái AC: **một phần** — FR-BND-05, FR-BND-08 (cô lập dữ liệu), FR-BND-09, FR-BND-10 (khai báo và xác minh pháp nhân) đã viết AC; FR-BND-01..04, 06, 07 (hồ sơ thương hiệu) chưa viết
+> Phụ trách: TV3 (hồ sơ thương hiệu, pháp nhân) · TV1 (cô lập dữ liệu)
+> Cập nhật: 2026-10-17 (bổ sung FR-BND-09, 10 theo ADR-0013)
 
 Đọc kèm: `spec/glossary.md` §"Quy tắc cô lập dữ liệu", `spec/modules/AUTH.md` FR-AUTH-07/08,
-`spec/decisions/0003-to-chuc-ma-nguon.md` QT4,
-`spec/decisions/0013-brand-tu-dang-ky-hop-dong-hai-lop-va-chi-tra-doanh-thu.md`
+`spec/decisions/0003-to-chuc-ma-nguon.md` QT4
 
 ---
 
@@ -56,35 +55,44 @@
 
 ---
 
-## FR-BND-09 — Khai báo thông tin pháp nhân và tài khoản nhận doanh thu
+## Hồ sơ thương hiệu — FR-BND-01..04, 06, 07 (chưa viết)
+
+Chưa viết. Không thuộc task Auth · RBAC · cô lập dữ liệu mức slot. Nội dung FR ở
+`docs/FR_NFR_SCENTSTATION.md` mục A2; viết theo đúng định dạng của FR-BND-05 ở trên.
+
+---
+
+## FR-BND-09 — Khai báo thông tin pháp nhân thương hiệu
 * **Statement:** Hệ thống phải cho phép Brand Admin khai báo mã số thuế, giấy phép kinh doanh và tài khoản doanh nghiệp nhận doanh thu của thương hiệu mình; tài khoản nhận doanh thu được lưu mã hóa (ADR-0013).
-* **Traces:** BR-009 · **Priority:** M · ADR-0013 mục 1
-* **API:** `PUT /brands/{id}/legal-profile`
+* **Traces:** BR-009, ADR-0013 · **Priority:** M
+* **API:** `PUT /brands/me/legal-profile`
 * **Acceptance criteria:**
   * **AC1:** Given Brand Admin của thương hiệu `B`,  
-    When cập nhật thông tin pháp nhân gồm mã số thuế (`tax_code`), đường dẫn/tài liệu giấy phép kinh doanh (`business_license_url`) và tài khoản doanh nghiệp (`payout_account`),  
-    Then hệ thống lưu thành công, trong đó số tài khoản ngân hàng và tên ngân hàng nhận tiền phải được mã hóa trước khi ghi vào CSDL (`payout_account_ciphertext`).
-  * **AC2 (Phân quyền):** Given Brand Admin của thương hiệu `B1`,  
-    When cố gắng cập nhật pháp nhân của thương hiệu `B2`,  
+    When cập nhật thông tin pháp nhân gồm mã số thuế, số giấy phép kinh doanh và tài khoản ngân hàng doanh nghiệp nhận doanh thu,  
+    Then hệ thống lưu thông tin, mã hóa tài khoản nhận tiền (`payout_account`), ghi nhận thời điểm cập nhật và xóa trạng thái xác minh trước đó (`legal_verified_at = null`).
+  * **AC2 (Mã hóa tài khoản):** Given tài khoản ngân hàng nhận tiền của thương hiệu,  
+    When lưu vào CSDL,  
+    Then trường `payout_account` được mã hóa đối xứng AES-256-GCM ở tầng ứng dụng, không lưu bản rõ trong CSDL hay log.
+  * **AC3 (Phân quyền):** Given người dùng không phải Brand Admin của thương hiệu hoặc tài khoản nền tảng,  
+    When gọi cập nhật hồ sơ pháp nhân của thương hiệu khác,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-* **Test:** `test_FR_BND_09_declare_legal_and_payout_profile`
+* **Test:** `tests/unit/bnd.test.ts` — các test `test_FR_BND_09_*`
 
 ---
 
 ## FR-BND-10 — Xác minh pháp nhân thương hiệu
 * **Statement:** Hệ thống phải cho phép Platform Super Admin ghi nhận đã xác minh pháp nhân của thương hiệu, kèm người và thời điểm xác minh (ADR-0013).
-* **Traces:** BR-008, BR-009 · **Priority:** M · ADR-0013 mục 1
+* **Traces:** BR-008, BR-009, ADR-0013 · **Priority:** M
 * **API:** `POST /brands/{id}/verify-legal`
 * **Acceptance criteria:**
-  * **AC1:** Given Platform Super Admin đối soát hợp lệ thông tin pháp nhân của thương hiệu `B`,  
-    When gửi `POST /brands/{id}/verify-legal`,  
-    Then hệ thống ghi nhận `legal_verified_at = CURRENT_TIMESTAMP`, `legal_verified_by = current_user_id`, cho phép thương hiệu đủ điều kiện nhận chi trả doanh thu (`BrandPayout`).
-  * **AC2 (Phân quyền):** Given người dùng không có vai trò Platform Super Admin gọi xác minh,  
+  * **AC1:** Given thương hiệu `B` đã khai báo thông tin pháp nhân,  
+    When Platform Super Admin xác nhận thông tin hợp lệ,  
+    Then hệ thống cập nhật `legal_verified_at = now()`, `legal_verified_by = admin.id` và ghi AuditLog `bnd.legal.verified`.
+  * **AC2 (Điều kiện chi trả doanh thu):** Given kỳ chi trả của thương hiệu ở trạng thái `CONFIRMED`,  
+    When thương hiệu chưa được xác minh pháp nhân (`legal_verified_at` NULL),  
+    Then hệ thống từ chối chuyển kỳ chi trả sang `PAID` với mã lỗi `BRAND_NOT_VERIFIED` (ADR-0013 §3).
+  * **AC3 (Phân quyền):** Given tài khoản không có quyền Platform Super Admin,  
+    When gọi xác minh pháp nhân cho thương hiệu,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-* **Test:** `test_FR_BND_10_super_admin_verify_brand_legal`
+* **Test:** `tests/unit/bnd.test.ts` — các test `test_FR_BND_10_*`
 
----
-
-## Hồ sơ thương hiệu — FR-BND-01..04, 06, 07 (CRUD)
-
-Các FR dạng CRUD cơ bản: xem, tạo, cập nhật thông tin thương hiệu và đổi trạng thái ACTIVE/SUSPENDED tuân theo phân quyền quản trị của Super Admin và Brand Admin tương ứng.

@@ -7,12 +7,18 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { CurrentUser, TokenPair } from '@scentstation/contracts';
+import type {
+  BrandRegistered,
+  BrandRegistration,
+  CurrentUser,
+  TokenPair,
+} from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
-import { AppError } from '../../shared/errors/index.js';
+import { AppError, invalidField } from '../../shared/errors/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
+import { PerMinuteRateLimiter } from '../../shared/http/rate-limiter.js';
 import type { RequestOrigin } from '../../shared/http/request-origin.js';
 import {
   AuthQueries,
@@ -34,7 +40,13 @@ import {
   type AuthenticatedUser,
 } from './principal.loader.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
-import { hashRefreshToken, newRefreshToken, type TokenService } from './tokens.js';
+import {
+  hashRefreshToken,
+  hashVerificationToken,
+  newRefreshToken,
+  newVerificationToken,
+  type TokenService,
+} from './tokens.js';
 
 const MS_PER_MINUTE = 60_000;
 const MS_PER_DAY = 86_400_000;
@@ -53,6 +65,13 @@ type Queries = Pick<
   | 'bumpPermissionVersion'
   | 'touchLastLogin'
   | 'setPassword'
+  | 'emailExists'
+  | 'brandCodeExists'
+  | 'registerBrandAndAdmin'
+  | 'findEmailVerificationByTokenHash'
+  | 'findEmailVerificationByUser'
+  | 'markEmailVerified'
+  | 'replaceEmailVerificationToken'
 >;
 
 type Loader = Pick<PrincipalLoader, 'invalidateUser' | 'invalidateSession'>;
@@ -60,6 +79,11 @@ type Audit = Pick<AuditService, 'log'>;
 
 @Injectable()
 export class AuthService {
+  /** FR-USR-06: theo IP. */
+  private readonly registerLimiter: PerMinuteRateLimiter;
+  /** FR-USR-07: gửi lại mã, theo tài khoản — dùng chung ngưỡng với đăng ký. */
+  private readonly resendLimiter: PerMinuteRateLimiter;
+
   constructor(
     @Inject(AuthQueries) private readonly queries: Queries,
     @Inject(AuditService) private readonly audit: Audit,
@@ -67,7 +91,11 @@ export class AuthService {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
-  ) {}
+  ) {
+    const limit = () => config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN');
+    this.registerLimiter = new PerMinuteRateLimiter(clock, limit);
+    this.resendLimiter = new PerMinuteRateLimiter(clock, limit);
+  }
 
   /**
    * FR-AUTH-01, FR-AUTH-02, FR-AUTH-03, FR-AUD-01.
@@ -302,6 +330,128 @@ export class AuthService {
       permissions: [...user.permissions].sort(),
       mustChangePassword: user.mustChangePassword,
     };
+  }
+
+  /**
+   * FR-USR-06, FR-AUTH-05 (ADR-0013): thương hiệu tự đăng ký — Brand ACTIVE kèm tài khoản Brand Admin
+   * ACTIVE, đăng nhập được ngay. Mã xác minh email (FR-USR-07) ghi cùng transaction.
+   */
+  async registerBrand(input: BrandRegistration, origin: RequestOrigin): Promise<BrandRegistered> {
+    const clientIp = origin.ip ?? 'unknown';
+    if (!this.registerLimiter.tryAcquire(clientIp)) {
+      throw new AppError('RATE_LIMITED', 'auth.registerRateLimited');
+    }
+
+    if (await this.queries.emailExists(input.email)) {
+      throw invalidField('email', 'usr.emailTaken');
+    }
+
+    // Sinh brandCode tự động từ brandName
+    let baseCode = input.brandName
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 30);
+    if (!baseCode) baseCode = 'BRAND';
+
+    let brandCode = baseCode;
+    let counter = 1;
+    while (await this.queries.brandCodeExists(brandCode)) {
+      brandCode = `${baseCode.slice(0, 24)}_${counter++}`;
+    }
+
+    const passwordHash = await hashPassword(input.password);
+    const rawToken = newVerificationToken();
+    const result = await this.queries.registerBrandAndAdmin({
+      brandName: input.brandName,
+      brandCode,
+      email: input.email,
+      fullName: input.fullName,
+      passwordHash,
+      tokenHash: hashVerificationToken(rawToken),
+      expiresAt: this.verificationExpiry(),
+    });
+
+    await this.audit.log({
+      actorType: 'ANONYMOUS',
+      action: 'auth.brand.registered',
+      targetType: 'brand',
+      targetId: result.brandId,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+      metadata: { brandCode, email: result.email, userId: result.userId },
+    });
+
+    return result;
+  }
+
+  /**
+   * FR-USR-07 (ADR-0013): mã đúng và còn hạn → ghi nhận đã xác minh. Mã sai, quá hạn hoặc đã bị thay
+   * bởi mã mới → VALIDATION_ERROR. Gọi lại với mã đã dùng của email đã xác minh → thành công.
+   */
+  async verifyEmail(token: string): Promise<void> {
+    const record = await this.queries.findEmailVerificationByTokenHash(
+      hashVerificationToken(token),
+    );
+    if (!record) {
+      throw new AppError('VALIDATION_ERROR', 'auth.invalidVerificationToken');
+    }
+    if (record.verifiedAt !== null) return;
+
+    const now = this.clock.now();
+    if (record.expiresAt <= now) {
+      throw new AppError('VALIDATION_ERROR', 'auth.verificationTokenExpired');
+    }
+
+    await this.queries.markEmailVerified(record.id, now);
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: record.userId,
+      action: 'auth.email.verified',
+      targetType: 'user',
+      targetId: record.userId,
+      metadata: { email: record.email },
+    });
+  }
+
+  /**
+   * FR-USR-07: sinh mã mới thay mã cũ cho tài khoản đang đăng nhập. Tài khoản không cần xác minh
+   * (không có dòng) hoặc đã xác minh → không làm gì.
+   */
+  async resendVerification(actor: AuthenticatedUser, origin: RequestOrigin): Promise<void> {
+    if (!this.resendLimiter.tryAcquire(actor.userId)) {
+      throw new AppError('RATE_LIMITED', 'auth.registerRateLimited');
+    }
+
+    const record = await this.queries.findEmailVerificationByUser(actor.userId);
+    if (!record || record.verifiedAt !== null) return;
+
+    const rawToken = newVerificationToken();
+    await this.queries.replaceEmailVerificationToken(
+      record.id,
+      hashVerificationToken(rawToken),
+      this.verificationExpiry(),
+      this.clock.now(),
+    );
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'auth.email.verification_resent',
+      targetType: 'user',
+      targetId: actor.userId,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+      metadata: { email: record.email },
+    });
+  }
+
+  private verificationExpiry(): Date {
+    const ttlHours = this.config.constraint('EMAIL_VERIFICATION_TOKEN_TTL_HOURS');
+    return new Date(this.clock.now().getTime() + ttlHours * 3_600_000);
   }
 
   /**

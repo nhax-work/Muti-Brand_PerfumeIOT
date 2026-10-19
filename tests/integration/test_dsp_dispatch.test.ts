@@ -56,7 +56,7 @@ afterEach(async () => {
   await client.query(`DELETE FROM dispense_commands WHERE machine_id = $1`, [fx.machineId]);
   await client.query(
     `UPDATE orders SET status = 'FAILED'
-      WHERE machine_id = $1 AND status IN ('PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED')`,
+      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED')`,
     [fx.machineId],
   );
   await client.query(

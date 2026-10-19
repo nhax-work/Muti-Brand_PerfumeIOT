@@ -264,4 +264,156 @@ export class AuthQueries {
       .where('id', '=', userId)
       .execute();
   }
+
+  async emailExists(email: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('users')
+      .select('id')
+      .where('email', '=', email)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async brandCodeExists(code: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('brands')
+      .select('id')
+      .where('code', '=', code)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  /**
+   * FR-USR-06 (ADR-0013): trong một transaction tạo Brand ACTIVE, tài khoản Brand Admin ACTIVE và
+   * dòng `email_verifications` duy nhất của tài khoản đó (FR-USR-07).
+   */
+  async registerBrandAndAdmin(params: {
+    brandName: string;
+    brandCode: string;
+    email: string;
+    fullName: string;
+    passwordHash: string;
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<{ brandId: string; userId: string; email: string }> {
+    return this.db.transaction().execute(async (tx) => {
+      const brand = await tx
+        .insertInto('brands')
+        .values({
+          code: params.brandCode,
+          name: params.brandName,
+          status: 'ACTIVE',
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const user = await tx
+        .insertInto('users')
+        .values({
+          brand_id: brand.id,
+          email: params.email,
+          full_name: params.fullName,
+          password_hash: params.passwordHash,
+          status: 'ACTIVE',
+        })
+        .returning(['id', 'email'])
+        .executeTakeFirstOrThrow();
+
+      const role = await tx
+        .selectFrom('roles')
+        .select('id')
+        .where('code', '=', 'BRAND_ADMIN')
+        .executeTakeFirst();
+
+      if (role) {
+        await tx
+          .insertInto('user_roles')
+          .values({
+            user_id: user.id,
+            role_id: role.id,
+            scope_type: 'BRAND',
+            scope_id: brand.id,
+          })
+          .execute();
+      }
+
+      await tx
+        .insertInto('email_verifications')
+        .values({
+          user_id: user.id,
+          email: user.email,
+          token_hash: params.tokenHash,
+          expires_at: params.expiresAt,
+        })
+        .execute();
+
+      return { brandId: brand.id, userId: user.id, email: user.email };
+    });
+  }
+
+  async findEmailVerificationByTokenHash(tokenHash: string): Promise<EmailVerificationRow | null> {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .select(['id', 'user_id', 'email', 'expires_at', 'verified_at'])
+      .where('token_hash', '=', tokenHash)
+      .executeTakeFirst();
+    return row ? toEmailVerification(row) : null;
+  }
+
+  /** Không có dòng = tài khoản do Super Admin tạo, không cần xác minh (FR-USR-07). */
+  async findEmailVerificationByUser(userId: string): Promise<EmailVerificationRow | null> {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .select(['id', 'user_id', 'email', 'expires_at', 'verified_at'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    return row ? toEmailVerification(row) : null;
+  }
+
+  async markEmailVerified(verificationId: string, verifiedAt: Date): Promise<void> {
+    await this.db
+      .updateTable('email_verifications')
+      .set({ verified_at: verifiedAt, updated_at: verifiedAt })
+      .where('id', '=', verificationId)
+      .execute();
+  }
+
+  /** Gửi lại mã: ghi đè mã cũ trên dòng duy nhất của tài khoản — mã cũ mất hiệu lực ngay. */
+  async replaceEmailVerificationToken(
+    verificationId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    now: Date,
+  ): Promise<void> {
+    await this.db
+      .updateTable('email_verifications')
+      .set({ token_hash: tokenHash, expires_at: expiresAt, updated_at: now })
+      .where('id', '=', verificationId)
+      .where('verified_at', 'is', null)
+      .execute();
+  }
+}
+
+export interface EmailVerificationRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly email: string;
+  readonly expiresAt: Date;
+  readonly verifiedAt: Date | null;
+}
+
+function toEmailVerification(row: {
+  id: string;
+  user_id: string;
+  email: string;
+  expires_at: Date;
+  verified_at: Date | null;
+}): EmailVerificationRow {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    email: row.email,
+    expiresAt: row.expires_at,
+    verifiedAt: row.verified_at,
+  };
 }

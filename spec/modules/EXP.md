@@ -1,11 +1,11 @@
 # FR-EXP — Ân hạn, gia hạn và thanh lý
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A7 · 28 FR  
-> Trạng thái AC: **hoàn thành** (FR-EXP-06, 07 soát lại và FR-EXP-23÷28 thêm ngày 2026-10-17 theo ADR-0014 — chủ động không gia hạn và nhận hàng trả về)  
-> Phụ trách: TV3 / Tài  
+> Trạng thái AC: **hoàn thành** (bổ sung FR-EXP-23 ÷ 28 theo ADR-0014)  
+> Phụ trách: TV3
+> Cập nhật: 2026-10-17
 
-Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
-`spec/decisions/0014-an-han-chu-dong-khong-gia-han-va-doi-slot.md`
+Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
 
 ---
 
@@ -80,36 +80,31 @@
 ---
 
 ## FR-EXP-06 — Chuyển sang GRACE khi đến ngày hết hạn mà chưa gia hạn
-* **Statement:** Hệ thống phải chuyển hóa đơn sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hóa đơn gia hạn và thương hiệu chưa báo không gia hạn (FR-EXP-23) (ADR-0014).
-* **Traces:** BR-013 · **Priority:** M · ADR-0014 mục 1
+* **Statement:** Hệ thống phải chuyển hóa đơn sang trạng thái GRACE khi đến ngày hết hạn mà chưa có hóa đơn gia hạn và thương hiệu chưa báo không gia hạn (FR-EXP-23).
+* **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Vào ân hạn):** Given hóa đơn `H` ở trạng thái `EXPIRING` có `end_date < CurrentDate`, chưa có hóa đơn gia hạn nối tiếp và chưa báo không gia hạn (`non_renewal_requested_at IS NULL`),  
-    When job quét xử lý hết hạn hằng ngày chạy,  
+  * **AC1:** Given hóa đơn `H` ở trạng thái `EXPIRING` có `end_date < CurrentDate` và chưa có hóa đơn gia hạn nối tiếp,  
+    When job chạy lúc 00:00:00 ngày tiếp theo,  
     Then trạng thái hóa đơn `H` chuyển sang `GRACE`.
-  * **AC2 (Đã có hóa đơn gia hạn):** Given hóa đơn `H` đã được gia hạn trước đó (hóa đơn mới đã thanh toán),  
+  * **AC2:** Given hóa đơn `H` đã được gia hạn trước đó (trạng thái `RENEWED`),  
     When đến ngày hết hạn của `H`,  
-    Then `H` chuyển sang `RENEWED` và hóa đơn mới chuyển sang `ACTIVE`, không vào `GRACE`.
-  * **AC3 (Đã chủ động báo không gia hạn):** Given Brand Admin đã báo không gia hạn (`non_renewal_requested_at IS NOT NULL`),  
-    When đến ngày `end_date`,  
-    Then hóa đơn **không** chuyển sang `GRACE` và không bị tính phí ân hạn; slot duy trì trạng thái bán cho tới khi nhân viên kho đến tháo chai thực tế (FR-EXP-25).
+    Then `H` không chuyển sang `GRACE` mà kích hoạt hóa đơn mới sang `ACTIVE`.
 * **Test:** `test_FR_EXP_06_transition_to_grace`
 
 ---
 
 ## FR-EXP-07 — Cấu hình ngày kết thúc ân hạn cho từng hóa đơn
 * **Statement:** Hệ thống phải đặt ngày kết thúc ân hạn mặc định bằng ngày hết hạn cộng `GRACE_PERIOD_DEFAULT_DAYS` ngày khi hóa đơn vào GRACE, và cho phép Platform Super Admin sửa ngày đó cho từng hóa đơn (ADR-0014).
-* **Traces:** BR-013 · **Priority:** M · ADR-0014 mục 1
+* **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Mặc định 7 ngày):** Given hóa đơn `H` chuyển sang trạng thái `GRACE`,  
-    When job chuyển trạng thái thực thi,  
-    Then hệ thống tự động gán `grace_period_end_date = end_date + GRACE_PERIOD_DEFAULT_DAYS` (mặc định 7 ngày).
-  * **AC2 (Super Admin điều chỉnh):** Given người dùng là Platform Super Admin, hóa đơn `H` đang ở trạng thái `GRACE`,  
+  * **AC1:** Given người dùng là Platform Super Admin, hóa đơn `H` đang ở trạng thái `GRACE`,  
     When cập nhật ngày `grace_period_end_date` với giá trị hợp lệ (`grace_period_end_date >= CurrentDate`),  
     Then hệ thống lưu ngày kết thúc ân hạn mới và ghi AuditLog.
-  * **AC3 (Ca biên - Ngày trong quá khứ):** Given đặt `grace_period_end_date < CurrentDate`,  
+  * **AC2 (Ca biên - Ngày trong quá khứ):** Given đặt `grace_period_end_date < CurrentDate`,  
     When gửi yêu cầu cập nhật,  
-    Then hệ thống từ chối với HTTP 400 `INVALID_ARGUMENT`.
-  * **AC4 (Phân quyền):** Given người dùng là Brand Admin gửi yêu cầu thay đổi `grace_period_end_date`,  
+    Then hệ thống từ chối với HTTP 400.
+  * **AC3:** Given người dùng là Brand Admin,  
+    When gửi yêu cầu thay đổi `grace_period_end_date`,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_EXP_07_set_grace_period_end_date`
 
@@ -336,88 +331,90 @@
 
 ---
 
-## FR-EXP-23 — Chủ động báo không gia hạn và chọn phương thức nhận hàng
+## FR-EXP-23 — Báo không gia hạn trước ngày hết hạn
 * **Statement:** Hệ thống phải cho phép Brand Admin báo không gia hạn hóa đơn bất cứ lúc nào trước ngày hết hạn, kèm cách nhận hàng trả về: tự đến kho lấy, hoặc nền tảng gửi về địa chỉ thương hiệu và thương hiệu chịu phí vận chuyển (ADR-0014).
-* **Traces:** BR-013 · **Priority:** M · ADR-0014 mục 1 & 2
+* **Traces:** BR-013, ADR-0014 · **Priority:** M
 * **API:** `POST /slot-rentals/{id}/non-renewal`
 * **Acceptance criteria:**
-  * **AC1 (Báo không gia hạn thành công):** Given hóa đơn `H` đang ở trạng thái `ACTIVE` hoặc `EXPIRING` trước ngày hết hạn `end_date`,  
-    When Brand Admin gửi `POST /slot-rentals/{id}/non-renewal` kèm phương thức nhận hàng `returnMethod` (`'PICKUP'` hoặc `'DELIVERY'`),  
-    Then hệ thống cập nhật `non_renewal_requested_at = CURRENT_TIMESTAMP`, `return_method = returnMethod`, và ghi AuditLog.
-  * **AC2 (Thiếu phương thức nhận hàng):** Given yêu cầu thiếu `returnMethod` hoặc giá trị không thuộc `PICKUP` hay `DELIVERY`,  
-    When gửi yêu cầu,  
-    Then hệ thống từ chối với HTTP 400 `INVALID_ARGUMENT`.
-  * **AC3 (Sau ngày hết hạn):** Given hóa đơn đã quá ngày `end_date` (đã vào `GRACE` hoặc `LIQUIDATED`),  
-    When Brand Admin gửi yêu cầu báo không gia hạn,  
-    Then hệ thống từ chối với HTTP 409 `INVALID_STATE`.
-* **Test:** `test_FR_EXP_23_declare_non_renewal`
+  * **AC1 (Báo không gia hạn trước hạn):** Given Brand Admin của thương hiệu sở hữu hóa đơn `H` đang ở trạng thái `ACTIVE` hoặc `EXPIRING`,  
+    When gửi yêu cầu báo không gia hạn kèm hình thức nhận hàng (`PICKUP_AT_WAREHOUSE` hoặc `DELIVER_TO_BRAND`), địa chỉ nhận hàng và người liên hệ nếu gửi về,  
+    Then hệ thống ghi nhận `non_renewal_requested_at = now()`, hình thức nhận hàng và ghi AuditLog.
+  * **AC2 (Hóa đơn đã hết hạn hoặc đang ân hạn):** Given hóa đơn `H` đã chuyển sang `GRACE`, `LIQUIDATED` hoặc `CLOSED`,  
+    When gọi báo không gia hạn,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR` (chỉ được báo trước mốc `ends_at`).
+  * **AC3 (Phân quyền):** Given người gọi không phải Brand Admin của thương hiệu sở hữu hóa đơn,  
+    When gọi báo không gia hạn,  
+    Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
+* **Test:** `test_FR_EXP_23_request_non_renewal`
 
 ---
 
-## FR-EXP-24 — Rút lại thông báo không gia hạn
+## FR-EXP-24 — Rút lại việc báo không gia hạn trước ngày hết hạn
 * **Statement:** Hệ thống phải cho phép Brand Admin rút lại việc báo không gia hạn trước ngày hết hạn (ADR-0014).
-* **Traces:** BR-013 · **Priority:** M · ADR-0014 mục 1
+* **Traces:** BR-013, ADR-0014 · **Priority:** M
 * **API:** `DELETE /slot-rentals/{id}/non-renewal`
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` đã báo không gia hạn và thời điểm hiện tại vẫn trước `end_date`,  
-    When Brand Admin gửi `DELETE /slot-rentals/{id}/non-renewal`,  
-    Then hệ thống xóa thông tin không gia hạn (`non_renewal_requested_at = NULL`, `return_method = NULL`), khôi phục hóa đơn về luồng gia hạn/ân hạn chuẩn.
-  * **AC2 (Quá hạn rút lại):** Given đã đến hoặc quá ngày `end_date`,  
-    When Brand Admin gửi yêu cầu rút lại,  
-    Then hệ thống từ chối với HTTP 409 `CANNOT_WITHDRAW_NON_RENEWAL`.
-* **Test:** `test_FR_EXP_24_withdraw_non_renewal`
+  * **AC1 (Rút lại hợp lệ):** Given hóa đơn `H` đã báo không gia hạn nhưng chưa đến ngày hết hạn `ends_at`,  
+    When Brand Admin gửi yêu cầu rút lại việc báo không gia hạn,  
+    Then hệ thống xóa thông tin báo không gia hạn (`non_renewal_requested_at = null`), cho phép gia hạn bình thường và ghi AuditLog.
+  * **AC2 (Đã quá hạn hết hạn):** Given hóa đơn `H` đã qua mốc `ends_at`,  
+    When gửi yêu cầu rút lại việc báo không gia hạn,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+* **Test:** `test_FR_EXP_24_cancel_non_renewal_request`
 
 ---
 
-## FR-EXP-25 — Bảo vệ quyền lợi khi chủ động không gia hạn
-* **Statement:** Hệ thống phải giữ hóa đơn đã báo không gia hạn ở ACTIVE hoặc EXPIRING tới ngày hết hạn, không chuyển sang GRACE và không tính phí ân hạn; slot tiếp tục bán tới khi Inventory Staff tháo chai, doanh thu tới lúc đó thuộc thương hiệu (ADR-0014).
-* **Traces:** BR-009, BR-013 · **Priority:** M · ADR-0014 mục 1
+## FR-EXP-25 — Không vào GRACE và không tính phí ân hạn khi đã báo không gia hạn
+* **Statement:** Hệ thống phải giữ hóa đơn đã báo không gia hạn ở ACTIVE hoặc EXPIRING tại ngày hết hạn, không chuyển sang GRACE và không tính phí ân hạn; slot tiếp tục bán tới khi Inventory Staff tháo chai, doanh thu tới lúc đó thuộc thương hiệu (ADR-0014).
+* **Traces:** BR-009, BR-013, ADR-0014 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` đã báo không gia hạn và chạm mốc `end_date`,  
-    When job kiểm tra hết hạn quét,  
-    Then hóa đơn không bị chuyển sang `GRACE` và không bị tính phí lưu kho ân hạn.
-  * **AC2:** Given nhân viên kho chưa kịp tháo chai tại ngày `end_date`,  
-    When máy tiếp tục xịt phục vụ khách hàng trên slot đó,  
-    Then toàn bộ doanh thu phát sinh vẫn được ghi nhận mang nhãn `revenue_owner = 'BRAND'` và đối soát chuyển trả cho thương hiệu.
-* **Test:** `test_FR_EXP_25_non_renewal_grace_bypass_and_revenue`
+  * **AC1 (Không chuyển sang GRACE):** Given hóa đơn `H` đã báo không gia hạn,  
+    When đến ngày hết hạn `ends_at`,  
+    Then job quét hết hạn không chuyển `H` sang `GRACE`, không tính phí ân hạn và không tạo khoản phí lưu kho.
+  * **AC2 (Tiếp tục bán và quy kết doanh thu):** Given slot của hóa đơn `H` vẫn còn chai nước hoa và hoạt động bình thường,  
+    When khách mua lượt xịt tại máy sau ngày `ends_at`,  
+    Then đơn hàng vẫn thành công và doanh thu thuộc về thương hiệu (`revenue_owner = 'BRAND'`) cho tới khi Inventory Staff thực hiện tháo chai.
+* **Test:** `test_FR_EXP_25_no_grace_transition_for_non_renewal`
 
 ---
 
-## FR-EXP-26 — Lập phiếu trả hàng khi tháo chai không gia hạn
+## FR-EXP-26 — Lập phiếu trả hàng khi tháo chai
 * **Statement:** Hệ thống phải lập phiếu trả hàng khi Inventory Staff tháo chai của hóa đơn đã báo không gia hạn, ghi khối lượng còn lại của từng chai, chuyển chai sang RETURNED_TO_BRAND, chuyển hóa đơn sang CLOSED và thông báo cho Brand Admin kèm danh sách chai (ADR-0014).
-* **Traces:** BR-005, BR-013 · **Priority:** M · ADR-0014 mục 2
-* **API:** `POST /inventory/bottle-returns`
+* **Traces:** BR-005, BR-013, ADR-0014 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` đã báo không gia hạn, Inventory Staff tháo chai tại máy, cân khối lượng đo được thực tế và hoàn tất checklist tháo chai,  
-    When đóng phiên tháo chai,  
-    Then hệ thống tự động sinh bản ghi trong bảng `bottle_returns` liên kết với `slot_rental_id`, ghi nhận khối lượng còn lại, chuyển trạng thái chai sang `RETURNED_TO_BRAND`, chuyển hóa đơn `H` sang `CLOSED`, đặt ngày sẵn sàng nhận hàng `ready_at = CURRENT_TIMESTAMP`, hạn nhận hàng `pickup_deadline = ready_at + RETURN_PICKUP_MAX_DAYS` (14 ngày); đồng thời gửi thông báo trong ứng dụng và email cho Brand Admin kèm danh sách chai và khối lượng.
-* **Test:** `test_FR_EXP_26_create_bottle_return_ticket`
+  * **AC1 (Tháo chai và lập phiếu trả hàng):** Given hóa đơn `H` đã báo không gia hạn,  
+    When Inventory Staff thực hiện tháo chai tại máy hoặc kho,  
+    Then hệ thống tự động tạo bản ghi `bottle_returns` ghi nhận danh sách chai, khối lượng còn lại theo cảm biến/cân, chuyển trạng thái các chai liên quan sang `RETURNED_TO_BRAND`, chuyển hóa đơn `H` sang `CLOSED`.
+  * **AC2 (Thông báo cho thương hiệu):** Given phiếu trả hàng vừa được lập,  
+    When hoàn tất giao dịch trong CSDL,  
+    Then hệ thống gửi thông báo cho Brand Admin kèm danh sách chai, khối lượng còn lại và địa điểm kho hàng sẵn sàng để nhận.
+* **Test:** `test_FR_EXP_26_create_bottle_return_record`
 
 ---
 
 ## FR-EXP-27 — Ghi nhận bàn giao hàng trả về
 * **Statement:** Hệ thống phải cho phép Inventory Staff ghi nhận bàn giao hàng trả về gồm người nhận, thời điểm và mã vận đơn nếu gửi (ADR-0014).
-* **Traces:** BR-008, BR-013 · **Priority:** M · ADR-0014 mục 2
+* **Traces:** BR-008, BR-013, ADR-0014 · **Priority:** M
 * **API:** `POST /bottle-returns/{id}/handover`
 * **Acceptance criteria:**
-  * **AC1 (Khách tự đến kho nhận):** Given phiếu trả hàng có `return_method = 'PICKUP'`,  
-    When Inventory Staff ghi nhận bàn giao kèm tên người nhận và ảnh/chữ ký xác nhận,  
-    Then hệ thống cập nhật `handed_over_at = CURRENT_TIMESTAMP`, `received_by`, chuyển trạng thái phiếu sang `COMPLETED`, và chuyển trạng thái chai sang `RETURNED`.
-  * **AC2 (Gửi qua bưu điện/vận chuyển):** Given phiếu trả hàng có `return_method = 'DELIVERY'`,  
-    When Inventory Staff bàn giao cho bên vận chuyển kèm mã vận đơn `trackingCode`,  
-    Then hệ thống lưu `tracking_code`, `handed_over_at`, và thông báo mã vận đơn cho Brand Admin.
-* **Test:** `test_FR_EXP_27_handover_returned_bottles`
+  * **AC1 (Bàn giao trực tiếp tại kho):** Given phiếu trả hàng `R` đang ở trạng thái `READY_FOR_PICKUP`,  
+    When Inventory Staff ghi nhận bàn giao cho người đại diện thương hiệu đến lấy trực tiếp kèm tên người nhận và ảnh/chứng từ bàn giao,  
+    Then hệ thống chuyển trạng thái phiếu sang `COMPLETED`, lưu `handed_over_at = now()`, `handed_over_by` và ghi AuditLog.
+  * **AC2 (Gửi qua đơn vị vận chuyển):** Given phiếu trả hàng `R` theo hình thức gửi hàng,  
+    When Inventory Staff nhập mã vận đơn (`tracking_code`) và đơn vị vận chuyển,  
+    Then hệ thống cập nhật mã vận đơn, thời điểm gửi và thông báo mã vận đơn cho Brand Admin.
+* **Test:** `test_FR_EXP_27_record_return_handover`
 
 ---
 
-## FR-EXP-28 — Xử lý quá hạn nhận hàng trả về
+## FR-EXP-28 — Chuyển quyền sở hữu khi quá hạn nhận hàng trả về
 * **Statement:** Hệ thống phải chuyển quyền sở hữu hàng trả về sang nền tảng như thanh lý (FR-EXP-15, 16) khi quá `RETURN_PICKUP_MAX_DAYS` ngày kể từ lúc hàng sẵn sàng mà thương hiệu chưa nhận, và thông báo cho Brand Admin 3 ngày trước hạn đó (ADR-0014).
-* **Traces:** BR-013 · **Priority:** M · ADR-0014 mục 2
+* **Traces:** BR-013, ADR-0014 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Thông báo nhắc trước 3 ngày):** Given phiếu trả hàng còn 3 ngày là đến `pickup_deadline` mà chưa bàn giao,  
-    When job quét hằng ngày chạy,  
-    Then hệ thống gửi email cảnh báo khẩn cấp cho Brand Admin về việc hàng sẽ bị chuyển quyền sở hữu về nền tảng.
-  * **AC2 (Quá hạn 14 ngày):** Given quá `RETURN_PICKUP_MAX_DAYS = 14` ngày kể từ `ready_at` mà thương hiệu không nhận,  
-    When job quét quá hạn chạy,  
-    Then quyền sở hữu các chai liên kết chuyển sang `PLATFORM`, trạng thái chai chuyển `LIQUIDATED`, phiếu trả hàng chuyển `EXPIRED`, và ghi AuditLog thanh lý do quá hạn nhận hàng.
-* **Test:** `test_FR_EXP_28_liquidate_unclaimed_returned_bottles`
+  * **AC1 (Cảnh báo trước 3 ngày):** Given phiếu trả hàng `R` sẵn sàng từ ngày `T`,  
+    When đến mốc `T + RETURN_PICKUP_MAX_DAYS - 3 ngày`,  
+    Then hệ thống tự động gửi thông báo khẩn cấp và email nhắc Brand Admin nhận hàng trước thời hạn thanh lý.
+  * **AC2 (Chuyển quyền sở hữu sang nền tảng):** Given quá `RETURN_PICKUP_MAX_DAYS` ngày kể từ lúc hàng sẵn sàng mà thương hiệu không đến nhận hoặc không xác nhận nhận hàng,  
+    When job quét hết hạn thực thi,  
+    Then quyền sở hữu các chai trong phiếu trả hàng chuyển sang nền tảng (`owner = 'PLATFORM'`), phiếu chuyển sang `LIQUIDATED` và ghi AuditLog.
+* **Test:** `test_FR_EXP_28_forfeit_unclaimed_returns`

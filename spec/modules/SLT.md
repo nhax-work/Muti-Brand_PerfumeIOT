@@ -1,8 +1,9 @@
 # FR-SLT — Hóa đơn thuê slot
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A6 · 56 mục = 49 FR hiệu lực + 7 FR bãi bỏ (mức X)  
-> Trạng thái AC: **hoàn thành** (FR-SLT-01÷18 viết tuần 1; FR-SLT-19÷29 bổ sung sau; ngày 2026-09-25 viết lại theo ADR-0006; ngày 2026-09-30 theo ADR-0008; ngày 2026-10-17 soát lại FR-SLT-17, 18, 44 và thêm FR-SLT-48÷56 theo ADR-0013, ADR-0014)  
+> Trạng thái AC: **hoàn thành** (bổ sung FR-SLT-48 ÷ 56 theo ADR-0013, ADR-0014)  
 > Phụ trách: TV3 / Tài  
+> Cập nhật: 2026-10-17
 
 "Hóa đơn thuê slot" là thuật ngữ tiếng Việt của thực thể `SlotRental`; định danh kỹ thuật không đổi.
 "Phiên thanh toán" (`RentalCheckout`, ADR-0008) gom các hóa đơn tạo trong cùng một lần chọn để trả
@@ -301,7 +302,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Traces:** BR-009 · **Priority:** M
 * **API:** `GET /settlements`
 * **Acceptance criteria:**
-  * **AC1:** Given thương hiệu `B` có 2 hóa đơn hiệu lực trong kỳ tháng `K` (từ 00:00 ngày đầu tháng đến 23:59 ngày cuối tháng theo múi giờ Việt Nam GMT+7),  
+  * **AC1:** Given thương hiệu `B` có 2 hóa đơn hiệu lực trong kỳ `K`,  
     When lấy bảng đối soát cho kỳ `K`,  
     Then hệ thống trả đúng 1 bảng đối soát cho thương hiệu `B`, kèm chính xác 2 dòng chi tiết tương ứng với 2 slot.
   * **AC2:** Given thương hiệu `B` không có hóa đơn hiệu lực và không phát sinh doanh thu trong kỳ `K`,  
@@ -309,7 +310,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then không có bảng đối soát cho thương hiệu `B`.
   * **AC3 (Phân quyền dữ liệu):** Given Brand Admin của thương hiệu `B` tải bảng đối soát,  
     When thực hiện truy vấn,  
-    Then chỉ xem được bảng của thương hiệu `B`, không xem được của các thương hiệu khác (FR-BND-05, FR-BND-08).
+    Then chỉ xem được bảng của thương hiệu `B`, không xem được của các thương hiệu khác.
 * **Test:** `test_FR_SLT_17_generate_settlement_statement`
 
 ---
@@ -318,16 +319,13 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Statement:** Hệ thống phải tính trong bảng đối soát: số đơn hàng, doanh thu lượt xịt thuộc thương hiệu và số tiền nền tảng phải chuyển trả, chỉ gồm đơn có chủ sở hữu doanh thu BRAND ở trạng thái DISPENSED hoặc FORFEITED; không trừ phí cổng thanh toán hay khoản đã hoàn cho khách (ADR-0013).
 * **Traces:** BR-009 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Đơn DISPENSED và FORFEITED):** Given hóa đơn `H` của thương hiệu `B` có 350 đơn `DISPENSED` (tổng `8,750,000 VND`) và 50 đơn `FORFEITED` (khách bỏ lượt sau thanh toán thành công, tổng `1,250,000 VND`) đều mang nhãn `revenue_owner = 'BRAND'` trong kỳ,  
+  * **AC1:** Given hóa đơn `H` của thương hiệu `B` có 400 đơn hàng mang nhãn `BRAND` trong kỳ, tổng `10,000,000 VND`,  
     When tính dòng đối soát cho `H`,  
-    Then số đơn = `400`, doanh thu lượt xịt thương hiệu = `10,000,000 VND`, số tiền phải chuyển trả = `10,000,000 VND` — không trừ phí cổng hay phí thuê vì gói đã trả trước (ADR-0006, ADR-0013).
-  * **AC2 (Không tính đơn lỗi/hoàn tiền):** Given các đơn hàng ở trạng thái `FAILED`, `REFUND_PENDING` hoặc `REFUNDED` phát sinh trong kỳ,  
+    Then số đơn = `400`, doanh thu lượt xịt thương hiệu = `10,000,000 VND`, số tiền phải chuyển trả = `10,000,000 VND` — không trừ phí thuê hay ăn chia vì gói đã trả trước (ADR-0006).
+  * **AC2 (Đơn thuộc nền tảng):** Given slot của `H` có thêm đơn mang nhãn `PLATFORM` sau khi thanh lý,  
     When tính đối soát,  
-    Then các đơn này tuyệt đối không được cộng vào doanh thu lượt xịt hay số tiền chuyển trả.
-  * **AC3 (Đơn thuộc nền tảng):** Given slot của `H` có thêm đơn mang nhãn `PLATFORM` sau khi thanh lý hàng tồn,  
-    When tính đối soát,  
-    Then các đơn đó không được tính cho thương hiệu (FR-REV-05).
-  * **AC4:** Given thương hiệu `B` đã trả tiền gói thuê và gói bảo quản cho `H`,  
+    Then các đơn đó không được tính (FR-REV-05).
+  * **AC3:** Given thương hiệu `B` đã trả tiền gói thuê và gói bảo quản cho `H`,  
     When xem bảng đối soát,  
     Then các khoản đó không xuất hiện — chúng nằm trên hóa đơn (FR-SLT-40), không phải trên bảng đối soát.
 * **Test:** `test_FR_SLT_18_settlement_calculation_formula`
@@ -796,7 +794,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ---
 
 ## FR-SLT-44 — Tính bồi thường hàng hóa hư hỏng
-* **Statement:** Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, kể cả lúc chờ thương hiệu nhận hàng trả về, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá trị chai đã được chứng minh, không vượt hạn mức còn lại. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0013, ADR-0014; AC bên dưới cần soát lại cho khớp.)*
+* **Statement:** Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, kể cả lúc chờ thương hiệu nhận hàng trả về, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá trị chai đã được chứng minh, không vượt hạn mức còn lại (ADR-0013, ADR-0014).
 * **Traces:** BR-005, BR-008 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1 (Chai đang lắp):** Given chai `X` của thương hiệu `B` đang lắp trong slot `S`, hóa đơn của `S` chụp gói bồi thường `60%`, hạn mức `5,000,000 VND` chưa dùng, giá bán lẻ chai `2,000,000 VND` (FR-PRD-05),  
@@ -871,141 +869,161 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 
 ## FR-SLT-48 — Quản lý phiên bản hợp đồng khung
 * **Statement:** Hệ thống phải cho phép Platform Super Admin quản lý các phiên bản hợp đồng khung, mỗi thời điểm có đúng một phiên bản hiện hành (ADR-0013).
-* **Traces:** BR-008, BR-013 · **Priority:** M · ADR-0013 mục 2
-* **API:** `GET /agreements/current`, `POST /agreements`
+* **Traces:** BR-008, BR-013, ADR-0013 · **Priority:** M
+* **API:** `GET /agreements`, `POST /agreements`, `POST /agreements/{version}/publish`
 * **Acceptance criteria:**
-  * **AC1:** Given Platform Super Admin tạo phiên bản hợp đồng khung mới với `version`, `title`, `content_markdown`,  
-    When kích hoạt phiên bản đó,  
-    Then phiên bản mới trở thành phiên bản hiện hành (`is_current = TRUE`), phiên bản hiện hành trước đó tự động chuyển `is_current = FALSE` trong cùng transaction; CSDL bảo đảm bằng partial unique index chỉ có tối đa một bản ghi `is_current = TRUE`.
-  * **AC2 (Tra cứu hiện hành):** Given Brand Admin hoặc khách vãng lai gọi `GET /agreements/current`,  
-    Then hệ thống trả về nội dung phiên bản hiện hành kèm mã băm nội dung SHA-256 (`content_hash`).
-* **Test:** `test_FR_SLT_48_manage_agreement_versions`
+  * **AC1 (Tạo bản nháp):** Given Platform Super Admin,  
+    When tạo phiên bản hợp đồng khung mới kèm `version`, `title`, `content`,  
+    Then hệ thống tự động tính `content_hash` = SHA-256 hex của `content`, lưu bản nháp (`is_current = false`, `published_at` NULL) và ghi AuditLog.
+  * **AC2 (Công bố bản hiện hành duy nhất):** Given bản nháp phiên bản `V`, Super Admin đã xác thực lại mật khẩu,  
+    When công bố `POST /agreements/{version}/publish`,  
+    Then trong một transaction hệ thống đặt `is_current = false` cho bản cũ trước rồi đặt `is_current = true` và `published_at = now()` cho bản mới, đảm bảo duy nhất một bản hiện hành (`uq_agreement_version_current`).
+  * **AC3 (Bất biến sau công bố):** Given phiên bản hợp đồng khung đã công bố,  
+    When có bất kỳ thao tác UPDATE nào lên nội dung hoặc phiên bản,  
+    Then trigger CSDL chặn lại (nội dung hợp đồng là bất biến).
+  * **AC4 (Trùng phiên bản):** Given `version` đã tồn tại,  
+    When tạo mới với cùng `version`,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+  * **AC5 (Xác thực lại):** Given Super Admin chưa xác thực lại mật khẩu trong `REAUTH_TOKEN_TTL_SEC`,  
+    When công bố hợp đồng,  
+    Then hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED`.
+* **Test:** `test_FR_SLT_48_single_current_version`, `test_FR_SLT_48_published_content_immutable`
 
 ---
 
-## FR-SLT-49 — Bắt buộc đồng ý hợp đồng khung khi tạo phiên thanh toán
+## FR-SLT-49 — Đồng ý hợp đồng khung và lưu vết
 * **Statement:** Hệ thống phải từ chối tạo phiên thanh toán thuê slot khi thương hiệu chưa đồng ý phiên bản hợp đồng khung hiện hành, và lưu phiên bản, người đồng ý, thời điểm, địa chỉ IP và mã băm nội dung cho mỗi lần đồng ý (ADR-0013).
-* **Traces:** BR-008, BR-013 · **Priority:** M · ADR-0013 mục 2
-* **API:** `POST /rental-checkouts`, `POST /agreements/{version}/accept`
+* **Traces:** BR-008, BR-013, ADR-0013 · **Priority:** M
+* **API:** `GET /agreements/current`, `POST /agreements/{version}/accept`
 * **Acceptance criteria:**
-  * **AC1 (Chưa đồng ý):** Given thương hiệu `B` chưa từng chấp thuận phiên bản hợp đồng khung hiện hành,  
-    When Brand Admin gửi yêu cầu `POST /rental-checkouts`,  
+  * **AC1 (Đồng ý bản hiện hành):** Given Brand Admin của thương hiệu `B`, phiên bản hiện hành là `V` có mã băm `H`,  
+    When gửi `POST /agreements/{version}/accept` kèm `contentHash = H`,  
+    Then hệ thống ghi nhận vào `agreement_acceptances` một dòng `kind = FRAMEWORK` gồm `brand_id`, `agreement_version_id`, `accepted_by`, `accepted_at`, `ip_address`, `user_agent`, `content_hash` và trả về `201` kèm `AgreementAcceptance` (không trả IP).
+  * **AC2 (Lệch mã băm nội dung):** Given gửi `contentHash` không khớp với `content_hash` của bản hiện hành,  
+    When gọi đồng ý,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+  * **AC3 (Chỉ đồng ý bản hiện hành):** Given gọi accept cho một phiên bản không phải là bản hiện hành (`is_current = false`),  
+    When gọi đồng ý,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+  * **AC4 (Idempotent đồng ý lại):** Given thương hiệu `B` đã đồng ý bản `V`,  
+    When Brand Admin gửi lại yêu cầu đồng ý cho bản `V`,  
+    Then hệ thống trả về `200` kèm bản ghi đã lưu trước đó mà không tạo thêm dòng mới (`uq_acceptance_framework`; bảng chỉ cho thêm mới).
+  * **AC5 (Chặn tạo phiên thanh toán):** Given thương hiệu `B` chưa đồng ý bản hiện hành (hoặc hệ thống chưa có bản nào được công bố),  
+    When Brand Admin gọi `POST /rental-checkouts`,  
     Then hệ thống từ chối với HTTP 403 `AGREEMENT_NOT_ACCEPTED`.
-  * **AC2 (Lưu vết chấp thuận):** Given Brand Admin gọi `POST /agreements/{version}/accept`,  
-    Then hệ thống tạo bản ghi trong bảng `agreement_acceptances` lưu đầy đủ: `brand_id`, `user_id`, `agreement_version_id`, `accepted_at`, `ip_address`, `content_hash`.
-  * **AC3 (Hợp lệ):** Given thương hiệu `B` đã chấp thuận phiên bản hiện hành,  
-    When gửi `POST /rental-checkouts`,  
-    Then hệ thống chấp nhận tạo phiên thanh toán.
-* **Test:** `test_FR_SLT_49_require_agreement_acceptance_for_checkout`
+  * **AC6 (Công bố bản mới buộc đồng ý lại):** Given hệ thống công bố phiên bản hợp đồng mới,  
+    When thương hiệu `B` tạo phiên thanh toán tiếp theo mà chưa đồng ý bản mới,  
+    Then hệ thống từ chối với HTTP 403 `AGREEMENT_NOT_ACCEPTED`.
+  * **AC7 (Phân quyền):** Given tài khoản mức nền tảng gọi `POST /agreements/{version}/accept`,  
+    Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
+* **Test:** `tests/unit/slt.test.ts` — `test_FR_SLT_49_accept_agreement_idempotent`, `test_FR_SLT_49_accept_rejects_non_current_version_or_changed_content`, `test_FR_SLT_49_checkout_rejected_*`; `tests/integration/test_slt_checkout_payment.test.ts` — `test_FR_SLT_49_new_version_requires_reaccept`
 
 ---
 
-## FR-SLT-50 — Phụ lục tự sinh cho phiên thanh toán
+## FR-SLT-50 — Phụ lục điều khoản cho từng phiên thanh toán
 * **Statement:** Hệ thống phải sinh phụ lục cho mỗi phiên thanh toán từ ảnh chụp giá của các hóa đơn (slot, gói thuê, gói bảo quản, mức bảo vệ tối đa, tỷ lệ phí ân hạn) và yêu cầu Brand Admin đồng ý phụ lục trước khi thanh toán, lưu vết như FR-SLT-49 (ADR-0013).
-* **Traces:** BR-008, BR-013 · **Priority:** M · ADR-0013 mục 2
-* **API:** `GET /rental-checkouts/{id}/annex`, `POST /rental-checkouts/{id}/accept-annex`
+* **Traces:** BR-008, BR-013, ADR-0013 · **Priority:** M
+* **API:** `GET /rental-checkouts/{id}/annex`, `POST /rental-checkouts/{id}/annex/accept`
 * **Acceptance criteria:**
-  * **AC1:** Given phiên thanh toán `C` chứa các hóa đơn thuê slot,  
-    When hệ thống tạo phiên,  
-    Then tự động kết xuất phụ lục chi tiết từ snapshot giá của các slot: danh sách slot, gói thuê, gói bảo quản, đơn giá, mức bảo vệ tối đa (`coverage_cap`), tỷ lệ phí ân hạn.
-  * **AC2:** Given Brand Admin chuẩn bị thanh toán phiên `C`,  
-    When gọi xác nhận đồng ý phụ lục (`POST /rental-checkouts/{id}/accept-annex`),  
-    Then hệ thống lưu vết chấp thuận trong `agreement_acceptances` gắn với `rental_checkout_id`, IP và mã băm nội dung phụ lục; liên kết `annex_acceptance_id` trên `rental_checkouts`.
-  * **AC3 (Chưa đồng ý phụ lục):** Given phiên thanh toán chưa có xác nhận phụ lục,  
-    When gọi khởi tạo thanh toán (`POST /rental-checkouts/{id}/pay`),  
-    Then hệ thống từ chối với HTTP 403 `ANNEX_NOT_ACCEPTED`.
-* **Test:** `test_FR_SLT_50_generate_and_accept_checkout_annex`
+  * **AC1 (Sinh phụ lục xác định):** Given phiên thanh toán `C` gồm các hóa đơn slot đã chụp giá, gói thuê, gói bảo quản và hạn mức,  
+    When lấy phụ lục,  
+    Then hệ thống sinh nội dung chuẩn hóa có mã băm `contentHash` xác định (cùng dữ liệu luôn cho cùng mã băm).
+  * **AC2 (Đồng ý phụ lục trước khi thanh toán):** Given phiên thanh toán `C` chưa được đồng ý phụ lục,  
+    When gọi khởi tạo thanh toán `POST /rental-checkouts/{id}/payments`,  
+    Then hệ thống từ chối với HTTP 403 `AGREEMENT_NOT_ACCEPTED`.
+  * **AC3 (Phiên cũ không có phụ lục):** Given phiên thanh toán tạo trước ADR-0013,  
+    When gọi lấy phụ lục,  
+    Then hệ thống trả về HTTP 404 `NOT_FOUND`.
+* **Test:** `test_FR_SLT_50_generate_checkout_annex`, `test_FR_SLT_50_payment_requires_annex_acceptance`
 
 ---
 
-## FR-SLT-51 — Xác nhận hợp đồng và phụ lục qua email OTP
+## FR-SLT-51 — Xác nhận OTP khi đồng ý (mức S)
 * **Statement:** Hệ thống phải xác nhận việc đồng ý hợp đồng khung và phụ lục bằng mã OTP gửi qua email (ADR-0013).
-* **Traces:** BR-008 · **Priority:** S · ADR-0013 mục 2
-* **Acceptance criteria:**
-  * **AC1:** Given Brand Admin thực hiện xác nhận hợp đồng khung hoặc phụ lục,  
-    When bật cấu hình bắt buộc OTP xác nhận,  
-    Then hệ thống gửi mã OTP về email đã xác minh của Brand Admin và chỉ ghi nhận chấp thuận khi mã OTP gửi lên khớp và chưa hết hạn.
-* **Test:** `test_FR_SLT_51_confirm_agreements_via_email_otp`
+* **Traces:** BR-008, ADR-0013 · **Priority:** S
+* **Ghi chú:** Không làm trong lịch 12 tuần (hoãn sau MVP).
 
 ---
 
-## FR-SLT-52 — Quản lý kỳ chi trả doanh thu hàng tháng cho thương hiệu
+## FR-SLT-52 — Quản lý kỳ chi trả doanh thu hàng tháng
 * **Statement:** Hệ thống phải quản lý kỳ chi trả doanh thu hằng tháng cho mỗi thương hiệu theo các trạng thái DRAFT (đang cộng dồn), CONFIRMED (khóa số liệu sau khi hết tháng), PAID (đã chuyển khoản) (ADR-0013).
-* **Traces:** BR-009 · **Priority:** M · ADR-0013 mục 3
+* **Traces:** BR-009, ADR-0013 · **Priority:** M
 * **API:** `GET /brand-payouts`
 * **Acceptance criteria:**
-  * **AC1 (Khởi tạo DRAFT):** Trong suốt tháng dương lịch, kỳ chi trả của thương hiệu ở trạng thái `DRAFT`, liên tục cộng dồn số tiền từ các đơn `DISPENSED` và `FORFEITED` mang nhãn `BRAND`.
-  * **AC2 (Khóa số liệu CONFIRMED):** Khi kết thúc tháng (00:00 ngày đầu tháng tiếp theo theo giờ VN), job tự động chốt kỳ chi trả của tháng trước và chuyển trạng thái sang `CONFIRMED`.
-  * **AC3 (Chuyển sang PAID):** Khi chuyển sang `PAID`, kỳ chi trả được ghi nhận đã hoàn tất và không thể hoàn tác hay sửa đổi số liệu.
-* **Test:** `test_FR_SLT_52_monthly_brand_payout_lifecycle`
+  * **AC1 (Kỳ tháng giờ Việt Nam):** Given các đơn hàng phát sinh,  
+    When gom vào kỳ chi trả,  
+    Then kỳ được tính theo tháng dương lịch theo múi giờ Việt Nam (UTC+7, từ 00:00:00 ngày 1 đến 23:59:59 ngày cuối tháng).
+  * **AC2 (Đơn được tính):** Given kỳ chi trả `K`,  
+    When tính số liệu,  
+    Then chỉ gồm các đơn có `revenue_owner = 'BRAND'` ở trạng thái `DISPENSED` hoặc `FORFEITED` (ADR-0013 §3), không trừ phí cổng hay khoản đã hoàn cho khách.
+  * **AC3 (Chuyển CONFIRMED khi hết tháng):** When kết thúc tháng dương lịch,  
+    Then job định kỳ tự động chuyển kỳ chi trả từ `DRAFT` sang `CONFIRMED` để chốt số liệu đối soát.
+* **Test:** `test_FR_SLT_52_monthly_payout_lifecycle`
 
 ---
 
-## FR-SLT-53 — Thực hiện chi trả doanh thu cho thương hiệu
+## FR-SLT-53 — Ghi nhận chuyển khoản chi trả doanh thu
 * **Statement:** Hệ thống phải cho phép Platform Super Admin chuyển kỳ chi trả sang PAID kèm mã giao dịch chuyển khoản, sau khi xác thực lại, và chỉ khi thương hiệu đã được xác minh pháp nhân và có tài khoản nhận doanh thu (ADR-0013).
-* **Traces:** BR-008, BR-009 · **Priority:** M · ADR-0013 mục 3
-* **API:** `POST /brand-payouts/{id}/pay`
+* **Traces:** BR-008, BR-009, ADR-0013 · **Priority:** M
+* **API:** `POST /brand-payouts/{id}/payout`
 * **Acceptance criteria:**
-  * **AC1 (Thành công):** Given kỳ chi trả đang ở `CONFIRMED`, thương hiệu `B` đã xác minh pháp nhân (`legal_verified_at IS NOT NULL`) và đã khai báo tài khoản ngân hàng, Platform Super Admin đã xác thực lại mật khẩu (`X-Reauth-Token`),  
-    When gửi `POST /brand-payouts/{id}/pay` kèm `payoutReference = "BANK-TXN-12345"`,  
-    Then kỳ chuyển sang `PAID`, lưu `payout_reference`, `paid_at`, `paid_by` và ghi AuditLog.
-  * **AC2 (Chưa xác minh pháp nhân hoặc thiếu tài khoản):** Given thương hiệu `B` chưa được xác minh pháp nhân hoặc chưa khai báo tài khoản nhận tiền,  
-    When Super Admin thực hiện chi trả,  
+  * **AC1 (Điều kiện chi trả hợp lệ):** Given kỳ chi trả ở trạng thái `CONFIRMED`, thương hiệu đã được xác minh pháp nhân (`legal_verified_at` không NULL) và có tài khoản nhận tiền, Super Admin đã xác thực lại,  
+    When thực hiện chi trả kèm `payout_reference`,  
+    Then kỳ chi trả chuyển sang `PAID`, lưu `paid_at = now()`, `paid_by` và ghi AuditLog.
+  * **AC2 (Chưa xác minh pháp nhân):** Given thương hiệu chưa xác minh pháp nhân (`legal_verified_at` NULL),  
+    When gọi ghi nhận chi trả,  
     Then hệ thống từ chối với HTTP 409 `BRAND_NOT_VERIFIED`.
-  * **AC3 (Chưa reauth):** Given thiếu `X-Reauth-Token` hợp lệ,  
-    When gọi endpoint,  
-    Then hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED` (FR-AUTH-09).
-* **Test:** `test_FR_SLT_53_execute_brand_payout`
+  * **AC3 (Chưa xác thực lại):** Given Super Admin chưa xác thực lại,  
+    When gọi chi trả,  
+    Then hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED`.
+* **Test:** `test_FR_SLT_53_payout_requires_legal_verification_and_reauth`
 
 ---
 
 ## FR-SLT-54 — Khiếu nại số liệu kỳ chi trả
 * **Statement:** Hệ thống phải cho phép Brand Admin gửi khiếu nại số liệu trên kỳ chi trả CONFIRMED, và từ chối chuyển kỳ sang PAID khi khiếu nại chưa được Platform Super Admin trả lời (ADR-0013).
-* **Traces:** BR-008, BR-009 · **Priority:** M · ADR-0013 mục 3
-* **API:** `POST /brand-payouts/{id}/dispute`
+* **Traces:** BR-008, BR-009, ADR-0013 · **Priority:** M
+* **API:** `POST /brand-payouts/{id}/dispute`, `POST /brand-payouts/{id}/resolve-dispute`
 * **Acceptance criteria:**
-  * **AC1 (Gửi khiếu nại):** Given kỳ chi trả đang ở `CONFIRMED`,  
-    When Brand Admin gửi khiếu nại kèm lý do/bằng chứng,  
-    Then hệ thống ghi nhận khiếu nại và đánh dấu kỳ chi trả đang có tranh chấp (`has_dispute = TRUE`).
-  * **AC2 (Chặn chi trả khi chưa xử lý):** Given kỳ chi trả đang có khiếu nại chưa được Super Admin phản hồi/xử lý,  
-    When Super Admin thực hiện chi trả `POST /brand-payouts/{id}/pay`,  
-    Then hệ thống từ chối với HTTP 409 `PAYOUT_HAS_UNRESOLVED_DISPUTE`.
-* **Test:** `test_FR_SLT_54_dispute_brand_payout`
+  * **AC1 (Gửi khiếu nại):** Given kỳ chi trả `CONFIRMED`,  
+    When Brand Admin gửi khiếu nại kèm nội dung và số liệu đề xuất,  
+    Then hệ thống ghi nhận khiếu nại, gắn cờ `has_open_dispute = true` và thông báo cho Super Admin.
+  * **AC2 (Khóa chi trả khi có khiếu nại mở):** Given kỳ chi trả có khiếu nại chưa giải quyết (`has_open_dispute = true`),  
+    When Platform Super Admin gọi ghi nhận chi trả `POST /brand-payouts/{id}/payout`,  
+    Then hệ thống từ chối với HTTP 409 `DISPUTE_PENDING`.
+  * **AC3 (Giải quyết khiếu nại):** Given Super Admin phản hồi hoặc điều chỉnh số liệu và đóng khiếu nại,  
+    When cờ `has_open_dispute` được gỡ,  
+    Then kỳ chi trả được phép chuyển sang `PAID`.
+* **Test:** `test_FR_SLT_54_dispute_blocks_payout`
 
 ---
 
-## FR-SLT-55 — Đổi slot khi mua nhầm
+## FR-SLT-55 — Đổi slot trong cùng máy sau khi mua gói
 * **Statement:** Hệ thống phải cho phép Brand Admin đổi hóa đơn đã thanh toán sang một slot trống khác có cùng giá thuê niêm yết, trong `SLOT_SWAP_WINDOW_HOURS` giờ kể từ lúc thanh toán và khi chưa lắp chai đầu tiên, tối đa một lần mỗi hóa đơn, không hoàn tiền và giữ nguyên số hóa đơn, gói thuê, gói bảo quản (ADR-0014).
-* **Traces:** BR-011 · **Priority:** M · ADR-0014 mục 3
-* **API:** `POST /slot-rentals/{id}/swap-slot`
+* **Traces:** BR-011, ADR-0014 · **Priority:** M
+* **API:** `POST /slot-rentals/{id}/swap`
 * **Acceptance criteria:**
-  * **AC1 (Đổi thành công):** Given hóa đơn `H` đã thanh toán, thời gian từ `paid_at` `<= SLOT_SWAP_WINDOW_HOURS = 48` giờ, chưa lắp chai đầu tiên (`status = 'DRAFT'`), slot đích `S2` đang trống và có cùng `monthly_rent_price` với slot hiện tại `S1`, hóa đơn chưa từng đổi lần nào (`swapped_at IS NULL`),  
-    When Brand Admin gửi `POST /slot-rentals/{id}/swap-slot` với `newSlotId = S2`,  
-    Then hệ thống chuyển hóa đơn `H` sang slot `S2`, cập nhật `swapped_from_slot_id = S1`, `swapped_at = CURRENT_TIMESTAMP`, giải phóng slot `S1` và chiếm giữ slot `S2` trong cùng transaction; giữ nguyên `invoice_number`, gói thuê và gói bảo quản; ghi AuditLog.
-  * **AC2 (Quá 48 giờ hoặc đã lắp chai):** Given đã quá 48 giờ kể từ lúc thanh toán hoặc hóa đơn đã chuyển `ACTIVE` (đã lắp chai),  
-    When gửi yêu cầu đổi,  
-    Then hệ thống từ chối với HTTP 409 `SLOT_SWAP_NOT_ALLOWED`.
-  * **AC3 (Khác giá thuê):** Given slot đích `S2` có giá thuê niêm yết khác slot hiện tại,  
-    When gửi yêu cầu đổi,  
-    Then hệ thống từ chối với HTTP 409 `SLOT_SWAP_NOT_ALLOWED`.
-  * **AC4 (Đã đổi một lần):** Given hóa đơn đã từng được đổi trước đó (`swapped_at IS NOT NULL`),  
-    When gửi yêu cầu đổi tiếp,  
-    Then hệ thống từ chối với HTTP 409 `SLOT_SWAP_NOT_ALLOWED`.
-* **Test:** `test_FR_SLT_55_swap_rental_slot`
+  * **AC1 (Đổi slot hợp lệ):** Given hóa đơn `H` đã thanh toán của thương hiệu `B` trên slot `S1` của máy `M`, trong vòng `SLOT_SWAP_WINDOW_HOURS` giờ kể từ `paid_at`, chưa từng đổi slot (`swap_count = 0`), chưa lắp chai đầu tiên,  
+    When Brand Admin chọn đổi sang slot trống `S2` trên cùng máy `M` có cùng giá niêm yết tháng,  
+    Then hệ thống chuyển `H` sang `S2`, giải phóng `S1` sang `AVAILABLE`, tăng `swap_count = 1`, giữ nguyên số hóa đơn, gói thuê, gói bảo quản và ghi AuditLog.
+  * **AC2 (Khác giá thuê hoặc quá thời hạn):** Given slot `S2` có giá thuê khác `S1`, hoặc đã quá `SLOT_SWAP_WINDOW_HOURS` giờ, hoặc đã lắp chai đầu tiên,  
+    When gửi yêu cầu đổi slot,  
+    Then hệ thống từ chối với HTTP 400 `SLOT_SWAP_NOT_ALLOWED`.
+  * **AC3 (Slot đích đã bị giữ):** Given `S2` đã bị phiên thanh toán khác giữ hoặc có hóa đơn,  
+    When thực hiện đổi slot đồng thời,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_OCCUPIED`.
+* **Test:** `test_FR_SLT_55_swap_slot_within_window`
 
 ---
 
-## FR-SLT-56 — Giới hạn số slot giữ chỗ chưa thanh toán
+## FR-SLT-56 — Giới hạn tổng số slot được giữ chỗ cùng thời điểm
 * **Statement:** Hệ thống phải từ chối tạo phiên thanh toán khi tổng số slot chưa thanh toán mà thương hiệu đang giữ chỗ, cộng dồn trên mọi phiên đang mở, vượt `BRAND_MAX_HELD_SLOTS` (ADR-0014).
-* **Traces:** BR-011 · **Priority:** M · ADR-0014 mục 4
-* **API:** `POST /rental-checkouts`
+* **Traces:** BR-011, ADR-0014 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1 (Chặn vượt giới hạn):** Given thương hiệu `B` đang giữ chỗ 4 slot chưa thanh toán trong các phiên mở,  
-    When gửi `POST /rental-checkouts` để giữ thêm 2 slot (tổng thành 6 > `BRAND_MAX_HELD_SLOTS = 5`),  
+  * **AC1 (Từ chối khi vượt ngưỡng giữ chỗ):** Given thương hiệu `B` đang có các phiên mở với tổng cộng `K` slot chưa thanh toán,  
+    When tạo phiên thanh toán mới với `N` slot mà `K + N > BRAND_MAX_HELD_SLOTS`,  
     Then hệ thống từ chối với HTTP 409 `HOLD_LIMIT_REACHED`.
-  * **AC2 (Không tính slot đã thanh toán):** Các slot đã thanh toán thành công không được tính vào giới hạn giữ chỗ.
-  * **AC3 (Sau khi phiên hết hạn):** Given phiên giữ chỗ trước đó hết thời gian `RENTAL_CHECKOUT_HOLD_MIN` và tự hủy, các slot cũ được giải phóng,  
-    When tạo phiên mới,  
-    Then hệ thống cho phép tiếp tục giữ chỗ nếu tổng số slot giữ chỗ hiện tại `<= 5`.
-* **Test:** `test_FR_SLT_56_enforce_brand_max_held_slots`
-
+  * **AC2 (Phiên hết hạn hoặc bị hủy được giải phóng):** Given một phiên thanh toán hết hạn giữ chỗ hoặc bị hủy,  
+    When tính lại tổng số slot đang giữ của thương hiệu `B`,  
+    Then số slot đó được trừ ra, cho phép tạo phiên mới nếu tổng không vượt ngưỡng.
+* **Test:** `test_FR_SLT_56_brand_max_held_slots_limit`
