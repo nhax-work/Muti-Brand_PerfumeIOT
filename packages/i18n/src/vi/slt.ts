@@ -18,4 +18,6 @@ export const slt = {
   emailNotVerified: 'Tài khoản chưa xác minh email, không thể tạo phiên thanh toán',
   agreementNotAccepted: 'Thương hiệu chưa đồng ý phiên bản hợp đồng khung hiện hành',
   agreementNotFound: 'Không tìm thấy phiên bản hợp đồng khung',
+  agreementNotCurrent: 'Chỉ đồng ý được phiên bản hợp đồng khung hiện hành',
+  agreementContentChanged: 'Nội dung hợp đồng khung đã thay đổi, vui lòng mở lại để xem bản mới',
 } as const;

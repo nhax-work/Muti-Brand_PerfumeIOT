@@ -6,12 +6,31 @@ Quyết định: `spec/decisions/0016-tich-hop-cong-thanh-toan-payos.md`.
 thật. CI và test tích hợp dùng webhook mẫu ký bằng khóa test (`tests/integration/test_payos_webhook.test.ts`),
 không gọi PayOS. Tài liệu này dành cho lượt chạy thật của nhóm, với **số tiền nhỏ**.
 
+## 0. Trình tự một lượt chạy (khoảng 45 phút)
+
+| # | Việc | Lệnh / chỗ làm | Xong khi |
+|---|---|---|---|
+| 1 | Lấy bộ khóa kênh thanh toán **mới** (mục 1) — bộ khóa từng nằm trong `.env.example` coi như đã lộ | my.payos.vn | Có 3 giá trị mới, bộ cũ đã vô hiệu |
+| 2 | Điền `.env` (mục 2) | `.env` — **không** điền vào `.env.example` | `PAYMENT_PROVIDER=payos` |
+| 3 | Hạ tầng + lược đồ + dữ liệu mẫu | `make up && make migrate && make seed` | `make migrate` báo "No migrations to run" ở lần chạy lại |
+| 4 | API (kèm MQTT và scheduler) | `npm run api:dev` | Khởi động không báo thiếu biến `PAYOS_*` |
+| 5 | Đường hầm + đăng ký webhook (mục 3) | `cloudflared tunnel --url http://localhost:3000` | PayOS lưu được URL — log API có `UNKNOWN_REFERENCE` trả 200 |
+| 6 | Máy giả lập tự bấm nút | `npm run sim -- --press-after 5` | Log "Đã kết nối"; trang máy trên admin hiện ONLINE |
+| 7 | Kiosk và web quản trị | `npm run kiosk:dev`, `npm run admin:dev` | Kiosk hiện danh mục máy M001 |
+| 8 | Hạ giá slot thử về 2.000đ (mục 4) | Web quản trị, Brand Admin của slot | Kiosk hiện giá mới |
+| 9 | Chạy 7 ca ở mục 4 theo thứ tự | Kiosk, app ngân hàng, web quản trị | Ghi kết quả từng ca vào mục 7 |
+| 10 | Kiểm CSDL (cuối mục 4) và hoàn tiền thử (mục 5) | Adminer `http://localhost:8080` hoặc `psql` | Hai câu SQL cho kết quả đúng |
+
+Hết lượt chạy: đặt lại `PAYMENT_PROVIDER=mock` để dev hằng ngày không tạo link thật.
+
 ## 1. Chuẩn bị kênh thanh toán
 
 1. Đăng nhập [my.payos.vn](https://my.payos.vn), tạo **kênh thanh toán** liên kết tài khoản ngân hàng của
    nhóm.
 2. Lấy ba giá trị của kênh: **Client ID**, **API Key**, **Checksum Key**. Đây là bí mật — không commit,
-   không gửi qua chat công khai (NFR-SEC-05).
+   không gửi qua chat công khai (NFR-SEC-05). Chỉ ghi vào `.env` (đã nằm trong `.gitignore`);
+   `.env.example` chỉ chứa giá trị giữ chỗ. Khóa đã từng bị commit thì tạo lại trên my.payos.vn —
+   xóa khỏi file không xóa được khỏi lịch sử git.
 
 ## 2. Cấu hình `.env`
 
@@ -59,6 +78,7 @@ thử thấp tương ứng. PayOS chỉ nhận **số tiền nguyên VND**.
 | 5 | Brand Admin: chọn slot, thanh toán phiên thuê bằng QR hoặc trang `checkoutUrl` | Phiên `paidAt`, mỗi hóa đơn có số `HD-…` |
 | 6 | Tạo đơn mới trên kiosk, bấm "Hủy thanh toán" → "Vẫn hủy", rồi quét lại chính QR đó | Đơn `EXPIRED` (lý do `CUSTOMER_CANCELLED`), payment `CANCELLED`; trang `checkoutUrl` của link báo đã hủy. Nếu app ngân hàng vẫn chuyển được tiền vào QR cũ thì webhook phải đưa đơn sang `REFUND_PENDING` (lý do `PAID_AFTER_CANCEL`), không xịt (FR-ORD-33) — ghi lại kết quả thực tế vào đây |
 | 7 | Quét QR và chuyển khoản, rồi bấm hủy ngay khi tiền đang về | Kiosk báo đã nhận tiền và ở lại màn QR, sau đó sang "Mời bấm nút"; đơn không bị hủy |
+| 8 | Mở màn QR trên kiosk, rồi ở tab trình duyệt thứ hai cùng máy chọn một mùi khác | Tab thứ hai báo máy đang phục vụ khách khác (`MACHINE_BUSY`, FR-ORD-35); hủy ở tab đầu thì tab thứ hai tạo được đơn |
 
 Sau lượt chạy, kiểm CSDL:
 
@@ -92,6 +112,33 @@ Tiền tới sau khi đã hủy (khách chuyển ngay trước khi bấm hủy, 
 
 Với `PAYMENT_PROVIDER=mock`, hủy luôn thành công; `npm run pay:mock -- <mã>` sau khi hủy giả lập đúng
 trường hợp tiền tới sau khi đã hủy.
+
+## 7. Biên bản lượt chạy thật
+
+Điền sau mỗi lượt. Đây là bằng chứng cho việc "Lượt chạy PayOS thật" của lộ trình tuần 6 và cho chương
+kiến trúc thanh toán trong báo cáo. Không ghi số tài khoản, tên chủ tài khoản hay mã giao dịch ngân hàng
+đầy đủ của người chuyển (NFR-DAT-04) — chỉ `orderCode` và 4 số cuối mã giao dịch.
+
+**Lượt 1** — ngày: … · người chạy: … · commit: … · ngân hàng dùng để chuyển: …
+
+| Ca (mục 4) | Kết quả mong đợi | Kết quả thực tế | Đạt? | Ghi chú (`orderCode`, thời gian webhook về) |
+|---|---|---|---|---|
+| Đăng ký URL webhook | PayOS lưu URL, API trả 200 `UNKNOWN_REFERENCE` | | | |
+| 1 — QR kiosk | Mã `ORD-…`, VietQR hiện đúng số tiền | | | |
+| 2 — Nội dung chuyển khoản | 9 ký tự, số tiền điền sẵn | | | |
+| 3 — Chuyển khoản đơn kiosk | Đơn `PAID` → "Mời bấm nút" → `DISPENSED` | | | |
+| 4 — QR quá hạn | App ngân hàng báo link hết hạn | | | |
+| 5 — Phiên thuê slot | Phiên `paidAt`, mỗi hóa đơn một số `HD-…` | | | |
+| 6 — Hủy rồi vẫn chuyển | `EXPIRED`/`CUSTOMER_CANCELLED`; nếu tiền vẫn vào: `REFUND_PENDING`/`PAID_AFTER_CANCEL`, không xịt | | | |
+| 7 — Hủy khi tiền đang về | `ORDER_NOT_CANCELLABLE`, đơn vẫn xịt | | | |
+| 8 — Hai đơn cùng máy | `MACHINE_BUSY` | | | |
+| SQL 1 — `provider_reference` | Số nguyên `orderCode` | | | |
+| SQL 2 — `counterAccount` | `0` | | | |
+
+**Thời gian webhook** (từ lúc bấm chuyển tới lúc kiosk đổi màn): lần nhanh nhất … giây, chậm nhất … giây —
+so với `WEBHOOK_TO_ARMED_MAX_SEC` (NFR-PER-03).
+
+**Sự cố gặp phải và cách xử lý:** …
 
 ## Chưa có
 

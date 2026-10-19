@@ -29,7 +29,8 @@ export const router = createBrowserRouter([
       {
         path: 'checkout/:slotNumber',
         handle: { keepAwake: true } satisfies KioskRouteHandle,
-        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
+        lazy: () =>
+          import('@/screens/checkout/CheckoutScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: '*',

@@ -192,7 +192,7 @@ components:
             slotOccupied:
               value: { code: SLOT_OCCUPIED, message: Slot đang có hóa đơn hiệu lực }
             machineBusy:
-              value: { code: MACHINE_BUSY, message: Máy đang chờ khách trước bấm nút }
+              value: { code: MACHINE_BUSY, message: Máy đang phục vụ khách khác }
     Locked:
       description: Tài khoản bị khóa
       content:
@@ -268,14 +268,20 @@ components:
       description: Trục kết nối, suy ra từ heartbeat (FR-MCH-08). Độc lập với chế độ hoạt động.
     MachineOperatingMode:
       type: string
-      enum: [NORMAL, MAINTENANCE, DISABLED]
-      description: Trục chế độ, do người vận hành đặt (FR-MCH-09). Độc lập với trạng thái kết nối.
+      enum: [NORMAL, DRAINING, MAINTENANCE, DISABLED]
+      description: >-
+        Trục chế độ, do người vận hành đặt (FR-MCH-09). Độc lập với trạng thái kết nối. DRAINING
+        (ADR-0015): đã yêu cầu bảo trì — không nhận đơn mới, phục vụ nốt đơn đã trả tiền rồi tự sang
+        MAINTENANCE (FR-MNT-05). Chỉ tồn tại ở backend; thiết bị vẫn nhận NORMAL.
     SlotStatus:
       type: string
       enum: [AVAILABLE, UNAVAILABLE, MAINTENANCE, DISABLED]
     BottleStatus:
       type: string
-      enum: [IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED]
+      enum: [IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED, RETURNED_TO_BRAND]
+      description: >-
+        RETURNED_TO_BRAND (ADR-0014): chai đã tháo của hóa đơn báo không gia hạn, nằm trên phiếu trả
+        hàng chờ thương hiệu nhận (FR-EXP-26).
     RefillStatus:
       type: string
       enum: [STARTED, COMPLETED, CANCELLED]
@@ -373,6 +379,24 @@ components:
       description: >-
         Trạng thái phiếu khiếu nại hoàn tiền (ADR-0012). REFUNDED, REJECTED, EXPIRED đều là đã đóng —
         tài khoản nhận hoàn tiền bị xóa ngay khi phiếu đóng.
+    AgreementKind:
+      type: string
+      enum: [FRAMEWORK, ANNEX]
+      description: >-
+        Lần đồng ý hợp đồng khung (một lần cho mỗi phiên bản) hay phụ lục của một phiên thanh toán
+        (ADR-0013).
+    BrandPayoutStatus:
+      type: string
+      enum: [DRAFT, CONFIRMED, PAID]
+      description: >-
+        Kỳ chi trả doanh thu (FR-SLT-52, ADR-0013): DRAFT đang cộng dồn trong tháng → CONFIRMED khóa số
+        liệu sau khi hết tháng → PAID đã chuyển khoản.
+    BottleReturnMethod:
+      type: string
+      enum: [WAREHOUSE_PICKUP, SHIP_TO_BRAND]
+      description: >-
+        Cách nhận hàng trả về khi báo không gia hạn (FR-EXP-23, ADR-0014): tự đến kho lấy, hoặc nền
+        tảng gửi về địa chỉ thương hiệu và thương hiệu chịu phí vận chuyển.
     RentalInvoiceStage:
       type: string
       enum:
@@ -456,34 +480,35 @@ components:
       properties:
         reauthToken: { type: string }
         expiresIn: { type: integer }
-    BrandRegisterRequest:
+    BrandRegistration:
       type: object
-      required: [brandName, email, password]
+      required: [brandName, fullName, email, password]
+      description: >-
+        Thương hiệu tự đăng ký (FR-USR-06, ADR-0013): tạo cùng lúc một Brand và một tài khoản Brand
+        Admin gắn với nó. Mã thương hiệu (code) do hệ thống sinh từ tên.
       properties:
         brandName: { type: string, minLength: 1, maxLength: 200 }
+        fullName: { type: string, minLength: 1, maxLength: 200 }
         email: { type: string, format: email }
-        password: { type: string, minLength: 8, maxLength: 100 }
-    BrandRegisterResponse:
+        password: { type: string, format: password, minLength: 8 }
+    BrandRegistered:
       type: object
-      required: [brand, user]
+      required: [brandId, userId, email]
+      description: >-
+        Tài khoản ở ACTIVE và đăng nhập được ngay; mã xác minh đã gửi tới email. Chưa xác minh thì chưa
+        tạo được phiên thanh toán thuê slot (EMAIL_NOT_VERIFIED, FR-USR-07).
       properties:
-        brand: { $ref: '#/components/schemas/Brand' }
-        user: { $ref: '#/components/schemas/User' }
-    VerifyEmailRequest:
+        brandId: { type: string, format: uuid }
+        userId: { type: string, format: uuid }
+        email: { type: string, format: email }
+    EmailVerificationConfirm:
       type: object
       required: [token]
       properties:
-        token: { type: string }
-    VerifyEmailResponse:
-      type: object
-      required: [verified]
-      properties:
-        verified: { type: boolean }
-    ResendVerificationRequest:
-      type: object
-      required: [email]
-      properties:
-        email: { type: string, format: email }
+        token:
+          type: string
+          minLength: 16
+          description: Mã trong email xác minh. Sai hoặc quá hạn trả VALIDATION_ERROR.
 
     # ---------------------------------------------------------------------------------
     # BND, USR, PRD
@@ -500,6 +525,36 @@ components:
         contactInfo: { type: [object, 'null'], additionalProperties: true }
         status: { $ref: '#/components/schemas/BrandStatus' }
         createdAt: { type: string, format: date-time }
+        taxCode: { type: [string, 'null'], maxLength: 20, description: 'Mã số thuế (FR-BND-09).' }
+        businessLicenseNumber: { type: [string, 'null'], maxLength: 100 }
+        hasPayoutAccount:
+          type: boolean
+          description: >-
+            Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả
+            nguyên văn qua API.
+        legalVerifiedAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Super Admin đã xác minh pháp nhân (FR-BND-10). Null thì kỳ chi trả không chuyển PAID được
+            (BRAND_NOT_VERIFIED).
+    BrandLegalProfileUpdate:
+      type: object
+      required: [taxCode]
+      description: >-
+        Brand Admin khai hồ sơ pháp nhân và tài khoản doanh nghiệp nhận doanh thu (FR-BND-09,
+        ADR-0013). Sửa sau khi đã xác minh thì xóa trạng thái xác minh — Super Admin phải xác minh lại.
+      properties:
+        taxCode: { type: string, minLength: 10, maxLength: 20 }
+        businessLicenseNumber: { type: string, maxLength: 100 }
+        payoutAccount:
+          type: object
+          required: [bankCode, accountNumber, accountHolder]
+          description: Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn.
+          properties:
+            bankCode: { type: string, maxLength: 20 }
+            accountNumber: { type: string, maxLength: 30 }
+            accountHolder: { type: string, maxLength: 200 }
     BrandCreate:
       type: object
       required: [code, name]
@@ -653,9 +708,18 @@ components:
     MachineModeUpdate:
       type: object
       required: [operatingMode]
+      description: >-
+        Chọn MAINTENANCE thì máy vào DRAINING trước và tự sang MAINTENANCE khi phục vụ xong (FR-MNT-05);
+        force = true ép chuyển thẳng, reason bắt buộc (FR-MNT-17). Không đặt DRAINING trực tiếp được —
+        gửi DRAINING trả VALIDATION_ERROR.
       properties:
         operatingMode: { $ref: '#/components/schemas/MachineOperatingMode' }
-        reason: { type: string }
+        reason: { type: string, description: 'Bắt buộc khi force = true.' }
+        force:
+          type: boolean
+          description: >-
+            Bỏ trống coi như false. Chỉ có nghĩa khi operatingMode = MAINTENANCE: bỏ qua DRAINING, chuyển
+            ngay (khẩn cấp). Đơn đang dở đi theo FR-ORD-19.
     MachineStatusHistoryEntry:
       type: object
       required: [id, occurredAt, source]
@@ -805,6 +869,33 @@ components:
         paidAt: { type: [string, 'null'], format: date-time }
         cancelledAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+        nonRenewalRequestedAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Brand Admin đã báo không gia hạn (FR-EXP-23, ADR-0014): hóa đơn không vào GRACE, không tính
+            phí ân hạn, giữ ACTIVE/EXPIRING tới khi tháo chai (FR-EXP-25).
+        returnMethod:
+          oneOf: [{ $ref: '#/components/schemas/BottleReturnMethod' }, { type: 'null' }]
+        swappedFromSlotId:
+          type: [string, 'null']
+          format: uuid
+          description: Slot cũ khi đã đổi slot (FR-SLT-55) — khác null là đã dùng lượt đổi duy nhất.
+        swappedAt: { type: [string, 'null'], format: date-time }
+    SlotRentalNonRenewal:
+      type: object
+      required: [returnMethod]
+      description: Báo không gia hạn, lấy hàng về (FR-EXP-23, ADR-0014).
+      properties:
+        returnMethod: { $ref: '#/components/schemas/BottleReturnMethod' }
+    SlotSwapRequest:
+      type: object
+      required: [targetSlotId]
+      description: >-
+        Đổi hóa đơn sang slot trống khác cùng giá niêm yết (FR-SLT-55, ADR-0014). Giữ số hóa đơn, gói
+        thuê, gói bảo quản; không hoàn tiền, không bù chênh lệch.
+      properties:
+        targetSlotId: { type: string, format: uuid }
     SlotRentalCreate:
       type: object
       deprecated: true
@@ -1069,6 +1160,133 @@ components:
           type: array
           minItems: 1
           items: { $ref: '#/components/schemas/SlotRental' }
+        agreementVersionId:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            Hợp đồng khung hiện hành lúc tạo phiên (ADR-0013). Null với phiên tạo trước ADR-0013.
+        annexAcceptedAt:
+          type: [string, 'null']
+          format: date-time
+          description: >-
+            Lúc Brand Admin đồng ý phụ lục của phiên (FR-SLT-50). Null thì chưa thanh toán được
+            (AGREEMENT_NOT_ACCEPTED).
+    AgreementVersion:
+      type: object
+      required: [id, version, title, content, contentHash, isCurrent, createdAt]
+      description: >-
+        Hợp đồng khung có phiên bản (FR-SLT-48, ADR-0013). Đã công bố (publishedAt) thì nội dung bất
+        biến; mỗi thời điểm đúng một phiên bản hiện hành.
+      properties:
+        id: { type: string, format: uuid }
+        version: { type: string, maxLength: 20 }
+        title: { type: string, maxLength: 200 }
+        content: { type: string, description: Toàn văn hợp đồng khung (Markdown). }
+        contentHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 của content — gửi lại khi đồng ý để chứng minh đã thấy đúng bản này.
+        isCurrent: { type: boolean }
+        publishedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    AgreementVersionCreate:
+      type: object
+      required: [version, title, content]
+      properties:
+        version: { type: string, minLength: 1, maxLength: 20 }
+        title: { type: string, minLength: 1, maxLength: 200 }
+        content: { type: string, minLength: 1 }
+    AgreementCurrent:
+      type: object
+      required: [agreement]
+      properties:
+        agreement: { $ref: '#/components/schemas/AgreementVersion' }
+        acceptance:
+          oneOf: [{ $ref: '#/components/schemas/AgreementAcceptance' }, { type: 'null' }]
+          description: >-
+            Lần thương hiệu của người gọi đã đồng ý phiên bản này; null là chưa đồng ý. Luôn null với
+            tài khoản mức nền tảng.
+    AgreementAccept:
+      type: object
+      required: [contentHash]
+      description: >-
+        contentHash phải trùng mã băm của văn bản đang hiện hành (hợp đồng khung, hoặc phụ lục của
+        phiên); lệch — văn bản đã đổi sau khi người dùng mở — trả VALIDATION_ERROR.
+      properties:
+        contentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+    AgreementAcceptance:
+      type: object
+      required: [id, brandId, acceptedBy, kind, agreementVersionId, contentHash, acceptedAt]
+      description: >-
+        Bằng chứng đồng ý (FR-SLT-49, 50): phiên bản, người, thời điểm, mã băm nội dung. IP lưu trong CSDL,
+        không trả qua API.
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        acceptedBy: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/AgreementKind' }
+        agreementVersionId: { type: string, format: uuid }
+        rentalCheckoutId: { type: [string, 'null'], format: uuid }
+        contentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        acceptedAt: { type: string, format: date-time }
+    RentalCheckoutAnnex:
+      type: object
+      required: [checkoutId, agreementVersionId, content, contentHash]
+      description: >-
+        Phụ lục tự sinh của một phiên thanh toán (FR-SLT-50, ADR-0013) từ ảnh chụp giá của các hóa đơn:
+        slot, gói thuê, gói bảo quản, mức bảo vệ tối đa, tỉ lệ phí ân hạn. Sinh lại từ cùng dữ liệu luôn
+        cho cùng contentHash.
+      properties:
+        checkoutId: { type: string, format: uuid }
+        agreementVersionId: { type: string, format: uuid }
+        content: { type: string, description: Toàn văn phụ lục (Markdown). }
+        contentHash: { type: string, pattern: '^[0-9a-f]{64}$' }
+        acceptance:
+          oneOf: [{ $ref: '#/components/schemas/AgreementAcceptance' }, { type: 'null' }]
+    BrandPayout:
+      type: object
+      required:
+        [id, brandId, periodMonth, status, currency, orderCount, amount, createdAt]
+      description: >-
+        Kỳ chi trả doanh thu lượt xịt một tháng của một thương hiệu (FR-SLT-52, ADR-0013). Tính đơn
+        revenueOwner = BRAND ở DISPENSED hoặc FORFEITED; không trừ phí cổng hay khoản đã hoàn cho khách
+        (FR-SLT-18).
+      properties:
+        id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        periodMonth:
+          type: string
+          format: date
+          description: Ngày đầu tháng dương lịch của kỳ, giờ Việt Nam.
+        status: { $ref: '#/components/schemas/BrandPayoutStatus' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        orderCount: { type: integer, minimum: 0 }
+        amount:
+          $ref: '#/components/schemas/Money'
+          description: DRAFT là số tạm đang cộng dồn; từ CONFIRMED là số đã khóa.
+        confirmedAt: { type: [string, 'null'], format: date-time }
+        paidAt: { type: [string, 'null'], format: date-time }
+        transferReference: { type: [string, 'null'], maxLength: 100 }
+        disputeNote: { type: [string, 'null'] }
+        disputedAt: { type: [string, 'null'], format: date-time }
+        disputeResponse: { type: [string, 'null'] }
+        disputeResolvedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    BrandPayoutPay:
+      type: object
+      required: [transferReference]
+      properties:
+        transferReference: { type: string, minLength: 1, maxLength: 100 }
+    BrandPayoutDispute:
+      type: object
+      required: [note]
+      properties:
+        note: { type: string, minLength: 1, maxLength: 2000 }
+    BrandPayoutDisputeResponse:
+      type: object
+      required: [response]
+      properties:
+        response: { type: string, minLength: 1, maxLength: 2000 }
     RentalPaymentIntent:
       type: object
       required: [paymentId, checkoutId, amount, currency, status, expiresAt]
@@ -1200,23 +1418,6 @@ components:
         storageAmount: { $ref: '#/components/schemas/Money' }
         graceFeeAmount: { $ref: '#/components/schemas/Money' }
         totalAmount: { $ref: '#/components/schemas/Money' }
-    AgreementVersionView:
-      type: object
-      required: [version, title, content, contentHash]
-      properties:
-        version: { type: string }
-        title: { type: string }
-        content: { type: string }
-        contentHash: { type: string }
-    AgreementAcceptanceView:
-      type: object
-      required: [brandId, version, acceptedBy, acceptedAt, contentHash]
-      properties:
-        brandId: { type: string, format: uuid }
-        version: { type: string }
-        acceptedBy: { type: string, format: uuid }
-        acceptedAt: { type: string, format: date-time }
-        contentHash: { type: string }
     GracePeriodUpdate:
       type: object
       required: [graceEndsAt]
@@ -1397,6 +1598,67 @@ components:
         expiresAt: { type: [string, 'null'], format: date-time }
         sourceRentalId: { type: [string, 'null'], format: uuid }
         liquidatedAt: { type: [string, 'null'], format: date-time }
+        bottleReturnId:
+          type: [string, 'null']
+          format: uuid
+          description: Phiếu trả hàng chứa chai (FR-EXP-26). Có giá trị khi status = RETURNED_TO_BRAND.
+    BottleReturn:
+      type: object
+      required:
+        [id, slotRentalId, brandId, returnMethod, readyAt, pickupDeadline, bottles, createdAt]
+      description: >-
+        Phiếu trả hàng khi thương hiệu chủ động không gia hạn (FR-EXP-26 ÷ 28, ADR-0014). Đóng bằng bàn
+        giao (handedOverAt) hoặc quá pickupDeadline mà chưa nhận — hàng chuyển sở hữu về nền tảng như
+        thanh lý (forfeitedAt).
+      properties:
+        id: { type: string, format: uuid }
+        slotRentalId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        returnMethod: { $ref: '#/components/schemas/BottleReturnMethod' }
+        shippingAddress: { type: [string, 'null'] }
+        readyAt: { type: string, format: date-time }
+        pickupDeadline:
+          type: string
+          format: date-time
+          description: readyAt + RETURN_PICKUP_MAX_DAYS.
+        handedOverAt: { type: [string, 'null'], format: date-time }
+        recipientName: { type: [string, 'null'], maxLength: 200 }
+        trackingNumber: { type: [string, 'null'], maxLength: 100 }
+        forfeitedAt: { type: [string, 'null'], format: date-time }
+        bottles:
+          type: array
+          items: { $ref: '#/components/schemas/Bottle' }
+        createdAt: { type: string, format: date-time }
+    BottleReturnCreate:
+      type: object
+      required: [slotRentalId, bottles]
+      description: >-
+        Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại
+        từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot →
+        UNAVAILABLE (FR-MCH-17), thông báo Brand Admin.
+      properties:
+        slotRentalId: { type: string, format: uuid }
+        bottles:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [bottleId, measuredWeightG]
+            properties:
+              bottleId: { type: string, format: uuid }
+              measuredWeightG: { type: number, minimum: 0 }
+    BottleReturnHandover:
+      type: object
+      required: [recipientName]
+      description: >-
+        Bàn giao hàng trả về (FR-EXP-27). SHIP_TO_BRAND bắt buộc trackingNumber.
+      properties:
+        recipientName: { type: string, minLength: 1, maxLength: 200 }
+        handedOverAt:
+          type: string
+          format: date-time
+          description: Mặc định là thời điểm gọi API.
+        trackingNumber: { type: string, maxLength: 100 }
     BottleCreate:
       type: object
       required: [batchId, identifier, initialVolumeMl]
@@ -1625,7 +1887,9 @@ components:
           oneOf: [{ $ref: '#/components/schemas/CommandStatus' }, { type: 'null' }]
         failureCode:
           type: [string, 'null']
-          description: PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED).
+          description: >-
+            PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED). QUEUE_TIMEOUT khi đơn đã trả tiền chờ
+            lượt quá PAID_QUEUE_MAX_SEC (đơn FAILED, FR-ORD-34) — kiosk hiện màn sự cố kèm QR khiếu nại.
         slotNumber:
           type: integer
           description: Số slot — kiosk hiện "Mời bấm nút số N" khi đèn đã sáng (FR-ORD-26).
@@ -2297,22 +2561,25 @@ paths:
       operationId: registerBrand
       security: []
       description: >-
-        FR-USR-06 (ADR-0013): thương hiệu tự đăng ký với tên thương hiệu, email và mật khẩu. Tạo cùng
-        lúc một Brand và một tài khoản Brand Admin gắn với thương hiệu đó.
+        FR-USR-06, FR-AUTH-05 (ADR-0013): tạo cùng lúc một Brand ACTIVE và một tài khoản Brand Admin
+        ACTIVE gắn với nó, gửi mã xác minh tới email. Đăng nhập được ngay; chưa xác minh email thì chưa
+        tạo được phiên thanh toán thuê slot (EMAIL_NOT_VERIFIED, FR-USR-07). Email đã có tài khoản trả
+        VALIDATION_ERROR với chi tiết ở trường email. Giới hạn tần suất theo IP — vượt trả RATE_LIMITED.
+        Ghi nhật ký (FR-AUD-01).
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/BrandRegisterRequest' }
+            schema: { $ref: '#/components/schemas/BrandRegistration' }
       responses:
         '201':
-          description: Đăng ký thành công
+          description: Đã tạo thương hiệu và tài khoản
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/BrandRegisterResponse' }
+              schema: { $ref: '#/components/schemas/BrandRegistered' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '429':
-          description: Vượt giới hạn tần suất đăng ký
+          description: Vượt giới hạn tần suất đăng ký — mã RATE_LIMITED
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -2320,46 +2587,34 @@ paths:
   /auth/verify-email:
     post:
       tags: [AUTH]
-      summary: Xác minh email bằng token
+      summary: Xác minh email bằng mã đã gửi
       operationId: verifyEmail
       security: []
       description: >-
-        FR-USR-07 (ADR-0013): xác minh email của tài khoản tự đăng ký bằng token một lần.
+        FR-USR-07 (ADR-0013): mã đúng và còn hạn thì ghi nhận email đã xác minh. Mã sai, quá hạn hoặc
+        đã dùng trả VALIDATION_ERROR. Gọi lại với mã đã dùng của email đã xác minh trả 204.
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/VerifyEmailRequest' }
+            schema: { $ref: '#/components/schemas/EmailVerificationConfirm' }
       responses:
-        '200':
-          description: Xác minh thành công
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VerifyEmailResponse' }
+        '204': { $ref: '#/components/responses/NoContent' }
         '400': { $ref: '#/components/responses/BadRequest' }
 
-  /auth/resend-verification:
+  /auth/verify-email/resend:
     post:
       tags: [AUTH]
-      summary: Gửi lại email xác minh
+      summary: Gửi lại mã xác minh email
       operationId: resendEmailVerification
-      security: []
       description: >-
-        ADR-0013: gửi lại token xác minh qua email cho tài khoản chưa xác minh.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ResendVerificationRequest' }
+        FR-USR-07: sinh mã mới thay mã cũ cho tài khoản đang đăng nhập. Tài khoản không cần xác minh
+        hoặc đã xác minh trả 204 mà không gửi gì. Vượt giới hạn tần suất trả RATE_LIMITED.
       responses:
-        '200':
-          description: Đã gửi lại email xác minh
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/VerifyEmailResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '204': { $ref: '#/components/responses/NoContent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '429':
-          description: Vượt giới hạn tần suất
+          description: Gửi lại quá nhiều lần — mã RATE_LIMITED
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -2477,6 +2732,51 @@ paths:
               schema: { $ref: '#/components/schemas/Brand' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /brands/{id}/legal-verification:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [BND]
+      summary: Ghi nhận đã xác minh pháp nhân
+      operationId: verifyBrandLegal
+      description: >-
+        FR-BND-10 (ADR-0013): Platform Super Admin ghi nhận đã xác minh pháp nhân, kèm người và thời
+        điểm. Thương hiệu chưa khai mã số thuế trả VALIDATION_ERROR. Gọi lại với thương hiệu đã xác minh
+        trả 200 như cũ. Cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-03).
+      responses:
+        '200':
+          description: Đã xác minh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /brands/me/legal-profile:
+    put:
+      tags: [BND]
+      summary: Khai hồ sơ pháp nhân và tài khoản nhận doanh thu
+      operationId: updateMyBrandLegalProfile
+      description: >-
+        FR-BND-09 (ADR-0013): Brand Admin khai mã số thuế, giấy phép kinh doanh, tài khoản doanh nghiệp
+        nhận doanh thu (lưu mã hóa). Sửa sau khi đã xác minh thì trạng thái xác minh bị xóa. Ghi nhật ký
+        (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandLegalProfileUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /brands/me:
     get:
@@ -2855,11 +3155,18 @@ paths:
       summary: Đổi chế độ hoạt động của máy
       operationId: setMachineMode
       description: >-
-        FR-MCH-11, FR-MNT-05, FR-MNT-12: Operations Staff bật/tắt máy hoặc chuyển sang MAINTENANCE.
-        KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12).
-        Chuyển sang MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07) và
-        máy không nhận đơn mới (FR-MNT-06, MACHINE_IN_MAINTENANCE). Thao tác nhạy cảm — cần xác
-        thực lại (FR-AUTH-09). Ghi lịch sử (FR-MCH-13).
+        FR-MCH-11, FR-MNT-05, FR-MNT-12, FR-MNT-17: Operations Staff bật/tắt máy hoặc yêu cầu bảo
+        trì. KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12).
+
+        Yêu cầu MAINTENANCE (ADR-0015): máy vào DRAINING — không nhận đơn mới (MACHINE_IN_MAINTENANCE,
+        FR-MNT-06) nhưng phục vụ nốt đơn đã trả tiền và lệnh đang chạy; khi không còn lệnh CUSTOMER
+        hiệu lực, đơn chờ thanh toán hay đơn chờ lượt thì hệ thống tự chuyển sang MAINTENANCE. Phản hồi
+        trả operatingMode = DRAINING, hoặc MAINTENANCE nếu máy đã rảnh ngay lúc gọi. force = true kèm
+        reason chuyển thẳng sang MAINTENANCE (FR-MNT-17). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
+
+        Vào MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07). Thao tác nhạy
+        cảm — cần xác thực lại (FR-AUTH-09). Ghi lịch sử mọi lần chuyển, kể cả DRAINING → MAINTENANCE
+        tự động (FR-MCH-13).
       requestBody:
         required: true
         content:
@@ -3091,45 +3398,6 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
-  /agreements/current:
-    get:
-      tags: [SLT]
-      summary: Phiên bản hợp đồng khung hiện hành
-      operationId: getCurrentAgreement
-      description: >-
-        FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành kèm nội dung và mã băm sha256.
-      responses:
-        '200':
-          description: Phiên bản hợp đồng khung hiện hành
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AgreementVersionView' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /agreements/{version}/accept:
-    parameters:
-      - name: version
-        in: path
-        required: true
-        description: Mã phiên bản hợp đồng khung
-        schema: { type: string }
-    post:
-      tags: [SLT]
-      summary: Brand Admin đồng ý phiên bản hợp đồng khung
-      operationId: acceptAgreement
-      description: >-
-        FR-SLT-49 (ADR-0013): Brand Admin đồng ý phiên bản hợp đồng khung hiện hành, lưu vết người
-        đồng ý, thời điểm, địa chỉ IP và mã băm. Đồng ý lặp lại với cùng phiên bản không sinh bản ghi trùng.
-      responses:
-        '200':
-          description: Đã ghi nhận đồng ý hợp đồng khung
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/AgreementAcceptanceView' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
   /rental-checkouts:
     post:
       tags: [SLT]
@@ -3144,8 +3412,12 @@ paths:
         với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot
         lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả
         VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03).
-        FR-SLT-49, FR-USR-07 (ADR-0013): tài khoản chưa xác minh email bị từ chối EMAIL_NOT_VERIFIED (403);
-        thương hiệu chưa đồng ý hợp đồng khung hiện hành bị từ chối AGREEMENT_NOT_ACCEPTED (403).
+
+        Điều kiện trước (ADR-0013, ADR-0014): tài khoản tự đăng ký chưa xác minh email trả
+        EMAIL_NOT_VERIFIED (FR-USR-07); thương hiệu chưa đồng ý hợp đồng khung hiện hành trả
+        AGREEMENT_NOT_ACCEPTED (FR-SLT-49); tổng slot chưa thanh toán thương hiệu đang giữ — cộng cả
+        phiên này — vượt BRAND_MAX_HELD_SLOTS trả HOLD_LIMIT_REACHED (FR-SLT-56). Phiên ghi lại phiên
+        bản hợp đồng khung hiện hành (agreementVersionId).
       requestBody:
         required: true
         content:
@@ -3192,7 +3464,9 @@ paths:
         toán; số tiền là totalAmount của phiên. Đã có thanh toán PENDING thì trả lại chính nó
         (uq_checkout_payment_pending). Phiên đã thanh toán, đã hủy, hoặc đã quá holdExpiresAt trả
         RENTAL_NOT_ACTIVE — kể cả khi job hủy (FR-SLT-39) chưa kịp chạy. Kết quả thanh toán về qua
-        `POST /webhooks/payments/{provider}` (FR-SLT-38).
+        `POST /webhooks/payments/{provider}` (FR-SLT-38). Phiên có agreementVersionId mà Brand Admin
+        chưa đồng ý phụ lục (`POST /rental-checkouts/{id}/annex/accept`) trả AGREEMENT_NOT_ACCEPTED
+        (FR-SLT-50, ADR-0013).
       responses:
         '200':
           description: Thanh toán đang chờ (tạo mới hoặc đã có)
@@ -3202,6 +3476,171 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /rental-checkouts/{id}/annex:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [SLT]
+      summary: Phụ lục của phiên thanh toán
+      operationId: getRentalCheckoutAnnex
+      description: >-
+        FR-SLT-50 (ADR-0013): phụ lục tự sinh từ ảnh chụp giá của các hóa đơn trong phiên, kèm lần đồng
+        ý nếu đã có. Phiên tạo trước ADR-0013 (không có agreementVersionId) trả NOT_FOUND. Ngoài phạm
+        vi thương hiệu trả FORBIDDEN_SCOPE (FR-AUTH-08).
+      responses:
+        '200':
+          description: Phụ lục
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RentalCheckoutAnnex' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /rental-checkouts/{id}/annex/accept:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Đồng ý phụ lục của phiên thanh toán
+      operationId: acceptRentalCheckoutAnnex
+      description: >-
+        FR-SLT-50 (ADR-0013): Brand Admin đồng ý phụ lục trước khi thanh toán. Lưu phiên bản hợp đồng
+        khung, người, thời điểm, IP, mã băm nội dung. contentHash lệch phụ lục hiện tại trả
+        VALIDATION_ERROR. Phiên đã thanh toán, đã hủy hoặc quá giờ giữ chỗ trả RENTAL_NOT_ACTIVE. Gọi
+        lại khi đã đồng ý trả 200 cùng bản ghi cũ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgreementAccept' }
+      responses:
+        '201':
+          description: Đã ghi nhận đồng ý
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementAcceptance' }
+        '200':
+          description: Đã đồng ý từ trước
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementAcceptance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /agreements:
+    get:
+      tags: [SLT]
+      summary: Danh sách phiên bản hợp đồng khung
+      operationId: listAgreementVersions
+      description: 'FR-SLT-48 (ADR-0013): Platform Super Admin xem mọi phiên bản, kể cả bản nháp.'
+      responses:
+        '200':
+          description: Các phiên bản, mới nhất trước
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AgreementVersion' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [SLT]
+      summary: Soạn phiên bản hợp đồng khung mới
+      operationId: createAgreementVersion
+      description: >-
+        FR-SLT-48: tạo bản nháp (chưa công bố, chưa hiện hành). Trùng version trả VALIDATION_ERROR.
+        Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgreementVersionCreate' }
+      responses:
+        '201':
+          description: Bản nháp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementVersion' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /agreements/current:
+    get:
+      tags: [SLT]
+      summary: Hợp đồng khung hiện hành
+      operationId: getCurrentAgreement
+      description: >-
+        FR-SLT-48, FR-SLT-49 (ADR-0013): phiên bản hiện hành kèm lần đồng ý của thương hiệu người gọi
+        (null nếu chưa). Chưa có phiên bản nào được công bố trả NOT_FOUND.
+      responses:
+        '200':
+          description: Hợp đồng khung hiện hành
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementCurrent' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agreements/{version}/publish:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: string, maxLength: 20 }
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [SLT]
+      summary: Công bố một phiên bản thành hiện hành
+      operationId: publishAgreementVersion
+      description: >-
+        FR-SLT-48: bản nháp → đã công bố và hiện hành; phiên bản hiện hành cũ thôi hiện hành trong cùng
+        transaction (uq_agreement_version_current). Từ lúc này mọi thương hiệu phải đồng ý bản mới trước
+        khi tạo phiên thanh toán tiếp theo. Đã công bố thì nội dung bất biến. Cần xác thực lại
+        (FR-AUTH-09). Ghi nhật ký (FR-AUD-03).
+      responses:
+        '200':
+          description: Đã công bố
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementVersion' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /agreements/{version}/accept:
+    parameters:
+      - name: version
+        in: path
+        required: true
+        schema: { type: string, maxLength: 20 }
+    post:
+      tags: [SLT]
+      summary: Đồng ý hợp đồng khung
+      operationId: acceptAgreement
+      description: >-
+        FR-SLT-49 (ADR-0013): Brand Admin đồng ý một lần cho thương hiệu mình. Chỉ đồng ý được phiên bản
+        hiện hành — phiên bản khác trả VALIDATION_ERROR, contentHash lệch cũng vậy. Lưu phiên bản, người,
+        thời điểm, IP, mã băm nội dung (chỉ thêm mới). Gọi lại khi đã đồng ý trả 200 cùng bản ghi cũ.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AgreementAccept' }
+      responses:
+        '201':
+          description: Đã ghi nhận đồng ý
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementAcceptance' }
+        '200':
+          description: Đã đồng ý từ trước
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AgreementAcceptance' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /slot-rentals/{id}/invoice:
     parameters:
@@ -3364,6 +3803,81 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/SlotRental' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/non-renewal:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [EXP]
+      summary: Báo không gia hạn, lấy hàng về
+      operationId: requestSlotRentalNonRenewal
+      description: >-
+        FR-EXP-23, FR-EXP-25 (ADR-0014): Brand Admin báo bất cứ lúc nào trước endsAt, chọn cách nhận
+        hàng. Hóa đơn giữ ACTIVE/EXPIRING tới khi Inventory Staff tháo chai — không vào GRACE, không
+        tính phí ân hạn; doanh thu tới lúc tháo chai vẫn thuộc thương hiệu. Hóa đơn không ở ACTIVE hoặc
+        EXPIRING, hoặc đã quá endsAt, trả RENTAL_NOT_ACTIVE. Gọi lại thì cập nhật cách nhận hàng. Ghi
+        nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotRentalNonRenewal' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [EXP]
+      summary: Rút lại việc báo không gia hạn
+      operationId: withdrawSlotRentalNonRenewal
+      description: >-
+        FR-EXP-24 (ADR-0014): chỉ trước endsAt. Sau endsAt, hoặc khi chai đã được tháo, trả
+        RENTAL_NOT_ACTIVE — muốn tiếp tục thì thuê lại slot như mới. Chưa từng báo thì trả 200 như cũ.
+        Ghi nhật ký (FR-AUD-03).
+      responses:
+        '200':
+          description: Đã rút lại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /slot-rentals/{id}/swap-slot:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Đổi hóa đơn sang slot khác khi mua nhầm
+      operationId: swapSlotRentalSlot
+      description: >-
+        FR-SLT-55 (ADR-0014): trong SLOT_SWAP_WINDOW_HOURS kể từ paidAt, hóa đơn DRAFT đã thanh toán
+        (chưa lắp chai), chưa đổi lần nào, slot đích trống và cùng giá thuê niêm yết. Ngược lại trả
+        SLOT_SWAP_NOT_ALLOWED. Slot đích vừa bị người khác giữ trả SLOT_OCCUPIED
+        (excl_slot_rental_overlap). Slot cũ được giải phóng trong cùng transaction. Giữ nguyên số hóa
+        đơn, gói thuê, gói bảo quản; không hoàn tiền. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SlotSwapRequest' }
+      responses:
+        '200':
+          description: Đã đổi slot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SlotRental' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /slots/{id}/rent-price:
@@ -3771,6 +4285,139 @@ paths:
               schema: { $ref: '#/components/schemas/Settlement' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /brand-payouts:
+    get:
+      tags: [SLT]
+      summary: Danh sách kỳ chi trả doanh thu
+      operationId: listBrandPayouts
+      description: >-
+        FR-SLT-52 (ADR-0013): Brand Admin chỉ thấy kỳ của thương hiệu mình (cô lập — nhóm trọng yếu);
+        Platform Super Admin thấy mọi thương hiệu, lọc được theo brandId và status.
+      parameters:
+        - name: brandId
+          in: query
+          description: Chỉ Platform Super Admin dùng được; Brand Admin luôn lấy thương hiệu của mình.
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/BrandPayoutStatus' }
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Các kỳ chi trả, mới nhất trước
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/BrandPayout' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /brand-payouts/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [SLT]
+      summary: Chi tiết kỳ chi trả
+      operationId: getBrandPayout
+      description: >-
+        FR-SLT-52: kỳ của thương hiệu khác trả FORBIDDEN_SCOPE với Brand Admin (FR-AUTH-08). Dòng chi
+        tiết theo slot lấy từ `GET /settlements` với cùng tháng.
+      responses:
+        '200':
+          description: Kỳ chi trả
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandPayout' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /brand-payouts/{id}/pay:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [SLT]
+      summary: Ghi nhận đã chuyển khoản kỳ chi trả
+      operationId: payBrandPayout
+      description: >-
+        FR-SLT-53 (ADR-0013): Platform Super Admin chuyển kỳ CONFIRMED sang PAID kèm mã giao dịch. Thương
+        hiệu chưa xác minh pháp nhân hoặc chưa có tài khoản nhận doanh thu trả BRAND_NOT_VERIFIED; kỳ
+        không ở CONFIRMED, hoặc còn khiếu nại chưa trả lời (FR-SLT-54), trả RENTAL_NOT_ACTIVE. Cần xác
+        thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-03). Gửi email cho Brand Admin (FR-ALR-16).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandPayoutPay' }
+      responses:
+        '200':
+          description: Đã chuyển PAID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandPayout' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brand-payouts/{id}/dispute:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Khiếu nại số liệu kỳ chi trả
+      operationId: disputeBrandPayout
+      description: >-
+        FR-SLT-54 (ADR-0013): Brand Admin gửi một khiếu nại trên kỳ CONFIRMED của thương hiệu mình. Kỳ
+        không ở CONFIRMED hoặc đã có khiếu nại trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandPayoutDispute' }
+      responses:
+        '200':
+          description: Đã ghi nhận khiếu nại
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandPayout' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /brand-payouts/{id}/dispute-response:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [SLT]
+      summary: Trả lời khiếu nại số liệu
+      operationId: respondBrandPayoutDispute
+      description: >-
+        FR-SLT-54: Platform Super Admin trả lời khiếu nại — điều kiện để chuyển PAID. Kỳ không có khiếu
+        nại, hoặc đã trả lời, trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-03).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BrandPayoutDisputeResponse' }
+      responses:
+        '200':
+          description: Đã trả lời
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BrandPayout' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   # -----------------------------------------------------------------------------------
   # EXP — Ân hạn và thanh lý
   # -----------------------------------------------------------------------------------
@@ -4151,7 +4798,8 @@ paths:
       operationId: removeBottleFromSlot
       description: >-
         FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật
-        ký (FR-AUD-07).
+        ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns`
+        (FR-EXP-26), không qua endpoint này.
       requestBody:
         required: true
         content:
@@ -4164,6 +4812,105 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Bottle' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bottle-returns:
+    get:
+      tags: [EXP]
+      summary: Danh sách phiếu trả hàng
+      operationId: listBottleReturns
+      description: >-
+        FR-EXP-26 ÷ 28 (ADR-0014): Inventory Staff và Super Admin thấy mọi phiếu; Brand Admin chỉ thấy
+        phiếu của thương hiệu mình. open = true chỉ lấy phiếu chưa bàn giao và chưa quá hạn.
+      parameters:
+        - name: open
+          in: query
+          schema: { type: boolean }
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+      responses:
+        '200':
+          description: Các phiếu trả hàng, mới nhất trước
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/BottleReturn' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      tags: [EXP]
+      summary: Tháo chai và lập phiếu trả hàng
+      operationId: createBottleReturn
+      description: >-
+        FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng
+        transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot
+        → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi
+        email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không
+        ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi
+        nhật ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleReturnCreate' }
+      responses:
+        '201':
+          description: Đã lập phiếu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BottleReturn' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bottle-returns/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [EXP]
+      summary: Chi tiết phiếu trả hàng
+      operationId: getBottleReturn
+      description: 'FR-EXP-26: phiếu kèm danh sách chai. Phiếu của thương hiệu khác trả FORBIDDEN_SCOPE.'
+      responses:
+        '200':
+          description: Phiếu trả hàng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BottleReturn' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /bottle-returns/{id}/handover:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [EXP]
+      summary: Ghi nhận bàn giao hàng trả về
+      operationId: handOverBottleReturn
+      description: >-
+        FR-EXP-27 (ADR-0014): Inventory Staff ghi người nhận, thời điểm, mã vận đơn (bắt buộc khi
+        SHIP_TO_BRAND — thiếu trả VALIDATION_ERROR). Phiếu đã bàn giao hoặc đã quá hạn nhận trả
+        RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleReturnHandover' }
+      responses:
+        '200':
+          description: Đã bàn giao
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BottleReturn' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /inventory-adjustments:
@@ -4321,9 +5068,12 @@ paths:
         đó (NFR-DAT-06). Sinh mã tham chiếu duy nhất và mã QR thanh toán, hạn thanh toán
         ORDER_PAYMENT_TTL_SEC.
 
-        Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06),
-        SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có
-        lệnh xịt chờ khách trước bấm nút (FR-ORD-24, ADR-0007).
+        Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE khi máy MAINTENANCE, DRAINING
+        hoặc có phiếu nạp đang mở (FR-MNT-06, FR-INV-30, ADR-0015), SLOT_UNAVAILABLE (FR-ORD-04,
+        FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có lệnh xịt chờ khách trước bấm
+        nút (FR-ORD-24, ADR-0007) hoặc đã có một đơn chờ thanh toán chưa hết hạn (FR-ORD-35,
+        uq_machine_open_order, ADR-0015). Đơn chờ thanh toán đã quá hạn được chuyển EXPIRED ngay lúc
+        này rồi mới xét, nên khách sau không phải chờ job hết hạn.
 
         Trước khi hiện mã QR, kiosk phải hiện điều khoản bấm nút trong DISPENSE_PRESS_WINDOW_SEC, quá
         thời gian mất lượt và không hoàn tiền (FR-ORD-25).

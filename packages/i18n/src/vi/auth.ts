@@ -23,5 +23,4 @@ export const auth = {
   invalidVerificationToken: 'Mã xác minh email không hợp lệ hoặc không tồn tại',
   verificationTokenExpired: 'Mã xác minh email đã hết hạn',
   brandCodeTaken: 'Mã thương hiệu đã tồn tại',
-  emailAlreadyVerified: 'Email đã được xác minh trước đó',
 } as const;

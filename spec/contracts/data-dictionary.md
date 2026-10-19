@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **41 bảng**, **26 kiểu enum**.
+Tổng: **46 bảng**, **29 kiểu enum**.
 
 ---
 
@@ -24,16 +24,19 @@ Tổng: **41 bảng**, **26 kiểu enum**.
 
 | Kiểu | Giá trị |
 |---|---|
+| `agreement_kind` | `FRAMEWORK` · `ANNEX` |
 | `alert_severity` | `INFO` · `WARNING` · `HIGH` · `CRITICAL` |
 | `alert_status` | `OPEN` · `ACKNOWLEDGED` · `IN_PROGRESS` · `RESOLVED` · `CLOSED` |
-| `bottle_status` | `IN_STOCK` · `INSTALLED` · `LOW` · `EMPTY` · `DAMAGED` · `EXPIRED` · `LIQUIDATED` |
+| `bottle_return_method` | `WAREHOUSE_PICKUP` · `SHIP_TO_BRAND` |
+| `bottle_status` | `IN_STOCK` · `INSTALLED` · `LOW` · `EMPTY` · `DAMAGED` · `EXPIRED` · `LIQUIDATED` · `RETURNED_TO_BRAND` |
+| `brand_payout_status` | `DRAFT` · `CONFIRMED` · `PAID` |
 | `brand_status` | `ACTIVE` · `SUSPENDED` · `DISABLED` |
 | `command_status` | `CREATED` · `SENT` · `ACKNOWLEDGED` · `SUCCEEDED` · `FAILED` · `REJECTED` · `EXPIRED` · `UNKNOWN` |
 | `credential_status` | `ACTIVE` · `REVOKED` · `EXPIRED` |
 | `dispense_type` | `CUSTOMER` · `DIAGNOSTIC` |
 | `kiosk_interaction_type` | `PRODUCT_IMPRESSION` · `PRODUCT_SELECTED` |
 | `machine_connection_status` | `ONLINE` · `UNSTABLE` · `OFFLINE` |
-| `machine_operating_mode` | `NORMAL` · `MAINTENANCE` · `DISABLED` |
+| `machine_operating_mode` | `NORMAL` · `DRAINING` · `MAINTENANCE` · `DISABLED` |
 | `notification_status` | `PENDING` · `SENT` · `FAILED` · `READ` |
 | `order_status` | `CREATED` · `PENDING_PAYMENT` · `PAID` · `DISPENSE_REQUESTED` · `DISPENSED` · `FAILED` · `EXPIRED` · `REFUND_PENDING` · `REFUNDED` · `FORFEITED` |
 | `payment_status` | `PENDING` · `SUCCEEDED` · `FAILED` · `CANCELLED` · `EXPIRED` · `REFUND_PENDING` · `PARTIALLY_REFUNDED` · `REFUNDED` |
@@ -71,6 +74,22 @@ Thương hiệu, tài khoản, vai trò và phiên đăng nhập. Vai trò là d
 | `status` | `brand_status` | — | `'ACTIVE'::brand_status` |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `tax_code` | `character varying(20)` | có |  | Mã số thuế do Brand Admin khai (FR-BND-09). Bắt buộc trước khi Super Admin xác minh pháp nhân. |
+| `business_license_number` | `character varying(100)` | có |  |  |
+| `payout_account_ciphertext` | `bytea` | có |  | Tài khoản doanh nghiệp nhận doanh thu (mã ngân hàng, số tài khoản, tên chủ tài khoản), mã hóa tầng ứng dụng (FR-BND-09, ADR-0013). Tài khoản của THƯƠNG HIỆU, không thuộc phạm vi NFR-DAT-04. |
+| `payout_account_key_version` | `smallint` | có |  | Phiên bản khóa đã mã hóa payout_account_ciphertext — để xoay khóa mà vẫn đọc được bản cũ. |
+| `legal_verified_at` | `timestamp with time zone` | có |  | Super Admin ghi nhận đã xác minh pháp nhân (FR-BND-10). NULL thì kỳ chi trả không chuyển được sang PAID (BRAND_NOT_VERIFIED, FR-SLT-53). Không chặn việc thuê slot. |
+| `legal_verified_by` | `uuid` | có |  |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_brand_legal_verified_has_tax_code` — `CHECK (((legal_verified_at IS NULL) OR (tax_code IS NOT NULL)))`
+- `chk_brand_legal_verified_pair` — `CHECK (((legal_verified_at IS NULL) = (legal_verified_by IS NULL)))`
+- `chk_brand_payout_account_key` — `CHECK (((payout_account_ciphertext IS NULL) = (payout_account_key_version IS NULL)))`
+
+**Khóa ngoại**
+
+- `brands_legal_verified_by_fkey` — `FOREIGN KEY (legal_verified_by) REFERENCES users(id)`
 
 **Index**
 
@@ -208,6 +227,35 @@ Vai trò là dữ liệu, không phải enum — đổi tập vai trò chỉ c�
 - `refresh_sessions_pkey` (UNIQUE) — `USING btree (id)`
 - `refresh_sessions_token_hash_key` (UNIQUE) — `USING btree (token_hash)`
 
+### `email_verifications`
+
+Xác minh email của tài khoản Brand Admin tự đăng ký (FR-USR-07, ADR-0013). Không có dòng = tài khoản do Super Admin tạo, không cần xác minh. Có dòng, verified_at NULL = chưa xác minh.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `user_id` | `uuid` | — |  |  |
+| `email` | `citext` | — |  | Địa chỉ đã gửi mã — đổi email thì phải xác minh lại địa chỉ mới. |
+| `token_hash` | `character(64)` | — |  | SHA-256 (hex) của mã gửi trong email. Không lưu mã gốc (NFR-SEC-05). |
+| `expires_at` | `timestamp with time zone` | — |  |  |
+| `verified_at` | `timestamp with time zone` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_email_verification_expiry` — `CHECK ((expires_at > created_at))`
+
+**Khóa ngoại**
+
+- `email_verifications_user_id_fkey` — `FOREIGN KEY (user_id) REFERENCES users(id)`
+
+**Index**
+
+- `email_verifications_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_email_verification_token` (UNIQUE) — `USING btree (token_hash)`
+- `uq_email_verification_user` (UNIQUE) — `USING btree (user_id)`
+
 ## Nhóm Catalog và Machines
 
 Địa điểm, máy, slot, danh mục sản phẩm, gói thuê và hóa đơn thuê slot. `machines` KHÔNG có `brand_id` — đường duy nhất nối thương hiệu với máy là `slot_rentals` (BR-003, BR-012). Một lần thanh toán có thể gồm nhiều hóa đơn, gom bằng `rental_checkouts` (ADR-0008).
@@ -278,7 +326,7 @@ Máy thuộc nền tảng, KHÔNG có brand_id. Một máy chứa slot của nhi
 | `serial_number` | `character varying(100)` | — |  |  |
 | `display_name` | `character varying(200)` | — |  |  |
 | `status` | `machine_connection_status` | — | `'OFFLINE'::machine_connection_status` | Trục kết nối, suy ra từ heartbeat (FR-MCH-08, FR-IOT-01..03). Độc lập với operating_mode. |
-| `operating_mode` | `machine_operating_mode` | — | `'NORMAL'::machine_operating_mode` | Trục chế độ, do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Độc lập với status. |
+| `operating_mode` | `machine_operating_mode` | — | `'NORMAL'::machine_operating_mode` | Trục chế độ, do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Độc lập với status. DRAINING (ADR-0015): đã yêu cầu bảo trì, không nhận đơn mới nhưng phục vụ nốt đơn đã trả tiền, rồi tự sang MAINTENANCE; chỉ tồn tại ở backend — thiết bị vẫn nhận chế độ NORMAL. |
 | `last_seen_at` | `timestamp with time zone` | có |  |  |
 | `firmware_version` | `character varying(100)` | có |  |  |
 | `configuration_version` | `integer` | — | `1` |  |
@@ -468,6 +516,7 @@ Phiên thanh toán thuê slot (ADR-0008): một lần Brand Admin chọn một h
 | `created_by` | `uuid` | — |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `agreement_version_id` | `uuid` | có |  | Hợp đồng khung hiện hành lúc tạo phiên — thương hiệu phải đã đồng ý phiên bản này (AGREEMENT_NOT_ACCEPTED). Phụ lục của phiên là phụ lục của phiên bản này. NULL với phiên tạo trước ADR-0013. |
 
 **Ràng buộc kiểm tra**
 
@@ -476,6 +525,7 @@ Phiên thanh toán thuê slot (ADR-0008): một lần Brand Admin chọn một h
 
 **Khóa ngoại**
 
+- `rental_checkouts_agreement_version_id_fkey` — `FOREIGN KEY (agreement_version_id) REFERENCES agreement_versions(id)`
 - `rental_checkouts_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
 - `rental_checkouts_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
 
@@ -527,6 +577,11 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 | `paid_at` | `timestamp with time zone` | có |  | Thời điểm thanh toán được xác nhận (FR-SLT-38) — ghi cùng lúc với rental_checkouts.paid_at của phiên. DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng. |
 | `cancelled_at` | `timestamp with time zone` | có |  |  |
 | `checkout_id` | `uuid` | có |  | Phiên thanh toán sinh ra hóa đơn (ADR-0008). Bắt buộc với hóa đơn theo gói (chk_rental_package_snapshot_complete); NULL với hóa đơn mô hình cũ trước ADR-0006. |
+| `non_renewal_requested_at` | `timestamp with time zone` | có |  | Brand Admin báo không gia hạn (FR-EXP-23): hóa đơn không vào GRACE, không tính phí ân hạn, giữ ACTIVE/EXPIRING tới khi Inventory Staff tháo chai (FR-EXP-25). Rút lại trước ends_at thì về NULL (FR-EXP-24). |
+| `non_renewal_requested_by` | `uuid` | có |  |  |
+| `return_method` | `bottle_return_method` | có |  | Cách nhận hàng trả về, chọn lúc báo không gia hạn (FR-EXP-23). |
+| `swapped_from_slot_id` | `uuid` | có |  | Slot cũ khi hóa đơn đã đổi slot (FR-SLT-55). Khác NULL nghĩa là đã dùng lượt đổi duy nhất. |
+| `swapped_at` | `timestamp with time zone` | có |  |  |
 
 **Ràng buộc kiểm tra**
 
@@ -536,10 +591,13 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 - `chk_rental_duration_positive` — `CHECK (((duration_months IS NULL) OR (duration_months > 0)))`
 - `chk_rental_fee_nonnegative` — `CHECK ((fixed_fee >= (0)::numeric))`
 - `chk_rental_invoice_on_payment` — `CHECK (((paid_at IS NULL) = (invoice_number IS NULL)))`
+- `chk_rental_non_renewal_fields` — `CHECK ((num_nulls(non_renewal_requested_at, non_renewal_requested_by, return_method) = ANY (ARRAY[0, 3])))`
 - `chk_rental_package_snapshot_complete` — `CHECK (((rental_package_id IS NULL) OR (num_nulls(storage_plan_id, duration_months, monthly_rent_price, discount_percent, storage_monthly_price, storage_coverage_percent, storage_coverage_cap, rent_amount, storage_amount, total_amount, checkout_id) = 0)))`
 - `chk_rental_percents` — `CHECK ((((discount_percent IS NULL) OR ((discount_percent >= (0)::numeric) AND (discount_percent <= (100)::numeric))) AND ((storage_coverage_percent IS NULL) OR ((storage_coverage_percent >= (0)::numeric) AND (storage_coverage_percent <= (100)::numeric)))))`
 - `chk_rental_period` — `CHECK ((ends_at > starts_at))`
 - `chk_rental_price_nonnegative` — `CHECK ((price_per_spray >= (0)::numeric))`
+- `chk_rental_swap_fields` — `CHECK (((swapped_from_slot_id IS NULL) = (swapped_at IS NULL)))`
+- `chk_rental_swap_other_slot` — `CHECK (((swapped_from_slot_id IS NULL) OR (swapped_from_slot_id <> slot_id)))`
 - `chk_rental_total_amount` — `CHECK (((total_amount IS NULL) OR (total_amount = ((rent_amount + storage_amount) + grace_fee_amount))))`
 - `chk_revenue_share_percent` — `CHECK (((revenue_share_percent >= (0)::numeric) AND (revenue_share_percent <= (100)::numeric)))`
 - `excl_slot_rental_overlap` — `EXCLUDE USING gist (slot_id WITH =, tstzrange(starts_at, ends_at, '[)'::text) WITH &&) WHERE ((status = ANY (ARRAY['DRAFT'::slot_rental_status, 'ACTIVE'::slot_rental_status, 'EXPIRING'::slot_rental_status, 'GRACE'::slot_rental_status, 'LIQUIDATED'::slot_rental_status])))`
@@ -551,11 +609,13 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 - `slot_rentals_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
 - `slot_rentals_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
 - `slot_rentals_fragrance_product_id_fkey` — `FOREIGN KEY (fragrance_product_id) REFERENCES fragrance_products(id)`
+- `slot_rentals_non_renewal_requested_by_fkey` — `FOREIGN KEY (non_renewal_requested_by) REFERENCES users(id)`
 - `slot_rentals_previous_rental_id_fkey` — `FOREIGN KEY (previous_rental_id) REFERENCES slot_rentals(id)`
 - `slot_rentals_rental_package_id_fkey` — `FOREIGN KEY (rental_package_id) REFERENCES rental_packages(id)`
 - `slot_rentals_request_id_fkey` — `FOREIGN KEY (request_id) REFERENCES slot_rental_requests(id)`
 - `slot_rentals_slot_id_fkey` — `FOREIGN KEY (slot_id) REFERENCES machine_slots(id)`
 - `slot_rentals_storage_plan_id_fkey` — `FOREIGN KEY (storage_plan_id) REFERENCES storage_plans(id)`
+- `slot_rentals_swapped_from_slot_id_fkey` — `FOREIGN KEY (swapped_from_slot_id) REFERENCES machine_slots(id)`
 
 **Index**
 
@@ -569,6 +629,121 @@ Hóa đơn thuê slot: một lần thương hiệu mua gói thuê một slot (AD
 - `uq_rental_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
 - `uq_rental_invoice_number` (UNIQUE) — `USING btree (invoice_number)`
 - `uq_slot_active_rental` (UNIQUE) — `USING btree (slot_id) WHERE (status = ANY (ARRAY['ACTIVE'::slot_rental_status, 'EXPIRING'::slot_rental_status, 'GRACE'::slot_rental_status, 'LIQUIDATED'::slot_rental_status]))`
+
+### `agreement_versions`
+
+Hợp đồng khung do nền tảng soạn, giống nhau cho mọi thương hiệu (ADR-0013). Bản nháp sửa được; đã công bố (published_at) thì nội dung bất biến. Đổi điều khoản = công bố phiên bản mới.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `version` | `character varying(20)` | — |  |  |
+| `title` | `character varying(200)` | — |  |  |
+| `content` | `text` | — |  |  |
+| `content_hash` | `character(64)` | — |  | SHA-256 (hex) của content — thứ được lưu lại trong agreement_acceptances làm bằng chứng. |
+| `is_current` | `boolean` | — | `false` |  |
+| `published_at` | `timestamp with time zone` | có |  |  |
+| `created_by` | `uuid` | — |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_agreement_current_published` — `CHECK (((NOT is_current) OR (published_at IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `agreement_versions_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
+
+**Index**
+
+- `agreement_versions_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_agreement_version` (UNIQUE) — `USING btree (version)`
+- `uq_agreement_version_current` (UNIQUE) — `USING btree (is_current) WHERE is_current`
+
+### `agreement_acceptances`
+
+Bằng chứng thương hiệu đồng ý hợp đồng khung (FRAMEWORK) hoặc phụ lục của một phiên thanh toán (ANNEX) — ADR-0013. Chỉ thêm mới: trigger và REVOKE như audit_logs.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `brand_id` | `uuid` | — |  |  |
+| `accepted_by` | `uuid` | — |  |  |
+| `kind` | `agreement_kind` | — |  |  |
+| `agreement_version_id` | `uuid` | — |  | FRAMEWORK: phiên bản được đồng ý. ANNEX: phiên bản hợp đồng khung mà phụ lục thuộc về (= rental_checkouts.agreement_version_id). |
+| `rental_checkout_id` | `uuid` | có |  |  |
+| `content_hash` | `character(64)` | — |  | SHA-256 (hex) của đúng văn bản người dùng đã thấy: nội dung hợp đồng khung, hoặc phụ lục sinh từ ảnh chụp giá của các hóa đơn trong phiên (FR-SLT-50). |
+| `ip_address` | `inet` | — |  |  |
+| `user_agent` | `text` | có |  |  |
+| `accepted_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_acceptance_annex_has_checkout` — `CHECK (((kind = 'ANNEX'::agreement_kind) = (rental_checkout_id IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `agreement_acceptances_accepted_by_fkey` — `FOREIGN KEY (accepted_by) REFERENCES users(id)`
+- `agreement_acceptances_agreement_version_id_fkey` — `FOREIGN KEY (agreement_version_id) REFERENCES agreement_versions(id)`
+- `agreement_acceptances_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `fk_acceptance_checkout_same_brand` — `FOREIGN KEY (rental_checkout_id, brand_id) REFERENCES rental_checkouts(id, brand_id)` — *ràng buộc cùng thương hiệu*
+
+**Index**
+
+- `agreement_acceptances_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_acceptance_annex` (UNIQUE) — `USING btree (rental_checkout_id) WHERE (kind = 'ANNEX'::agreement_kind)`
+- `uq_acceptance_framework` (UNIQUE) — `USING btree (brand_id, agreement_version_id) WHERE (kind = 'FRAMEWORK'::agreement_kind)`
+
+### `brand_payouts`
+
+Kỳ chi trả doanh thu lượt xịt hằng tháng cho một thương hiệu (ADR-0013): DRAFT → CONFIRMED → PAID. Tính đơn revenue_owner = BRAND ở DISPENSED hoặc FORFEITED; không trừ phí cổng hay khoản đã hoàn cho khách (FR-SLT-18).
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `brand_id` | `uuid` | — |  |  |
+| `period_month` | `date` | — |  | Ngày đầu tháng dương lịch của kỳ, theo giờ Việt Nam (Asia/Ho_Chi_Minh). |
+| `status` | `brand_payout_status` | — | `'DRAFT'::brand_payout_status` |  |
+| `currency` | `character(3)` | — | `'VND'::bpchar` |  |
+| `order_count` | `integer` | — | `0` |  |
+| `amount` | `numeric(19,4)` | — | `0` | DRAFT: số cộng dồn tạm, tính lại mỗi lần cập nhật. Từ CONFIRMED trở đi: số đã khóa, không đổi. |
+| `confirmed_at` | `timestamp with time zone` | có |  |  |
+| `paid_at` | `timestamp with time zone` | có |  |  |
+| `paid_by` | `uuid` | có |  |  |
+| `transfer_reference` | `character varying(100)` | có |  | Mã giao dịch chuyển khoản Super Admin nhập khi chuyển PAID, sau khi xác thực lại (FR-SLT-53). |
+| `dispute_note` | `text` | có |  | Khiếu nại số liệu của Brand Admin trên kỳ CONFIRMED (FR-SLT-54) — mỗi kỳ một khiếu nại. |
+| `disputed_at` | `timestamp with time zone` | có |  |  |
+| `disputed_by` | `uuid` | có |  |  |
+| `dispute_response` | `text` | có |  |  |
+| `dispute_resolved_at` | `timestamp with time zone` | có |  |  |
+| `dispute_resolved_by` | `uuid` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_payout_amounts_nonnegative` — `CHECK (((amount >= (0)::numeric) AND (order_count >= 0)))`
+- `chk_payout_confirmed_at` — `CHECK (((status = 'DRAFT'::brand_payout_status) = (confirmed_at IS NULL)))`
+- `chk_payout_dispute_fields` — `CHECK (((num_nulls(dispute_note, disputed_at, disputed_by) = ANY (ARRAY[0, 3])) AND (num_nulls(dispute_response, dispute_resolved_at, dispute_resolved_by) = ANY (ARRAY[0, 3]))))`
+- `chk_payout_dispute_on_confirmed` — `CHECK (((disputed_at IS NULL) OR (status <> 'DRAFT'::brand_payout_status)))`
+- `chk_payout_dispute_resolution_after_dispute` — `CHECK (((dispute_resolved_at IS NULL) OR (disputed_at IS NOT NULL)))`
+- `chk_payout_paid` — `CHECK ((((status = 'PAID'::brand_payout_status) = (paid_at IS NOT NULL)) AND ((status <> 'PAID'::brand_payout_status) OR ((paid_by IS NOT NULL) AND (transfer_reference IS NOT NULL)))))`
+- `chk_payout_paid_dispute_resolved` — `CHECK (((status <> 'PAID'::brand_payout_status) OR (disputed_at IS NULL) OR (dispute_resolved_at IS NOT NULL)))`
+- `chk_payout_period_first_day` — `CHECK ((EXTRACT(day FROM period_month) = (1)::numeric))`
+
+**Khóa ngoại**
+
+- `brand_payouts_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `brand_payouts_dispute_resolved_by_fkey` — `FOREIGN KEY (dispute_resolved_by) REFERENCES users(id)`
+- `brand_payouts_disputed_by_fkey` — `FOREIGN KEY (disputed_by) REFERENCES users(id)`
+- `brand_payouts_paid_by_fkey` — `FOREIGN KEY (paid_by) REFERENCES users(id)`
+
+**Index**
+
+- `brand_payouts_pkey` (UNIQUE) — `USING btree (id)`
+- `idx_brand_payouts_status` — `USING btree (status, period_month)`
+- `uq_brand_payout_period` (UNIQUE) — `USING btree (brand_id, period_month)`
 
 ## Nhóm Inventory
 
@@ -669,11 +844,13 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `liquidated_at` | `timestamp with time zone` | có |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `bottle_return_id` | `uuid` | có |  | Phiếu trả hàng chứa chai này (FR-EXP-26). Bắt buộc khi status = RETURNED_TO_BRAND. |
 
 **Ràng buộc kiểm tra**
 
 - `chk_bottle_current_nonnegative` — `CHECK ((current_estimated_ml >= (0)::numeric))`
 - `chk_bottle_initial_nonnegative` — `CHECK ((initial_volume_ml >= (0)::numeric))`
+- `chk_bottle_returned_has_return` — `CHECK ((((status)::text <> 'RETURNED_TO_BRAND'::text) OR (bottle_return_id IS NOT NULL)))`
 
 **Khóa ngoại**
 
@@ -682,12 +859,14 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 - `bottles_fragrance_product_id_fkey` — `FOREIGN KEY (fragrance_product_id) REFERENCES fragrance_products(id)`
 - `bottles_source_rental_id_fkey` — `FOREIGN KEY (source_rental_id) REFERENCES slot_rentals(id)`
 - `fk_bottle_batch_same_brand` — `FOREIGN KEY (batch_id, brand_id) REFERENCES inventory_batches(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `fk_bottle_return_same_brand` — `FOREIGN KEY (bottle_return_id, brand_id) REFERENCES bottle_returns(id, brand_id)` — *ràng buộc cùng thương hiệu*
 
 **Index**
 
 - `bottles_pkey` (UNIQUE) — `USING btree (id)`
 - `idx_bottles_batch` — `USING btree (batch_id)`
 - `idx_bottles_brand_status_expiry` — `USING btree (brand_id, status, expires_at)`
+- `idx_bottles_return` — `USING btree (bottle_return_id) WHERE (bottle_return_id IS NOT NULL)`
 - `uq_bottle_brand_identifier` (UNIQUE) — `USING btree (brand_id, identifier)`
 - `uq_bottle_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
 
@@ -799,6 +978,52 @@ Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc n�
 - `storage_compensations_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_compensation_bottle` (UNIQUE) — `USING btree (bottle_id)`
 
+### `bottle_returns`
+
+Phiếu trả hàng khi thương hiệu chủ động không gia hạn (ADR-0014). Lập lúc Inventory Staff tháo chai (FR-EXP-26); đóng bằng bàn giao (FR-EXP-27) hoặc quá hạn nhận → chuyển sở hữu về nền tảng như thanh lý (FR-EXP-28). Chai trên phiếu trỏ về đây qua bottles.bottle_return_id.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `slot_rental_id` | `uuid` | — |  |  |
+| `brand_id` | `uuid` | — |  |  |
+| `return_method` | `bottle_return_method` | — |  |  |
+| `shipping_address` | `text` | có |  | Địa chỉ gửi hàng khi SHIP_TO_BRAND — ảnh chụp lúc lập phiếu; phí vận chuyển thu ngoài hệ thống. |
+| `ready_at` | `timestamp with time zone` | — |  |  |
+| `pickup_deadline` | `timestamp with time zone` | — |  | ready_at + RETURN_PICKUP_MAX_DAYS. Báo trước cho Brand Admin 3 ngày (reminder_sent_at). |
+| `reminder_sent_at` | `timestamp with time zone` | có |  |  |
+| `handed_over_at` | `timestamp with time zone` | có |  |  |
+| `handed_over_by` | `uuid` | có |  |  |
+| `recipient_name` | `character varying(200)` | có |  |  |
+| `tracking_number` | `character varying(100)` | có |  |  |
+| `forfeited_at` | `timestamp with time zone` | có |  | Quá hạn nhận hàng: mọi chai trên phiếu chuyển owner = PLATFORM, status LIQUIDATED (FR-EXP-28). |
+| `created_by` | `uuid` | — |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_bottle_return_closed_once` — `CHECK (((handed_over_at IS NULL) OR (forfeited_at IS NULL)))`
+- `chk_bottle_return_deadline` — `CHECK ((pickup_deadline > ready_at))`
+- `chk_bottle_return_handover_fields` — `CHECK ((num_nulls(handed_over_at, handed_over_by, recipient_name) = ANY (ARRAY[0, 3])))`
+- `chk_bottle_return_ship_address` — `CHECK (((return_method <> 'SHIP_TO_BRAND'::bottle_return_method) OR (shipping_address IS NOT NULL)))`
+- `chk_bottle_return_shipped_has_tracking` — `CHECK (((return_method <> 'SHIP_TO_BRAND'::bottle_return_method) OR (handed_over_at IS NULL) OR (tracking_number IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `bottle_returns_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `bottle_returns_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
+- `bottle_returns_handed_over_by_fkey` — `FOREIGN KEY (handed_over_by) REFERENCES users(id)`
+- `fk_bottle_return_rental_same_brand` — `FOREIGN KEY (slot_rental_id, brand_id) REFERENCES slot_rentals(id, brand_id)` — *ràng buộc cùng thương hiệu*
+
+**Index**
+
+- `bottle_returns_pkey` (UNIQUE) — `USING btree (id)`
+- `idx_bottle_returns_brand` — `USING btree (brand_id, created_at)`
+- `idx_bottle_returns_pending` — `USING btree (pickup_deadline) WHERE ((handed_over_at IS NULL) AND (forfeited_at IS NULL))`
+- `uq_bottle_return_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
+- `uq_bottle_return_rental` (UNIQUE) — `USING btree (slot_rental_id)`
+
 ## Nhóm Orders và Payments
 
 Đơn hàng, thanh toán, lệnh xịt và tương tác kiosk. Ba ràng buộc duy nhất ở nhóm này (`uq_payment_event`, `uq_order_active_command`, `dispense_results.command_id`) là toàn bộ cơ chế giữ cho BR-002 "một giao dịch một lượt xịt" đúng.
@@ -824,7 +1049,7 @@ Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc n�
 | `paid_at` | `timestamp with time zone` | có |  |  |
 | `dispensed_at` | `timestamp with time zone` | có |  |  |
 | `failure_code` | `character varying(100)` | có |  |  |
-| `needs_manual_review` | `boolean` | — | `false` | Đặt true khi đã thanh toán nhưng lượt xịt thất bại hoặc không xác định (FR-ORD-19). Dẫn vào luồng hoàn tiền và hỗ trợ (FR-ORD-20/21). |
+| `needs_manual_review` | `boolean` | — | `false` | Đặt true khi đã thanh toán nhưng lượt xịt thất bại, không xác định, bị thiết bị từ chối (kể cả trước khi đèn sáng) hoặc chờ lượt quá PAID_QUEUE_MAX_SEC (FR-ORD-19, FR-ORD-34, ADR-0015). Không đặt với đơn FORFEITED. Dẫn vào luồng hoàn tiền thủ công (FR-ORD-20, ADR-0012). |
 | `manual_review_resolved_by` | `uuid` | có |  |  |
 | `manual_review_resolved_at` | `timestamp with time zone` | có |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
@@ -849,11 +1074,13 @@ Khoản bồi thường khi chai của thương hiệu chuyển DAMAGED lúc n�
 - `idx_orders_brand` — `USING btree (brand_id, created_at)`
 - `idx_orders_brand_status` — `USING btree (brand_id, status, created_at)`
 - `idx_orders_machine` — `USING btree (machine_id, created_at)`
+- `idx_orders_paid_queue` — `USING btree (paid_at) WHERE (status = 'PAID'::order_status)`
 - `idx_orders_rental` — `USING btree (slot_rental_id)`
 - `idx_orders_slot` — `USING btree (slot_id)`
 - `orders_idempotency_key_key` (UNIQUE) — `USING btree (idempotency_key)`
 - `orders_payment_reference_key` (UNIQUE) — `USING btree (payment_reference)`
 - `orders_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_machine_open_order` (UNIQUE) — `USING btree (machine_id) WHERE (status = ANY (ARRAY['CREATED'::order_status, 'PENDING_PAYMENT'::order_status]))`
 - `uq_order_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
 
 ### `order_status_histories`
@@ -991,6 +1218,7 @@ Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân h�
 - `dispense_commands_command_token_key` (UNIQUE) — `USING btree (command_token)`
 - `dispense_commands_pkey` (UNIQUE) — `USING btree (id)`
 - `idx_commands_machine` — `USING btree (machine_id, created_at)`
+- `idx_commands_slot_customer` — `USING btree (slot_id, created_at) WHERE (command_type = 'CUSTOMER'::dispense_type)`
 - `uq_machine_active_customer_command` (UNIQUE) — `USING btree (machine_id) WHERE ((command_type = 'CUSTOMER'::dispense_type) AND (status = ANY (ARRAY['CREATED'::command_status, 'SENT'::command_status, 'ACKNOWLEDGED'::command_status])))`
 - `uq_order_active_command` (UNIQUE) — `USING btree (order_id) WHERE ((order_id IS NOT NULL) AND (command_type = 'CUSTOMER'::dispense_type) AND (status = ANY (ARRAY['CREATED'::command_status, 'SENT'::command_status, 'ACKNOWLEDGED'::command_status])))`
 
@@ -1057,6 +1285,60 @@ Nguồn dữ liệu cho xếp hạng sản phẩm theo mức độ quan tâm (FR
 - `idx_kiosk_events_rental` — `USING btree (slot_rental_id, event_type, occurred_at)`
 - `kiosk_interaction_events_event_id_key` (UNIQUE) — `USING btree (event_id)`
 - `kiosk_interaction_events_pkey` (UNIQUE) — `USING btree (id)`
+
+### `refund_claims`
+
+Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT được lưu tài khoản ngân hàng của khách (NFR-DAT-04): mã hóa tầng ứng dụng, xóa khi phiếu đóng. Không ghi dữ liệu tài khoản vào audit_logs, log, payment_events hay notifications.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `order_id` | `uuid` | — |  |  |
+| `brand_id` | `uuid` | — |  |  |
+| `status` | `refund_claim_status` | — | `'OPEN'::refund_claim_status` |  |
+| `refund_order` | `boolean` | — |  | TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên. |
+| `amount` | `numeric(19,4)` | — |  | Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa. |
+| `currency` | `character(3)` | — |  |  |
+| `account_ciphertext` | `bytea` | có |  | Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng. |
+| `contact_ciphertext` | `bytea` | có |  | Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa. |
+| `pii_key_version` | `smallint` | — |  | Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ. |
+| `consented_at` | `timestamp with time zone` | — |  | Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại. |
+| `assigned_to` | `uuid` | có |  |  |
+| `assigned_at` | `timestamp with time zone` | có |  |  |
+| `payout_reference` | `character varying(100)` | có |  | Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED. |
+| `resolution_note` | `text` | có |  |  |
+| `resolved_by` | `uuid` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `closed_at` | `timestamp with time zone` | có |  |  |
+| `account_purged_at` | `timestamp with time zone` | có |  |  |
+| `contact_purged_at` | `timestamp with time zone` | có |  |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_refund_claim_account_purged_on_close` — `CHECK (((status = 'OPEN'::refund_claim_status) OR ((account_ciphertext IS NULL) AND (account_purged_at IS NOT NULL))))`
+- `chk_refund_claim_amount_positive` — `CHECK ((amount > (0)::numeric))`
+- `chk_refund_claim_assignment` — `CHECK (((assigned_to IS NULL) = (assigned_at IS NULL)))`
+- `chk_refund_claim_closed_at` — `CHECK (((status = 'OPEN'::refund_claim_status) = (closed_at IS NULL)))`
+- `chk_refund_claim_contact_purge` — `CHECK (((contact_purged_at IS NULL) OR (contact_ciphertext IS NULL)))`
+- `chk_refund_claim_open_has_account` — `CHECK (((status <> 'OPEN'::refund_claim_status) OR (account_ciphertext IS NOT NULL)))`
+- `chk_refund_claim_refunded_has_payout` — `CHECK (((status <> 'REFUNDED'::refund_claim_status) OR (payout_reference IS NOT NULL)))`
+- `chk_refund_claim_rejected_has_note` — `CHECK (((status <> 'REJECTED'::refund_claim_status) OR (resolution_note IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `fk_refund_claim_order_same_brand` — `FOREIGN KEY (order_id, brand_id) REFERENCES orders(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `refund_claims_assigned_to_fkey` — `FOREIGN KEY (assigned_to) REFERENCES users(id)`
+- `refund_claims_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
+- `refund_claims_resolved_by_fkey` — `FOREIGN KEY (resolved_by) REFERENCES users(id)`
+
+**Index**
+
+- `idx_refund_claims_assigned` — `USING btree (assigned_to, status)`
+- `idx_refund_claims_contact_purge` — `USING btree (closed_at) WHERE (contact_ciphertext IS NOT NULL)`
+- `idx_refund_claims_status` — `USING btree (status, created_at)`
+- `refund_claims_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_refund_claim_order` (UNIQUE) — `USING btree (order_id)`
 
 ## Nhóm Operations
 
@@ -1353,62 +1635,4 @@ Telemetry theo FR-IOT-04, lưu lịch sử phục vụ báo cáo và phân tích
 
 - `idx_sensor_readings` — `USING btree (machine_id, slot_id, measured_at)`
 - `sensor_readings_pkey` (UNIQUE) — `USING btree (id)`
-
-## Bảng chưa xếp nhóm
-
-Những bảng sau có trong CSDL nhưng chưa được xếp vào nhóm nào trong `scripts/gen-data-dictionary.ts`. Bổ sung vào `GROUPS` rồi sinh lại.
-
-### `refund_claims`
-
-Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT được lưu tài khoản ngân hàng của khách (NFR-DAT-04): mã hóa tầng ứng dụng, xóa khi phiếu đóng. Không ghi dữ liệu tài khoản vào audit_logs, log, payment_events hay notifications.
-
-| Cột | Kiểu | Null | Mặc định | Mô tả |
-|---|---|---|---|---|
-| `id` | `uuid` | — | `gen_random_uuid()` |  |
-| `order_id` | `uuid` | — |  |  |
-| `brand_id` | `uuid` | — |  |  |
-| `status` | `refund_claim_status` | — | `'OPEN'::refund_claim_status` |  |
-| `refund_order` | `boolean` | — |  | TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên. |
-| `amount` | `numeric(19,4)` | — |  | Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa. |
-| `currency` | `character(3)` | — |  |  |
-| `account_ciphertext` | `bytea` | có |  | Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng. |
-| `contact_ciphertext` | `bytea` | có |  | Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa. |
-| `pii_key_version` | `smallint` | — |  | Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ. |
-| `consented_at` | `timestamp with time zone` | — |  | Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại. |
-| `assigned_to` | `uuid` | có |  |  |
-| `assigned_at` | `timestamp with time zone` | có |  |  |
-| `payout_reference` | `character varying(100)` | có |  | Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED. |
-| `resolution_note` | `text` | có |  |  |
-| `resolved_by` | `uuid` | có |  |  |
-| `created_at` | `timestamp with time zone` | — | `now()` |  |
-| `updated_at` | `timestamp with time zone` | — | `now()` |  |
-| `closed_at` | `timestamp with time zone` | có |  |  |
-| `account_purged_at` | `timestamp with time zone` | có |  |  |
-| `contact_purged_at` | `timestamp with time zone` | có |  |  |
-
-**Ràng buộc kiểm tra**
-
-- `chk_refund_claim_account_purged_on_close` — `CHECK (((status = 'OPEN'::refund_claim_status) OR ((account_ciphertext IS NULL) AND (account_purged_at IS NOT NULL))))`
-- `chk_refund_claim_amount_positive` — `CHECK ((amount > (0)::numeric))`
-- `chk_refund_claim_assignment` — `CHECK (((assigned_to IS NULL) = (assigned_at IS NULL)))`
-- `chk_refund_claim_closed_at` — `CHECK (((status = 'OPEN'::refund_claim_status) = (closed_at IS NULL)))`
-- `chk_refund_claim_contact_purge` — `CHECK (((contact_purged_at IS NULL) OR (contact_ciphertext IS NULL)))`
-- `chk_refund_claim_open_has_account` — `CHECK (((status <> 'OPEN'::refund_claim_status) OR (account_ciphertext IS NOT NULL)))`
-- `chk_refund_claim_refunded_has_payout` — `CHECK (((status <> 'REFUNDED'::refund_claim_status) OR (payout_reference IS NOT NULL)))`
-- `chk_refund_claim_rejected_has_note` — `CHECK (((status <> 'REJECTED'::refund_claim_status) OR (resolution_note IS NOT NULL)))`
-
-**Khóa ngoại**
-
-- `fk_refund_claim_order_same_brand` — `FOREIGN KEY (order_id, brand_id) REFERENCES orders(id, brand_id)` — *ràng buộc cùng thương hiệu*
-- `refund_claims_assigned_to_fkey` — `FOREIGN KEY (assigned_to) REFERENCES users(id)`
-- `refund_claims_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
-- `refund_claims_resolved_by_fkey` — `FOREIGN KEY (resolved_by) REFERENCES users(id)`
-
-**Index**
-
-- `idx_refund_claims_assigned` — `USING btree (assigned_to, status)`
-- `idx_refund_claims_contact_purge` — `USING btree (closed_at) WHERE (contact_ciphertext IS NOT NULL)`
-- `idx_refund_claims_status` — `USING btree (status, created_at)`
-- `refund_claims_pkey` (UNIQUE) — `USING btree (id)`
-- `uq_refund_claim_order` (UNIQUE) — `USING btree (order_id)`
 

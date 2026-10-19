@@ -25,7 +25,6 @@ import {
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { ApiRequestError, errorMessage } from '@/shared/api';
-import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import {
   useAcceptAgreement,
@@ -157,10 +156,10 @@ function SlotQuoteSelector({
 export default function AvailableSlotsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { user } = useAuth();
   const { data, isLoading, error, refetch } = useAvailableSlots({ pageSize: 50 });
   const createCheckout = useCreateCheckout();
-  const { data: currentAgreement } = useCurrentAgreement();
+  const { data: agreementData } = useCurrentAgreement();
+  const currentAgreement = agreementData?.agreement;
   const acceptAgreement = useAcceptAgreement();
   const resendVerification = useResendVerification();
 
@@ -192,7 +191,10 @@ export default function AvailableSlotsPage() {
   const handleConfirmAgreement = async () => {
     if (!currentAgreement) return;
     try {
-      await acceptAgreement.mutateAsync(currentAgreement.version);
+      await acceptAgreement.mutateAsync({
+        version: currentAgreement.version,
+        contentHash: currentAgreement.contentHash,
+      });
       message.success(t('ui.agreementAcceptedSuccess'));
       setIsAgreementModalOpen(false);
     } catch (acceptErr) {
@@ -201,9 +203,8 @@ export default function AvailableSlotsPage() {
   };
 
   const handleResendVerification = async () => {
-    if (!user?.email) return;
     try {
-      await resendVerification.mutateAsync(user.email);
+      await resendVerification.mutateAsync();
       message.success(t('ui.resendVerificationSuccess'));
     } catch (resendErr) {
       message.error(errorMessage(resendErr, t));

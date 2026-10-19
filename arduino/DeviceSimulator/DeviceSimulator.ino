@@ -1,497 +1,571 @@
+// System firmware based on Test5Buttons: identical GPIO mapping and button debounce.
+// ESP32 Arduino core 3.x; ArduinoJson 7, ArduinoMqttClient 0.1.8, Crypto 0.4.0.
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <ArduinoMqttClient.h>
+#include <Ed25519.h>
+#include <LittleFS.h>
 #include <Preferences.h>
-#include <PubSubClient.h>
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
+#include <mbedtls/base64.h>
+#include <hal/gpio_ll.h>
+#include <soc/gpio_struct.h>
+#include <algorithm>
+#include <vector>
 #include <time.h>
-
 #if __has_include("config.h")
 #include "config.h"
 #else
-#error "Missing config.h. Copy config.example.h to config.h and update the settings."
+#error "Copy config.example.h to config.h and configure this device before compiling."
 #endif
 
-// Single-pump prototype: slot 1.
-constexpr uint8_t PIN_PUMP = 25;
-constexpr uint8_t PIN_BUTTON_LIGHT = 26;
-constexpr uint8_t PIN_BUTTON = 27;
-constexpr uint8_t SLOT_NUMBER = 1;
+#ifndef ALLOW_DIAGNOSTIC_COMMANDS
+#define ALLOW_DIAGNOSTIC_COMMANDS false
+#endif
 
-// Values from spec/constraints.md. ACTUATOR_MAX_MS is an immutable safety limit.
-constexpr unsigned long DEFAULT_ACTUATOR_RUN_MS = 500;
+constexpr uint8_t SLOT_COUNT = 5;
+constexpr uint8_t BUTTON_PINS[SLOT_COUNT] = {27, 34, 35, 36, 39};
+constexpr uint8_t PUMP_PINS[SLOT_COUNT] = {25, 18, 19, 21, 22};
+constexpr uint8_t LIGHT_PINS[SLOT_COUNT] = {26, 23, 32, 33, 13};
+constexpr uint8_t PUMP_OFF_LEVEL = PUMP_ON_LEVEL == HIGH ? LOW : HIGH;
+constexpr uint8_t LIGHT_OFF_LEVEL = LIGHT_ON_LEVEL == HIGH ? LOW : HIGH;
+constexpr unsigned long DEBOUNCE_MS = 30;
 constexpr unsigned long ACTUATOR_MAX_MS = 800;
-constexpr unsigned long BUTTON_DEBOUNCE_MS = 30;
-constexpr unsigned long HEARTBEAT_INTERVAL_MS = 30UL * 1000UL;
-constexpr unsigned long TELEMETRY_INTERVAL_MS = 60UL * 1000UL;
-constexpr unsigned long MQTT_RECONNECT_INTERVAL_MS = 2000;
-constexpr unsigned long WIFI_RECONNECT_INTERVAL_MS = 5000;
+constexpr unsigned long RESTART_GAP_MS = 500;
+constexpr uint16_t HISTORY_SIZE = 500;
+constexpr uint16_t OUTBOX_SIZE = 500;
 
-enum class DeviceState {
-  CONNECTING,
-  IDLE,
-  WAITING_FOR_BUTTON,
-  DISPENSING,
-};
-
-WiFiClient wifiClient;
-PubSubClient mqttClient(wifiClient);
+enum class DeviceState { IDLE, WAITING, DISPENSING };
+struct ButtonState { uint8_t raw; uint8_t stable; unsigned long changedAt; bool released; };
+struct SlotConfig { bool enabled; unsigned long runMs; };
+ButtonState buttons[SLOT_COUNT];
+SlotConfig slots[SLOT_COUNT];
+DeviceState state = DeviceState::IDLE;
 Preferences preferences;
-
-DeviceState deviceState = DeviceState::CONNECTING;
-String pendingCommandToken;
-time_t pendingExpiresAt = 0;
-unsigned long actuatorRunMs = DEFAULT_ACTUATOR_RUN_MS;
-unsigned long pumpStartedAtMs = 0;
-String pumpExecutedAt;
-unsigned long lastHeartbeatAtMs = 0;
-unsigned long lastTelemetryAtMs = 0;
-unsigned long lastMqttAttemptAtMs = 0;
-unsigned long lastWifiAttemptAtMs = 0;
-unsigned long eventSequence = 0;
-uint32_t configurationVersion = 0;
-String operatingMode = "NORMAL";
-bool slotEnabled = true;
-
-bool bootEventPublished = false;
+#if MQTT_USE_TLS
+WiFiClientSecure transport;
+#else
+WiFiClient transport;
+#endif
+MqttClient mqtt(transport);
+hw_timer_t* cutoffTimer = nullptr;
+volatile bool hardTimeout = false;
+bool storageReady = false;
+bool configReady = false;
+bool customerArmed = false;
+bool firstConnection = true;
+bool publishing = false;
 bool clockReady = false;
+uint32_t configurationVersion = 0;
+String operatingMode = "DISABLED";
+String commandToken;
+String executedAt;
+String pressedAt;
+String incomingCommand;
+String incomingConfig;
+int activeSlot = -1;
+unsigned long armedAtMs = 0;
+unsigned long pumpStartedAtMs = 0;
+unsigned long lastStoppedAtMs = 0;
+bool resting = false;
+unsigned long heartbeatMs = 30000;
+unsigned long telemetryMs = 60000;
+unsigned long pressWindowMs = 60000;
+unsigned long lastHeartbeat = 0;
+unsigned long lastTelemetry = 0;
+unsigned long lastWifiAttempt = 0;
+unsigned long lastMqttAttempt = 0;
+unsigned long lastOutboxAttempt = 0;
+uint32_t queueHead = 0;
+uint32_t queueTail = 0;
+uint32_t eventSequence = 0;
+uint16_t historyNext = 0;
 
-String topic(const char* suffix) {
-  return String("scentstation/") + MACHINE_SERIAL + "/" + suffix;
+String topic(const char* suffix) { return String("scentstation/") + MACHINE_SERIAL + "/" + suffix; }
+
+// Hardware timer cuts all pumps independently of Wi-Fi, MQTT, flash writes and loop().
+void ARDUINO_ISR_ATTR cutOffPumps() {
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) gpio_ll_set_level(&GPIO, PUMP_PINS[i], PUMP_OFF_LEVEL);
+  hardTimeout = true;
 }
 
-void setOutputsSafe() {
-  digitalWrite(PIN_PUMP, LOW);
-  digitalWrite(PIN_BUTTON_LIGHT, LOW);
-}
-
-void setIdle() {
-  setOutputsSafe();
-  pendingCommandToken = "";
-  pendingExpiresAt = 0;
-  deviceState = mqttClient.connected() ? DeviceState::IDLE : DeviceState::CONNECTING;
+void stopOutputs() {
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+    digitalWrite(PUMP_PINS[i], PUMP_OFF_LEVEL);
+    digitalWrite(LIGHT_PINS[i], LIGHT_OFF_LEVEL);
+  }
 }
 
 String timestampNow() {
-  time_t currentTime = time(nullptr);
-  if (currentTime < 1700000000) {
-    return "1970-01-01T00:00:00Z";
-  }
-
-  struct tm utcTime;
-  gmtime_r(&currentTime, &utcTime);
+  time_t epoch = time(nullptr);
+  struct tm utc;
+  gmtime_r(&epoch, &utc);
   char output[25];
-  strftime(output, sizeof(output), "%Y-%m-%dT%H:%M:%SZ", &utcTime);
+  strftime(output, sizeof(output), "%Y-%m-%dT%H:%M:%SZ", &utc);
   return String(output);
 }
 
+void commonFields(JsonDocument& doc) {
+  doc["schema_version"] = 1;
+  doc["machine_serial"] = MACHINE_SERIAL;
+  doc["ts"] = timestampNow();
+}
+
 String nextEventId() {
-  eventSequence++;
-  preferences.putULong("eventSeq", eventSequence);
-  return String(MACHINE_SERIAL) + "-" + String(static_cast<unsigned long>(time(nullptr))) + "-" +
-         String(eventSequence);
+  ++eventSequence;
+  if (preferences.putUInt("eventSeq", eventSequence) != sizeof(uint32_t)) storageReady = false;
+  return String(MACHINE_SERIAL) + "-" + String(static_cast<unsigned long>(time(nullptr))) + "-" + String(eventSequence);
 }
 
-template <typename TDocument>
-bool publishJson(const String& destination, TDocument& document, uint8_t qos = 0,
-                 bool retained = false) {
-  String payload;
-  serializeJson(document, payload);
-  bool published = mqttClient.publish(destination.c_str(), payload.c_str(), retained);
-  if (!published) {
-    Serial.printf("Failed to publish %s (required QoS: %u)\n", destination.c_str(), qos);
-  }
-  // PubSubClient publishes at QoS 0. The qos argument documents the contract;
-  // production firmware should use an MQTT client that supports QoS 1 publishing.
-  return published;
+bool publishPayload(const char* suffix, const String& payload, uint8_t qos) {
+  if (!mqtt.connected() || publishing) return false;
+  publishing = true;
+  const bool started = mqtt.beginMessage(topic(suffix), static_cast<unsigned long>(payload.length()), false, qos) == 1;
+  const bool written = started && mqtt.print(payload) == payload.length();
+  const bool sent = written && mqtt.endMessage() == 1;
+  publishing = false;
+  return sent;
 }
 
-void addCommonFields(JsonDocument& document) {
-  document["schema_version"] = 1;
-  document["machine_serial"] = MACHINE_SERIAL;
-  document["ts"] = timestampNow();
-}
+String queuePath(uint32_t sequence) { return "/outbox/" + String(sequence) + ".json"; }
 
-void publishHeartbeat() {
-  JsonDocument document;
-  addCommonFields(document);
-  document["firmware_version"] = "device-simulator-0.1.0";
-  document["configuration_version"] = configurationVersion;
-  document["operating_mode"] = operatingMode;
-  document["uptime_sec"] = millis() / 1000UL;
-  publishJson(topic("heartbeat"), document);
-  lastHeartbeatAtMs = millis();
-}
-
-void publishTelemetry() {
-  JsonDocument document;
-  addCommonFields(document);
-  document["door_open"] = false;
-  document["power_status"] = "AC";
-  JsonObject slot = document["slots"].add<JsonObject>();
-  slot["slot_number"] = SLOT_NUMBER;
-  slot["actuator_status"] =
-      deviceState == DeviceState::DISPENSING ? "RUNNING" : "IDLE";
-  publishJson(topic("telemetry"), document);
-  lastTelemetryAtMs = millis();
-}
-
-void publishEvent(const char* eventType) {
-  JsonDocument document;
-  addCommonFields(document);
-  document["device_event_id"] = nextEventId();
-  document["event_type"] = eventType;
-  document["payload"].to<JsonObject>();
-  publishJson(topic("event"), document, 1);
-}
-
-void publishAck(const String& commandToken) {
-  JsonDocument document;
-  addCommonFields(document);
-  document["command_token"] = commandToken;
-  document["stage"] = "ACK";
-  publishJson(topic("command/result"), document, 1);
-}
-
-void publishReject(const String& commandToken, const char* failureCode) {
-  JsonDocument document;
-  addCommonFields(document);
-  document["command_token"] = commandToken;
-  document["stage"] = "REJECT";
-  document["failure_code"] = failureCode;
-  publishJson(topic("command/result"), document, 1);
-}
-
-void publishResult(const String& commandToken, bool success, const char* failureCode,
-                   const String& executedAt) {
-  JsonDocument document;
-  addCommonFields(document);
-  document["command_token"] = commandToken;
-  document["stage"] = "RESULT";
-  document["device_event_id"] = nextEventId();
-  document["success"] = success;
-  document["executed_at"] = executedAt;
-  document["result_code"] = success ? "OK" : nullptr;
-  document["failure_code"] = success ? nullptr : failureCode;
-  publishJson(topic("command/result"), document, 1);
-}
-
-String tokenPreferenceKey(const String& token) {
-  // Preferences limits keys to 15 characters. This hash is only a local index.
-  uint32_t hash = 2166136261UL;
-  for (size_t i = 0; i < token.length(); i++) {
-    hash ^= static_cast<uint8_t>(token[i]);
-    hash *= 16777619UL;
-  }
-  char key[14];
-  snprintf(key, sizeof(key), "cmd%08lx", static_cast<unsigned long>(hash));
-  return String(key);
-}
-
-bool wasCommandExecuted(const String& token) {
-  String key = tokenPreferenceKey(token);
-  return preferences.getString(key.c_str(), "") == token;
-}
-
-void rememberExecutedCommand(const String& token) {
-  String key = tokenPreferenceKey(token);
-  preferences.putString(key.c_str(), token);
-}
-
-int64_t daysFromCivil(int year, unsigned month, unsigned day) {
-  // Convert a Gregorian date to days since the Unix epoch without timegm(),
-  // which is unavailable in some Arduino ESP32 core versions.
-  year -= month <= 2;
-  const int era = (year >= 0 ? year : year - 399) / 400;
-  const unsigned yearOfEra = static_cast<unsigned>(year - era * 400);
-  const unsigned dayOfYear =
-      (153 * (month > 2 ? month - 3 : month + 9) + 2) / 5 + day - 1;
-  const unsigned dayOfEra =
-      yearOfEra * 365 + yearOfEra / 4 - yearOfEra / 100 + dayOfYear;
-  return static_cast<int64_t>(era) * 146097 + static_cast<int64_t>(dayOfEra) - 719468;
-}
-
-bool parseIso8601(const String& input, time_t& output) {
-  int year, month, day, hour, minute, second;
-  char timezoneSign = 'Z';
-  int timezoneHour = 0;
-  int timezoneMinute = 0;
-
-  int fields = sscanf(input.c_str(), "%d-%d-%dT%d:%d:%d%c%d:%d", &year, &month, &day,
-                      &hour, &minute, &second, &timezoneSign, &timezoneHour,
-                      &timezoneMinute);
-  if (fields < 7 || (timezoneSign != 'Z' && timezoneSign != '+' && timezoneSign != '-')) {
-    return false;
-  }
-
-  if (year < 1970 || month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 ||
-      hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59) {
-    return false;
-  }
-
-  int64_t epochSeconds = daysFromCivil(year, static_cast<unsigned>(month),
-                                       static_cast<unsigned>(day)) *
-                             86400LL +
-                         hour * 3600LL + minute * 60LL + second;
-
-  if (timezoneSign == '+' || timezoneSign == '-') {
-    if (fields != 9) return false;
-    if (timezoneHour < 0 || timezoneHour > 23 || timezoneMinute < 0 ||
-        timezoneMinute > 59) {
-      return false;
-    }
-    long offsetSeconds = (timezoneHour * 3600L) + (timezoneMinute * 60L);
-    epochSeconds += timezoneSign == '+' ? -offsetSeconds : offsetSeconds;
-  }
-
-  if (epochSeconds <= 0) return false;
-  output = static_cast<time_t>(epochSeconds);
+bool queueMessage(const char* suffix, JsonDocument& doc) {
+  if (!storageReady || queueTail - queueHead >= OUTBOX_SIZE) return false;
+  JsonDocument envelope;
+  envelope["suffix"] = suffix;
+  envelope["message"].set(doc.as<JsonVariantConst>());
+  File file = LittleFS.open(queuePath(queueTail), "w");
+  if (!file) { storageReady = false; return false; }
+  const size_t expected = measureJson(envelope);
+  const size_t written = serializeJson(envelope, file);
+  file.close();
+  if (written != expected) { storageReady = false; return false; }
+  ++queueTail;
+  if (preferences.putUInt("qTail", queueTail) != sizeof(uint32_t)) { storageReady = false; return false; }
   return true;
 }
 
-const char* validateCommand(JsonDocument& document, time_t& expiresAt) {
-  if (!document["signature"].is<const char*>()) return "CMD_INVALID_SIGNATURE";
+void flushOutbox() {
+  if (!storageReady || queueHead == queueTail || !mqtt.connected()) return;
+  if (millis() - lastOutboxAttempt < 1000) return;
+  lastOutboxAttempt = millis();
+  const String path = queuePath(queueHead);
+  File file = LittleFS.open(path, "r");
+  JsonDocument envelope;
+  if (!file || deserializeJson(envelope, file)) { storageReady = false; return; }
+  file.close();
+  String payload;
+  serializeJson(envelope["message"], payload);
+  if (!publishPayload(envelope["suffix"].as<const char*>(), payload, 1)) return;
+  // Advance persisted head before deleting; a power loss can replay the same event safely.
+  if (preferences.putUInt("qHead", queueHead + 1) != sizeof(uint32_t)) { storageReady = false; return; }
+  ++queueHead;
+  LittleFS.remove(path);
+}
 
-#if !DEV_ALLOW_UNSIGNED_COMMANDS
-  // Fail closed until Ed25519 verification is implemented for production firmware.
-  return "CMD_INVALID_SIGNATURE";
+bool rememberToken(const String& token) {
+  File file = LittleFS.open("/history/" + String(historyNext) + ".txt", "w");
+  if (!file) return false;
+  const size_t written = file.print(token);
+  file.close();
+  if (written != token.length()) return false;
+  historyNext = (historyNext + 1) % HISTORY_SIZE;
+  return preferences.putUShort("histNext", historyNext) == sizeof(uint16_t);
+}
+
+bool tokenSeen(const String& token) {
+  for (uint16_t i = 0; i < HISTORY_SIZE; ++i) {
+    const String path = "/history/" + String(i) + ".txt";
+    if (!LittleFS.exists(path)) continue;
+    File file = LittleFS.open(path, "r");
+    if (!file) continue;
+    const String remembered = file.readString();
+    file.close();
+    if (remembered == token) return true;
+  }
+  return false;
+}
+
+// Sort every object recursively to match backend canonicalJson().
+String canonicalJson(JsonVariantConst value) {
+  if (value.is<JsonObjectConst>()) {
+    std::vector<String> keys;
+    for (JsonPairConst pair : value.as<JsonObjectConst>()) keys.emplace_back(pair.key().c_str());
+    std::sort(keys.begin(), keys.end(), [](const String& a, const String& b) { return a.compareTo(b) < 0; });
+    String result = "{";
+    for (size_t i = 0; i < keys.size(); ++i) {
+      if (i) result += ",";
+      String encodedKey;
+      JsonDocument keyDoc;
+      keyDoc.set(keys[i]);
+      serializeJson(keyDoc, encodedKey);
+      result += encodedKey + ":" + canonicalJson(value[keys[i]]);
+    }
+    return result + "}";
+  }
+  if (value.is<JsonArrayConst>()) {
+    String result = "[";
+    for (JsonVariantConst child : value.as<JsonArrayConst>()) {
+      if (result.length() > 1) result += ",";
+      result += canonicalJson(child);
+    }
+    return result + "]";
+  }
+  String result;
+  serializeJson(value, result);
+  return result;
+}
+
+bool verifyCommand(JsonDocument& doc) {
+  const String encodedSignature = doc["signature"] | "";
+  if (encodedSignature.isEmpty()) return false;
+#if DEV_ALLOW_UNSIGNED_COMMANDS
+  if (encodedSignature == "dev-unsigned" || encodedSignature == "DEV_ONLY") return true;
 #endif
-
-  if (String(document["machine_serial"].as<const char*>()) != MACHINE_SERIAL) {
-    return "CMD_WRONG_MACHINE";
+  String keyHex = COMMAND_PUBLIC_KEY_HEX;
+  if (keyHex.length() != 64 || encodedSignature.length() != 86) return false;
+  uint8_t key[32];
+  for (uint8_t i = 0; i < 32; ++i) {
+    const String byte = keyHex.substring(i * 2, i * 2 + 2);
+    if (!isxdigit(byte[0]) || !isxdigit(byte[1])) return false;
+    key[i] = strtoul(byte.c_str(), nullptr, 16);
   }
+  String base64 = encodedSignature;
+  base64.replace('-', '+'); base64.replace('_', '/'); base64 += "==";
+  uint8_t signature[64];
+  size_t length = 0;
+  if (mbedtls_base64_decode(signature, sizeof(signature), &length,
+      reinterpret_cast<const unsigned char*>(base64.c_str()), base64.length()) != 0 || length != 64) return false;
+  doc.remove("signature");
+  const String canonical = canonicalJson(doc.as<JsonVariantConst>());
+  doc["signature"] = encodedSignature;
+  return Ed25519::verify(signature, key, canonical.c_str(), canonical.length());
+}
 
-  const char* expiresAtText = document["expires_at"];
-  if (expiresAtText == nullptr || !parseIso8601(String(expiresAtText), expiresAt) ||
-      !clockReady || expiresAt <= time(nullptr)) {
-    return "CMD_EXPIRED";
-  }
+// Backend emits UTC ISO-8601 timestamps, optionally including milliseconds.
+bool commandExpiry(const String& value, time_t& expiry) {
+  struct tm utc = {};
+  char* end = strptime(value.c_str(), "%Y-%m-%dT%H:%M:%S", &utc);
+  if (!end) return false;
+  if (*end == '.') { ++end; if (!isdigit(*end)) return false; while (isdigit(*end)) ++end; }
+  if (strcmp(end, "Z") != 0) return false;
+  expiry = mktime(&utc); // setup() sets UTC; no local time zone is used.
+  return expiry > 0;
+}
 
-  String token = document["command_token"].as<String>();
-  if (token.isEmpty() || token == pendingCommandToken || wasCommandExecuted(token)) {
-    return "CMD_DUPLICATE";
-  }
-
-  if (operatingMode == "MAINTENANCE") return "MACHINE_IN_MAINTENANCE";
-  if (operatingMode == "DISABLED") return "MACHINE_IN_MAINTENANCE";
-  if (!slotEnabled || document["slot_number"].as<int>() != SLOT_NUMBER) return "SLOT_EMPTY";
+const char* safetyCheck(int slot) {
+  if (DOOR_SENSOR_PIN >= 0 && digitalRead(DOOR_SENSOR_PIN) == HIGH) return "DOOR_OPEN";
+  if (!configReady || operatingMode != "NORMAL") return "MACHINE_IN_MAINTENANCE";
+  if (slot < 0 || slot >= SLOT_COUNT || !slots[slot].enabled) return "SLOT_EMPTY";
   return nullptr;
 }
 
-void acceptCommand(JsonDocument& document) {
-  if (deviceState != DeviceState::IDLE) {
-    Serial.println("Ignored command: the device is already handling another command");
-    return;
-  }
-
-  String token = document["command_token"].as<String>();
-  time_t expiresAt = 0;
-  const char* failureCode = validateCommand(document, expiresAt);
-  if (failureCode != nullptr) {
-    publishReject(token, failureCode);
-    Serial.printf("Rejected command %s: %s\n", token.c_str(), failureCode);
-    return;
-  }
-
-  pendingCommandToken = token;
-  pendingExpiresAt = expiresAt;
-  deviceState = DeviceState::WAITING_FOR_BUTTON;
-  digitalWrite(PIN_BUTTON_LIGHT, HIGH);
-  publishAck(token);
-  publishTelemetry();
-  Serial.printf("Accepted command %s - button light ON - waiting for button\n", token.c_str());
+void rejectCommand(const String& token, const char* reason) {
+  JsonDocument doc;
+  commonFields(doc);
+  doc["command_token"] = token; doc["stage"] = "REJECT"; doc["failure_code"] = reason;
+  if (!queueMessage("command/result", doc)) Serial.println("ERROR: could not persist rejection");
+  Serial.printf("Command rejected: %s\n", reason);
 }
 
-void applyConfig(JsonDocument& document) {
-  uint32_t incomingVersion = document["configuration_version"] | 0;
-  if (incomingVersion <= configurationVersion) return;
-
-  unsigned long nextRunMs = actuatorRunMs;
-  bool nextSlotEnabled = slotEnabled;
-  JsonArray slots = document["slots"].as<JsonArray>();
-  for (JsonObject slot : slots) {
-    if (slot["slot_number"].as<int>() == SLOT_NUMBER) {
-      nextRunMs = slot["actuator_run_ms"] | actuatorRunMs;
-      nextSlotEnabled = slot["enabled"] | slotEnabled;
-      break;
-    }
-  }
-
-  if (nextRunMs == 0 || nextRunMs >= ACTUATOR_MAX_MS) {
-    Serial.println("Rejected config: actuator_run_ms is outside the safe range");
-    return;
-  }
-
-  actuatorRunMs = nextRunMs;
-  slotEnabled = nextSlotEnabled;
-  operatingMode = document["operating_mode"] | "NORMAL";
-  configurationVersion = incomingVersion;
-  preferences.putUInt("configVer", configurationVersion);
-  preferences.putULong("runMs", actuatorRunMs);
-  preferences.putBool("slotEnabled", slotEnabled);
-  preferences.putString("mode", operatingMode);
-  Serial.printf("Applied config version %lu\n", static_cast<unsigned long>(configurationVersion));
+void clearCommand() {
+  customerArmed = false;
+  stopOutputs();
+  state = DeviceState::IDLE;
+  activeSlot = -1;
+  commandToken = "";
+  pressedAt = "";
+  executedAt = "";
 }
 
-void mqttCallback(char* receivedTopic, byte* payload, unsigned int length) {
-  JsonDocument document;
-  DeserializationError error = deserializeJson(document, payload, length);
-  if (error) {
-    Serial.printf("Invalid MQTT JSON: %s\n", error.c_str());
-    return;
+void startPump(bool customer) {
+  if (customer && (!customerArmed || state != DeviceState::WAITING || activeSlot < 0)) return;
+  if (customer && digitalRead(LIGHT_PINS[activeSlot]) != LIGHT_ON_LEVEL) {
+    rejectCommand(commandToken, "ACTUATOR_FAULT"); clearCommand(); return;
   }
-
-  String incomingTopic(receivedTopic);
-  if (incomingTopic == topic("command")) {
-    String commandType = document["command_type"] | "";
-    if (commandType == "DISPENSE") {
-      acceptCommand(document);
-    } else if (commandType == "STATUS_REPORT") {
-      publishHeartbeat();
-      publishTelemetry();
-    }
-  } else if (incomingTopic == topic("config")) {
-    applyConfig(document);
+  if (const char* reason = safetyCheck(activeSlot)) {
+    rejectCommand(commandToken, reason); clearCommand(); return;
   }
-}
-
-void connectWifi() {
-  if (WiFi.status() == WL_CONNECTED) return;
-  if (millis() - lastWifiAttemptAtMs < WIFI_RECONNECT_INTERVAL_MS) return;
-  lastWifiAttemptAtMs = millis();
-  Serial.printf("Connecting to Wi-Fi %s...\n", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-}
-
-void connectMqtt() {
-  if (WiFi.status() != WL_CONNECTED || mqttClient.connected()) return;
-  if (millis() - lastMqttAttemptAtMs < MQTT_RECONNECT_INTERVAL_MS) return;
-  lastMqttAttemptAtMs = millis();
-
-  String clientId = String("device-") + MACHINE_SERIAL + "-" +
-                    String(static_cast<uint32_t>(ESP.getEfuseMac()), HEX);
-  if (!mqttClient.connect(clientId.c_str())) {
-    Serial.printf("MQTT connection failed, rc=%d\n", mqttClient.state());
-    return;
-  }
-
-  mqttClient.subscribe(topic("command").c_str(), 1);
-  mqttClient.subscribe(topic("config").c_str(), 1);
-  deviceState = DeviceState::IDLE;
-  Serial.println("MQTT connected - pump OFF - button light OFF");
-
-  if (!bootEventPublished) {
-    publishEvent("BOOT");
-    bootEventPublished = true;
-  } else {
-    publishEvent("RECONNECTED");
-  }
-  publishHeartbeat();
-  publishTelemetry();
-}
-
-void updateClockStatus() {
-  if (!clockReady && time(nullptr) >= 1700000000) {
-    clockReady = true;
-    Serial.println("NTP clock synchronized");
-  }
-}
-
-void handleButton() {
-  static int lastReading = HIGH;
-  static int stableState = HIGH;
-  static unsigned long changedAtMs = 0;
-
-  int reading = digitalRead(PIN_BUTTON);
-  if (reading != lastReading) {
-    lastReading = reading;
-    changedAtMs = millis();
-  }
-  if (millis() - changedAtMs < BUTTON_DEBOUNCE_MS || reading == stableState) return;
-
-  stableState = reading;
-  if (stableState != LOW || deviceState != DeviceState::WAITING_FOR_BUTTON) return;
-
-  if (!clockReady || time(nullptr) >= pendingExpiresAt) {
-    publishReject(pendingCommandToken, "CMD_EXPIRED");
-    Serial.println("Command expired before the button was pressed");
-    setIdle();
-    return;
-  }
-
-  rememberExecutedCommand(pendingCommandToken);
-  deviceState = DeviceState::DISPENSING;
-  digitalWrite(PIN_BUTTON_LIGHT, LOW);
-  digitalWrite(PIN_PUMP, HIGH);
+  // No network or flash operations occur between this timestamp and activation.
+  pressedAt = customer ? timestampNow() : "";
+  executedAt = timestampNow();
+  stopOutputs();
+  hardTimeout = false;
+  timerWrite(cutoffTimer, 0);
+  timerStart(cutoffTimer);
   pumpStartedAtMs = millis();
-  pumpExecutedAt = timestampNow();
-  publishTelemetry();
-  Serial.println("Button pressed - button light OFF - pump ON");
+  state = DeviceState::DISPENSING;
+  customerArmed = false;
+  digitalWrite(PUMP_PINS[activeSlot], PUMP_ON_LEVEL);
+  Serial.printf("Slot %d: pump ON\n", activeSlot + 1);
 }
 
-void handlePump() {
-  if (deviceState != DeviceState::DISPENSING) return;
-  unsigned long elapsed = millis() - pumpStartedAtMs;
-  if (elapsed < actuatorRunMs && elapsed < ACTUATOR_MAX_MS) return;
-
-  String completedToken = pendingCommandToken;
-  bool hardTimeout = actuatorRunMs > ACTUATOR_MAX_MS || elapsed >= ACTUATOR_MAX_MS;
-  digitalWrite(PIN_PUMP, LOW);
-  publishResult(completedToken, !hardTimeout, hardTimeout ? "HARD_TIMEOUT" : nullptr,
-                pumpExecutedAt);
-  Serial.println(hardTimeout ? "Pump stopped by HARD_TIMEOUT"
-                             : "Pump OFF - RESULT OK published");
-  setIdle();
-  publishTelemetry();
+void finishPump() {
+  stopOutputs();
+  timerStop(cutoffTimer);
+  JsonDocument doc;
+  commonFields(doc);
+  doc["command_token"] = commandToken;
+  doc["stage"] = "RESULT";
+  doc["device_event_id"] = nextEventId();
+  doc["success"] = !hardTimeout;
+  doc["executed_at"] = executedAt;
+  if (!pressedAt.isEmpty()) doc["pressed_at"] = pressedAt;
+  doc["result_code"] = hardTimeout ? nullptr : "OK";
+  doc["failure_code"] = hardTimeout ? "HARD_TIMEOUT" : nullptr;
+  // This is commanded actuator status, not proof of delivered liquid.
+  doc["sensor_snapshot"]["slot_number"] = activeSlot + 1;
+  doc["sensor_snapshot"]["actuator_run_ms"] = millis() - pumpStartedAtMs;
+  doc["sensor_snapshot"]["delivery_sensor_present"] = false;
+  if (!queueMessage("command/result", doc)) Serial.println("ERROR: result persistence failed; device disabled");
+  Serial.printf("Slot %d: pump OFF; result queued\n", activeSlot + 1);
+  clearCommand();
+  resting = true;
+  lastStoppedAtMs = millis();
 }
 
-void handlePendingExpiration() {
-  if (deviceState != DeviceState::WAITING_FOR_BUTTON || !clockReady) return;
-  if (time(nullptr) < pendingExpiresAt) return;
-  publishReject(pendingCommandToken, "CMD_EXPIRED");
-  Serial.println("Command expired - button light OFF");
-  setIdle();
+void acceptCommand(JsonDocument& doc) {
+  const String token = doc["command_token"] | "";
+  if (token.isEmpty() || token.length() > 255) return;
+  if (!verifyCommand(doc)) { rejectCommand(token, "CMD_INVALID_SIGNATURE"); return; }
+  if (String(doc["machine_serial"] | "") != MACHINE_SERIAL) { rejectCommand(token, "CMD_WRONG_MACHINE"); return; }
+  time_t expiry = 0;
+  if (!clockReady || !commandExpiry(doc["expires_at"] | "", expiry) || expiry <= time(nullptr)) {
+    rejectCommand(token, "CMD_EXPIRED"); return;
+  }
+  if (token == commandToken || tokenSeen(token)) { rejectCommand(token, "CMD_DUPLICATE"); return; }
+  // Ignore other commands while busy. No command is allowed to replace the armed slot.
+  if (state != DeviceState::IDLE || resting) return;
+  if (doc["schema_version"] != 1 || String(doc["command_type"] | "") != "DISPENSE") return;
+  const String type = doc["dispense_type"] | "";
+  if (type != "CUSTOMER" && type != "DIAGNOSTIC") return;
+  if (type == "DIAGNOSTIC" && !ALLOW_DIAGNOSTIC_COMMANDS) {
+    rejectCommand(token, "MACHINE_IN_MAINTENANCE"); return;
+  }
+  const int slot = (doc["slot_number"] | 0) - 1;
+  if (const char* reason = safetyCheck(slot)) { rejectCommand(token, reason); return; }
+  // Reserve a result slot and refuse to arm if durable replay protection cannot be written.
+  if (!storageReady || queueTail - queueHead >= OUTBOX_SIZE - 1 || !cutoffTimer || !rememberToken(token)) {
+    storageReady = false; rejectCommand(token, "ACTUATOR_FAULT"); return;
+  }
+  commandToken = token;
+  activeSlot = slot;
+  state = DeviceState::WAITING;
+  armedAtMs = millis();
+  if (type == "CUSTOMER") {
+    digitalWrite(LIGHT_PINS[slot], LIGHT_ON_LEVEL);
+    customerArmed = true;
+    // A button already held when authorization arrives must be released again.
+    for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+      const uint8_t level = digitalRead(BUTTON_PINS[i]);
+      buttons[i] = {level, LOW, millis(), false};
+    }
+  }
+  JsonDocument ack;
+  commonFields(ack); ack["command_token"] = token; ack["stage"] = "ACK";
+  String payload; serializeJson(ack, payload);
+  // ACK is not persisted/replayed: after reset the waiting command exists only on the server.
+  if (!publishPayload("command/result", payload, 1)) { clearCommand(); return; }
+  if (type == "DIAGNOSTIC") startPump(false);
+  Serial.printf("Command armed: slot %d\n", slot + 1);
 }
 
-void publishPeriodicMessages() {
-  if (!mqttClient.connected()) return;
-  if (millis() - lastHeartbeatAtMs >= HEARTBEAT_INTERVAL_MS) publishHeartbeat();
-  if (millis() - lastTelemetryAtMs >= TELEMETRY_INTERVAL_MS) publishTelemetry();
+void applyConfiguration(JsonDocument& doc) {
+  if (doc["schema_version"] != 1 || String(doc["machine_serial"] | "") != MACHINE_SERIAL) return;
+  const uint32_t version = doc["configuration_version"] | 0U;
+  if (version < configurationVersion || (configReady && version == configurationVersion)) return;
+  const String mode = doc["operating_mode"] | "";
+  if (mode != "NORMAL" && mode != "MAINTENANCE" && mode != "DISABLED") return;
+  const unsigned long heartbeat = doc["heartbeat_interval_sec"] | 0UL;
+  const unsigned long telemetry = doc["telemetry_interval_sec"] | 0UL;
+  const unsigned long window = doc["press_window_sec"] | 0UL;
+  if (!heartbeat || heartbeat > 3600 || !telemetry || telemetry > 3600 || !window || window > 3600) return;
+  SlotConfig next[SLOT_COUNT] = {};
+  bool seen[SLOT_COUNT] = {};
+  for (JsonObject slot : doc["slots"].as<JsonArray>()) {
+    const int index = (slot["slot_number"] | 0) - 1;
+    const unsigned long duration = slot["actuator_run_ms"] | 0UL;
+    if (index < 0 || index >= SLOT_COUNT || seen[index] || !duration || duration >= ACTUATOR_MAX_MS) return;
+    seen[index] = true;
+    next[index] = {slot["enabled"] | false, duration};
+  }
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) if (!seen[i]) return;
+  if (preferences.putUInt("cfgVersion", version) != sizeof(uint32_t)) { storageReady = false; return; }
+  configurationVersion = version;
+  operatingMode = mode;
+  heartbeatMs = heartbeat * 1000; telemetryMs = telemetry * 1000; pressWindowMs = window * 1000;
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) slots[i] = next[i];
+  configReady = true;
+  if (state == DeviceState::WAITING) {
+    if (const char* reason = safetyCheck(activeSlot)) { rejectCommand(commandToken, reason); clearCommand(); }
+  }
+  Serial.printf("Configuration applied: version %lu\n", static_cast<unsigned long>(version));
+}
+
+void readIncoming(int messageSize) {
+  const String destination = mqtt.messageTopic();
+  const bool retained = mqtt.messageRetain() == 1;
+  String payload;
+  const bool acceptable = messageSize > 0 && messageSize <= 4096;
+  if (acceptable) payload.reserve(messageSize);
+  while (mqtt.available()) { const char ch = mqtt.read(); if (acceptable) payload += ch; }
+  if (!acceptable) return;
+  // Callbacks can run inside QoS 1 publish waits: defer all business logic to loop().
+  if (destination == topic("config")) incomingConfig = payload;
+  if (destination == topic("command") && !retained && incomingCommand.isEmpty()) incomingCommand = payload;
+}
+
+void updateButtons() {
+  const unsigned long now = millis();
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+    ButtonState& button = buttons[i];
+    const uint8_t level = digitalRead(BUTTON_PINS[i]);
+    if (level != button.raw) { button.raw = level; button.changedAt = now; }
+    if (now - button.changedAt < DEBOUNCE_MS || button.raw == button.stable) continue;
+    button.stable = button.raw;
+    if (button.stable == HIGH) { button.released = true; continue; }
+    if (!button.released) continue;
+    button.released = false;
+    if (state == DeviceState::WAITING && activeSlot == i && now - armedAtMs < pressWindowMs) startPump(true);
+    else Serial.printf("Button %u ignored: no matching armed command\n", i + 1);
+  }
+}
+
+void publishHealth() {
+  if (!mqtt.connected() || !clockReady) return;
+  if (millis() - lastHeartbeat >= heartbeatMs) {
+    JsonDocument doc;
+    commonFields(doc);
+    doc["firmware_version"] = "scentstation-5slot-1.0.0";
+    doc["configuration_version"] = configurationVersion;
+    doc["operating_mode"] = operatingMode;
+    doc["uptime_sec"] = millis() / 1000;
+    String payload; serializeJson(doc, payload);
+    if (publishPayload("heartbeat", payload, 0)) lastHeartbeat = millis();
+  }
+  if (millis() - lastTelemetry >= telemetryMs) {
+    JsonDocument doc;
+    commonFields(doc);
+    doc["door_open"] = DOOR_SENSOR_PIN >= 0 && digitalRead(DOOR_SENSOR_PIN) == HIGH;
+    doc["power_status"] = "AC";
+    for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+      JsonObject slot = doc["slots"].add<JsonObject>();
+      slot["slot_number"] = i + 1;
+      slot["actuator_status"] = "IDLE";
+    }
+    String payload; serializeJson(doc, payload);
+    if (publishPayload("telemetry", payload, 0)) lastTelemetry = millis();
+  }
+}
+
+void connectNetwork() {
+  const unsigned long now = millis();
+  if (WiFi.status() != WL_CONNECTED) {
+    // Allow association to finish before replacing the station configuration.
+    const unsigned long wifiRetryMs = 20000;
+    if (lastWifiAttempt == 0 || now - lastWifiAttempt >= wifiRetryMs) {
+      lastWifiAttempt = now;
+      WiFi.disconnect(false, false);
+      WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+      Serial.println("Wi-Fi connection attempt started; retry in 20 seconds if needed");
+    }
+    return;
+  }
+  if (mqtt.connected() || now - lastMqttAttempt < 2000 || !clockReady) return;
+  lastMqttAttempt = now;
+  if (!mqtt.connect(MQTT_HOST, MQTT_PORT)) { Serial.println("MQTT connection failed; retrying"); return; }
+  mqtt.subscribe(topic("command"), 1);
+  mqtt.subscribe(topic("config"), 1);
+  lastHeartbeat = now - heartbeatMs;
+  lastTelemetry = now - telemetryMs;
+  JsonDocument event;
+  commonFields(event); event["device_event_id"] = nextEventId();
+  event["event_type"] = firstConnection ? "BOOT" : "RECONNECTED";
+  event["payload"]["door_sensor_present"] = DOOR_SENSOR_PIN >= 0;
+  event["payload"]["delivery_sensor_present"] = false;
+  queueMessage("event", event);
+  firstConnection = false;
+  Serial.println("MQTT connected; pumps remain OFF until an authorized command and button press");
 }
 
 void setup() {
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+    digitalWrite(PUMP_PINS[i], PUMP_OFF_LEVEL); pinMode(PUMP_PINS[i], OUTPUT);
+    digitalWrite(PUMP_PINS[i], PUMP_OFF_LEVEL);
+    digitalWrite(LIGHT_PINS[i], LIGHT_OFF_LEVEL); pinMode(LIGHT_PINS[i], OUTPUT);
+    digitalWrite(LIGHT_PINS[i], LIGHT_OFF_LEVEL);
+    pinMode(BUTTON_PINS[i], i == 0 ? INPUT_PULLUP : INPUT);
+    buttons[i] = {static_cast<uint8_t>(digitalRead(BUTTON_PINS[i])), LOW, millis(), false};
+  }
   Serial.begin(115200);
-  pinMode(PIN_PUMP, OUTPUT);
-  pinMode(PIN_BUTTON_LIGHT, OUTPUT);
-  pinMode(PIN_BUTTON, INPUT_PULLUP);
-  setOutputsSafe();
-
-  preferences.begin("scent-device", false);
-  eventSequence = preferences.getULong("eventSeq", 0);
-  configurationVersion = preferences.getUInt("configVer", 0);
-  actuatorRunMs = preferences.getULong("runMs", DEFAULT_ACTUATOR_RUN_MS);
-  slotEnabled = preferences.getBool("slotEnabled", true);
-  operatingMode = preferences.getString("mode", "NORMAL");
-
+  if (DOOR_SENSOR_PIN >= 0) pinMode(DOOR_SENSOR_PIN, INPUT_PULLUP);
+  const bool nvsReady = preferences.begin("scent-system", false);
+  storageReady = nvsReady && LittleFS.begin(INITIALIZE_DEVICE_STORAGE);
+  if (storageReady) storageReady = LittleFS.exists("/outbox") || LittleFS.mkdir("/outbox");
+  if (storageReady) storageReady = LittleFS.exists("/history") || LittleFS.mkdir("/history");
+  queueHead = preferences.getUInt("qHead", 0);
+  queueTail = preferences.getUInt("qTail", 0);
+  // Recover an append written just before power loss, without generating a new event ID.
+  if (storageReady && LittleFS.exists(queuePath(queueTail))) {
+    ++queueTail; preferences.putUInt("qTail", queueTail);
+  }
+  if (queueTail < queueHead || queueTail - queueHead > OUTBOX_SIZE) storageReady = false;
+  eventSequence = preferences.getUInt("eventSeq", 0);
+  historyNext = preferences.getUShort("histNext", 0) % HISTORY_SIZE;
+  configurationVersion = preferences.getUInt("cfgVersion", 0);
+  cutoffTimer = timerBegin(1000000);
+  if (cutoffTimer) {
+    timerAttachInterrupt(cutoffTimer, &cutOffPumps);
+    timerAlarm(cutoffTimer, ACTUATOR_MAX_MS * 1000, false, 0);
+    timerStop(cutoffTimer);
+  }
   WiFi.mode(WIFI_STA);
-  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
-  mqttClient.setCallback(mqttCallback);
-  mqttClient.setBufferSize(4096);
+#if MQTT_USE_TLS
+  transport.setCACert(MQTT_ROOT_CA);
+#endif
+  mqtt.setId(String("machine-") + MACHINE_SERIAL);
+  mqtt.setUsernamePassword(MQTT_USERNAME, MQTT_PASSWORD);
+  mqtt.setCleanSession(true); // Pending commands must not survive a device reboot.
+  mqtt.setConnectionTimeout(2000);
+  mqtt.onMessage(readIncoming);
+  setenv("TZ", "UTC0", 1); tzset();
   configTime(0, 0, "pool.ntp.org", "time.google.com");
-
-  Serial.println("ScentStation Device Simulator - 1 pump");
-  Serial.println("Safe startup: pump OFF - button light OFF");
-  // Allow the first connection attempts to run immediately.
-  lastWifiAttemptAtMs = millis() - WIFI_RECONNECT_INTERVAL_MS;
-  lastMqttAttemptAtMs = millis() - MQTT_RECONNECT_INTERVAL_MS;
+  lastWifiAttempt = 0;
+  Serial.println("ScentStation system firmware: safe startup, all pumps and lights OFF");
+  if (!storageReady) Serial.println("ERROR: durable storage unavailable; pumps disabled");
+#if DEV_ALLOW_UNSIGNED_COMMANDS
+  Serial.println("WARNING: unsigned development commands enabled; use only on a trusted LAN");
+#endif
 }
 
 void loop() {
-  connectWifi();
-  connectMqtt();
-  mqttClient.loop();
-  updateClockStatus();
-  handlePendingExpiration();
-  handleButton();
-  handlePump();
-  publishPeriodicMessages();
+  // Prioritize pump cutoff; never enter a blocking network/flash operation while pumping.
+  if (state == DeviceState::DISPENSING) {
+    if (hardTimeout || millis() - pumpStartedAtMs >= slots[activeSlot].runMs) finishPump();
+    else delay(1);
+    return;
+  }
+  clockReady = time(nullptr) >= 1700000000;
+  if (resting && millis() - lastStoppedAtMs >= RESTART_GAP_MS) resting = false;
+  if (state == DeviceState::WAITING && millis() - armedAtMs >= pressWindowMs) {
+    stopOutputs(); rejectCommand(commandToken, "PRESS_TIMEOUT"); clearCommand();
+  }
+  updateButtons();
+  if (state == DeviceState::DISPENSING) return;
+  connectNetwork();
+  mqtt.poll();
+  if (!incomingConfig.isEmpty()) {
+    JsonDocument doc;
+    if (!deserializeJson(doc, incomingConfig)) applyConfiguration(doc);
+    incomingConfig = "";
+  }
+  if (!incomingCommand.isEmpty()) {
+    JsonDocument doc;
+    String payload = incomingCommand; incomingCommand = "";
+    if (!deserializeJson(doc, payload)) acceptCommand(doc);
+  }
+  if (state == DeviceState::DISPENSING) return;
+  flushOutbox();
+  publishHealth();
 }

@@ -504,9 +504,11 @@ export class MchService {
   /**
    * Bật hoặc tắt slot từ xa (FR-MCH-12, FR-MCH-17).
    *
-   * Chỉ chuyển giữa AVAILABLE ↔ UNAVAILABLE. Slot đang MAINTENANCE/DISABLED không bật được bằng
-   * endpoint này — bật lại sẽ âm thầm bỏ qua quy trình bảo trì. Gọi lặp lại cùng trạng thái thì trả
-   * về như cũ. Tắt slot đang có hợp đồng vẫn cho phép (ops cần xử lý sự cố) nhưng ghi WARNING.
+   * Chuyển giữa AVAILABLE ↔ UNAVAILABLE, và bật lại slot MAINTENANCE — trạng thái slot chỉ có khi hệ
+   * thống tự tắt sau CONSECUTIVE_FAIL_ALERT lượt lỗi liên tiếp; Operations Staff bật lại sau khi
+   * kiểm tra (FR-MCH-18, ADR-0015). Slot DISABLED (đã xóa mềm) không bật được bằng endpoint này. Gọi
+   * lặp lại cùng trạng thái thì trả về như cũ. Tắt slot đang có hợp đồng vẫn cho phép (ops cần xử lý
+   * sự cố) nhưng ghi WARNING.
    */
   async setSlotEnabled(
     actor: AuthenticatedUser,
@@ -521,7 +523,7 @@ export class MchService {
 
     if (enabled) {
       if (slot.status === 'AVAILABLE') return toSlotDto(slot);
-      if (slot.status !== 'UNAVAILABLE') {
+      if (slot.status !== 'UNAVAILABLE' && slot.status !== 'MAINTENANCE') {
         throw invalidField('enabled', 'mch.slotNotDirectlyEnableable', {
           status: translate(DEFAULT_LOCALE, `slotStatus.${slot.status}`),
         });

@@ -132,13 +132,13 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ---
 
 ## FR-USR-06 — Thương hiệu tự đăng ký
-* **Statement:** Hệ thống phải cho phép thương hiệu tự đăng ký bằng tên thương hiệu, email và mật khẩu, tạo cùng lúc một thương hiệu và một tài khoản Brand Admin gắn với thương hiệu đó (ADR-0013).
+* **Statement:** Hệ thống phải cho phép thương hiệu tự đăng ký bằng tên thương hiệu, họ tên người đại diện, email và mật khẩu, tạo cùng lúc một thương hiệu và một tài khoản Brand Admin gắn với thương hiệu đó (ADR-0013).
 * **Traces:** BR-011, ADR-0013 · **Priority:** M
 * **API:** `POST /auth/register-brand`
 * **Acceptance criteria:**
-  * **AC1:** Given tên thương hiệu, email hợp lệ và mật khẩu hợp lệ (tối thiểu 8 ký tự),  
+  * **AC1:** Given tên thương hiệu, họ tên, email hợp lệ và mật khẩu hợp lệ (tối thiểu 8 ký tự),  
     When gọi `POST /auth/register-brand`,  
-    Then trong cùng một transaction: tạo `Brand` ở trạng thái `ACTIVE` (với `code` tự sinh từ tên thương hiệu), tạo `User` ở trạng thái `ACTIVE` (không qua `INVITED`) với vai trò `BRAND_ADMIN`, tạo bản ghi `email_verifications` với `expires_at = now() + 24 giờ`, và trả về `201 Created` kèm thông tin thương hiệu và người dùng.
+    Then trong cùng một transaction: tạo `Brand` ở trạng thái `ACTIVE` (với `code` tự sinh từ tên thương hiệu), tạo `User` ở trạng thái `ACTIVE` (không qua `INVITED`) với vai trò `BRAND_ADMIN`, tạo bản ghi `email_verifications` duy nhất của tài khoản với `expires_at = now() + EMAIL_VERIFICATION_TOKEN_TTL_HOURS`, và trả về `201 Created` kèm `brandId`, `userId`, `email`. Tài khoản đăng nhập được ngay.
   * **AC2 (Ca biên - Email trùng):** Given email đã tồn tại trong hệ thống (không phân biệt hoa thường),  
     When gọi đăng ký,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`, chỉ ra lỗi ở trường `email`.
@@ -155,19 +155,19 @@ không ghi vào nhật ký kiểm toán. Tài khoản ở `INVITED` cho tới kh
 ## FR-USR-07 — Xác minh email của tài khoản tự đăng ký
 * **Statement:** Hệ thống phải yêu cầu xác minh email của tài khoản tự đăng ký trước khi cho phép tạo phiên thanh toán thuê slot (ADR-0013).
 * **Traces:** BR-003, BR-011, ADR-0013 · **Priority:** M
-* **API:** `POST /auth/verify-email`, `POST /auth/resend-verification`
+* **API:** `POST /auth/verify-email`, `POST /auth/verify-email/resend`
 * **Acceptance criteria:**
   * **AC1:** Given tài khoản tự đăng ký có mã xác minh chưa hết hạn,  
     When gọi `POST /auth/verify-email` với mã xác minh hợp lệ,  
-    Then hệ thống cập nhật `verified_at = now()` và trả về `200` với `{ verified: true }`.
+    Then hệ thống cập nhật `verified_at = now()` và trả về `204`.
   * **AC2 (Idempotency):** Given email đã được xác minh thành công trước đó,  
     When gọi lại `POST /auth/verify-email` với cùng mã xác minh,  
-    Then hệ thống vẫn trả về `200` với `{ verified: true }`, không báo lỗi.
+    Then hệ thống vẫn trả về `204`, không báo lỗi.
   * **AC3 (Ca biên - Mã sai hoặc quá hạn):** Given mã xác minh không tồn tại hoặc đã quá thời hạn `EMAIL_VERIFICATION_TOKEN_TTL_HOURS` (24 giờ),  
     When gọi xác minh,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
-  * **AC4 (Gửi lại mã xác minh):** Given tài khoản chưa xác minh email,  
-    When gọi `POST /auth/resend-verification`,  
+  * **AC4 (Gửi lại mã xác minh):** Given tài khoản đang đăng nhập chưa xác minh email,  
+    When gọi `POST /auth/verify-email/resend`,  
     Then hệ thống sinh mã ngẫu nhiên mới thay thế mã cũ trên bản ghi, cập nhật lại hạn dùng `expires_at = now() + 24 giờ`, và mã cũ lập tức mất hiệu lực.
   * **AC5 (Chặn tạo phiên thuê slot khi chưa xác minh):** Given tài khoản tự đăng ký có bản ghi `email_verifications` mà `verified_at` đang NULL,  
     When gọi `POST /rental-checkouts`,  

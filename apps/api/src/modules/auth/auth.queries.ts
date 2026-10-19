@@ -283,24 +283,19 @@ export class AuthQueries {
     return row !== undefined;
   }
 
+  /**
+   * FR-USR-06 (ADR-0013): trong một transaction tạo Brand ACTIVE, tài khoản Brand Admin ACTIVE và
+   * dòng `email_verifications` duy nhất của tài khoản đó (FR-USR-07).
+   */
   async registerBrandAndAdmin(params: {
     brandName: string;
     brandCode: string;
     email: string;
     fullName: string;
     passwordHash: string;
-  }): Promise<{
-    brand: { id: string; code: string; name: string; status: 'ACTIVE'; createdAt: Date };
-    user: {
-      id: string;
-      brandId: string;
-      email: string;
-      fullName: string;
-      status: 'ACTIVE';
-      roles: RoleCode[];
-      createdAt: Date;
-    };
-  }> {
+    tokenHash: string;
+    expiresAt: Date;
+  }): Promise<{ brandId: string; userId: string; email: string }> {
     return this.db.transaction().execute(async (tx) => {
       const brand = await tx
         .insertInto('brands')
@@ -309,7 +304,7 @@ export class AuthQueries {
           name: params.brandName,
           status: 'ACTIVE',
         })
-        .returning(['id', 'code', 'name', 'status', 'created_at'])
+        .returning('id')
         .executeTakeFirstOrThrow();
 
       const user = await tx
@@ -321,7 +316,7 @@ export class AuthQueries {
           password_hash: params.passwordHash,
           status: 'ACTIVE',
         })
-        .returning(['id', 'brand_id', 'email', 'full_name', 'status', 'created_at'])
+        .returning(['id', 'email'])
         .executeTakeFirstOrThrow();
 
       const role = await tx
@@ -342,116 +337,83 @@ export class AuthQueries {
           .execute();
       }
 
-      return {
-        brand: {
-          id: brand.id,
-          code: brand.code,
-          name: brand.name,
-          status: brand.status as 'ACTIVE',
-          createdAt: brand.created_at,
-        },
-        user: {
-          id: user.id,
-          brandId: user.brand_id as string,
+      await tx
+        .insertInto('email_verifications')
+        .values({
+          user_id: user.id,
           email: user.email,
-          fullName: user.full_name,
-          status: user.status as 'ACTIVE',
-          roles: ['BRAND_ADMIN' as RoleCode],
-          createdAt: user.created_at,
-        },
-      };
+          token_hash: params.tokenHash,
+          expires_at: params.expiresAt,
+        })
+        .execute();
+
+      return { brandId: brand.id, userId: user.id, email: user.email };
     });
   }
 
-  async createEmailVerification(
-    userId: string,
-    email: string,
-    tokenHash: string,
-    expiresAt: Date,
-  ): Promise<string> {
-    const row = await this.db
-      .insertInto('email_verifications')
-      .values({
-        user_id: userId,
-        email,
-        token_hash: tokenHash,
-        expires_at: expiresAt,
-      })
-      .returning('id')
-      .executeTakeFirstOrThrow();
-    return row.id;
-  }
-
-  async findEmailVerificationByTokenHash(tokenHash: string): Promise<
-    | {
-        id: string;
-        userId: string;
-        email: string;
-        tokenHash: string;
-        expiresAt: Date;
-        verifiedAt: Date | null;
-      }
-    | undefined
-  > {
+  async findEmailVerificationByTokenHash(tokenHash: string): Promise<EmailVerificationRow | null> {
     const row = await this.db
       .selectFrom('email_verifications')
-      .selectAll()
+      .select(['id', 'user_id', 'email', 'expires_at', 'verified_at'])
       .where('token_hash', '=', tokenHash)
       .executeTakeFirst();
-    if (!row) return undefined;
-    return {
-      id: row.id,
-      userId: row.user_id,
-      email: row.email,
-      tokenHash: row.token_hash,
-      expiresAt: row.expires_at,
-      verifiedAt: row.verified_at,
-    };
+    return row ? toEmailVerification(row) : null;
+  }
+
+  /** Không có dòng = tài khoản do Super Admin tạo, không cần xác minh (FR-USR-07). */
+  async findEmailVerificationByUser(userId: string): Promise<EmailVerificationRow | null> {
+    const row = await this.db
+      .selectFrom('email_verifications')
+      .select(['id', 'user_id', 'email', 'expires_at', 'verified_at'])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
+    return row ? toEmailVerification(row) : null;
   }
 
   async markEmailVerified(verificationId: string, verifiedAt: Date): Promise<void> {
     await this.db
       .updateTable('email_verifications')
-      .set({ verified_at: verifiedAt })
+      .set({ verified_at: verifiedAt, updated_at: verifiedAt })
       .where('id', '=', verificationId)
       .execute();
   }
 
-  async findLatestUnverifiedByEmail(email: string): Promise<
-    | {
-        id: string;
-        userId: string;
-        email: string;
-        tokenHash: string;
-        expiresAt: Date;
-        verifiedAt: Date | null;
-      }
-    | undefined
-  > {
-    const row = await this.db
-      .selectFrom('email_verifications')
-      .selectAll()
-      .where('email', '=', email)
-      .orderBy('created_at', 'desc')
-      .executeTakeFirst();
-    if (!row) return undefined;
-    return {
-      id: row.id,
-      userId: row.user_id,
-      email: row.email,
-      tokenHash: row.token_hash,
-      expiresAt: row.expires_at,
-      verifiedAt: row.verified_at,
-    };
-  }
-
-  async findUserByEmail(email: string): Promise<{ id: string; brandId: string | null } | undefined> {
-    const row = await this.db
-      .selectFrom('users')
-      .select(['id', 'brand_id'])
-      .where('email', '=', email)
-      .executeTakeFirst();
-    return row ? { id: row.id, brandId: row.brand_id } : undefined;
+  /** Gửi lại mã: ghi đè mã cũ trên dòng duy nhất của tài khoản — mã cũ mất hiệu lực ngay. */
+  async replaceEmailVerificationToken(
+    verificationId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    now: Date,
+  ): Promise<void> {
+    await this.db
+      .updateTable('email_verifications')
+      .set({ token_hash: tokenHash, expires_at: expiresAt, updated_at: now })
+      .where('id', '=', verificationId)
+      .where('verified_at', 'is', null)
+      .execute();
   }
 }
 
+export interface EmailVerificationRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly email: string;
+  readonly expiresAt: Date;
+  readonly verifiedAt: Date | null;
+}
+
+function toEmailVerification(row: {
+  id: string;
+  user_id: string;
+  email: string;
+  expires_at: Date;
+  verified_at: Date | null;
+}): EmailVerificationRow {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    email: row.email,
+    expiresAt: row.expires_at,
+    verifiedAt: row.verified_at,
+  };
+}

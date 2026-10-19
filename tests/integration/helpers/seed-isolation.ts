@@ -195,38 +195,30 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
       );
     }
 
-    // ADR-0013 / FR-SLT-49: Cả hai thương hiệu seed đã đồng ý hợp đồng khung hiện hành
-    let currentAgreement = await client.query<{ id: string; version: string; content_hash: string }>(
-      `SELECT id, version, content_hash FROM agreement_versions WHERE is_active = true LIMIT 1`,
+    // ADR-0013 / FR-SLT-49: cả hai thương hiệu seed đã đồng ý hợp đồng khung hiện hành. CSDL test
+    // chưa có phiên bản nào thì công bố một bản — bản đó ở lại cho các lần chạy sau (đã công bố thì
+    // bất biến, và agreement_acceptances chỉ cho thêm mới).
+    let current = await client.query<{ id: string; content_hash: string }>(
+      `SELECT id, content_hash FROM agreement_versions WHERE is_current`,
     );
-    if (!currentAgreement.rows[0]) {
-      await client.query(`UPDATE agreement_versions SET is_active = true WHERE version = 'v1.0'`);
-      currentAgreement = await client.query<{ id: string; version: string; content_hash: string }>(
-        `SELECT id, version, content_hash FROM agreement_versions WHERE is_active = true LIMIT 1`,
+    if (!current.rows[0]) {
+      const content = `Điều khoản dịch vụ ScentStation (test ${runId}).`;
+      current = await client.query<{ id: string; content_hash: string }>(
+        `INSERT INTO agreement_versions
+           (version, title, content, content_hash, is_current, published_at, created_by)
+         VALUES ($1, 'Hợp đồng khung (test)', $2, encode(sha256(convert_to($2, 'UTF8')), 'hex'),
+                 true, now(), $3)
+         RETURNING id, content_hash`,
+        [`test-${runId}`, content, superAdminId],
       );
     }
-    let agreementVersionId = currentAgreement.rows[0]?.id;
-    let agreementVersion = currentAgreement.rows[0]?.version;
-    let agreementHash = currentAgreement.rows[0]?.content_hash;
-    if (!agreementVersionId) {
-      agreementVersion = 'v1.0';
-      agreementHash = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
-      const inserted = await client.query<{ id: string }>(
-        `INSERT INTO agreement_versions (version, title, content, content_hash, is_active)
-         VALUES ($1, 'Hợp đồng khung v1.0', 'Điều khoản.', $2, true)
-         ON CONFLICT (version) DO UPDATE SET is_active = true
-         RETURNING id`,
-        [agreementVersion, agreementHash],
-      );
-      agreementVersionId = inserted.rows[0]!.id;
-    }
-
+    const agreement = current.rows[0]!;
     await client.query(
-      `INSERT INTO agreement_acceptances (brand_id, agreement_version_id, version, accepted_by, content_hash)
-       VALUES ($1, $2, $3, $4, $5),
-              ($6, $2, $3, $7, $5)
-       ON CONFLICT (brand_id, agreement_version_id) DO NOTHING`,
-      [brandA, agreementVersionId, agreementVersion, brandAdminAId, agreementHash, brandB, brandAdminBId],
+      `INSERT INTO agreement_acceptances
+         (brand_id, accepted_by, kind, agreement_version_id, content_hash, ip_address, user_agent)
+       VALUES ($1, $2, 'FRAMEWORK', $5, $6, '127.0.0.1', 'seed-isolation'),
+              ($3, $4, 'FRAMEWORK', $5, $6, '127.0.0.1', 'seed-isolation')`,
+      [brandA, brandAdminAId, brandB, brandAdminBId, agreement.id, agreement.content_hash],
     );
 
     await client.query(
@@ -450,7 +442,30 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
  * `trg_audit_logs_append_only`, FR-AUD-09) mà `audit_logs.brand_id` lại có khóa ngoại tới `brands`,
  * nên mỗi lần đăng nhập là một hàng khóa vĩnh viễn thương hiệu đó lại. Mã thương hiệu có hậu tố
  * theo từng lần chạy nên vài hàng bỏ lại không làm lần chạy sau hỏng.
+ *
+ * Cùng lý do với `agreement_acceptances` (chỉ cho thêm mới, ADR-0013): thương hiệu và tài khoản đã
+ * đồng ý hợp đồng khung — cùng tài khoản đã soạn phiên bản hợp đồng — được bỏ lại.
  */
+/**
+ * Khách trước đã rời màn QR: đơn chờ thanh toán của máy → EXPIRED, thanh toán PENDING → EXPIRED — như
+ * kiosk gọi hủy hoặc job hết hạn. Mỗi máy chỉ một đơn chờ thanh toán (FR-ORD-35, uq_machine_open_order),
+ * nên test tạo đơn mới mà không trả tiền đơn cũ phải gọi hàm này trước.
+ */
+export async function releaseOpenOrders(client: pg.Client, machineId: string): Promise<void> {
+  await client.query(
+    `UPDATE payments SET status = 'EXPIRED'
+      WHERE status = 'PENDING'
+        AND order_id IN (SELECT id FROM orders
+                          WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT'))`,
+    [machineId],
+  );
+  await client.query(
+    `UPDATE orders SET status = 'EXPIRED'
+      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
+    [machineId],
+  );
+}
+
 export async function cleanupIsolationFixture(
   client: pg.Client,
   fx: IsolationFixture,
@@ -471,8 +486,9 @@ export async function cleanupIsolationFixture(
     [`UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM sensor_readings WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_events WHERE machine_id = $1`, [fx.machineId]],
+    // Cảnh báo do test sinh ra (vd FR-ALR-04 tự tắt slot) trỏ tới máy và slot của fixture.
+    [`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM orders WHERE machine_id = $1`, [fx.machineId]],
-    [`DELETE FROM agreement_acceptances WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],
@@ -485,7 +501,13 @@ export async function cleanupIsolationFixture(
     [`DELETE FROM refresh_sessions WHERE user_id = ANY($1::uuid[])`, [users]],
     [`DELETE FROM user_roles WHERE user_id = ANY($1::uuid[])`, [users]],
     [`DELETE FROM role_permissions WHERE role_id = ANY($1::uuid[])`, [roles]],
-    [`DELETE FROM users WHERE id = ANY($1::uuid[])`, [users]],
+    // Người đã đồng ý hoặc soạn hợp đồng khung bị khóa lại như `brands` (xem chú thích hàm).
+    [
+      `DELETE FROM users u WHERE u.id = ANY($1::uuid[])
+         AND NOT EXISTS (SELECT 1 FROM agreement_acceptances a WHERE a.accepted_by = u.id)
+         AND NOT EXISTS (SELECT 1 FROM agreement_versions v WHERE v.created_by = u.id)`,
+      [users],
+    ],
     [`DELETE FROM roles WHERE id = ANY($1::uuid[])`, [roles]],
   ];
 

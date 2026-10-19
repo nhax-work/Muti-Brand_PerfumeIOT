@@ -54,7 +54,7 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: 'Đăng ký' }));
 
-    expect(await screen.findAllByText('Bắt buộc nhập')).toHaveLength(4);
+    expect(await screen.findAllByText('Bắt buộc nhập')).toHaveLength(5);
     expect(mockPost).not.toHaveBeenCalled();
   });
 
@@ -62,6 +62,9 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
     renderPage();
     fireEvent.change(screen.getByPlaceholderText('Tên thương hiệu'), {
       target: { value: 'Maison De Parfum' },
+    });
+    fireEvent.change(screen.getByLabelText('Họ tên'), {
+      target: { value: 'Nguyễn Văn A' },
     });
     fireEvent.change(screen.getByPlaceholderText('contact@example.com'), {
       target: { value: 'contact@parfum.vn' },
@@ -75,7 +78,7 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Đăng ký' }));
 
-    expect(await screen.findByText('Mật khẩu xác nhận không khớp')).toBeTruthy();
+    expect(await screen.findByText('Hai mật khẩu không khớp')).toBeTruthy();
     expect(mockPost).not.toHaveBeenCalled();
   });
 
@@ -84,7 +87,7 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
       data: {
         brandId: 'brand-uuid-123',
         userId: 'user-uuid-456',
-        message: 'Đăng ký thương hiệu thành công',
+        email: 'contact@parfum.vn',
       },
       response: new Response(null, { status: 201 }),
     });
@@ -92,6 +95,9 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
     renderPage();
     fireEvent.change(screen.getByPlaceholderText('Tên thương hiệu'), {
       target: { value: 'Maison De Parfum' },
+    });
+    fireEvent.change(screen.getByLabelText('Họ tên'), {
+      target: { value: 'Nguyễn Văn A' },
     });
     fireEvent.change(screen.getByPlaceholderText('contact@example.com'), {
       target: { value: 'contact@parfum.vn' },
@@ -109,6 +115,7 @@ describe('Màn hình đăng ký thương hiệu (FR-USR-06)', () => {
     expect(mockPost).toHaveBeenCalledWith('/auth/register-brand', {
       body: {
         brandName: 'Maison De Parfum',
+        fullName: 'Nguyễn Văn A',
         email: 'contact@parfum.vn',
         password: 'Password123!',
       },

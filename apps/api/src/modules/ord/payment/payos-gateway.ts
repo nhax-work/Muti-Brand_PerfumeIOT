@@ -56,7 +56,9 @@ const WebhookData = z.object({
 
 const WebhookBody = z.object({
   code: z.string(),
-  success: z.boolean(),
+  // Webhook thật có `success`, nhưng giao dịch mẫu PayOS gửi lúc lưu Webhook URL thì không — bắt buộc
+  // trường này làm URL bị từ chối 401 và không đăng ký được. Kết quả giao dịch đọc từ `code`.
+  success: z.boolean().optional(),
   data: z.record(z.string(), z.unknown()),
   signature: z.string().min(1),
 });
@@ -246,7 +248,8 @@ export class PayosPaymentGateway implements PaymentGateway {
       };
     }
 
-    const succeeded = body.data.success && body.data.code === '00' && data.data.code === '00';
+    const succeeded =
+      body.data.success !== false && body.data.code === '00' && data.data.code === '00';
     return {
       kind: 'VERIFIED',
       payload: stored,

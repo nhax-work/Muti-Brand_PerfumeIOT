@@ -117,3 +117,18 @@ describe('apps/api không viết chuỗi thẳng vào chỗ ném lỗi', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('chữ hiển thị không lộ ký hiệu nội bộ', () => {
+  // Người dùng (thương hiệu, nhân viên vận hành, khách) không biết FR-SLT-29 hay ADR-0013 là gì.
+  // Mã đặc tả để trong comment và tài liệu; chữ trên màn hình phải tự giải thích được.
+  const SPEC_CODE = /\b(?:FR|NFR|BR|ADR)-[A-Z]*-?\d+/;
+  // Tên biến cấu hình (REFUND_ACCOUNT_ENC_KEY, PAID_QUEUE_MAX_SEC…) cũng là chi tiết nội bộ.
+  const CONFIG_NAME = /\b[A-Z]+(?:_[A-Z]+){2,}\b/;
+
+  it.each(LOCALES)('catalog %s không chứa mã đặc tả hay tên biến cấu hình', (locale) => {
+    const leaks = entriesOf(locale)
+      .filter(([, text]) => SPEC_CODE.test(text) || CONFIG_NAME.test(text))
+      .map(([key, text]) => `${key}: ${text}`);
+    expect(leaks).toEqual([]);
+  });
+});

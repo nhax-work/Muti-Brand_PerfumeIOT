@@ -33,6 +33,23 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    // Đổi mật khẩu cần đăng nhập nhưng không có menu — tài khoản INVITED chưa dùng được màn nào khác.
+    element: (
+      <RequireAuth>
+        <AuthLayout />
+      </RequireAuth>
+    ),
+    children: [
+      {
+        path: '/change-password',
+        lazy: () =>
+          import('@/routes/change-password/ChangePasswordPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+    ],
+  },
+  {
     element: (
       <RequireAuth>
         <AdminLayout />
@@ -72,6 +89,41 @@ export const router = createBrowserRouter([
         path: '/refund-claims',
         lazy: () =>
           import('@/routes/refund-claims/RefundClaimsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/products',
+        lazy: () =>
+          import('@/routes/products/ProductsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/brands',
+        lazy: () => import('@/routes/brands/BrandsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/users',
+        lazy: () => import('@/routes/users/UsersPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/brand-profile',
+        lazy: () =>
+          import('@/routes/brand-profile/BrandProfilePage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/orders',
+        lazy: () => import('@/routes/orders/OrdersPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/locations',
+        lazy: () =>
+          import('@/routes/locations/LocationsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/pricing',
+        lazy: () => import('@/routes/pricing/PricingPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/my-slots',
+        lazy: () => import('@/routes/my-slots/MySlotsPage').then((m) => ({ Component: m.default })),
       },
       {
         path: '/rentals/:id',

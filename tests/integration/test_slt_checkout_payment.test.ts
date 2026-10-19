@@ -7,7 +7,7 @@
  *   - test_FR_SLT_43_notify_paid_and_active_invoice: AC1, AC3
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -500,7 +500,7 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
       );
       await raw.query(
         `INSERT INTO email_verifications (user_id, email, token_hash, expires_at)
-         VALUES ($1, $2, $3, now() + interval '24 hours')`,
+         VALUES ($1, $2, encode(sha256(convert_to($3, 'UTF8')), 'hex'), now() + interval '24 hours')`,
         [unverifiedUserId, unverifiedEmail, randomUUID()],
       );
 
@@ -532,72 +532,76 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
       await deleteCheckouts([checkoutId]);
     });
 
-    it('test_FR_SLT_49_checkout_requires_current_agreement', async () => {
-      await raw.query(`DELETE FROM agreement_acceptances WHERE brand_id = $1`, [fx.brandB]);
-      const res = await brandB('POST', '/rental-checkouts', {
-        payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
-      });
-      expect(res.statusCode).toBe(403);
-      expect(res.json()).toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
-
-      // Khôi phục đồng ý cho Brand B
-      const agreement = await raw.query<{ id: string; version: string; content_hash: string }>(
-        `SELECT id, version, content_hash FROM agreement_versions WHERE is_active = true LIMIT 1`,
-      );
-      const userB = await raw.query<{ id: string }>(`SELECT id FROM users WHERE email = $1`, [
-        fx.brandAdminBEmail,
-      ]);
-      await raw.query(
-        `INSERT INTO agreement_acceptances (brand_id, agreement_version_id, version, accepted_by, content_hash)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
-          fx.brandB,
-          agreement.rows[0]!.id,
-          agreement.rows[0]!.version,
-          userB.rows[0]!.id,
-          agreement.rows[0]!.content_hash,
-        ],
-      );
-    });
-
     it('test_FR_SLT_49_new_version_requires_reaccept', async () => {
-      const v2Version = `v2.0-${fx.runId}`;
-      const v2Hash = '1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
-      await raw.query(`UPDATE agreement_versions SET is_active = false WHERE is_active = true`);
-      const v2Row = await raw.query<{ id: string }>(
-        `INSERT INTO agreement_versions (version, title, content, content_hash, is_active)
-         VALUES ($1, 'Hợp đồng v2.0', 'Điều khoản mới.', $2, true)
-         RETURNING id`,
-        [v2Version, v2Hash],
+      // agreement_acceptances chỉ cho thêm mới và bản đã công bố thì bất biến: bản v2 ở lại CSDL, chỉ
+      // trả quyền "hiện hành" về bản cũ khi xong.
+      const previous = await raw.query<{ id: string }>(
+        `SELECT id FROM agreement_versions WHERE is_current`,
+      );
+      const v2Version = `t2-${fx.runId}`;
+      const v2Content = `Điều khoản mới ${fx.runId}.`;
+      const v2Hash = createHash('sha256').update(v2Content).digest('hex');
+      await raw.query(`UPDATE agreement_versions SET is_current = false WHERE is_current`);
+      await raw.query(
+        `INSERT INTO agreement_versions
+           (version, title, content, content_hash, is_current, published_at, created_by)
+         VALUES ($1, 'Hợp đồng v2', $2, $3, true, now(), $4)`,
+        [v2Version, v2Content, v2Hash, fx.superAdminId],
       );
 
       try {
-        // Chưa đồng ý bản mới -> từ chối
-        const resRejected = await brandA('POST', '/rental-checkouts', {
-          payload: { items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }] },
+        // Chưa đồng ý bản mới → từ chối
+        const rejected = await brandB('POST', '/rental-checkouts', {
+          payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
         });
-        expect(resRejected.statusCode).toBe(403);
-        expect(resRejected.json()).toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+        expect(rejected.statusCode).toBe(403);
+        expect(rejected.json()).toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
 
-        // Đồng ý bản mới
-        const acceptRes = await brandA('POST', `/agreements/${v2Version}/accept`, {
+        const current = await brandB('GET', '/agreements/current');
+        expect(current.statusCode).toBe(200);
+        expect(current.json()).toMatchObject({
+          agreement: { version: v2Version, contentHash: v2Hash, isCurrent: true },
+          acceptance: null,
+        });
+
+        // contentHash lệch (văn bản đã đổi sau khi mở) → VALIDATION_ERROR
+        const stale = await brandB('POST', `/agreements/${v2Version}/accept`, {
+          payload: { contentHash: 'f'.repeat(64) },
+        });
+        expect(stale.statusCode).toBe(400);
+
+        // Đồng ý bản mới: 201 lần đầu, 200 cùng bản ghi khi gọi lại
+        const accepted = await brandB('POST', `/agreements/${v2Version}/accept`, {
           payload: { contentHash: v2Hash },
         });
-        expect(acceptRes.statusCode).toBe(200);
-
-        // Tạo phiên thành công
-        const resOk = await brandA('POST', '/rental-checkouts', {
-          payload: { items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }] },
+        expect(accepted.statusCode).toBe(201);
+        expect(accepted.json()).toMatchObject({ brandId: fx.brandB, kind: 'FRAMEWORK' });
+        const again = await brandB('POST', `/agreements/${v2Version}/accept`, {
+          payload: { contentHash: v2Hash },
         });
-        expect(resOk.statusCode).toBe(201);
-        await deleteCheckouts([resOk.json<{ id: string }>().id]);
+        expect(again.statusCode).toBe(200);
+        expect(again.json<{ id: string }>().id).toBe(accepted.json<{ id: string }>().id);
+
+        const ok = await brandB('POST', '/rental-checkouts', {
+          payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
+        });
+        expect(ok.statusCode).toBe(201);
+        const checkoutId = ok.json<{ id: string }>().id;
+        const stored = await raw.query<{ agreement_version_id: string | null }>(
+          `SELECT agreement_version_id FROM rental_checkouts WHERE id = $1`,
+          [checkoutId],
+        );
+        expect(stored.rows[0]?.agreement_version_id).not.toBeNull();
+        await deleteCheckouts([checkoutId]);
       } finally {
-        // Phục hồi lại bản v1.0
-        await raw.query(`DELETE FROM agreement_acceptances WHERE agreement_version_id = $1`, [
-          v2Row.rows[0]!.id,
+        await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
+          v2Version,
         ]);
-        await raw.query(`DELETE FROM agreement_versions WHERE id = $1`, [v2Row.rows[0]!.id]);
-        await raw.query(`UPDATE agreement_versions SET is_active = true WHERE version = 'v1.0'`);
+        if (previous.rows[0]) {
+          await raw.query(`UPDATE agreement_versions SET is_current = true WHERE id = $1`, [
+            previous.rows[0].id,
+          ]);
+        }
       }
     });
   });

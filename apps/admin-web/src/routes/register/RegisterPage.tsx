@@ -1,11 +1,11 @@
-import type { BrandRegisterRequest } from '@scentstation/contracts';
+import type { BrandRegistration } from '@scentstation/contracts';
 import { Alert, Button, Card, Form, Input, Result } from 'antd';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, errorMessage, unwrap } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 
-interface FormValues extends BrandRegisterRequest {
+interface FormValues extends BrandRegistration {
   confirmPassword?: string;
 }
 
@@ -24,6 +24,7 @@ export default function RegisterPage() {
         api.POST('/auth/register-brand', {
           body: {
             brandName: values.brandName.trim(),
+            fullName: values.fullName.trim(),
             email: values.email.trim(),
             password: values.password,
           },
@@ -75,6 +76,14 @@ export default function RegisterPage() {
         </Form.Item>
 
         <Form.Item
+          name="fullName"
+          label={t('ui.userFullName')}
+          rules={[{ required: true, whitespace: true, message: t('validation.required') }]}
+        >
+          <Input autoComplete="name" />
+        </Form.Item>
+
+        <Form.Item
           name="email"
           label={t('ui.email')}
           rules={[
@@ -98,7 +107,7 @@ export default function RegisterPage() {
 
         <Form.Item
           name="confirmPassword"
-          label={t('ui.confirmPassword')}
+          label={t('ui.registerConfirmPassword')}
           dependencies={['password']}
           rules={[
             { required: true, message: t('validation.required') },

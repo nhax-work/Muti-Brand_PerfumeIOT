@@ -8,6 +8,7 @@ import { KioskShell } from './KioskShell';
 
 const mockNavigate = vi.fn();
 let mockPathname = '/';
+let mockOutOfService = false;
 
 const mockCancelKioskOrder = vi.fn().mockResolvedValue({});
 
@@ -25,8 +26,6 @@ vi.mock('react-router', () => ({
   useMatches: () => [],
   Outlet: () => <div data-testid="outlet-content">Outlet Content</div>,
 }));
-
-let mockOutOfService = false;
 
 vi.mock('@/shared/hooks/useOutOfService', () => ({
   useOutOfService: () => mockOutOfService,
@@ -71,11 +70,11 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
       </I18nProvider>,
     );
 
-  it('ở màn thanh toán chưa có đơn thì vẫn có nút Quay lại danh mục', () => {
+  it('ở màn thanh toán chưa có đơn thì header vẫn giữ khách trong luồng thanh toán', () => {
     mockPathname = '/checkout/2';
     renderShell();
 
-    expect(screen.getByRole('button', { name: /Quay lại danh mục/i })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Quay lại danh mục/i })).toBeNull();
   });
 
   it('đã có đơn thì ẩn nút Quay lại danh mục ở header — lỡ chạm là mất màn đếm ngược (FR-ORD-26)', () => {
@@ -164,5 +163,13 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     // Dropdown đóng lại và ngôn ngữ đổi sang English
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(screen.getByText('English')).toBeTruthy();
+  });
+
+  it('giữ màn giao dịch khi máy mất kết nối và không cho rời checkout bằng header', () => {
+    mockPathname = '/checkout/2';
+    mockOutOfService = true;
+    renderShell();
+    expect(screen.getByTestId('outlet-content')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Quay lại danh mục/i })).toBeNull();
   });
 });

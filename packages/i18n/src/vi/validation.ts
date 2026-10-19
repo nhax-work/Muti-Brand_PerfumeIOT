@@ -18,4 +18,5 @@ export const validation = {
   tooBig: 'Giá trị lớn hơn mức cho phép',
   notANumber: 'Phải là một số',
   priceFormat: 'Giá phải là chuỗi số thập phân',
+  periodEndBeforeStart: 'Mốc cuối phải sau mốc đầu',
 } as const;

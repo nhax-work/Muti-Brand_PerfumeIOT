@@ -6,8 +6,10 @@
 Nguồn: `seed_document/DB_DIAGRAM_MERMAID.md` · Chuẩn đặt tên: `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`
 Lược đồ thi hành: `spec/contracts/schema.sql` · Mô tả từng cột: `spec/contracts/data-dictionary.md`
 
-40 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
-`storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008 + `refund_claims` theo ADR-0012). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
+45 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
+`storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008 + `refund_claims` theo ADR-0012
++ `email_verifications`, `agreement_versions`, `agreement_acceptances`, `brand_payouts` theo ADR-0013 +
+`bottle_returns` theo ADR-0014). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
 tổng quan các quan hệ cốt lõi, rồi 6 sơ đồ chi tiết theo nhóm.
 
 ---
@@ -75,6 +77,18 @@ erDiagram
         varchar code UK
         varchar name
         brand_status status
+        varchar tax_code "ADR-0013"
+        bytea payout_account_ciphertext "mã hóa"
+        timestamptz legal_verified_at "NULL = chưa xác minh pháp nhân"
+        uuid legal_verified_by FK
+    }
+    EMAIL_VERIFICATIONS {
+        uuid id PK
+        uuid user_id FK,UK "chỉ tài khoản tự đăng ký"
+        citext email
+        char token_hash UK
+        timestamptz expires_at
+        timestamptz verified_at
     }
     USERS {
         uuid id PK
@@ -119,6 +133,7 @@ erDiagram
     ROLES  ||--o{ ROLE_PERMISSIONS : "gồm"
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : "thuộc"
     USERS  ||--o{ REFRESH_SESSIONS : "mở phiên"
+    USERS  ||--o| EMAIL_VERIFICATIONS : "xác minh email"
 ```
 
 Vai trò là **dữ liệu**, không phải enum: đổi tập vai trò chỉ cần sửa dữ liệu seed, không cần
@@ -126,6 +141,11 @@ migration. MVP có 4 vai trò hệ thống — Platform Super Admin, Operations 
 Brand Admin (`docs/FR_NFR_SCENTSTATION.md` Phần D).
 
 `users.brand_id` NULL với tài khoản mức nền tảng, bắt buộc có giá trị với Brand Admin (FR-AUTH-05).
+
+**Tự đăng ký** (ADR-0013, FR-USR-06, 07): tạo một `brands` và một `users` Brand Admin trong cùng
+transaction, kèm một hàng `email_verifications`. Tài khoản do Super Admin tạo không có hàng nào ở đó
+và không phải xác minh — có hàng mà `verified_at` NULL thì chưa tạo được phiên thanh toán thuê slot.
+`brands.legal_verified_at` chỉ chặn chuyển kỳ chi trả sang `PAID`, không chặn việc thuê slot.
 
 ---
 
@@ -187,6 +207,9 @@ erDiagram
         uuid checkout_id FK "phiên thanh toán, ADR-0008"
         numeric fixed_fee "DEPRECATED"
         numeric revenue_share_percent "DEPRECATED"
+        timestamptz non_renewal_requested_at "ADR-0014"
+        bottle_return_method return_method
+        uuid swapped_from_slot_id FK "đã đổi slot một lần"
     }
     RENTAL_CHECKOUTS {
         uuid id PK
@@ -195,6 +218,34 @@ erDiagram
         timestamptz hold_expires_at "giữ chỗ cả giỏ"
         timestamptz paid_at
         timestamptz cancelled_at
+        uuid agreement_version_id FK "hợp đồng khung lúc tạo, ADR-0013"
+    }
+    AGREEMENT_VERSIONS {
+        uuid id PK
+        varchar version UK
+        text content "bất biến sau khi công bố"
+        char content_hash
+        boolean is_current "đúng một bản hiện hành"
+    }
+    AGREEMENT_ACCEPTANCES {
+        uuid id PK "chỉ thêm mới"
+        uuid brand_id FK
+        uuid accepted_by FK
+        agreement_kind kind "FRAMEWORK hoặc ANNEX"
+        uuid agreement_version_id FK
+        uuid rental_checkout_id FK "chỉ ANNEX"
+        char content_hash
+        inet ip_address
+    }
+    BRAND_PAYOUTS {
+        uuid id PK
+        uuid brand_id FK
+        date period_month "UK cùng brand_id"
+        brand_payout_status status
+        numeric amount
+        varchar transfer_reference "bắt buộc khi PAID"
+        timestamptz disputed_at
+        timestamptz dispute_resolved_at
     }
     RENTAL_PACKAGES {
         uuid id PK
@@ -230,11 +281,22 @@ erDiagram
     RENTAL_PACKAGES ||--o{ SLOT_RENTALS : "được mua qua"
     STORAGE_PLANS ||--o{ SLOT_RENTALS : "bảo quản cho"
     RENTAL_CHECKOUTS ||--|{ SLOT_RENTALS : "gom để thanh toán"
+    AGREEMENT_VERSIONS ||--o{ AGREEMENT_ACCEPTANCES : "được đồng ý"
+    AGREEMENT_VERSIONS ||--o{ RENTAL_CHECKOUTS : "làm căn cứ cho"
+    RENTAL_CHECKOUTS ||--o| AGREEMENT_ACCEPTANCES : "đồng ý phụ lục"
 ```
+
+**Hợp đồng hai lớp** (ADR-0013, FR-SLT-48 ÷ 50): thương hiệu đồng ý `agreement_versions` hiện hành một
+lần (`agreement_acceptances` kind `FRAMEWORK`), rồi mỗi phiên thanh toán đồng ý phụ lục tự sinh từ ảnh
+chụp giá của các hóa đơn (kind `ANNEX`, một hàng mỗi phiên) trước khi trả tiền. `agreement_acceptances`
+chỉ thêm mới — trigger và `REVOKE` như `audit_logs`. Kỳ chi trả `brand_payouts` (FR-SLT-52 ÷ 54) không có
+khóa ngoại tới `orders`: số liệu tính lại từ đơn `BRAND` ở `DISPENSED`/`FORFEITED` trong tháng, khóa lại
+lúc `CONFIRMED`.
 
 **`machines` có hai trục trạng thái độc lập.** `status` là kết nối, suy ra từ heartbeat (FR-MCH-08,
 FR-IOT-01..03). `operating_mode` là chế độ do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Một máy
-có thể vừa `ONLINE` vừa `MAINTENANCE`. `machine_status_histories` ghi cả hai trục vào cùng một bảng
+có thể vừa `ONLINE` vừa `MAINTENANCE`. `DRAINING` (ADR-0015) là chế độ trung gian chỉ có ở backend: không
+nhận đơn mới, phục vụ nốt đơn đã trả tiền rồi tự sang `MAINTENANCE`. `machine_status_histories` ghi cả hai trục vào cùng một bảng
 nhưng mỗi hàng chỉ điền một cặp.
 
 **Luồng mua gói của Brand Admin** (ADR-0006, ADR-0008, FR-SLT-19, 24, 27, 30 ÷ 43): chọn một hoặc
@@ -284,6 +346,17 @@ erDiagram
         numeric current_estimated_ml
         uuid source_rental_id FK
         timestamptz liquidated_at
+        uuid bottle_return_id FK "bắt buộc khi RETURNED_TO_BRAND"
+    }
+    BOTTLE_RETURNS {
+        uuid id PK
+        uuid slot_rental_id FK,UK "một phiếu mỗi hóa đơn"
+        uuid brand_id FK
+        bottle_return_method return_method
+        timestamptz ready_at
+        timestamptz pickup_deadline "+ RETURN_PICKUP_MAX_DAYS"
+        timestamptz handed_over_at
+        timestamptz forfeited_at "quá hạn nhận"
     }
     REFILL_SESSIONS {
         uuid id PK
@@ -315,7 +388,14 @@ erDiagram
     BOTTLES ||--o{ REFILL_SESSIONS : "được tháo/lắp qua"
     BOTTLES ||--o{ INVENTORY_ADJUSTMENTS : "được điều chỉnh"
     BOTTLES ||--o| STORAGE_COMPENSATIONS : "được bồi thường"
+    BOTTLE_RETURNS ||--|{ BOTTLES : "trả về thương hiệu"
 ```
+
+**`bottle_returns` là phiếu trả hàng** (ADR-0014, FR-EXP-26 ÷ 28) cho hóa đơn thương hiệu đã báo không
+gia hạn: lập lúc tháo chai, chai sang `RETURNED_TO_BRAND`. Đóng bằng bàn giao, hoặc quá
+`pickup_deadline` thì mọi chai trên phiếu chuyển sở hữu về nền tảng như thanh lý. Khóa ngoại kép
+`(slot_rental_id, brand_id)` và `(bottles.bottle_return_id, brand_id)` chặn phiếu gom chai của thương
+hiệu khác.
 
 **`bottles` có hai cột chủ sở hữu, đừng nhầm.** `brand_id` là thương hiệu gốc, bất biến để phục vụ
 kiểm toán. `owner` là chủ sở hữu hiện tại, lật sang `PLATFORM` khi thanh lý (FR-EXP-15). Câu hỏi
@@ -420,6 +500,7 @@ erDiagram
 | `uq_payment_event (provider, provider_event_id)` | Cổng thanh toán gửi lại webhook → xử lý hai lần (FR-ORD-15) |
 | `uq_order_active_command (order_id)` partial | Một đơn có hai lệnh xịt cùng hiệu lực → xịt hai lần (FR-DSP-05) |
 | `uq_machine_active_customer_command (machine_id)` partial | Hai nút sáng cùng lúc trên một máy → người sau bấm được lượt của người trước (FR-DSP-26, ADR-0007) |
+| `uq_machine_open_order (machine_id)` partial trên `orders` | Hai khách cùng mở màn QR trên một máy → cả hai trả tiền, đèn sáng cho người đã bỏ đi (FR-ORD-35, ADR-0015) |
 | `dispense_results.command_id` UNIQUE | Một lệnh ghi hai kết quả khác nhau (FR-IOT-07) |
 
 **`payments` phục vụ hai loại giao dịch** (ADR-0006, ADR-0008): đơn kiosk (`order_id`) và phiên

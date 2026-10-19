@@ -45,15 +45,22 @@ beforeAll(async () => {
 }, 60_000);
 
 afterEach(async () => {
-  // Mỗi test để máy rảnh: lệnh còn hiệu lực hay đơn dở dang sẽ bị test sau ghi lệnh nhầm.
+  // Mỗi test để máy rảnh: lệnh còn hiệu lực hay đơn dở dang sẽ bị test sau ghi lệnh nhầm. Xóa hẳn
+  // lệnh (không đánh FAILED): lệnh lỗi của test trước cộng dồn vào chuỗi lỗi liên tiếp của slot và
+  // làm slot tự tắt giữa test sau (FR-ALR-04, FR-MCH-18).
   await client.query(
-    `UPDATE dispense_commands SET status = 'FAILED'
-      WHERE machine_id = $1 AND status IN ('CREATED', 'SENT', 'ACKNOWLEDGED')`,
+    `DELETE FROM dispense_results WHERE command_id IN
+       (SELECT id FROM dispense_commands WHERE machine_id = $1)`,
     [fx.machineId],
   );
+  await client.query(`DELETE FROM dispense_commands WHERE machine_id = $1`, [fx.machineId]);
   await client.query(
     `UPDATE orders SET status = 'FAILED'
       WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED')`,
+    [fx.machineId],
+  );
+  await client.query(
+    `UPDATE machine_slots SET status = 'AVAILABLE' WHERE machine_id = $1 AND status = 'MAINTENANCE'`,
     [fx.machineId],
   );
 });
@@ -172,12 +179,10 @@ describe('DSP — ghi lệnh xịt cho đơn đã thanh toán', () => {
   });
 
   it('test_FR_DSP_26_one_active_customer_command_per_machine', async () => {
-    // Hai đơn ở hai slot khác nhau cùng được thanh toán khi máy rảnh.
-    // ADR-0015: Mỗi máy tối đa 1 đơn chờ thanh toán, thanh toán đơn 1 trước khi tạo đơn 2
-    const first = await flow.createOrder(0);
-    await flow.pay(first);
-    const second = await flow.createOrder(2);
-    await flow.pay(second);
+    // Hai đơn ở hai slot khác nhau cùng được thanh toán khi máy rảnh. Khách sau chỉ mở được màn QR
+    // khi khách trước đã trả tiền — mỗi máy một đơn chờ thanh toán (FR-ORD-35).
+    const first = await flow.paidOrder(0);
+    const second = await flow.paidOrder(2);
 
     await dsp.armQueuedOrders();
     // AC2: chỉ đơn trả tiền trước có lệnh; đơn sau giữ PAID "chờ lượt".
@@ -276,10 +281,8 @@ describe('DSP — kết quả từ thiết bị (mqtt.md §6)', () => {
         pressDeadline: string | null;
       }>();
 
-    const order = await flow.createOrder(0);
-    await flow.pay(order);
-    const queued = await flow.createOrder(2);
-    await flow.pay(queued);
+    const order = await flow.paidOrder(0);
+    const queued = await flow.paidOrder(2);
     const token = await armAndSend(order.id);
 
     // Lệnh đã gửi nhưng đèn chưa sáng: chưa mời bấm.
@@ -364,7 +367,8 @@ describe('DSP — kết quả từ thiết bị (mqtt.md §6)', () => {
       needs_manual_review: true,
     });
 
-    // Trước ACK: thiết bị từ chối ngay khi nhận lệnh, đèn chưa từng sáng → FAILED (mqtt.md §6).
+    // Trước ACK: thiết bị từ chối ngay khi nhận lệnh, đèn chưa từng sáng. Khách vẫn đã trả tiền mà
+    // không nhận lượt → FAILED và cũng cần người xem (ADR-0015 mục 1, mqtt.md §6).
     const early = await flow.paidOrder(1);
     const earlyToken = await armAndSend(early.id);
     await deliver(report(earlyToken, 'REJECT', { failureCode: 'CMD_EXPIRED' }));
@@ -372,8 +376,11 @@ describe('DSP — kết quả từ thiết bị (mqtt.md §6)', () => {
     expect(await flow.orderRow(early.id)).toMatchObject({
       status: 'FAILED',
       failure_code: 'CMD_EXPIRED',
-      needs_manual_review: false,
+      needs_manual_review: true,
     });
+    // Lệnh không được gửi lại tự động (FR-DSP-19): đơn đã rời PAID nên vòng ghi lệnh bỏ qua.
+    await dsp.armQueuedOrders();
+    expect(await flow.commandsOf(early.id)).toHaveLength(1);
   });
 
   it('test_FR_DSP_09_result_from_other_machine_is_ignored', async () => {

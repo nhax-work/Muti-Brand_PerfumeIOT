@@ -5,11 +5,17 @@
 
 import type { ColumnType } from "kysely";
 
+export type AgreementKind = "ANNEX" | "FRAMEWORK";
+
 export type AlertSeverity = "CRITICAL" | "HIGH" | "INFO" | "WARNING";
 
 export type AlertStatus = "ACKNOWLEDGED" | "CLOSED" | "IN_PROGRESS" | "OPEN" | "RESOLVED";
 
-export type BottleStatus = "DAMAGED" | "EMPTY" | "EXPIRED" | "IN_STOCK" | "INSTALLED" | "LIQUIDATED" | "LOW";
+export type BottleReturnMethod = "SHIP_TO_BRAND" | "WAREHOUSE_PICKUP";
+
+export type BottleStatus = "DAMAGED" | "EMPTY" | "EXPIRED" | "IN_STOCK" | "INSTALLED" | "LIQUIDATED" | "LOW" | "RETURNED_TO_BRAND";
+
+export type BrandPayoutStatus = "CONFIRMED" | "DRAFT" | "PAID";
 
 export type BrandStatus = "ACTIVE" | "DISABLED" | "SUSPENDED";
 
@@ -39,7 +45,7 @@ export type KioskInteractionType = "PRODUCT_IMPRESSION" | "PRODUCT_SELECTED";
 
 export type MachineConnectionStatus = "OFFLINE" | "ONLINE" | "UNSTABLE";
 
-export type MachineOperatingMode = "DISABLED" | "MAINTENANCE" | "NORMAL";
+export type MachineOperatingMode = "DISABLED" | "DRAINING" | "MAINTENANCE" | "NORMAL";
 
 export type NotificationStatus = "FAILED" | "PENDING" | "READ" | "SENT";
 
@@ -76,6 +82,41 @@ export type TicketStatus = "ASSIGNED" | "CLOSED" | "IN_PROGRESS" | "OPEN" | "POS
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export type UserStatus = "ACTIVE" | "DISABLED" | "INVITED" | "LOCKED";
+
+export interface AgreementAcceptances {
+  accepted_at: Generated<Timestamp>;
+  accepted_by: string;
+  /**
+   * FRAMEWORK: phiên bản được đồng ý. ANNEX: phiên bản hợp đồng khung mà phụ lục thuộc về (= rental_checkouts.agreement_version_id).
+   */
+  agreement_version_id: string;
+  brand_id: string;
+  /**
+   * SHA-256 (hex) của đúng văn bản người dùng đã thấy: nội dung hợp đồng khung, hoặc phụ lục sinh từ ảnh chụp giá của các hóa đơn trong phiên (FR-SLT-50).
+   */
+  content_hash: string;
+  id: Generated<string>;
+  ip_address: string;
+  kind: AgreementKind;
+  rental_checkout_id: string | null;
+  user_agent: string | null;
+}
+
+export interface AgreementVersions {
+  content: string;
+  /**
+   * SHA-256 (hex) của content — thứ được lưu lại trong agreement_acceptances làm bằng chứng.
+   */
+  content_hash: string;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  id: Generated<string>;
+  is_current: Generated<boolean>;
+  published_at: Timestamp | null;
+  title: string;
+  updated_at: Generated<Timestamp>;
+  version: string;
+}
 
 export interface Alerts {
   acknowledged_at: Timestamp | null;
@@ -123,8 +164,40 @@ export interface AuditLogs {
   user_agent: string | null;
 }
 
+export interface BottleReturns {
+  brand_id: string;
+  created_at: Generated<Timestamp>;
+  created_by: string;
+  /**
+   * Quá hạn nhận hàng: mọi chai trên phiếu chuyển owner = PLATFORM, status LIQUIDATED (FR-EXP-28).
+   */
+  forfeited_at: Timestamp | null;
+  handed_over_at: Timestamp | null;
+  handed_over_by: string | null;
+  id: Generated<string>;
+  /**
+   * ready_at + RETURN_PICKUP_MAX_DAYS. Báo trước cho Brand Admin 3 ngày (reminder_sent_at).
+   */
+  pickup_deadline: Timestamp;
+  ready_at: Timestamp;
+  recipient_name: string | null;
+  reminder_sent_at: Timestamp | null;
+  return_method: BottleReturnMethod;
+  /**
+   * Địa chỉ gửi hàng khi SHIP_TO_BRAND — ảnh chụp lúc lập phiếu; phí vận chuyển thu ngoài hệ thống.
+   */
+  shipping_address: string | null;
+  slot_rental_id: string;
+  tracking_number: string | null;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Bottles {
   batch_id: string;
+  /**
+   * Phiếu trả hàng chứa chai này (FR-EXP-26). Bắt buộc khi status = RETURNED_TO_BRAND.
+   */
+  bottle_return_id: string | null;
   /**
    * Thương hiệu gốc, bất biến để phục vụ kiểm toán kể cả sau khi quyền sở hữu chuyển về nền tảng.
    */
@@ -155,16 +228,68 @@ export interface Bottles {
   updated_at: Generated<Timestamp>;
 }
 
+export interface BrandPayouts {
+  /**
+   * DRAFT: số cộng dồn tạm, tính lại mỗi lần cập nhật. Từ CONFIRMED trở đi: số đã khóa, không đổi.
+   */
+  amount: Generated<Numeric>;
+  brand_id: string;
+  confirmed_at: Timestamp | null;
+  created_at: Generated<Timestamp>;
+  currency: Generated<string>;
+  /**
+   * Khiếu nại số liệu của Brand Admin trên kỳ CONFIRMED (FR-SLT-54) — mỗi kỳ một khiếu nại.
+   */
+  dispute_note: string | null;
+  dispute_resolved_at: Timestamp | null;
+  dispute_resolved_by: string | null;
+  dispute_response: string | null;
+  disputed_at: Timestamp | null;
+  disputed_by: string | null;
+  id: Generated<string>;
+  order_count: Generated<number>;
+  paid_at: Timestamp | null;
+  paid_by: string | null;
+  /**
+   * Ngày đầu tháng dương lịch của kỳ, theo giờ Việt Nam (Asia/Ho_Chi_Minh).
+   */
+  period_month: Timestamp;
+  status: Generated<BrandPayoutStatus>;
+  /**
+   * Mã giao dịch chuyển khoản Super Admin nhập khi chuyển PAID, sau khi xác thực lại (FR-SLT-53).
+   */
+  transfer_reference: string | null;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface Brands {
+  business_license_number: string | null;
   code: string;
   contact_info: Json | null;
   created_at: Generated<Timestamp>;
   description: string | null;
   id: Generated<string>;
   kiosk_content: Json | null;
+  /**
+   * Super Admin ghi nhận đã xác minh pháp nhân (FR-BND-10). NULL thì kỳ chi trả không chuyển được sang PAID (BRAND_NOT_VERIFIED, FR-SLT-53). Không chặn việc thuê slot.
+   */
+  legal_verified_at: Timestamp | null;
+  legal_verified_by: string | null;
   logo_url: string | null;
   name: string;
+  /**
+   * Tài khoản doanh nghiệp nhận doanh thu (mã ngân hàng, số tài khoản, tên chủ tài khoản), mã hóa tầng ứng dụng (FR-BND-09, ADR-0013). Tài khoản của THƯƠNG HIỆU, không thuộc phạm vi NFR-DAT-04.
+   */
+  payout_account_ciphertext: Buffer | null;
+  /**
+   * Phiên bản khóa đã mã hóa payout_account_ciphertext — để xoay khóa mà vẫn đọc được bản cũ.
+   */
+  payout_account_key_version: number | null;
   status: Generated<BrandStatus>;
+  /**
+   * Mã số thuế do Brand Admin khai (FR-BND-09). Bắt buộc trước khi Super Admin xác minh pháp nhân.
+   */
+  tax_code: string | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -258,6 +383,23 @@ export interface DispenseResults {
   result_code: string | null;
   sensor_snapshot: Json | null;
   success: boolean;
+}
+
+export interface EmailVerifications {
+  created_at: Generated<Timestamp>;
+  /**
+   * Địa chỉ đã gửi mã — đổi email thì phải xác minh lại địa chỉ mới.
+   */
+  email: string;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  /**
+   * SHA-256 (hex) của mã gửi trong email. Không lưu mã gốc (NFR-SEC-05).
+   */
+  token_hash: string;
+  updated_at: Generated<Timestamp>;
+  user_id: string;
+  verified_at: Timestamp | null;
 }
 
 export interface FragranceProducts {
@@ -355,7 +497,7 @@ export interface Machines {
   last_seen_at: Timestamp | null;
   location_id: string;
   /**
-   * Trục chế độ, do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Độc lập với status.
+   * Trục chế độ, do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Độc lập với status. DRAINING (ADR-0015): đã yêu cầu bảo trì, không nhận đơn mới nhưng phục vụ nốt đơn đã trả tiền, rồi tự sang MAINTENANCE; chỉ tồn tại ở backend — thiết bị vẫn nhận chế độ NORMAL.
    */
   operating_mode: Generated<MachineOperatingMode>;
   serial_number: string;
@@ -485,7 +627,7 @@ export interface Orders {
   manual_review_resolved_at: Timestamp | null;
   manual_review_resolved_by: string | null;
   /**
-   * Đặt true khi đã thanh toán nhưng lượt xịt thất bại hoặc không xác định (FR-ORD-19). Dẫn vào luồng hoàn tiền và hỗ trợ (FR-ORD-20/21).
+   * Đặt true khi đã thanh toán nhưng lượt xịt thất bại, không xác định, bị thiết bị từ chối (kể cả trước khi đèn sáng) hoặc chờ lượt quá PAID_QUEUE_MAX_SEC (FR-ORD-19, FR-ORD-34, ADR-0015). Không đặt với đơn FORFEITED. Dẫn vào luồng hoàn tiền thủ công (FR-ORD-20, ADR-0012).
    */
   needs_manual_review: Generated<boolean>;
   paid_at: Timestamp | null;
@@ -544,7 +686,7 @@ export interface Payments {
   paid_at: Timestamp | null;
   provider: string;
   /**
-   * Mã tham chiếu gửi cho cổng thanh toán, cổng gửi lại trong webhook (FR-ORD-14). Đơn kiosk: bằng orders.payment_reference. Phiên thuê slot: mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009).
+   * Mã tham chiếu cổng thanh toán gửi lại trong webhook (FR-ORD-14). Cổng có mã riêng thì lưu mã của cổng — PayOS: orderCode (số nguyên, ADR-0016); cổng không có (mock) thì lưu mã hệ thống: đơn kiosk bằng orders.payment_reference, phiên thuê slot mã riêng cho MỖI payment. Duy nhất theo provider (uq_payment_provider_reference, ADR-0009).
    */
   provider_reference: string | null;
   provider_transaction_id: string | null;
@@ -668,6 +810,10 @@ export interface RefundClaims {
 }
 
 export interface RentalCheckouts {
+  /**
+   * Hợp đồng khung hiện hành lúc tạo phiên — thương hiệu phải đã đồng ý phiên bản này (AGREEMENT_NOT_ACCEPTED). Phụ lục của phiên là phụ lục của phiên bản này. NULL với phiên tạo trước ADR-0013.
+   */
+  agreement_version_id: string | null;
   brand_id: string;
   /**
    * Hết giờ giữ chỗ mà chưa thanh toán (FR-SLT-39). Cùng transaction: mọi hóa đơn của phiên → CANCELLED và payment PENDING của phiên → EXPIRED.
@@ -795,6 +941,11 @@ export interface SlotRentals {
    */
   monthly_rent_price: Numeric | null;
   /**
+   * Brand Admin báo không gia hạn (FR-EXP-23): hóa đơn không vào GRACE, không tính phí ân hạn, giữ ACTIVE/EXPIRING tới khi Inventory Staff tháo chai (FR-EXP-25). Rút lại trước ends_at thì về NULL (FR-EXP-24).
+   */
+  non_renewal_requested_at: Timestamp | null;
+  non_renewal_requested_by: string | null;
+  /**
    * Thời điểm thanh toán được xác nhận (FR-SLT-38) — ghi cùng lúc với rental_checkouts.paid_at của phiên. DRAFT + paid_at NULL = chờ thanh toán; DRAFT + paid_at khác NULL = chờ nạp hàng.
    */
   paid_at: Timestamp | null;
@@ -817,6 +968,10 @@ export interface SlotRentals {
    */
   request_id: string | null;
   /**
+   * Cách nhận hàng trả về, chọn lúc báo không gia hạn (FR-EXP-23).
+   */
+  return_method: BottleReturnMethod | null;
+  /**
    * DEPRECATED (ADR-0006): không còn ăn chia doanh thu lượt xịt. Giữ cột để không phá migration và test hiện có; hóa đơn mới để mặc định 0.
    */
   revenue_share_percent: Generated<Numeric>;
@@ -831,6 +986,11 @@ export interface SlotRentals {
   storage_coverage_percent: Numeric | null;
   storage_monthly_price: Numeric | null;
   storage_plan_id: string | null;
+  swapped_at: Timestamp | null;
+  /**
+   * Slot cũ khi hóa đơn đã đổi slot (FR-SLT-55). Khác NULL nghĩa là đã dùng lượt đổi duy nhất.
+   */
+  swapped_from_slot_id: string | null;
   terminated_reason: string | null;
   total_amount: Numeric | null;
   updated_at: Generated<Timestamp>;
@@ -910,45 +1070,14 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
-export interface EmailVerifications {
-  created_at: Generated<Timestamp>;
-  email: string;
-  expires_at: Timestamp;
-  id: Generated<string>;
-  token_hash: string;
-  user_id: string;
-  verified_at: Timestamp | null;
-}
-
-export interface AgreementVersions {
-  content: string;
-  content_hash: string;
-  created_at: Generated<Timestamp>;
-  id: Generated<string>;
-  is_active: Generated<boolean>;
-  title: string;
-  updated_at: Generated<Timestamp>;
-  version: string;
-}
-
-export interface AgreementAcceptances {
-  accepted_at: Generated<Timestamp>;
-  accepted_by: string;
-  agreement_version_id: string;
-  brand_id: string;
-  content_hash: string;
-  created_at: Generated<Timestamp>;
-  id: Generated<string>;
-  ip_address: string | null;
-  version: string;
-}
-
 export interface DB {
   agreement_acceptances: AgreementAcceptances;
   agreement_versions: AgreementVersions;
   alerts: Alerts;
   audit_logs: AuditLogs;
+  bottle_returns: BottleReturns;
   bottles: Bottles;
+  brand_payouts: BrandPayouts;
   brand_shipment_declarations: BrandShipmentDeclarations;
   brands: Brands;
   device_credentials: DeviceCredentials;

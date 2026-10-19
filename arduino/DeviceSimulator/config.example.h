@@ -1,18 +1,30 @@
 #pragma once
 
-// Copy this file to config.h, then enter your LAN settings.
-// Do not commit config.h because it contains the Wi-Fi password.
-
+// Copy to config.h. Keep credentials out of version control.
 #define WIFI_SSID "YOUR_WIFI_NAME"
 #define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
-
-// IPv4 address of the computer running Docker/Mosquitto.
-// Do not use localhost/127.0.0.1; on ESP32 that address means the ESP32 itself.
+#define MACHINE_SERIAL "M001"
 #define MQTT_HOST "192.168.1.10"
 #define MQTT_PORT 1883
+#define MQTT_USERNAME ""
+#define MQTT_PASSWORD ""
 
-#define MACHINE_SERIAL "M001"
+// LAN development only. Production requires TLS and verified Ed25519 commands.
+#define MQTT_USE_TLS false
+#define MQTT_ROOT_CA ""
+#define DEV_ALLOW_UNSIGNED_COMMANDS false
+// Keep false for customer operation: diagnostic commands can run without a button.
+#define ALLOW_DIAGNOSTIC_COMMANDS false
+// Raw 32-byte Ed25519 public key as 64 hexadecimal characters (not PEM).
+#define COMMAND_PUBLIC_KEY_HEX ""
 
-// Development only: allows manual commands sent with mosquitto_pub.
-// Production firmware must set this to false and verify Ed25519 signatures.
-#define DEV_ALLOW_UNSIGNED_COMMANDS true
+// Set true ONCE to initialize LittleFS on a fresh ESP32, then set false and upload again.
+// Formatting removes existing files in the LittleFS partition.
+#define INITIALIZE_DEVICE_STORAGE false
+
+// Match the active-HIGH AOD4184 modules used in Test5Buttons.
+#define PUMP_ON_LEVEL HIGH
+#define LIGHT_ON_LEVEL HIGH
+
+// Optional door switch: open = HIGH, closed = LOW. -1 means no physical door sensor.
+#define DOOR_SENSOR_PIN -1

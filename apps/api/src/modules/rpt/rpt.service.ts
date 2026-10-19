@@ -9,11 +9,12 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
-import { notFoundFor } from '../../shared/errors/index.js';
+import { invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope, Principal } from '../../shared/scoping/index.js';
-import { RptQueries, type MachineMapRow } from './rpt.queries.js';
+import { RptQueries, type MachineMapRow, type ReportPeriod } from './rpt.queries.js';
 
 export type MachineMapSlotDto = Schema<'MachineMapSlot'>;
+export type BrandSlotReportDto = Schema<'BrandSlotReportItem'>;
 
 /**
  * Slot ngoài phạm vi khai thác: đúng ba trường, không hơn.
@@ -62,5 +63,26 @@ export class RptService {
 
     const rows = await this.queries.machineMap(scope, machineId);
     return rows.map((row) => (row.mine ? toOwnSlotDto(row) : toForeignSlotDto(row)));
+  }
+
+  /**
+   * FR-RPT-08, FR-RPT-10: số đơn và doanh thu theo từng slot thương hiệu thuê, trong `[from, to)`
+   * theo thời điểm khách trả tiền. Bỏ trống mốc nào thì không giới hạn phía đó. Tài khoản mức nền
+   * tảng thấy mọi thương hiệu (FR-BND-07).
+   */
+  async getBrandSlotReport(scope: BrandScope, period: ReportPeriod): Promise<BrandSlotReportDto[]> {
+    if (period.from && period.to && period.from >= period.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    const rows = await this.queries.brandSlotReport(scope, period);
+    return rows.map((row) => ({
+      slotRentalId: row.slotRentalId,
+      slotId: row.slotId,
+      machineId: row.machineId,
+      locationName: row.locationName,
+      ...(row.productName !== null ? { productName: row.productName } : {}),
+      orderCount: row.orderCount,
+      revenue: row.revenue,
+    }));
   }
 }

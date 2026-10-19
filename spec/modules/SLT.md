@@ -874,10 +874,10 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Acceptance criteria:**
   * **AC1 (Tạo bản nháp):** Given Platform Super Admin,  
     When tạo phiên bản hợp đồng khung mới kèm `version`, `title`, `content`,  
-    Then hệ thống tự động tính `content_hash` = SHA-256 hex của `content`, lưu bản nháp `is_active = false` và ghi AuditLog.
+    Then hệ thống tự động tính `content_hash` = SHA-256 hex của `content`, lưu bản nháp (`is_current = false`, `published_at` NULL) và ghi AuditLog.
   * **AC2 (Công bố bản hiện hành duy nhất):** Given bản nháp phiên bản `V`, Super Admin đã xác thực lại mật khẩu,  
     When công bố `POST /agreements/{version}/publish`,  
-    Then trong một transaction hệ thống tắt `is_active = false` của bản cũ trước rồi đặt `is_active = true` và `published_at = now()` cho bản mới, đảm bảo duy nhất một bản hiện hành (`uq_agreement_versions_active`).
+    Then trong một transaction hệ thống đặt `is_current = false` cho bản cũ trước rồi đặt `is_current = true` và `published_at = now()` cho bản mới, đảm bảo duy nhất một bản hiện hành (`uq_agreement_version_current`).
   * **AC3 (Bất biến sau công bố):** Given phiên bản hợp đồng khung đã công bố,  
     When có bất kỳ thao tác UPDATE nào lên nội dung hoặc phiên bản,  
     Then trigger CSDL chặn lại (nội dung hợp đồng là bất biến).
@@ -898,16 +898,16 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Acceptance criteria:**
   * **AC1 (Đồng ý bản hiện hành):** Given Brand Admin của thương hiệu `B`, phiên bản hiện hành là `V` có mã băm `H`,  
     When gửi `POST /agreements/{version}/accept` kèm `contentHash = H`,  
-    Then hệ thống ghi nhận vào `agreement_acceptances` gồm `brand_id`, `agreement_version_id`, `version`, `accepted_by`, `accepted_at`, `ip_address`, `content_hash` và trả về 200.
+    Then hệ thống ghi nhận vào `agreement_acceptances` một dòng `kind = FRAMEWORK` gồm `brand_id`, `agreement_version_id`, `accepted_by`, `accepted_at`, `ip_address`, `user_agent`, `content_hash` và trả về `201` kèm `AgreementAcceptance` (không trả IP).
   * **AC2 (Lệch mã băm nội dung):** Given gửi `contentHash` không khớp với `content_hash` của bản hiện hành,  
     When gọi đồng ý,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
-  * **AC3 (Chỉ đồng ý bản hiện hành):** Given gọi accept cho một phiên bản không phải là bản hiện hành (`is_active = false`),  
+  * **AC3 (Chỉ đồng ý bản hiện hành):** Given gọi accept cho một phiên bản không phải là bản hiện hành (`is_current = false`),  
     When gọi đồng ý,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
   * **AC4 (Idempotent đồng ý lại):** Given thương hiệu `B` đã đồng ý bản `V`,  
     When Brand Admin gửi lại yêu cầu đồng ý cho bản `V`,  
-    Then hệ thống trả về 200 kèm bản ghi đã lưu trước đó mà không tạo thêm dòng mới (bắt `uq_brand_agreement_version`).
+    Then hệ thống trả về `200` kèm bản ghi đã lưu trước đó mà không tạo thêm dòng mới (`uq_acceptance_framework`; bảng chỉ cho thêm mới).
   * **AC5 (Chặn tạo phiên thanh toán):** Given thương hiệu `B` chưa đồng ý bản hiện hành (hoặc hệ thống chưa có bản nào được công bố),  
     When Brand Admin gọi `POST /rental-checkouts`,  
     Then hệ thống từ chối với HTTP 403 `AGREEMENT_NOT_ACCEPTED`.
@@ -916,7 +916,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
     Then hệ thống từ chối với HTTP 403 `AGREEMENT_NOT_ACCEPTED`.
   * **AC7 (Phân quyền):** Given tài khoản mức nền tảng gọi `POST /agreements/{version}/accept`,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-* **Test:** `test_FR_SLT_49_accept_records_evidence`, `test_FR_SLT_49_hash_mismatch_rejected`, `test_FR_SLT_49_accept_idempotent`, `test_FR_SLT_49_checkout_requires_current_agreement`
+* **Test:** `tests/unit/slt.test.ts` — `test_FR_SLT_49_accept_agreement_idempotent`, `test_FR_SLT_49_accept_rejects_non_current_version_or_changed_content`, `test_FR_SLT_49_checkout_rejected_*`; `tests/integration/test_slt_checkout_payment.test.ts` — `test_FR_SLT_49_new_version_requires_reaccept`
 
 ---
 

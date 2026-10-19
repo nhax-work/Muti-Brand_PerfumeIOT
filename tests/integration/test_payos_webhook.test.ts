@@ -16,6 +16,7 @@ import { openRawClient } from './helpers/db.js';
 import { kioskFlow } from './helpers/kiosk-flow.js';
 import {
   cleanupIsolationFixture,
+  releaseOpenOrders,
   seedIsolationFixture,
   TEST_PASSWORD,
   type IsolationFixture,
@@ -81,12 +82,9 @@ beforeAll(async () => {
   );
 }, 60_000);
 
+// Mỗi máy một đơn chờ thanh toán (FR-ORD-35): mỗi test bắt đầu như khi khách trước đã rời màn QR.
 beforeEach(async () => {
-  await client.query(
-    `UPDATE orders SET status = 'FAILED'
-      WHERE machine_id = $1 AND status IN ('CREATED', 'PENDING_PAYMENT')`,
-    [fx.machineId],
-  );
+  await releaseOpenOrders(client, fx.machineId);
 });
 
 afterAll(async () => {

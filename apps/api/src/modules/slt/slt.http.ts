@@ -9,7 +9,19 @@
  * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { z } from 'zod';
 import { originOf } from '../../shared/http/request-origin.js';
 import { parseBody } from '../../shared/http/validation.js';
@@ -185,28 +197,44 @@ export class SlotRentalQuoteController {
   }
 }
 
-const AgreementVersionParam = z.object({ version: z.string().min(1) });
+const AgreementVersionParam = z.object({ version: z.string().min(1).max(20) });
+
+/** openapi.yaml: AgreementAccept. */
+const AgreementAcceptBody = z.object({ contentHash: z.string().regex(/^[0-9a-f]{64}$/) });
+
+interface StatusReply {
+  status(code: number): unknown;
+}
 
 @Controller('agreements')
 export class AgreementsController {
   constructor(@Inject(SltService) private readonly service: SltService) {}
 
-  /** FR-SLT-48 (ADR-0013) */
+  /** FR-SLT-48, FR-SLT-49 (ADR-0013) */
   @Get('current')
-  getCurrentAgreement() {
-    return this.service.getCurrentAgreement();
+  getCurrentAgreement(@CurrentBrandScope() scope: BrandScope) {
+    return this.service.getCurrentAgreement(scope);
   }
 
-  /** FR-SLT-49 (ADR-0013) */
+  /** FR-SLT-49 (ADR-0013): 201 khi ghi nhận mới, 200 khi thương hiệu đã đồng ý từ trước. */
   @Post(':version/accept')
-  @HttpCode(200)
-  acceptAgreement(
+  async acceptAgreement(
     @CurrentUser() actor: AuthenticatedUser,
     @CurrentBrandScope() scope: BrandScope,
     @Param() params: unknown,
+    @Body() body: unknown,
     @Req() request: HttpRequest,
+    @Res({ passthrough: true }) reply: StatusReply,
   ) {
     const { version } = parseBody(AgreementVersionParam, params);
-    return this.service.acceptAgreement(actor, scope, version, originOf(request));
+    const { contentHash } = parseBody(AgreementAcceptBody, body);
+    const { created, body: acceptance } = await this.service.acceptAgreement(
+      actor,
+      scope,
+      { version, contentHash },
+      originOf(request),
+    );
+    reply.status(created ? 201 : 200);
+    return acceptance;
   }
 }

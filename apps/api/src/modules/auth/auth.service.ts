@@ -8,11 +8,10 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type {
-  BrandRegisterRequest,
-  BrandRegisterResponse,
+  BrandRegistered,
+  BrandRegistration,
   CurrentUser,
   TokenPair,
-  VerifyEmailResponse,
 } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
@@ -69,11 +68,10 @@ type Queries = Pick<
   | 'emailExists'
   | 'brandCodeExists'
   | 'registerBrandAndAdmin'
-  | 'createEmailVerification'
   | 'findEmailVerificationByTokenHash'
+  | 'findEmailVerificationByUser'
   | 'markEmailVerified'
-  | 'findLatestUnverifiedByEmail'
-  | 'findUserByEmail'
+  | 'replaceEmailVerificationToken'
 >;
 
 type Loader = Pick<PrincipalLoader, 'invalidateUser' | 'invalidateSession'>;
@@ -81,7 +79,10 @@ type Audit = Pick<AuditService, 'log'>;
 
 @Injectable()
 export class AuthService {
+  /** FR-USR-06: theo IP. */
   private readonly registerLimiter: PerMinuteRateLimiter;
+  /** FR-USR-07: gửi lại mã, theo tài khoản — dùng chung ngưỡng với đăng ký. */
+  private readonly resendLimiter: PerMinuteRateLimiter;
 
   constructor(
     @Inject(AuthQueries) private readonly queries: Queries,
@@ -91,9 +92,9 @@ export class AuthService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {
-    this.registerLimiter = new PerMinuteRateLimiter(clock, () =>
-      config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN'),
-    );
+    const limit = () => config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN');
+    this.registerLimiter = new PerMinuteRateLimiter(clock, limit);
+    this.resendLimiter = new PerMinuteRateLimiter(clock, limit);
   }
 
   /**
@@ -332,12 +333,10 @@ export class AuthService {
   }
 
   /**
-   * FR-USR-06 (ADR-0013): thương hiệu tự đăng ký kèm tài khoản Brand Admin ban đầu.
+   * FR-USR-06, FR-AUTH-05 (ADR-0013): thương hiệu tự đăng ký — Brand ACTIVE kèm tài khoản Brand Admin
+   * ACTIVE, đăng nhập được ngay. Mã xác minh email (FR-USR-07) ghi cùng transaction.
    */
-  async registerBrand(
-    input: BrandRegisterRequest,
-    origin: RequestOrigin,
-  ): Promise<BrandRegisterResponse> {
+  async registerBrand(input: BrandRegistration, origin: RequestOrigin): Promise<BrandRegistered> {
     const clientIp = origin.ip ?? 'unknown';
     if (!this.registerLimiter.tryAcquire(clientIp)) {
       throw new AppError('RATE_LIMITED', 'auth.registerRateLimited');
@@ -350,7 +349,7 @@ export class AuthService {
     // Sinh brandCode tự động từ brandName
     let baseCode = input.brandName
       .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[̀-ͯ]/g, '')
       .toUpperCase()
       .replace(/[^A-Z0-9]/g, '_')
       .replace(/_+/g, '_')
@@ -365,78 +364,45 @@ export class AuthService {
     }
 
     const passwordHash = await hashPassword(input.password);
+    const rawToken = newVerificationToken();
     const result = await this.queries.registerBrandAndAdmin({
       brandName: input.brandName,
       brandCode,
       email: input.email,
-      fullName: input.brandName,
+      fullName: input.fullName,
       passwordHash,
+      tokenHash: hashVerificationToken(rawToken),
+      expiresAt: this.verificationExpiry(),
     });
-
-    // Tạo token xác minh email
-    const rawToken = newVerificationToken();
-    const tokenHash = hashVerificationToken(rawToken);
-    const ttlHours = this.config.constraint('EMAIL_VERIFICATION_TOKEN_TTL_HOURS');
-    const expiresAt = new Date(this.clock.now().getTime() + ttlHours * 3600_000);
-
-    await this.queries.createEmailVerification(
-      result.user.id,
-      result.user.email,
-      tokenHash,
-      expiresAt,
-    );
 
     await this.audit.log({
       actorType: 'ANONYMOUS',
       action: 'auth.brand.registered',
       targetType: 'brand',
-      targetId: result.brand.id,
+      targetId: result.brandId,
       sourceIp: origin.ip,
       userAgent: origin.userAgent,
-      metadata: { brandCode, email: input.email },
+      metadata: { brandCode, email: result.email, userId: result.userId },
     });
 
-    return {
-      brand: {
-        id: result.brand.id,
-        code: result.brand.code,
-        name: result.brand.name,
-        status: result.brand.status,
-        createdAt: result.brand.createdAt.toISOString(),
-        logoUrl: null,
-        description: null,
-        contactInfo: null,
-      },
-      user: {
-        id: result.user.id,
-        brandId: result.user.brandId,
-        email: result.user.email,
-        fullName: result.user.fullName,
-        status: result.user.status,
-        roles: result.user.roles,
-        createdAt: result.user.createdAt.toISOString(),
-        lastLoginAt: null,
-      },
-    };
+    return result;
   }
 
   /**
-   * FR-USR-07 (ADR-0013): xác minh email bằng token một lần.
+   * FR-USR-07 (ADR-0013): mã đúng và còn hạn → ghi nhận đã xác minh. Mã sai, quá hạn hoặc đã bị thay
+   * bởi mã mới → VALIDATION_ERROR. Gọi lại với mã đã dùng của email đã xác minh → thành công.
    */
-  async verifyEmail(token: string): Promise<VerifyEmailResponse> {
-    const tokenHash = hashVerificationToken(token);
-    const record = await this.queries.findEmailVerificationByTokenHash(tokenHash);
+  async verifyEmail(token: string): Promise<void> {
+    const record = await this.queries.findEmailVerificationByTokenHash(
+      hashVerificationToken(token),
+    );
     if (!record) {
       throw new AppError('VALIDATION_ERROR', 'auth.invalidVerificationToken');
     }
-
-    // Idempotent: nếu đã xác minh rồi thì trả về thành công
-    if (record.verifiedAt !== null) {
-      return { verified: true };
-    }
+    if (record.verifiedAt !== null) return;
 
     const now = this.clock.now();
-    if (record.expiresAt < now) {
+    if (record.expiresAt <= now) {
       throw new AppError('VALIDATION_ERROR', 'auth.verificationTokenExpired');
     }
 
@@ -449,51 +415,43 @@ export class AuthService {
       targetId: record.userId,
       metadata: { email: record.email },
     });
-
-    return { verified: true };
   }
 
   /**
-   * ADR-0013: gửi lại token xác minh qua email.
+   * FR-USR-07: sinh mã mới thay mã cũ cho tài khoản đang đăng nhập. Tài khoản không cần xác minh
+   * (không có dòng) hoặc đã xác minh → không làm gì.
    */
-  async resendVerification(email: string, origin: RequestOrigin): Promise<VerifyEmailResponse> {
-    const clientIp = origin.ip ?? 'unknown';
-    if (!this.registerLimiter.tryAcquire(clientIp)) {
+  async resendVerification(actor: AuthenticatedUser, origin: RequestOrigin): Promise<void> {
+    if (!this.resendLimiter.tryAcquire(actor.userId)) {
       throw new AppError('RATE_LIMITED', 'auth.registerRateLimited');
     }
 
-    const user = await this.queries.findUserByEmail(email);
-    if (!user) {
-      throw new AppError('NOT_FOUND', 'common.notFound');
-    }
-
-    const latest = await this.queries.findLatestUnverifiedByEmail(email);
-    if (latest && latest.verifiedAt !== null) {
-      throw new AppError('VALIDATION_ERROR', 'auth.emailAlreadyVerified');
-    }
+    const record = await this.queries.findEmailVerificationByUser(actor.userId);
+    if (!record || record.verifiedAt !== null) return;
 
     const rawToken = newVerificationToken();
-    const tokenHash = hashVerificationToken(rawToken);
-    const ttlHours = this.config.constraint('EMAIL_VERIFICATION_TOKEN_TTL_HOURS');
-    const expiresAt = new Date(this.clock.now().getTime() + ttlHours * 3600_000);
-
-    await this.queries.createEmailVerification(
-      user.id,
-      email,
-      tokenHash,
-      expiresAt,
+    await this.queries.replaceEmailVerificationToken(
+      record.id,
+      hashVerificationToken(rawToken),
+      this.verificationExpiry(),
+      this.clock.now(),
     );
 
     await this.audit.log({
       actorType: 'USER',
-      actorId: user.id,
+      actorId: actor.userId,
       action: 'auth.email.verification_resent',
       targetType: 'user',
-      targetId: user.id,
-      metadata: { email },
+      targetId: actor.userId,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+      metadata: { email: record.email },
     });
+  }
 
-    return { verified: false };
+  private verificationExpiry(): Date {
+    const ttlHours = this.config.constraint('EMAIL_VERIFICATION_TOKEN_TTL_HOURS');
+    return new Date(this.clock.now().getTime() + ttlHours * 3_600_000);
   }
 
   /**

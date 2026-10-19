@@ -11,19 +11,27 @@
  *   listOutgoing → publish → markSent (SENT)
  *   handleDeviceResult ─tx─▶ ACKNOWLEDGED | SUCCEEDED/FAILED/REJECTED + đơn DISPENSED/FAILED/FORFEITED
  *   sweepTimeouts ─tx─▶ UNKNOWN (FR-DSP-18) | EXPIRED
+ *   failQueueTimeouts ─tx─▶ đơn PAID chờ lượt quá PAID_QUEUE_MAX_SEC → FAILED QUEUE_TIMEOUT (FR-ORD-34)
+ *
+ * Mỗi lần lệnh CUSTOMER kết thúc bằng lỗi máy, cùng transaction đó đếm chuỗi lỗi liên tiếp trên slot;
+ * đủ CONSECUTIVE_FAIL_ALERT thì cảnh báo và tự tắt slot (FR-ALR-04, FR-MCH-18, ADR-0015 mục 5).
  */
 
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Kysely } from 'kysely';
 import { createCommandSigner, type CommandSigner } from '../../adapters/mqtt/command-signature.js';
+import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
-import type { Json } from '../../shared/db/types.generated.js';
+import type { DB } from '../../shared/db/index.js';
+import type { CommandStatus, Json } from '../../shared/db/types.generated.js';
 import { OrdService } from '../ord/index.js';
 import {
   ACKNOWLEDGEABLE_STATUSES,
   CLOSABLE_STATUSES,
   outcomeOf,
+  PRESS_TIMEOUT,
   type DeviceStage,
 } from './dispense-outcome.js';
 import { DspQueries, type OutgoingCommand } from './dsp.queries.js';
@@ -67,6 +75,21 @@ export type DeviceResultHandling = 'APPLIED' | 'IGNORED' | 'UNKNOWN_COMMAND';
 /** Mã lỗi Postgres khi vi phạm unique — ở đây là `uq_machine_active_customer_command`/`uq_order_active_command`. */
 const UNIQUE_VIOLATION = '23505';
 
+/** Hành động AuditLog khi slot tự tắt — cũng là mốc đếm lại chuỗi lỗi (DspQueries.lastAutoMaintenanceAt). */
+export const SLOT_AUTO_MAINTENANCE_ACTION = 'dsp.slot.auto_maintenance';
+
+/** Số đơn tối đa xử lý mỗi nhịp của job chờ lượt — nhịp sau làm tiếp phần còn lại. */
+const QUEUE_TIMEOUT_BATCH = 200;
+
+/** Lệnh vừa kết thúc trên slot, kèm đủ dữ liệu để đếm lỗi liên tiếp. */
+interface FinishedCommand {
+  readonly slotId: string;
+  readonly brandId: string | null;
+  readonly commandType: 'CUSTOMER' | 'DIAGNOSTIC';
+  readonly status: CommandStatus;
+  readonly failureCode: string | null;
+}
+
 @Injectable()
 export class DspService {
   private readonly logger = new Logger('DSP');
@@ -75,6 +98,7 @@ export class DspService {
   constructor(
     @Inject(DspQueries) private readonly queries: DspQueries,
     @Inject(OrdService) private readonly orders: OrdService,
+    @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {
@@ -209,6 +233,14 @@ export class DspService {
           at: input.executedAt ?? now,
         });
       }
+      // Kết quả đến trễ cho lệnh đã UNKNOWN thì lệnh đó đã được đếm lúc quét — không đếm hai lần.
+      if (command.status !== 'UNKNOWN') {
+        await this.afterCommandFinished(
+          tx,
+          { ...command, status: outcome.commandStatus, failureCode: outcome.order.failureCode },
+          now,
+        );
+      }
       return 'APPLIED';
     });
   }
@@ -248,6 +280,11 @@ export class DspService {
         } else {
           await this.queries.markUnknown(command.id, tx);
           if (command.orderId) await this.orders.flagOrderForReview(tx, command.orderId);
+          await this.afterCommandFinished(
+            tx,
+            { ...command, status: 'UNKNOWN', failureCode: null },
+            now,
+          );
         }
         return true;
       });
@@ -262,24 +299,90 @@ export class DspService {
   }
 
   /**
-   * ADR-0015 mục 2: quét các đơn PAID quá hạn chờ lượt (PAID_QUEUE_MAX_SEC = 180s)
-   * và chuyển sang FAILED với failureCode = QUEUE_TIMEOUT.
+   * FR-ORD-34 (ADR-0015 mục 2): đơn đã trả tiền chờ lượt quá PAID_QUEUE_MAX_SEC kể từ `paid_at` mà
+   * chưa ghi được lệnh → FAILED `QUEUE_TIMEOUT` + kiểm tra thủ công; kiosk hiện màn sự cố kèm QR
+   * khiếu nại. Quét theo `paid_at <= now - hạn` nên bù được đơn lỡ trong lúc hệ thống ngừng chạy.
+   *
+   * @returns số đơn đã chuyển FAILED
    */
-  async sweepQueueTimeouts(): Promise<number> {
-    const queueTimeoutSec = this.config.constraint('PAID_QUEUE_MAX_SEC');
-    const cutoff = new Date(this.clock.now().getTime() - queueTimeoutSec * 1000);
-    const timedOutIds = await this.queries.listQueueTimedOutOrders(cutoff);
-    let handled = 0;
-    for (const orderId of timedOutIds) {
-      const done = await this.queries.transaction(async (tx) => {
-        return this.orders.failBeforeDispense(tx, orderId, 'QUEUE_TIMEOUT');
-      });
+  async failQueueTimeouts(): Promise<number> {
+    const now = this.clock.now();
+    const paidBefore = new Date(
+      now.getTime() - this.config.constraint('PAID_QUEUE_MAX_SEC') * 1000,
+    );
+    const orderIds = await this.queries.listQueueTimedOutOrderIds(paidBefore, QUEUE_TIMEOUT_BATCH);
+    let failed = 0;
+    for (const orderId of orderIds) {
+      // failBeforeDispense khóa đơn và chỉ đổi khi đơn còn PAID — vòng ghi lệnh vừa nhặt thì bỏ qua.
+      const done = await this.queries.transaction((tx) =>
+        this.orders.failBeforeDispense(tx, orderId, 'QUEUE_TIMEOUT'),
+      );
       if (done) {
-        handled++;
-        this.logger.warn(`Đơn ${orderId} quá hạn chờ lượt (> ${queueTimeoutSec}s) → FAILED (QUEUE_TIMEOUT)`);
+        failed++;
+        this.logger.warn(`Đơn ${orderId} chờ lượt quá PAID_QUEUE_MAX_SEC → FAILED QUEUE_TIMEOUT`);
       }
     }
-    return handled;
+    return failed;
+  }
+
+  /**
+   * FR-ALR-04, FR-MCH-18: gọi trong transaction đã khép lệnh. Lệnh CUSTOMER kết thúc bằng lỗi máy
+   * có thể là lỗi thứ CONSECUTIVE_FAIL_ALERT liên tiếp của slot → cảnh báo + slot MAINTENANCE +
+   * AuditLog. Lệnh thành công hoặc khách không bấm (PRESS_TIMEOUT) cắt chuỗi.
+   */
+  private async afterCommandFinished(
+    tx: Kysely<DB>,
+    command: FinishedCommand,
+    now: Date,
+  ): Promise<void> {
+    if (command.commandType !== 'CUSTOMER') return;
+    if (!isMachineFailure(command.status, command.failureCode)) return;
+
+    const threshold = this.config.constraint('CONSECUTIVE_FAIL_ALERT');
+    const since = await this.queries.lastAutoMaintenanceAt(
+      command.slotId,
+      SLOT_AUTO_MAINTENANCE_ACTION,
+      tx,
+    );
+    const recent = await this.queries.listFinishedCustomerCommands(
+      command.slotId,
+      since,
+      threshold,
+      tx,
+    );
+    const streak =
+      recent.length === threshold &&
+      recent.every((c) => isMachineFailure(c.status, c.orderFailureCode));
+    if (!streak) return;
+
+    const changed = await this.queries.putSlotInMaintenance(command.slotId, tx);
+    if (!changed) return;
+    const tokens = recent.map((c) => c.commandToken);
+    await this.queries.raiseConsecutiveFailAlert(
+      {
+        brandId: command.brandId,
+        machineId: changed.machineId,
+        slotId: command.slotId,
+        title: `${threshold} lượt xịt lỗi liên tiếp — slot đã tự tắt`,
+        description: `Slot ${command.slotId} chuyển MAINTENANCE sau các lệnh ${tokens.join(', ')} (FR-ALR-04, FR-MCH-18).`,
+        at: now,
+      },
+      tx,
+    );
+    await this.audit.log(
+      {
+        actorType: 'SYSTEM',
+        action: SLOT_AUTO_MAINTENANCE_ACTION,
+        targetType: 'machine_slot',
+        targetId: command.slotId,
+        severity: 'HIGH',
+        before: { status: changed.from },
+        after: { status: 'MAINTENANCE' },
+        metadata: { reason: 'CONSECUTIVE_FAIL_ALERT', threshold, commandTokens: tokens },
+      },
+      tx,
+    );
+    this.logger.warn(`Slot ${command.slotId}: ${threshold} lệnh lỗi liên tiếp → MAINTENANCE`);
   }
 
   private buildPayload(command: OutgoingCommand): CommandPayload {
@@ -296,4 +399,13 @@ export class DspService {
     };
     return { ...unsigned, signature: this.signer.sign(unsigned) };
   }
+}
+
+/**
+ * Lệnh kết thúc vì máy có vấn đề (FR-ALR-04): FAILED, UNKNOWN, hoặc REJECTED mà không phải do khách
+ * không bấm. CMD_DUPLICATE không bao giờ khép lệnh nên không xuất hiện ở đây (ADR-0011).
+ */
+function isMachineFailure(status: CommandStatus, failureCode: string | null): boolean {
+  if (status === 'FAILED' || status === 'UNKNOWN') return true;
+  return status === 'REJECTED' && failureCode !== PRESS_TIMEOUT;
 }

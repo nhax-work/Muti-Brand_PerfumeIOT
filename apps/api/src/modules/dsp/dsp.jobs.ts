@@ -1,6 +1,6 @@
 /**
- * Cửa vào scheduler của DSP (ADR-0003): một nhịp = ghi lệnh cho đơn chờ → publish lệnh chưa gửi →
- * quét lệnh quá hạn. `entrypoints/scheduler.ts` quyết định chu kỳ.
+ * Cửa vào scheduler của DSP (ADR-0003): một nhịp = hủy đơn chờ lượt quá hạn → ghi lệnh cho đơn chờ →
+ * publish lệnh chưa gửi → quét lệnh quá hạn. `entrypoints/scheduler.ts` quyết định chu kỳ.
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -18,13 +18,17 @@ export class DspJobs {
   ) {}
 
   /** Bỏ qua nếu nhịp trước chưa xong — tránh hai nhịp cùng publish một lệnh. */
-  async tick(): Promise<void> {
+  async tick(allowDispatch = true): Promise<void> {
     if (this.running) return;
     this.running = true;
     try {
+      // Trước khi ghi lệnh: đơn chờ lượt đã quá PAID_QUEUE_MAX_SEC thì khách đã đứng chờ quá lâu —
+      // FAILED + kiểm tra thủ công, không sáng đèn cho người có thể đã bỏ đi (FR-ORD-34). Chạy cả khi
+      // broker mất kết nối: đó chính là lúc đơn bị kẹt.
+      await this.dsp.failQueueTimeouts();
       // Broker mất kết nối thì không ghi lệnh mới: đơn giữ PAID "chờ lượt" thay vì sinh lệnh rồi
       // để nó EXPIRED và đẩy đơn sang FAILED.
-      if (this.gateway.connected) {
+      if (this.gateway.connected && allowDispatch) {
         await this.dsp.armQueuedOrders();
         for (const message of await this.dsp.listOutgoing()) {
           try {
@@ -36,7 +40,6 @@ export class DspJobs {
         }
       }
       await this.dsp.sweepTimeouts();
-      await this.dsp.sweepQueueTimeouts();
     } catch (error) {
       this.logger.error(`Nhịp điều phối lỗi: ${describe(error)}`);
     } finally {

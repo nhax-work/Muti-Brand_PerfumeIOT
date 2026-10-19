@@ -419,7 +419,11 @@ describe('ORD — ADR-0015: MACHINE_BUSY và QUEUE_TIMEOUT', () => {
           calibratedDosageMl: '0.1200',
         },
       ],
-      machineHasOpenOrder: async () => true,
+      // Đơn khách trước còn hạn thanh toán → máy vẫn bận (FR-ORD-35).
+      findOpenOrderOnMachine: async () => ({
+        id: 'o-open',
+        expiresAt: new Date(Date.now() + 60_000),
+      }),
       machineHasActiveCustomerCommand: async () => false,
     };
 

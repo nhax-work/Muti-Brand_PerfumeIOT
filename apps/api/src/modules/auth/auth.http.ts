@@ -7,11 +7,10 @@
 
 import { Body, Controller, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
 import type {
-  BrandRegisterResponse,
+  BrandRegistered,
   CurrentUser as CurrentUserDto,
   ReauthResponse,
   TokenPair,
-  VerifyEmailResponse,
 } from '@scentstation/contracts';
 import { z } from 'zod';
 import { originOf } from '../../shared/http/request-origin.js';
@@ -37,22 +36,16 @@ const ChangePasswordBody = z.object({
 /** openapi.yaml: ReauthRequest. */
 const ReauthBody = z.object({ password: z.string().min(1) });
 
-/** openapi.yaml: BrandRegisterRequest */
+/** openapi.yaml: BrandRegistration. */
 const RegisterBrandBody = z.object({
-  brandName: z.string().min(1).max(200),
+  brandName: z.string().trim().min(1).max(200),
+  fullName: z.string().trim().min(1).max(200),
   email: z.string().email(),
-  password: z.string().min(8).max(100),
+  password: z.string().min(8),
 });
 
-/** openapi.yaml: VerifyEmailRequest */
-const VerifyEmailBody = z.object({
-  token: z.string().min(1),
-});
-
-/** openapi.yaml: ResendVerificationRequest */
-const ResendVerificationBody = z.object({
-  email: z.string().email(),
-});
+/** openapi.yaml: EmailVerificationConfirm — token có minLength 16. */
+const VerifyEmailBody = z.object({ token: z.string().min(16) });
 
 type HttpRequest = Parameters<typeof originOf>[0];
 
@@ -60,14 +53,11 @@ type HttpRequest = Parameters<typeof originOf>[0];
 export class AuthController {
   constructor(@Inject(AuthService) private readonly auth: AuthService) {}
 
-  /** FR-USR-06 */
+  /** FR-USR-06, FR-AUTH-05 (ADR-0013) */
   @Public()
   @Post('register-brand')
   @HttpCode(201)
-  registerBrand(
-    @Body() body: unknown,
-    @Req() request: HttpRequest,
-  ): Promise<BrandRegisterResponse> {
+  registerBrand(@Body() body: unknown, @Req() request: HttpRequest): Promise<BrandRegistered> {
     const data = parseBody(RegisterBrandBody, body);
     return this.auth.registerBrand(data, originOf(request));
   }
@@ -75,22 +65,20 @@ export class AuthController {
   /** FR-USR-07 */
   @Public()
   @Post('verify-email')
-  @HttpCode(200)
-  verifyEmail(@Body() body: unknown): Promise<VerifyEmailResponse> {
+  @HttpCode(204)
+  async verifyEmail(@Body() body: unknown): Promise<void> {
     const { token } = parseBody(VerifyEmailBody, body);
-    return this.auth.verifyEmail(token);
+    await this.auth.verifyEmail(token);
   }
 
-  /** ADR-0013 */
-  @Public()
-  @Post('resend-verification')
-  @HttpCode(200)
-  resendVerification(
-    @Body() body: unknown,
+  /** FR-USR-07 */
+  @Post('verify-email/resend')
+  @HttpCode(204)
+  async resendVerification(
+    @CurrentUser() user: AuthenticatedUser,
     @Req() request: HttpRequest,
-  ): Promise<VerifyEmailResponse> {
-    const { email } = parseBody(ResendVerificationBody, body);
-    return this.auth.resendVerification(email, originOf(request));
+  ): Promise<void> {
+    await this.auth.resendVerification(user, originOf(request));
   }
 
   /** FR-AUTH-01, FR-AUTH-02, FR-AUTH-03 */

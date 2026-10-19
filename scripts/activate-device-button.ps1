@@ -1,6 +1,8 @@
 param(
   [string]$MachineSerial = "M001",
   [int]$SlotNumber = 1,
+  [ValidateSet("CUSTOMER", "DIAGNOSTIC")]
+  [string]$DispenseType = "CUSTOMER",
   [double]$DosageMl = 0.12,
   [int]$ExpiresInSeconds = 300
 )
@@ -34,7 +36,7 @@ $payload = [ordered]@{
   ts = $now.ToString("yyyy-MM-ddTHH:mm:ssZ")
   command_token = $commandToken
   command_type = "DISPENSE"
-  dispense_type = "DIAGNOSTIC"
+  dispense_type = $DispenseType
   slot_number = $SlotNumber
   dosage_ml = $DosageMl
   expires_at = $now.AddSeconds($ExpiresInSeconds).ToString("yyyy-MM-ddTHH:mm:ssZ")

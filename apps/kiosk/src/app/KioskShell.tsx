@@ -73,11 +73,13 @@ export function KioskShell() {
 
   // Khách đang có đơn chưa kết thúc (có thể đã trả tiền, đèn đang sáng) thì không thay cả màn hình:
   // giữ màn thanh toán để khách còn thấy mã và đếm ngược, chỉ báo mất kết nối (FR-IOT-13, FR-ORD-21).
-  if (outOfService && !activeOrder) return <OutOfServiceScreen />;
 
   const isCatalog = location.pathname === '/catalog';
   const isProductDetail = location.pathname.startsWith('/products/');
   const isCheckout = location.pathname.startsWith('/checkout/');
+
+  // Giữ nguyên màn giao dịch để khách còn thấy mã và trạng thái khi máy/mạng gặp sự cố.
+  if (outOfService && !isCheckout && !activeOrder) return <OutOfServiceScreen />;
 
   return (
     <div className={styles.shell}>
@@ -94,7 +96,7 @@ export function KioskShell() {
             </button>
           )}
           {/* Đang có đơn thì CheckoutScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
-          {(isProductDetail || (isCheckout && !activeOrder)) && (
+          {isProductDetail && (
             <button
               type="button"
               className={styles.backButton}

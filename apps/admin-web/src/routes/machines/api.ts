@@ -241,3 +241,87 @@ export function useUpdateSlotConfig() {
     },
   });
 }
+
+// ---------------------------------------------------------------------------------------
+// Đăng ký máy, khóa MQTT, lịch sử trạng thái (FR-MCH-01, 02, 13)
+// ---------------------------------------------------------------------------------------
+
+export type MachineCreate = components['schemas']['MachineCreate'];
+export type DeviceCredential = components['schemas']['DeviceCredential'];
+export type MachineStatusHistoryEntry = components['schemas']['MachineStatusHistoryEntry'];
+
+/** FR-MCH-01, 04, 05: số sê-ri duy nhất, địa điểm, số slot. Máy mới chưa có khóa MQTT. */
+export function useRegisterMachine() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: MachineCreate) => unwrap(api.POST('/machines', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['machines'] }),
+  });
+}
+
+/**
+ * Metadata khóa MQTT hiện tại (FR-MCH-02) — không bao giờ có bí mật gốc. Máy chưa từng được cấp
+ * khóa trả 404: hiển thị "chưa cấp", không coi là lỗi, nên không thử lại.
+ */
+export function useMachineCredential(machineId: string | undefined) {
+  return useQuery({
+    queryKey: ['machine-credential', machineId],
+    queryFn: () =>
+      unwrap(api.GET('/machines/{id}/credentials', { params: { path: { id: machineId! } } })),
+    enabled: Boolean(machineId),
+    retry: false,
+  });
+}
+
+/**
+ * Cấp khóa mới và thu hồi khóa cũ (FR-MCH-02, NFR-SEC-07) — cần xác thực lại. Bí mật gốc chỉ có
+ * trong phản hồi này; người gọi hiển thị một lần rồi bỏ.
+ */
+export function useIssueCredential() {
+  const queryClient = useQueryClient();
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (machineId: string) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/credentials', {
+          params: { path: { id: machineId }, header: { 'X-Reauth-Token': reauthToken } },
+        }),
+      );
+    },
+    onSuccess: (_, machineId) =>
+      void queryClient.invalidateQueries({ queryKey: ['machine-credential', machineId] }),
+  });
+}
+
+/** Thu hồi khóa: broker từ chối thiết bị ngay sau đó (FR-AUTH-11, FR-IOT-08) — cần xác thực lại. */
+export function useRevokeCredential() {
+  const queryClient = useQueryClient();
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (machineId: string) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/credentials/revoke', {
+          params: { path: { id: machineId }, header: { 'X-Reauth-Token': reauthToken } },
+        }),
+      );
+    },
+    onSuccess: (_, machineId) =>
+      void queryClient.invalidateQueries({ queryKey: ['machine-credential', machineId] }),
+  });
+}
+
+/** FR-MCH-13: mỗi lần đổi kết nối hoặc chế độ một hàng, mới nhất trước. */
+export function useMachineStatusHistory(machineId: string | undefined, page: number) {
+  return useQuery({
+    queryKey: ['machine-status-history', machineId, page],
+    queryFn: () =>
+      unwrap(
+        api.GET('/machines/{id}/status-history', {
+          params: { path: { id: machineId! }, query: { page, pageSize: 10 } },
+        }),
+      ),
+    enabled: Boolean(machineId),
+  });
+}

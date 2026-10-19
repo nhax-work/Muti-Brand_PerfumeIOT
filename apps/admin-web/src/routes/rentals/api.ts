@@ -223,7 +223,7 @@ export function useSetPricePerSpray() {
   });
 }
 
-/** Lấy thông tin hợp đồng khung hiện hành (FR-SLT-48, ADR-0013). */
+/** Hợp đồng khung hiện hành kèm lần đồng ý của thương hiệu (FR-SLT-48, FR-SLT-49, ADR-0013). */
 export function useCurrentAgreement() {
   return useQuery({
     queryKey: ['current-agreement'],
@@ -236,10 +236,11 @@ export function useCurrentAgreement() {
 export function useAcceptAgreement() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (version: string) =>
+    mutationFn: ({ version, contentHash }: { version: string; contentHash: string }) =>
       unwrap(
         api.POST('/agreements/{version}/accept', {
           params: { path: { version } },
+          body: { contentHash },
         }),
       ),
     onSuccess: () => {
@@ -248,14 +249,9 @@ export function useAcceptAgreement() {
   });
 }
 
-/** Gửi lại email xác minh tài khoản (FR-USR-07, ADR-0013). */
+/** Gửi lại mã xác minh email cho tài khoản đang đăng nhập (FR-USR-07, ADR-0013). */
 export function useResendVerification() {
   return useMutation({
-    mutationFn: (email: string) =>
-      unwrap(
-        api.POST('/auth/resend-verification', {
-          body: { email },
-        }),
-      ),
+    mutationFn: () => unwrap(api.POST('/auth/verify-email/resend')),
   });
 }

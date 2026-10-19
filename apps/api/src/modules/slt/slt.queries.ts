@@ -119,6 +119,30 @@ export interface RentalCheckoutRecord {
   readonly createdAt: Date;
 }
 
+/** FR-SLT-48 (ADR-0013) */
+export interface AgreementVersionRecord {
+  readonly id: string;
+  readonly version: string;
+  readonly title: string;
+  readonly content: string;
+  readonly contentHash: string;
+  readonly isCurrent: boolean;
+  readonly publishedAt: Date | null;
+  readonly createdAt: Date;
+}
+
+/** FR-SLT-49 (ADR-0013). IP lưu trong CSDL nhưng không đọc ra — API không trả. */
+export interface AgreementAcceptanceRecord {
+  readonly id: string;
+  readonly brandId: string;
+  readonly acceptedBy: string;
+  readonly kind: 'FRAMEWORK' | 'ANNEX';
+  readonly agreementVersionId: string;
+  readonly rentalCheckoutId: string | null;
+  readonly contentHash: string;
+  readonly acceptedAt: Date;
+}
+
 export interface RentalInvoiceDetailRecord {
   readonly rentalId: string;
   readonly checkoutId: string | null;
@@ -334,6 +358,8 @@ export class SltQueries {
     readonly createdBy: string;
     readonly holdExpiresAt: Date;
     readonly totalAmount: string;
+    /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
+    readonly agreementVersionId?: string;
     readonly items: CheckoutCreateItemData[];
   }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
     try {
@@ -352,6 +378,8 @@ export class SltQueries {
     readonly createdBy: string;
     readonly holdExpiresAt: Date;
     readonly totalAmount: string;
+    /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
+    readonly agreementVersionId?: string;
     readonly items: CheckoutCreateItemData[];
   }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
     return this.db.transaction().execute(async (tx) => {
@@ -378,6 +406,7 @@ export class SltQueries {
           total_amount: params.totalAmount,
           hold_expires_at: params.holdExpiresAt,
           created_by: params.createdBy,
+          agreement_version_id: params.agreementVersionId ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -708,134 +737,66 @@ export class SltQueries {
     return row !== undefined;
   }
 
-  /**
-   * FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành (is_active = true).
-   */
-  async findCurrentAgreementVersion(): Promise<{
-    id: string;
-    version: string;
-    title: string;
-    content: string;
-    contentHash: string;
-  } | null> {
+  /** FR-SLT-48 (ADR-0013): phiên bản hợp đồng khung hiện hành — tối đa một (uq_agreement_version_current). */
+  async findCurrentAgreementVersion(): Promise<AgreementVersionRecord | null> {
     const row = await this.db
       .selectFrom('agreement_versions')
-      .selectAll()
-      .where('is_active', '=', true)
+      .select(AGREEMENT_VERSION_COLUMNS)
+      .where('is_current', '=', true)
       .executeTakeFirst();
-    if (!row) return null;
-    return {
-      id: row.id,
-      version: row.version,
-      title: row.title,
-      content: row.content,
-      contentHash: row.content_hash,
-    };
+    return row ? toAgreementVersion(row) : null;
   }
 
-  async findAgreementVersionByVersion(version: string): Promise<{
-    id: string;
-    version: string;
-    title: string;
-    content: string;
-    contentHash: string;
-  } | null> {
-    const row = await this.db
-      .selectFrom('agreement_versions')
-      .selectAll()
-      .where('version', '=', version)
-      .executeTakeFirst();
-    if (!row) return null;
-    return {
-      id: row.id,
-      version: row.version,
-      title: row.title,
-      content: row.content,
-      contentHash: row.content_hash,
-    };
-  }
-
-  /**
-   * FR-SLT-49 (ADR-0013): tìm bản ghi chấp thuận hợp đồng khung của thương hiệu.
-   */
-  async findAgreementAcceptance(
+  /** FR-SLT-49 (ADR-0013): lần thương hiệu đồng ý một phiên bản hợp đồng khung. */
+  async findFrameworkAcceptance(
     brandId: string,
-    version: string,
-  ): Promise<{
-    id: string;
-    brandId: string;
-    version: string;
-    acceptedBy: string;
-    acceptedAt: Date;
-    contentHash: string;
-  } | null> {
+    agreementVersionId: string,
+  ): Promise<AgreementAcceptanceRecord | null> {
     const row = await this.db
       .selectFrom('agreement_acceptances')
-      .selectAll()
+      .select(AGREEMENT_ACCEPTANCE_COLUMNS)
       .where('brand_id', '=', brandId)
-      .where('version', '=', version)
+      .where('agreement_version_id', '=', agreementVersionId)
+      .where('kind', '=', 'FRAMEWORK')
       .executeTakeFirst();
-    if (!row) return null;
-    return {
-      id: row.id,
-      brandId: row.brand_id,
-      version: row.version,
-      acceptedBy: row.accepted_by,
-      acceptedAt: row.accepted_at,
-      contentHash: row.content_hash,
-    };
+    return row ? toAgreementAcceptance(row) : null;
   }
 
   /**
-   * FR-SLT-49 (ADR-0013): ghi nhận chấp thuận hợp đồng khung, chống trùng lặp.
+   * FR-SLT-49 (ADR-0013): ghi bằng chứng đồng ý hợp đồng khung. Bảng chỉ cho thêm mới; hai yêu cầu
+   * đồng thời thì uq_acceptance_framework giữ một dòng — `created = false` trả lại dòng đã có.
    */
-  async insertAgreementAcceptance(params: {
+  async insertFrameworkAcceptance(params: {
     brandId: string;
     agreementVersionId: string;
-    version: string;
     acceptedBy: string;
-    acceptedAt: Date;
-    ipAddress: string | null;
     contentHash: string;
-  }): Promise<{
-    id: string;
-    brandId: string;
-    version: string;
-    acceptedBy: string;
-    acceptedAt: Date;
-    contentHash: string;
-  }> {
-    const existing = await this.findAgreementAcceptance(params.brandId, params.version);
-    if (existing) return existing;
-
+    ipAddress: string;
+    userAgent: string | null;
+  }): Promise<{ acceptance: AgreementAcceptanceRecord; created: boolean }> {
     const row = await this.db
       .insertInto('agreement_acceptances')
       .values({
         brand_id: params.brandId,
         agreement_version_id: params.agreementVersionId,
-        version: params.version,
         accepted_by: params.acceptedBy,
-        accepted_at: params.acceptedAt,
-        ip_address: params.ipAddress,
+        kind: 'FRAMEWORK',
         content_hash: params.contentHash,
+        ip_address: params.ipAddress,
+        user_agent: params.userAgent,
       })
-      .onConflict((oc) => oc.columns(['brand_id', 'agreement_version_id']).doNothing())
-      .returning(['id', 'brand_id', 'version', 'accepted_by', 'accepted_at', 'content_hash'])
+      .onConflict((oc) =>
+        oc
+          .columns(['brand_id', 'agreement_version_id'])
+          .where('kind', '=', 'FRAMEWORK')
+          .doNothing(),
+      )
+      .returning(AGREEMENT_ACCEPTANCE_COLUMNS)
       .executeTakeFirst();
+    if (row) return { acceptance: toAgreementAcceptance(row), created: true };
 
-    if (row) {
-      return {
-        id: row.id,
-        brandId: row.brand_id,
-        version: row.version,
-        acceptedBy: row.accepted_by,
-        acceptedAt: row.accepted_at,
-        contentHash: row.content_hash,
-      };
-    }
-
-    const fallback = await this.findAgreementAcceptance(params.brandId, params.version);
-    return fallback!;
+    const existing = await this.findFrameworkAcceptance(params.brandId, params.agreementVersionId);
+    return { acceptance: existing!, created: false };
   }
 
   private base(scope: BrandScope) {
@@ -890,5 +851,71 @@ function toRecord(
     paidAt: row.paid_at,
     cancelledAt: row.cancelled_at,
     createdAt: row.created_at,
+  };
+}
+
+const AGREEMENT_VERSION_COLUMNS = [
+  'id',
+  'version',
+  'title',
+  'content',
+  'content_hash',
+  'is_current',
+  'published_at',
+  'created_at',
+] as const;
+
+const AGREEMENT_ACCEPTANCE_COLUMNS = [
+  'id',
+  'brand_id',
+  'accepted_by',
+  'kind',
+  'agreement_version_id',
+  'rental_checkout_id',
+  'content_hash',
+  'accepted_at',
+] as const;
+
+function toAgreementVersion(row: {
+  id: string;
+  version: string;
+  title: string;
+  content: string;
+  content_hash: string;
+  is_current: boolean;
+  published_at: Date | null;
+  created_at: Date;
+}): AgreementVersionRecord {
+  return {
+    id: row.id,
+    version: row.version,
+    title: row.title,
+    content: row.content,
+    contentHash: row.content_hash,
+    isCurrent: row.is_current,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+  };
+}
+
+function toAgreementAcceptance(row: {
+  id: string;
+  brand_id: string;
+  accepted_by: string;
+  kind: 'FRAMEWORK' | 'ANNEX';
+  agreement_version_id: string;
+  rental_checkout_id: string | null;
+  content_hash: string;
+  accepted_at: Date;
+}): AgreementAcceptanceRecord {
+  return {
+    id: row.id,
+    brandId: row.brand_id,
+    acceptedBy: row.accepted_by,
+    kind: row.kind,
+    agreementVersionId: row.agreement_version_id,
+    rentalCheckoutId: row.rental_checkout_id,
+    contentHash: row.content_hash,
+    acceptedAt: row.accepted_at,
   };
 }

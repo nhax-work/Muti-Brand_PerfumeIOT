@@ -135,7 +135,7 @@ export interface paths {
         put?: never;
         /**
          * Thương hiệu tự đăng ký
-         * @description FR-USR-06 (ADR-0013): thương hiệu tự đăng ký với tên thương hiệu, email và mật khẩu. Tạo cùng lúc một Brand và một tài khoản Brand Admin gắn với thương hiệu đó.
+         * @description FR-USR-06, FR-AUTH-05 (ADR-0013): tạo cùng lúc một Brand ACTIVE và một tài khoản Brand Admin ACTIVE gắn với nó, gửi mã xác minh tới email. Đăng nhập được ngay; chưa xác minh email thì chưa tạo được phiên thanh toán thuê slot (EMAIL_NOT_VERIFIED, FR-USR-07). Email đã có tài khoản trả VALIDATION_ERROR với chi tiết ở trường email. Giới hạn tần suất theo IP — vượt trả RATE_LIMITED. Ghi nhật ký (FR-AUD-01).
          */
         post: operations["registerBrand"];
         delete?: never;
@@ -154,8 +154,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Xác minh email bằng token
-         * @description FR-USR-07 (ADR-0013): xác minh email của tài khoản tự đăng ký bằng token một lần.
+         * Xác minh email bằng mã đã gửi
+         * @description FR-USR-07 (ADR-0013): mã đúng và còn hạn thì ghi nhận email đã xác minh. Mã sai, quá hạn hoặc đã dùng trả VALIDATION_ERROR. Gọi lại với mã đã dùng của email đã xác minh trả 204.
          */
         post: operations["verifyEmail"];
         delete?: never;
@@ -164,7 +164,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/auth/resend-verification": {
+    "/auth/verify-email/resend": {
         parameters: {
             query?: never;
             header?: never;
@@ -174,8 +174,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Gửi lại email xác minh
-         * @description ADR-0013: gửi lại token xác minh qua email cho tài khoản chưa xác minh.
+         * Gửi lại mã xác minh email
+         * @description FR-USR-07: sinh mã mới thay mã cũ cho tài khoản đang đăng nhập. Tài khoản không cần xác minh hoặc đã xác minh trả 204 mà không gửi gì. Vượt giới hạn tần suất trả RATE_LIMITED.
          */
         post: operations["resendEmailVerification"];
         delete?: never;
@@ -249,6 +249,54 @@ export interface paths {
          * @description FR-BND-03: chuyển ACTIVE hoặc SUSPENDED. Thương hiệu SUSPENDED thì slot của họ không nhận đơn mới (FR-BND-04).
          */
         put: operations["setBrandStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brands/{id}/legal-verification": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ghi nhận đã xác minh pháp nhân
+         * @description FR-BND-10 (ADR-0013): Platform Super Admin ghi nhận đã xác minh pháp nhân, kèm người và thời điểm. Thương hiệu chưa khai mã số thuế trả VALIDATION_ERROR. Gọi lại với thương hiệu đã xác minh trả 200 như cũ. Cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["verifyBrandLegal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brands/me/legal-profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Khai hồ sơ pháp nhân và tài khoản nhận doanh thu
+         * @description FR-BND-09 (ADR-0013): Brand Admin khai mã số thuế, giấy phép kinh doanh, tài khoản doanh nghiệp nhận doanh thu (lưu mã hóa). Sửa sau khi đã xác minh thì trạng thái xác minh bị xóa. Ghi nhật ký (FR-AUD-03).
+         */
+        put: operations["updateMyBrandLegalProfile"];
         post?: never;
         delete?: never;
         options?: never;
@@ -530,7 +578,9 @@ export interface paths {
         get?: never;
         /**
          * Đổi chế độ hoạt động của máy
-         * @description FR-MCH-11, FR-MNT-05, FR-MNT-12: Operations Staff bật/tắt máy hoặc chuyển sang MAINTENANCE. KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12). Chuyển sang MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07) và máy không nhận đơn mới (FR-MNT-06, MACHINE_IN_MAINTENANCE). Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi lịch sử (FR-MCH-13).
+         * @description FR-MCH-11, FR-MNT-05, FR-MNT-12, FR-MNT-17: Operations Staff bật/tắt máy hoặc yêu cầu bảo trì. KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12).
+         *     Yêu cầu MAINTENANCE (ADR-0015): máy vào DRAINING — không nhận đơn mới (MACHINE_IN_MAINTENANCE, FR-MNT-06) nhưng phục vụ nốt đơn đã trả tiền và lệnh đang chạy; khi không còn lệnh CUSTOMER hiệu lực, đơn chờ thanh toán hay đơn chờ lượt thì hệ thống tự chuyển sang MAINTENANCE. Phản hồi trả operatingMode = DRAINING, hoặc MAINTENANCE nếu máy đã rảnh ngay lúc gọi. force = true kèm reason chuyển thẳng sang MAINTENANCE (FR-MNT-17). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
+         *     Vào MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07). Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi lịch sử mọi lần chuyển, kể cả DRAINING → MAINTENANCE tự động (FR-MCH-13).
          */
         put: operations["setMachineMode"];
         post?: never;
@@ -718,49 +768,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/agreements/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Phiên bản hợp đồng khung hiện hành
-         * @description FR-SLT-48 (ADR-0013): lấy phiên bản hợp đồng khung hiện hành kèm nội dung và mã băm sha256.
-         */
-        get: operations["getCurrentAgreement"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/agreements/{version}/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mã phiên bản hợp đồng khung */
-                version: string;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Brand Admin đồng ý phiên bản hợp đồng khung
-         * @description FR-SLT-49 (ADR-0013): Brand Admin đồng ý phiên bản hợp đồng khung hiện hành, lưu vết người đồng ý, thời điểm, địa chỉ IP và mã băm. Đồng ý lặp lại với cùng phiên bản không sinh bản ghi trùng.
-         */
-        post: operations["acceptAgreement"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/rental-checkouts": {
         parameters: {
             query?: never;
@@ -772,7 +779,8 @@ export interface paths {
         put?: never;
         /**
          * Chọn dịch vụ và giữ chỗ một hoặc nhiều slot
-         * @description FR-SLT-35, FR-SLT-36, FR-SLT-33, ADR-0008: Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản. Trong một transaction, hệ thống tạo một phiên thanh toán và một hóa đơn DRAFT cho mỗi slot, chụp bảng giá vào từng hóa đơn, tính tổng tiền phiên = tổng các hóa đơn, và giữ chỗ mọi slot tới lúc tạo + RENTAL_CHECKOUT_HOLD_MIN. Tất cả hoặc không có gì: một slot đang bị giữ chỗ hoặc đã có hóa đơn khác làm cả phiên bị từ chối với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03). FR-SLT-49, FR-USR-07 (ADR-0013): tài khoản chưa xác minh email bị từ chối EMAIL_NOT_VERIFIED (403); thương hiệu chưa đồng ý hợp đồng khung hiện hành bị từ chối AGREEMENT_NOT_ACCEPTED (403).
+         * @description FR-SLT-35, FR-SLT-36, FR-SLT-33, ADR-0008: Brand Admin chọn một hoặc nhiều slot trống, mỗi slot một gói thuê và đúng một gói bảo quản. Trong một transaction, hệ thống tạo một phiên thanh toán và một hóa đơn DRAFT cho mỗi slot, chụp bảng giá vào từng hóa đơn, tính tổng tiền phiên = tổng các hóa đơn, và giữ chỗ mọi slot tới lúc tạo + RENTAL_CHECKOUT_HOLD_MIN. Tất cả hoặc không có gì: một slot đang bị giữ chỗ hoặc đã có hóa đơn khác làm cả phiên bị từ chối với SLOT_OCCUPIED (cưỡng chế bởi excl_slot_rental_overlap), không hóa đơn nào được tạo. Slot lặp trong items, gói không mở bán, thiếu gói bảo quản hoặc slot chưa có giá niêm yết trả VALIDATION_ERROR; thương hiệu SUSPENDED trả FORBIDDEN_SCOPE. Ghi nhật ký (FR-AUD-03).
+         *     Điều kiện trước (ADR-0013, ADR-0014): tài khoản tự đăng ký chưa xác minh email trả EMAIL_NOT_VERIFIED (FR-USR-07); thương hiệu chưa đồng ý hợp đồng khung hiện hành trả AGREEMENT_NOT_ACCEPTED (FR-SLT-49); tổng slot chưa thanh toán thương hiệu đang giữ — cộng cả phiên này — vượt BRAND_MAX_HELD_SLOTS trả HOLD_LIMIT_REACHED (FR-SLT-56). Phiên ghi lại phiên bản hợp đồng khung hiện hành (agreementVersionId).
          */
         post: operations["createRentalCheckout"];
         delete?: never;
@@ -816,9 +824,147 @@ export interface paths {
         put?: never;
         /**
          * Thanh toán phiên thanh toán thuê slot
-         * @description FR-SLT-37, ADR-0008: Brand Admin trả một lần cho mọi hóa đơn trong phiên qua cổng thanh toán; số tiền là totalAmount của phiên. Đã có thanh toán PENDING thì trả lại chính nó (uq_checkout_payment_pending). Phiên đã thanh toán, đã hủy, hoặc đã quá holdExpiresAt trả RENTAL_NOT_ACTIVE — kể cả khi job hủy (FR-SLT-39) chưa kịp chạy. Kết quả thanh toán về qua `POST /webhooks/payments/{provider}` (FR-SLT-38).
+         * @description FR-SLT-37, ADR-0008: Brand Admin trả một lần cho mọi hóa đơn trong phiên qua cổng thanh toán; số tiền là totalAmount của phiên. Đã có thanh toán PENDING thì trả lại chính nó (uq_checkout_payment_pending). Phiên đã thanh toán, đã hủy, hoặc đã quá holdExpiresAt trả RENTAL_NOT_ACTIVE — kể cả khi job hủy (FR-SLT-39) chưa kịp chạy. Kết quả thanh toán về qua `POST /webhooks/payments/{provider}` (FR-SLT-38). Phiên có agreementVersionId mà Brand Admin chưa đồng ý phụ lục (`POST /rental-checkouts/{id}/annex/accept`) trả AGREEMENT_NOT_ACCEPTED (FR-SLT-50, ADR-0013).
          */
         post: operations["payRentalCheckout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rental-checkouts/{id}/annex": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Phụ lục của phiên thanh toán
+         * @description FR-SLT-50 (ADR-0013): phụ lục tự sinh từ ảnh chụp giá của các hóa đơn trong phiên, kèm lần đồng ý nếu đã có. Phiên tạo trước ADR-0013 (không có agreementVersionId) trả NOT_FOUND. Ngoài phạm vi thương hiệu trả FORBIDDEN_SCOPE (FR-AUTH-08).
+         */
+        get: operations["getRentalCheckoutAnnex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rental-checkouts/{id}/annex/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đồng ý phụ lục của phiên thanh toán
+         * @description FR-SLT-50 (ADR-0013): Brand Admin đồng ý phụ lục trước khi thanh toán. Lưu phiên bản hợp đồng khung, người, thời điểm, IP, mã băm nội dung. contentHash lệch phụ lục hiện tại trả VALIDATION_ERROR. Phiên đã thanh toán, đã hủy hoặc quá giờ giữ chỗ trả RENTAL_NOT_ACTIVE. Gọi lại khi đã đồng ý trả 200 cùng bản ghi cũ.
+         */
+        post: operations["acceptRentalCheckoutAnnex"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Danh sách phiên bản hợp đồng khung
+         * @description FR-SLT-48 (ADR-0013): Platform Super Admin xem mọi phiên bản, kể cả bản nháp.
+         */
+        get: operations["listAgreementVersions"];
+        put?: never;
+        /**
+         * Soạn phiên bản hợp đồng khung mới
+         * @description FR-SLT-48: tạo bản nháp (chưa công bố, chưa hiện hành). Trùng version trả VALIDATION_ERROR. Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["createAgreementVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agreements/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hợp đồng khung hiện hành
+         * @description FR-SLT-48, FR-SLT-49 (ADR-0013): phiên bản hiện hành kèm lần đồng ý của thương hiệu người gọi (null nếu chưa). Chưa có phiên bản nào được công bố trả NOT_FOUND.
+         */
+        get: operations["getCurrentAgreement"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agreements/{version}/publish": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Công bố một phiên bản thành hiện hành
+         * @description FR-SLT-48: bản nháp → đã công bố và hiện hành; phiên bản hiện hành cũ thôi hiện hành trong cùng transaction (uq_agreement_version_current). Từ lúc này mọi thương hiệu phải đồng ý bản mới trước khi tạo phiên thanh toán tiếp theo. Đã công bố thì nội dung bất biến. Cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["publishAgreementVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agreements/{version}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đồng ý hợp đồng khung
+         * @description FR-SLT-49 (ADR-0013): Brand Admin đồng ý một lần cho thương hiệu mình. Chỉ đồng ý được phiên bản hiện hành — phiên bản khác trả VALIDATION_ERROR, contentHash lệch cũng vậy. Lưu phiên bản, người, thời điểm, IP, mã băm nội dung (chỉ thêm mới). Gọi lại khi đã đồng ý trả 200 cùng bản ghi cũ.
+         */
+        post: operations["acceptAgreement"];
         delete?: never;
         options?: never;
         head?: never;
@@ -973,6 +1119,54 @@ export interface paths {
          * @description FR-SLT-14, FR-SLT-11: đóng hóa đơn LIQUIDATED sau khi hàng thanh lý đã bán hết hoặc được tháo khỏi slot, giải phóng slot cho hóa đơn mới. Hóa đơn không ở LIQUIDATED trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-EXP-21).
          */
         post: operations["closeSlotRental"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slot-rentals/{id}/non-renewal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Báo không gia hạn, lấy hàng về
+         * @description FR-EXP-23, FR-EXP-25 (ADR-0014): Brand Admin báo bất cứ lúc nào trước endsAt, chọn cách nhận hàng. Hóa đơn giữ ACTIVE/EXPIRING tới khi Inventory Staff tháo chai — không vào GRACE, không tính phí ân hạn; doanh thu tới lúc tháo chai vẫn thuộc thương hiệu. Hóa đơn không ở ACTIVE hoặc EXPIRING, hoặc đã quá endsAt, trả RENTAL_NOT_ACTIVE. Gọi lại thì cập nhật cách nhận hàng. Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["requestSlotRentalNonRenewal"];
+        /**
+         * Rút lại việc báo không gia hạn
+         * @description FR-EXP-24 (ADR-0014): chỉ trước endsAt. Sau endsAt, hoặc khi chai đã được tháo, trả RENTAL_NOT_ACTIVE — muốn tiếp tục thì thuê lại slot như mới. Chưa từng báo thì trả 200 như cũ. Ghi nhật ký (FR-AUD-03).
+         */
+        delete: operations["withdrawSlotRentalNonRenewal"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/slot-rentals/{id}/swap-slot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đổi hóa đơn sang slot khác khi mua nhầm
+         * @description FR-SLT-55 (ADR-0014): trong SLOT_SWAP_WINDOW_HOURS kể từ paidAt, hóa đơn DRAFT đã thanh toán (chưa lắp chai), chưa đổi lần nào, slot đích trống và cùng giá thuê niêm yết. Ngược lại trả SLOT_SWAP_NOT_ALLOWED. Slot đích vừa bị người khác giữ trả SLOT_OCCUPIED (excl_slot_rental_overlap). Slot cũ được giải phóng trong cùng transaction. Giữ nguyên số hóa đơn, gói thuê, gói bảo quản; không hoàn tiền. Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["swapSlotRentalSlot"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1275,6 +1469,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/brand-payouts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Danh sách kỳ chi trả doanh thu
+         * @description FR-SLT-52 (ADR-0013): Brand Admin chỉ thấy kỳ của thương hiệu mình (cô lập — nhóm trọng yếu); Platform Super Admin thấy mọi thương hiệu, lọc được theo brandId và status.
+         */
+        get: operations["listBrandPayouts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brand-payouts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Chi tiết kỳ chi trả
+         * @description FR-SLT-52: kỳ của thương hiệu khác trả FORBIDDEN_SCOPE với Brand Admin (FR-AUTH-08). Dòng chi tiết theo slot lấy từ `GET /settlements` với cùng tháng.
+         */
+        get: operations["getBrandPayout"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brand-payouts/{id}/pay": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ghi nhận đã chuyển khoản kỳ chi trả
+         * @description FR-SLT-53 (ADR-0013): Platform Super Admin chuyển kỳ CONFIRMED sang PAID kèm mã giao dịch. Thương hiệu chưa xác minh pháp nhân hoặc chưa có tài khoản nhận doanh thu trả BRAND_NOT_VERIFIED; kỳ không ở CONFIRMED, hoặc còn khiếu nại chưa trả lời (FR-SLT-54), trả RENTAL_NOT_ACTIVE. Cần xác thực lại (FR-AUTH-09). Ghi nhật ký (FR-AUD-03). Gửi email cho Brand Admin (FR-ALR-16).
+         */
+        post: operations["payBrandPayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brand-payouts/{id}/dispute": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Khiếu nại số liệu kỳ chi trả
+         * @description FR-SLT-54 (ADR-0013): Brand Admin gửi một khiếu nại trên kỳ CONFIRMED của thương hiệu mình. Kỳ không ở CONFIRMED hoặc đã có khiếu nại trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["disputeBrandPayout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/brand-payouts/{id}/dispute-response": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trả lời khiếu nại số liệu
+         * @description FR-SLT-54: Platform Super Admin trả lời khiếu nại — điều kiện để chuyển PAID. Kỳ không có khiếu nại, hoặc đã trả lời, trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-03).
+         */
+        post: operations["respondBrandPayoutDispute"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/slot-rentals/{id}/grace-period": {
         parameters: {
             query?: never;
@@ -1526,9 +1834,77 @@ export interface paths {
         post?: never;
         /**
          * Tháo chai khỏi slot và trả về kho
-         * @description FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07).
+         * @description FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
          */
         delete: operations["removeBottleFromSlot"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bottle-returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Danh sách phiếu trả hàng
+         * @description FR-EXP-26 ÷ 28 (ADR-0014): Inventory Staff và Super Admin thấy mọi phiếu; Brand Admin chỉ thấy phiếu của thương hiệu mình. open = true chỉ lấy phiếu chưa bàn giao và chưa quá hạn.
+         */
+        get: operations["listBottleReturns"];
+        put?: never;
+        /**
+         * Tháo chai và lập phiếu trả hàng
+         * @description FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi nhật ký (FR-AUD-07).
+         */
+        post: operations["createBottleReturn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bottle-returns/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Chi tiết phiếu trả hàng
+         * @description FR-EXP-26: phiếu kèm danh sách chai. Phiếu của thương hiệu khác trả FORBIDDEN_SCOPE.
+         */
+        get: operations["getBottleReturn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bottle-returns/{id}/handover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ghi nhận bàn giao hàng trả về
+         * @description FR-EXP-27 (ADR-0014): Inventory Staff ghi người nhận, thời điểm, mã vận đơn (bắt buộc khi SHIP_TO_BRAND — thiếu trả VALIDATION_ERROR). Phiếu đã bàn giao hoặc đã quá hạn nhận trả RENTAL_NOT_ACTIVE. Ghi nhật ký (FR-AUD-07).
+         */
+        post: operations["handOverBottleReturn"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1656,7 +2032,7 @@ export interface paths {
         /**
          * Tạo đơn hàng từ kiosk
          * @description FR-ORD-04, FR-ORD-05, FR-ORD-07, FR-ORD-08, FR-ORD-09: chỉ tạo được khi máy ONLINE và slot AVAILABLE. Lưu ảnh chụp máy, slot, hóa đơn, thương hiệu, sản phẩm, giá, loại tiền và chủ sở hữu doanh thu tại thời điểm tạo đơn (FR-REV-01, FR-REV-02); các trường này bất biến sau đó (NFR-DAT-06). Sinh mã tham chiếu duy nhất và mã QR thanh toán, hạn thanh toán ORDER_PAYMENT_TTL_SEC.
-         *     Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE (FR-MNT-06), SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có lệnh xịt chờ khách trước bấm nút (FR-ORD-24, ADR-0007).
+         *     Từ chối với: MACHINE_OFFLINE (FR-IOT-12), MACHINE_IN_MAINTENANCE khi máy MAINTENANCE, DRAINING hoặc có phiếu nạp đang mở (FR-MNT-06, FR-INV-30, ADR-0015), SLOT_UNAVAILABLE (FR-ORD-04, FR-SLT-10, FR-SLT-29, FR-BND-04), MACHINE_BUSY khi máy đang có lệnh xịt chờ khách trước bấm nút (FR-ORD-24, ADR-0007) hoặc đã có một đơn chờ thanh toán chưa hết hạn (FR-ORD-35, uq_machine_open_order, ADR-0015). Đơn chờ thanh toán đã quá hạn được chuyển EXPIRED ngay lúc này rồi mới xét, nên khách sau không phải chờ job hết hạn.
          *     Trước khi hiện mã QR, kiosk phải hiện điều khoản bấm nút trong DISPENSE_PRESS_WINDOW_SEC, quá thời gian mất lượt và không hoàn tiền (FR-ORD-25).
          *     Giới hạn ORDER_RATE_LIMIT_PER_MIN yêu cầu mỗi phút cho mỗi máy (NFR-SEC-06).
          */
@@ -2712,14 +3088,17 @@ export interface components {
          */
         MachineConnectionStatus: "ONLINE" | "UNSTABLE" | "OFFLINE";
         /**
-         * @description Trục chế độ, do người vận hành đặt (FR-MCH-09). Độc lập với trạng thái kết nối.
+         * @description Trục chế độ, do người vận hành đặt (FR-MCH-09). Độc lập với trạng thái kết nối. DRAINING (ADR-0015): đã yêu cầu bảo trì — không nhận đơn mới, phục vụ nốt đơn đã trả tiền rồi tự sang MAINTENANCE (FR-MNT-05). Chỉ tồn tại ở backend; thiết bị vẫn nhận NORMAL.
          * @enum {string}
          */
-        MachineOperatingMode: "NORMAL" | "MAINTENANCE" | "DISABLED";
+        MachineOperatingMode: "NORMAL" | "DRAINING" | "MAINTENANCE" | "DISABLED";
         /** @enum {string} */
         SlotStatus: "AVAILABLE" | "UNAVAILABLE" | "MAINTENANCE" | "DISABLED";
-        /** @enum {string} */
-        BottleStatus: "IN_STOCK" | "INSTALLED" | "LOW" | "EMPTY" | "DAMAGED" | "EXPIRED" | "LIQUIDATED";
+        /**
+         * @description RETURNED_TO_BRAND (ADR-0014): chai đã tháo của hóa đơn báo không gia hạn, nằm trên phiếu trả hàng chờ thương hiệu nhận (FR-EXP-26).
+         * @enum {string}
+         */
+        BottleStatus: "IN_STOCK" | "INSTALLED" | "LOW" | "EMPTY" | "DAMAGED" | "EXPIRED" | "LIQUIDATED" | "RETURNED_TO_BRAND";
         /** @enum {string} */
         RefillStatus: "STARTED" | "COMPLETED" | "CANCELLED";
         /**
@@ -2782,6 +3161,21 @@ export interface components {
          */
         RefundClaimStatus: "OPEN" | "REFUNDED" | "REJECTED" | "EXPIRED";
         /**
+         * @description Lần đồng ý hợp đồng khung (một lần cho mỗi phiên bản) hay phụ lục của một phiên thanh toán (ADR-0013).
+         * @enum {string}
+         */
+        AgreementKind: "FRAMEWORK" | "ANNEX";
+        /**
+         * @description Kỳ chi trả doanh thu (FR-SLT-52, ADR-0013): DRAFT đang cộng dồn trong tháng → CONFIRMED khóa số liệu sau khi hết tháng → PAID đã chuyển khoản.
+         * @enum {string}
+         */
+        BrandPayoutStatus: "DRAFT" | "CONFIRMED" | "PAID";
+        /**
+         * @description Cách nhận hàng trả về khi báo không gia hạn (FR-EXP-23, ADR-0014): tự đến kho lấy, hoặc nền tảng gửi về địa chỉ thương hiệu và thương hiệu chịu phí vận chuyển.
+         * @enum {string}
+         */
+        BottleReturnMethod: "WAREHOUSE_PICKUP" | "SHIP_TO_BRAND";
+        /**
          * @description Nhãn hiển thị cho Brand Admin (FR-SLT-41), SUY RA từ `status` và `paidAt` — không phải cột
          *     trong CSDL. DRAFT + chưa thanh toán → AWAITING_PAYMENT; DRAFT + đã thanh toán →
          *     AWAITING_STOCK; RENEWED, CLOSED, TERMINATED → ENDED.
@@ -2843,25 +3237,27 @@ export interface components {
             reauthToken: string;
             expiresIn: number;
         };
-        BrandRegisterRequest: {
+        /** @description Thương hiệu tự đăng ký (FR-USR-06, ADR-0013): tạo cùng lúc một Brand và một tài khoản Brand Admin gắn với nó. Mã thương hiệu (code) do hệ thống sinh từ tên. */
+        BrandRegistration: {
             brandName: string;
+            fullName: string;
             /** Format: email */
             email: string;
+            /** Format: password */
             password: string;
         };
-        BrandRegisterResponse: {
-            brand: components["schemas"]["Brand"];
-            user: components["schemas"]["User"];
-        };
-        VerifyEmailRequest: {
-            token: string;
-        };
-        VerifyEmailResponse: {
-            verified: boolean;
-        };
-        ResendVerificationRequest: {
+        /** @description Tài khoản ở ACTIVE và đăng nhập được ngay; mã xác minh đã gửi tới email. Chưa xác minh thì chưa tạo được phiên thanh toán thuê slot (EMAIL_NOT_VERIFIED, FR-USR-07). */
+        BrandRegistered: {
+            /** Format: uuid */
+            brandId: string;
+            /** Format: uuid */
+            userId: string;
             /** Format: email */
             email: string;
+        };
+        EmailVerificationConfirm: {
+            /** @description Mã trong email xác minh. Sai hoặc quá hạn trả VALIDATION_ERROR. */
+            token: string;
         };
         Brand: {
             /** Format: uuid */
@@ -2876,6 +3272,27 @@ export interface components {
             status: components["schemas"]["BrandStatus"];
             /** Format: date-time */
             createdAt: string;
+            /** @description Mã số thuế (FR-BND-09). */
+            taxCode?: string | null;
+            businessLicenseNumber?: string | null;
+            /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả nguyên văn qua API. */
+            hasPayoutAccount?: boolean;
+            /**
+             * Format: date-time
+             * @description Super Admin đã xác minh pháp nhân (FR-BND-10). Null thì kỳ chi trả không chuyển PAID được (BRAND_NOT_VERIFIED).
+             */
+            legalVerifiedAt?: string | null;
+        };
+        /** @description Brand Admin khai hồ sơ pháp nhân và tài khoản doanh nghiệp nhận doanh thu (FR-BND-09, ADR-0013). Sửa sau khi đã xác minh thì xóa trạng thái xác minh — Super Admin phải xác minh lại. */
+        BrandLegalProfileUpdate: {
+            taxCode: string;
+            businessLicenseNumber?: string;
+            /** @description Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn. */
+            payoutAccount?: {
+                bankCode: string;
+                accountNumber: string;
+                accountHolder: string;
+            };
         };
         BrandCreate: {
             code: string;
@@ -3019,9 +3436,13 @@ export interface components {
             calibratedDosageMl?: number;
             lowStockThresholdMl?: number;
         };
+        /** @description Chọn MAINTENANCE thì máy vào DRAINING trước và tự sang MAINTENANCE khi phục vụ xong (FR-MNT-05); force = true ép chuyển thẳng, reason bắt buộc (FR-MNT-17). Không đặt DRAINING trực tiếp được — gửi DRAINING trả VALIDATION_ERROR. */
         MachineModeUpdate: {
             operatingMode: components["schemas"]["MachineOperatingMode"];
+            /** @description Bắt buộc khi force = true. */
             reason?: string;
+            /** @description Bỏ trống coi như false. Chỉ có nghĩa khi operatingMode = MAINTENANCE: bỏ qua DRAINING, chuyển ngay (khẩn cấp). Đơn đang dở đi theo FR-ORD-19. */
+            force?: boolean;
         };
         /** @description Một hàng cho mỗi lần chuyển. Thay đổi kết nối điền cặp *ConnectionStatus và để trống cặp *OperatingMode; thay đổi chế độ làm ngược lại (FR-MCH-13). */
         MachineStatusHistoryEntry: {
@@ -3150,6 +3571,28 @@ export interface components {
             cancelledAt?: string | null;
             /** Format: date-time */
             createdAt?: string;
+            /**
+             * Format: date-time
+             * @description Brand Admin đã báo không gia hạn (FR-EXP-23, ADR-0014): hóa đơn không vào GRACE, không tính phí ân hạn, giữ ACTIVE/EXPIRING tới khi tháo chai (FR-EXP-25).
+             */
+            nonRenewalRequestedAt?: string | null;
+            returnMethod?: components["schemas"]["BottleReturnMethod"] | null;
+            /**
+             * Format: uuid
+             * @description Slot cũ khi đã đổi slot (FR-SLT-55) — khác null là đã dùng lượt đổi duy nhất.
+             */
+            swappedFromSlotId?: string | null;
+            /** Format: date-time */
+            swappedAt?: string | null;
+        };
+        /** @description Báo không gia hạn, lấy hàng về (FR-EXP-23, ADR-0014). */
+        SlotRentalNonRenewal: {
+            returnMethod: components["schemas"]["BottleReturnMethod"];
+        };
+        /** @description Đổi hóa đơn sang slot trống khác cùng giá niêm yết (FR-SLT-55, ADR-0014). Giữ số hóa đơn, gói thuê, gói bảo quản; không hoàn tiền, không bù chênh lệch. */
+        SlotSwapRequest: {
+            /** Format: uuid */
+            targetSlotId: string;
         };
         /**
          * @deprecated
@@ -3368,6 +3811,113 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             invoices: components["schemas"]["SlotRental"][];
+            /**
+             * Format: uuid
+             * @description Hợp đồng khung hiện hành lúc tạo phiên (ADR-0013). Null với phiên tạo trước ADR-0013.
+             */
+            agreementVersionId?: string | null;
+            /**
+             * Format: date-time
+             * @description Lúc Brand Admin đồng ý phụ lục của phiên (FR-SLT-50). Null thì chưa thanh toán được (AGREEMENT_NOT_ACCEPTED).
+             */
+            annexAcceptedAt?: string | null;
+        };
+        /** @description Hợp đồng khung có phiên bản (FR-SLT-48, ADR-0013). Đã công bố (publishedAt) thì nội dung bất biến; mỗi thời điểm đúng một phiên bản hiện hành. */
+        AgreementVersion: {
+            /** Format: uuid */
+            id: string;
+            version: string;
+            title: string;
+            /** @description Toàn văn hợp đồng khung (Markdown). */
+            content: string;
+            /** @description SHA-256 của content — gửi lại khi đồng ý để chứng minh đã thấy đúng bản này. */
+            contentHash: string;
+            isCurrent: boolean;
+            /** Format: date-time */
+            publishedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AgreementVersionCreate: {
+            version: string;
+            title: string;
+            content: string;
+        };
+        AgreementCurrent: {
+            agreement: components["schemas"]["AgreementVersion"];
+            /** @description Lần thương hiệu của người gọi đã đồng ý phiên bản này; null là chưa đồng ý. Luôn null với tài khoản mức nền tảng. */
+            acceptance?: components["schemas"]["AgreementAcceptance"] | null;
+        };
+        /** @description contentHash phải trùng mã băm của văn bản đang hiện hành (hợp đồng khung, hoặc phụ lục của phiên); lệch — văn bản đã đổi sau khi người dùng mở — trả VALIDATION_ERROR. */
+        AgreementAccept: {
+            contentHash: string;
+        };
+        /** @description Bằng chứng đồng ý (FR-SLT-49, 50): phiên bản, người, thời điểm, mã băm nội dung. IP lưu trong CSDL, không trả qua API. */
+        AgreementAcceptance: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            brandId: string;
+            /** Format: uuid */
+            acceptedBy: string;
+            kind: components["schemas"]["AgreementKind"];
+            /** Format: uuid */
+            agreementVersionId: string;
+            /** Format: uuid */
+            rentalCheckoutId?: string | null;
+            contentHash: string;
+            /** Format: date-time */
+            acceptedAt: string;
+        };
+        /** @description Phụ lục tự sinh của một phiên thanh toán (FR-SLT-50, ADR-0013) từ ảnh chụp giá của các hóa đơn: slot, gói thuê, gói bảo quản, mức bảo vệ tối đa, tỉ lệ phí ân hạn. Sinh lại từ cùng dữ liệu luôn cho cùng contentHash. */
+        RentalCheckoutAnnex: {
+            /** Format: uuid */
+            checkoutId: string;
+            /** Format: uuid */
+            agreementVersionId: string;
+            /** @description Toàn văn phụ lục (Markdown). */
+            content: string;
+            contentHash: string;
+            acceptance?: components["schemas"]["AgreementAcceptance"] | null;
+        };
+        /** @description Kỳ chi trả doanh thu lượt xịt một tháng của một thương hiệu (FR-SLT-52, ADR-0013). Tính đơn revenueOwner = BRAND ở DISPENSED hoặc FORFEITED; không trừ phí cổng hay khoản đã hoàn cho khách (FR-SLT-18). */
+        BrandPayout: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            brandId: string;
+            /**
+             * Format: date
+             * @description Ngày đầu tháng dương lịch của kỳ, giờ Việt Nam.
+             */
+            periodMonth: string;
+            status: components["schemas"]["BrandPayoutStatus"];
+            currency: components["schemas"]["Currency"];
+            orderCount: number;
+            /** @description DRAFT là số tạm đang cộng dồn; từ CONFIRMED là số đã khóa. */
+            amount: components["schemas"]["Money"];
+            /** Format: date-time */
+            confirmedAt?: string | null;
+            /** Format: date-time */
+            paidAt?: string | null;
+            transferReference?: string | null;
+            disputeNote?: string | null;
+            /** Format: date-time */
+            disputedAt?: string | null;
+            disputeResponse?: string | null;
+            /** Format: date-time */
+            disputeResolvedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        BrandPayoutPay: {
+            transferReference: string;
+        };
+        BrandPayoutDispute: {
+            note: string;
+        };
+        BrandPayoutDisputeResponse: {
+            response: string;
         };
         /** @description Thanh toán phiên thanh toán thuê slot qua cổng (FR-SLT-37, ADR-0008) — một thanh toán cho mọi hóa đơn trong phiên. Mỗi phiên tối đa một thanh toán PENDING — gọi lại trả chính thanh toán đó. */
         RentalPaymentIntent: {
@@ -3486,22 +4036,6 @@ export interface components {
             storageAmount: components["schemas"]["Money"];
             graceFeeAmount: components["schemas"]["Money"];
             totalAmount: components["schemas"]["Money"];
-        };
-        AgreementVersionView: {
-            version: string;
-            title: string;
-            content: string;
-            contentHash: string;
-        };
-        AgreementAcceptanceView: {
-            /** Format: uuid */
-            brandId: string;
-            version: string;
-            /** Format: uuid */
-            acceptedBy: string;
-            /** Format: date-time */
-            acceptedAt: string;
-            contentHash: string;
         };
         /** @description Ấn định ngày kết thúc ân hạn cho từng hóa đơn (FR-EXP-07). */
         GracePeriodUpdate: {
@@ -3680,6 +4214,58 @@ export interface components {
             sourceRentalId?: string | null;
             /** Format: date-time */
             liquidatedAt?: string | null;
+            /**
+             * Format: uuid
+             * @description Phiếu trả hàng chứa chai (FR-EXP-26). Có giá trị khi status = RETURNED_TO_BRAND.
+             */
+            bottleReturnId?: string | null;
+        };
+        /** @description Phiếu trả hàng khi thương hiệu chủ động không gia hạn (FR-EXP-26 ÷ 28, ADR-0014). Đóng bằng bàn giao (handedOverAt) hoặc quá pickupDeadline mà chưa nhận — hàng chuyển sở hữu về nền tảng như thanh lý (forfeitedAt). */
+        BottleReturn: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            slotRentalId: string;
+            /** Format: uuid */
+            brandId: string;
+            returnMethod: components["schemas"]["BottleReturnMethod"];
+            shippingAddress?: string | null;
+            /** Format: date-time */
+            readyAt: string;
+            /**
+             * Format: date-time
+             * @description readyAt + RETURN_PICKUP_MAX_DAYS.
+             */
+            pickupDeadline: string;
+            /** Format: date-time */
+            handedOverAt?: string | null;
+            recipientName?: string | null;
+            trackingNumber?: string | null;
+            /** Format: date-time */
+            forfeitedAt?: string | null;
+            bottles: components["schemas"]["Bottle"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @description Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17), thông báo Brand Admin. */
+        BottleReturnCreate: {
+            /** Format: uuid */
+            slotRentalId: string;
+            bottles: {
+                /** Format: uuid */
+                bottleId: string;
+                measuredWeightG: number;
+            }[];
+        };
+        /** @description Bàn giao hàng trả về (FR-EXP-27). SHIP_TO_BRAND bắt buộc trackingNumber. */
+        BottleReturnHandover: {
+            recipientName: string;
+            /**
+             * Format: date-time
+             * @description Mặc định là thời điểm gọi API.
+             */
+            handedOverAt?: string;
+            trackingNumber?: string;
         };
         BottleCreate: {
             /** Format: uuid */
@@ -3890,7 +4476,7 @@ export interface components {
             status: components["schemas"]["OrderStatus"];
             revenueOwner: components["schemas"]["RevenueOwner"];
             dispenseStatus?: components["schemas"]["CommandStatus"] | null;
-            /** @description PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED). */
+            /** @description PRESS_TIMEOUT khi khách không bấm nút (đơn FORFEITED). QUEUE_TIMEOUT khi đơn đã trả tiền chờ lượt quá PAID_QUEUE_MAX_SEC (đơn FAILED, FR-ORD-34) — kiosk hiện màn sự cố kèm QR khiếu nại. */
             failureCode?: string | null;
             /** @description Số slot — kiosk hiện "Mời bấm nút số N" khi đèn đã sáng (FR-ORD-26). */
             slotNumber?: number;
@@ -4599,21 +5185,21 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BrandRegisterRequest"];
+                "application/json": components["schemas"]["BrandRegistration"];
             };
         };
         responses: {
-            /** @description Đăng ký thành công */
+            /** @description Đã tạo thương hiệu và tài khoản */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BrandRegisterResponse"];
+                    "application/json": components["schemas"]["BrandRegistered"];
                 };
             };
             400: components["responses"]["BadRequest"];
-            /** @description Vượt giới hạn tần suất đăng ký */
+            /** @description Vượt giới hạn tần suất đăng ký — mã RATE_LIMITED */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4633,19 +5219,11 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["VerifyEmailRequest"];
+                "application/json": components["schemas"]["EmailVerificationConfirm"];
             };
         };
         responses: {
-            /** @description Xác minh thành công */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyEmailResponse"];
-                };
-            };
+            204: components["responses"]["NoContent"];
             400: components["responses"]["BadRequest"];
         };
     };
@@ -4656,23 +5234,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResendVerificationRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
-            /** @description Đã gửi lại email xác minh */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerifyEmailResponse"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            /** @description Vượt giới hạn tần suất */
+            204: components["responses"]["NoContent"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Gửi lại quá nhiều lần — mã RATE_LIMITED */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -4820,6 +5386,63 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    verifyBrandLegal: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xác minh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateMyBrandLegalProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandLegalProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Đã cập nhật */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getMyBrand: {
@@ -5552,53 +6175,6 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
-    getCurrentAgreement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Phiên bản hợp đồng khung hiện hành */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgreementVersionView"];
-                };
-            };
-            404: components["responses"]["NotFound"];
-        };
-    };
-    acceptAgreement: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Mã phiên bản hợp đồng khung */
-                version: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Đã ghi nhận đồng ý hợp đồng khung */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgreementAcceptanceView"];
-                };
-            };
-            400: components["responses"]["BadRequest"];
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-        };
-    };
     createRentalCheckout: {
         parameters: {
             query?: never;
@@ -5673,6 +6249,206 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    getRentalCheckoutAnnex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Phụ lục */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RentalCheckoutAnnex"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptRentalCheckoutAnnex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgreementAccept"];
+            };
+        };
+        responses: {
+            /** @description Đã đồng ý từ trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementAcceptance"];
+                };
+            };
+            /** @description Đã ghi nhận đồng ý */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementAcceptance"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listAgreementVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Các phiên bản, mới nhất trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementVersion"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createAgreementVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgreementVersionCreate"];
+            };
+        };
+        responses: {
+            /** @description Bản nháp */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementVersion"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getCurrentAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hợp đồng khung hiện hành */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementCurrent"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    publishAgreementVersion: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã công bố */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementVersion"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    acceptAgreement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgreementAccept"];
+            };
+        };
+        responses: {
+            /** @description Đã đồng ý từ trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementAcceptance"];
+                };
+            };
+            /** @description Đã ghi nhận đồng ý */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementAcceptance"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     getRentalInvoice: {
@@ -5858,6 +6634,91 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    requestSlotRentalNonRenewal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotRentalNonRenewal"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi nhận */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotRental"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    withdrawSlotRentalNonRenewal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã rút lại */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotRental"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    swapSlotRentalSlot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SlotSwapRequest"];
+            };
+        };
+        responses: {
+            /** @description Đã đổi slot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SlotRental"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -6309,6 +7170,158 @@ export interface operations {
             403: components["responses"]["Forbidden"];
         };
     };
+    listBrandPayouts: {
+        parameters: {
+            query?: {
+                /** @description Chỉ Platform Super Admin dùng được; Brand Admin luôn lấy thương hiệu của mình. */
+                brandId?: string;
+                status?: components["schemas"]["BrandPayoutStatus"];
+                /** @description Trang, bắt đầu từ 1 */
+                page?: components["parameters"]["page"];
+                /** @description Số bản ghi mỗi trang */
+                pageSize?: components["parameters"]["pageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Các kỳ chi trả, mới nhất trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["BrandPayout"][];
+                        meta: components["schemas"]["PageMeta"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getBrandPayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Kỳ chi trả */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandPayout"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    payBrandPayout: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandPayoutPay"];
+            };
+        };
+        responses: {
+            /** @description Đã chuyển PAID */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandPayout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    disputeBrandPayout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandPayoutDispute"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi nhận khiếu nại */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandPayout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    respondBrandPayoutDispute: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BrandPayoutDisputeResponse"];
+            };
+        };
+        responses: {
+            /** @description Đã trả lời */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandPayout"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     setGracePeriod: {
         parameters: {
             query?: never;
@@ -6741,6 +7754,118 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listBottleReturns: {
+        parameters: {
+            query?: {
+                open?: boolean;
+                /** @description Trang, bắt đầu từ 1 */
+                page?: components["parameters"]["page"];
+                /** @description Số bản ghi mỗi trang */
+                pageSize?: components["parameters"]["pageSize"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Các phiếu trả hàng, mới nhất trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["BottleReturn"][];
+                        meta: components["schemas"]["PageMeta"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createBottleReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BottleReturnCreate"];
+            };
+        };
+        responses: {
+            /** @description Đã lập phiếu */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BottleReturn"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getBottleReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Phiếu trả hàng */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BottleReturn"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    handOverBottleReturn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BottleReturnHandover"];
+            };
+        };
+        responses: {
+            /** @description Đã bàn giao */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BottleReturn"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

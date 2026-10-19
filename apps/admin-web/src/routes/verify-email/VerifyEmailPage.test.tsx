@@ -71,9 +71,7 @@ describe('Màn hình xác minh email (FR-USR-07)', () => {
 
     expect(await screen.findByText('Xác minh email thành công!')).toBeTruthy();
     expect(
-      screen.getByText(
-        'Tài khoản thương hiệu đã được kích hoạt thành công. Bạn có thể đăng nhập để sử dụng.',
-      ),
+      screen.getByText('Email đã được xác minh. Bạn có thể tạo phiên thuê slot.'),
     ).toBeTruthy();
   });
 

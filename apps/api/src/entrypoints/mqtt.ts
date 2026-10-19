@@ -11,9 +11,11 @@ import { hostname } from 'node:os';
 import type { INestApplicationContext } from '@nestjs/common';
 import { MqttClientAdapter } from '../adapters/mqtt/index.js';
 import { DspMqttGateway } from '../modules/dsp/index.js';
+import { IotMqttGateway } from '../modules/iot/iot.mqtt.js';
 
 export function startMqtt(app: INestApplicationContext, url: string): void {
   // clientId cố định theo máy chủ: phiên bền (clean=false) giữ bản tin QoS 1 lúc API khởi động lại.
   app.get(MqttClientAdapter).connect(url, `scentstation-api-${hostname()}`);
   app.get(DspMqttGateway).start();
+  app.get(IotMqttGateway).start();
 }

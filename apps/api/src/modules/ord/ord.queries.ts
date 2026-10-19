@@ -275,15 +275,21 @@ export class OrdQueries {
     return row !== undefined;
   }
 
-  /** ADR-0015: máy đang có đơn chờ thanh toán (CREATED hoặc PENDING_PAYMENT). */
-  async machineHasOpenOrder(machineId: string, executor: Executor = this.db): Promise<boolean> {
+  /**
+   * FR-ORD-35: đơn chờ thanh toán của máy (cùng tập trạng thái với `uq_machine_open_order` — tối đa
+   * một). `expiresAt` để người gọi biết đơn đó còn chặn máy hay đã quá hạn mà job chưa quét.
+   */
+  async findOpenOrderOnMachine(
+    machineId: string,
+    executor: Executor = this.db,
+  ): Promise<{ readonly id: string; readonly expiresAt: Date } | null> {
     const row = await executor
       .selectFrom('orders')
-      .select('id')
+      .select(['id', 'expires_at'])
       .where('machine_id', '=', machineId)
       .where('status', 'in', ['CREATED', 'PENDING_PAYMENT'])
       .executeTakeFirst();
-    return row !== undefined;
+    return row ? { id: row.id, expiresAt: row.expires_at } : null;
   }
 
   // -----------------------------------------------------------------------------------
