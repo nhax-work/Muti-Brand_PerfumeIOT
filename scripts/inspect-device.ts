@@ -4,7 +4,12 @@ import pg from 'pg';
 import { loadEnvFile } from '../apps/api/src/shared/config/env-file.js';
 
 loadEnvFile();
-const { values } = parseArgs({ options: { serial: { type: 'string', default: 'M001' } } });
+// PowerShell nuốt dấu `--` của `npm run … -- --serial M001`, npm chỉ chuyển xuống `M001` — nhận cả hai.
+const { values, positionals } = parseArgs({
+  options: { serial: { type: 'string' } },
+  allowPositionals: true,
+});
+const serial = values.serial ?? positionals[0] ?? 'M001';
 const url = process.env['DATABASE_URL'];
 if (!url) throw new Error('Thiếu DATABASE_URL');
 const client = new pg.Client({ connectionString: url });
@@ -13,10 +18,10 @@ try {
   const machine = (
     await client.query(
       'SELECT id, serial_number, status, operating_mode, last_seen_at, firmware_version, configuration_version, simulator_enabled FROM machines WHERE serial_number = $1',
-      [values.serial],
+      [serial],
     )
   ).rows[0];
-  if (!machine) throw new Error(`Không tìm thấy máy ${values.serial}`);
+  if (!machine) throw new Error(`Không tìm thấy máy ${serial}`);
   const id = machine.id;
   const [slots, orders, results, events, telemetry] = await Promise.all([
     client.query(
