@@ -79,6 +79,7 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     fireEvent.click(screen.getByText('Sửa'));
     const dialog = await screen.findByRole('dialog');
     expect((within(dialog).getAllByRole('textbox')[0] as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByText('Hủy'));
   });
 
   it('Super Admin chỉ xem — không có nút thêm, sửa, ngừng kinh doanh', () => {

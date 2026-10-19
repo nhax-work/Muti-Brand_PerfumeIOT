@@ -71,23 +71,18 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > migration trong `migrations/` (danh sách ADR và file tương ứng ở đầu `schema.sql`); `pg_dump --schema-only` của DB nạp
 > `schema.sql` phải trùng với DB chạy hết migration.
 
-> Trạng thái acceptance criteria trong `spec/modules/` (188/286 FR hiệu lực, đếm lại ngày 2026-09-29
-> sau ADR-0006 và ADR-0007 — đều đã duyệt; 7 FR mức X đã bãi bỏ không tính):
+> Trạng thái acceptance criteria trong `spec/modules/` (cập nhật ngày 2026-10-17 sau khi hoàn thành 28 FR mới theo ADR-0013, 0014, 0015 và 12 FR của RFQ; 7 FR mức X đã bãi bỏ không tính):
 >
-> - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
-> - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17), `DSP` (chỉ
->   FR-DSP-21..27 — nút bấm vật lý, ADR-0007)
-> - **Còn rỗng:** `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
+> - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`, `RFQ`
+> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-21..27 — nút bấm vật lý), `RPT` (FR-RPT-04)
+> - **Còn rỗng:** `IOT`, `AUD`, `PRD`
 >
-> **Lệch từ 2026-10-14:** ADR-0013, 0014, 0015 thêm 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
-> FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16) **chưa có AC**, và viết lại
-> câu yêu cầu của FR-USR-01, 05, FR-SLT-17, 18, 44, FR-EXP-06, 07, FR-INV-04, 30, 31, FR-ORD-19,
-> FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04, FR-AUTH-09 — AC cũ của các FR này trong
-> `spec/modules/` có thể còn theo nghĩa cũ, phải soát lại khi hiện thực ADR tương ứng.
+> **Đã hoàn thành ngày 2026-10-17:** Viết đủ AC cho 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
+> FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16), viết đủ 12 FR cho `RFQ`
+> (FR-RFQ-01 ÷ 12), và rà soát khớp 100% các FR viết lại câu yêu cầu (FR-USR-01, 05, FR-SLT-17, 18, 44,
+> FR-EXP-06, 07, FR-INV-04, 30, 31, FR-ORD-19, FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04, FR-AUTH-09).
 >
-> Đừng bịa acceptance criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở
-> `spec/modules/SLT.md`, hoặc nêu rõ là còn thiếu. Header của mỗi file ghi số FR và trạng thái; đếm
-> lại bằng cách so mục `## FR-XXX-NN` trong file với bảng FR ở `docs/FR_NFR_SCENTSTATION.md`.
+> Header của mỗi file ghi số FR và trạng thái; đếm lại bằng cách so mục `## FR-XXX-NN` trong file với bảng FR ở `docs/FR_NFR_SCENTSTATION.md`.
 
 ## 3. Quy tắc bắt buộc
 

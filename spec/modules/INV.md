@@ -1,11 +1,14 @@
 # FR-INV — Tồn kho và nạp nước hoa
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 31 FR  
-> Trạng thái AC: **đã viết** (FR-INV-01÷21 viết tuần 1; FR-INV-22÷31 bổ sung sau)  
-> Phụ trách: Hoàng (TV4)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 35 FR  
+> Trạng thái AC: **hoàn thành** (FR-INV-04, 30, 31 soát lại và FR-INV-32÷35 thêm ngày 2026-10-17 theo ADR-0013, ADR-0014, ADR-0015)  
+> Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
-Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
+Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
+`spec/decisions/0013-brand-tu-dang-ky-hop-dong-hai-lop-va-chi-tra-doanh-thu.md`,
+`spec/decisions/0014-an-han-chu-dong-khong-gia-han-va-doi-slot.md`,
+`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`
 
 ## FR-INV-01 — Tạo lô nước hoa
 
@@ -48,14 +51,15 @@
 
 ## FR-INV-04 — Trạng thái chai
 
-**Tuyên bố:** Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED, RETURNED_TO_BRAND. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0014; AC bên dưới cần soát lại cho khớp.)*
+**Tuyên bố:** Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED, RETURNED_TO_BRAND (ADR-0014).
 
 **Dấu vết:** BR-005, BR-013 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho một chai trong hệ thống, Khi trạng thái được cập nhật theo nghiệp vụ hợp lệ, Thì hệ thống chỉ lưu một giá trị thuộc tập trạng thái đã quy định.
-- AC2: Cho một giá trị trạng thái ngoài tập đã quy định, Khi yêu cầu cập nhật trạng thái, Thì hệ thống từ chối giá trị đó.
+- AC1: Cho một chai trong hệ thống, Khi trạng thái được cập nhật theo nghiệp vụ hợp lệ, Thì hệ thống chỉ lưu một giá trị thuộc tập trạng thái đã quy định: `IN_STOCK`, `INSTALLED`, `LOW`, `EMPTY`, `DAMAGED`, `EXPIRED`, `LIQUIDATED`, `RETURNED_TO_BRAND`.
+- AC2 (Trả hàng về thương hiệu - ADR-0014): Cho chai thuộc hóa đơn chủ động không gia hạn khi được Inventory Staff tháo khỏi máy, Khi ghi nhận vào phiếu trả hàng, Thì trạng thái chai chuyển thành `RETURNED_TO_BRAND`.
+- AC3: Cho một giá trị trạng thái ngoài tập đã quy định, Khi yêu cầu cập nhật trạng thái, Thì hệ thống từ chối giá trị đó.
 
 **Kiểm tra:** `test_FR_INV_04_bottle_status`
 
@@ -389,35 +393,95 @@
 
 **Kiểm tra:** `test_FR_INV_29_open_refill_session`
 
-## FR-INV-30 — Tạm ngưng cảnh báo cửa mở khi phiếu nạp đang mở
+## FR-INV-30 — Tạm ngưng cảnh báo cửa mở và dừng nhận đơn khi phiếu nạp đang mở
+**Tuyên bố:** Hệ thống phải, khi máy có phiếu nạp còn mở: tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03, từ chối tạo đơn mới trên cả máy và không tạo lệnh xịt cho đơn đang chờ lượt (ADR-0015).
 
-**Tuyên bố:** Hệ thống phải, khi máy có phiếu nạp còn mở: tạm ngưng cảnh báo cửa mở quá hạn theo FR-ALR-03, từ chối tạo đơn mới trên cả máy và không tạo lệnh xịt cho đơn đang chờ lượt. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
-
-**Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M
+**Dấu vết:** BR-005, BR-006, BR-010 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho tồn tại `RefillSession` trạng thái `STARTED` trên máy `M`, Khi thiết bị báo cửa mở liên tục quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống không sinh cảnh báo FR-ALR-03 — kể cả khi máy đang ở chế độ NORMAL.
+- AC1 (Tạm ngưng cảnh báo): Cho tồn tại `RefillSession` trạng thái `STARTED` trên máy `M`, Khi thiết bị báo cửa mở liên tục quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống không sinh cảnh báo FR-ALR-03 — kể cả khi máy đang ở chế độ NORMAL.
 - AC2: Cho máy `M` không có phiếu nạp nào đang mở và không ở chế độ MAINTENANCE, Khi cửa mở quá `DOOR_OPEN_ALERT_MIN`, Thì hệ thống sinh cảnh báo bình thường.
+- AC3 (Từ chối tạo đơn mới - ADR-0015): Cho máy `M` đang có phiếu nạp trạng thái `STARTED`, Khi kiosk gửi yêu cầu tạo đơn mới (`POST /kiosk/machines/{serialNumber}/orders`), Thì hệ thống từ chối với HTTP 409 `MACHINE_IN_MAINTENANCE` (hoặc `MACHINE_BUSY`).
+- AC4 (Không tạo lệnh xịt đơn chờ lượt - ADR-0015): Cho đơn hàng đã thanh toán `PAID` đang chờ lượt trên máy `M`, Khi máy có phiếu nạp mở, Thì hệ thống tạm giữ đơn trong hàng đợi, tuyệt đối không tạo và gửi lệnh xịt xuống máy cho tới khi phiếu nạp được đóng.
 
-> Đây là ngoại lệ **thứ hai** của FR-ALR-03, bổ sung cho ngoại lệ chế độ MAINTENANCE vốn có.
-> Inventory Staff nạp hàng không chuyển máy sang MAINTENANCE, nên thiếu ngoại lệ này thì mỗi lần
-> nạp quá `DOOR_OPEN_ALERT_MIN` sẽ sinh báo động giả. Cùng ghi ở `spec/contracts/schema.sql` §13
-> mục 5 và `spec/contracts/mqtt.md` §3.
+> Ngoại lệ thứ hai của FR-ALR-03, bổ sung cho ngoại lệ chế độ MAINTENANCE.
 
 **Kiểm tra:** `test_FR_INV_30_suppress_door_alert_during_refill`
 
+---
+
 ## FR-INV-31 — Đóng phiếu nạp và khôi phục giám sát
+**Tuyên bố:** Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở và cho máy nhận đơn trở lại (ADR-0015).
 
-**Tuyên bố:** Hệ thống phải yêu cầu Inventory Staff đóng phiếu nạp khi hoàn tất; tại thời điểm đóng phiếu, hệ thống khôi phục giám sát cảnh báo cửa mở và cho máy nhận đơn trở lại. *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0015; AC bên dưới cần soát lại cho khớp.)*
-
-**Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M · **API:** `POST /refill-sessions/{id}/close`
+**Dấu vết:** BR-005, BR-006 · **Ưu tiên:** M · **API:** `POST /inventory/refill-sessions/{id}/close`
 
 **Tiêu chí xét tuyển**
 
 - AC1: Cho phiếu nạp `F` trạng thái `STARTED`, checklist đã hoàn thành và đã chọn chai mới hợp lệ, Khi đóng phiếu, Thì `F` chuyển `COMPLETED`, ghi `completed_at`, và `new_bottle_id` khác NULL.
 - AC2 (Cổng checklist): Cho checklist chưa hoàn thành, Khi yêu cầu đóng phiếu, Thì hệ thống từ chối (FR-INV-14).
-- AC3 (Chai chưa chọn): Cho `new_bottle_id` chưa được cung cấp, Khi yêu cầu đóng phiếu, Thì hệ thống từ chối — cột nullable ở CSDL chỉ phục vụ giai đoạn phiếu còn mở, ràng buộc này nằm ở domain service (`spec/contracts/schema.sql` §13 mục 2).
+- AC3 (Chai chưa chọn): Cho `new_bottle_id` chưa được cung cấp, Khi yêu cầu đóng phiếu, Thì hệ thống từ chối.
 - AC4 (Khôi phục giám sát): Cho phiếu `F` vừa chuyển `COMPLETED`, Khi cửa tiếp tục mở quá `DOOR_OPEN_ALERT_MIN` sau thời điểm đóng phiếu, Thì hệ thống sinh cảnh báo FR-ALR-03 trở lại.
+- AC5 (Mở nhận đơn trở lại - ADR-0015): Cho phiếu nạp trên máy `M` vừa đóng thành công, Khi kiosk tạo đơn hàng mới hoặc scheduler quét đơn `PAID` đang chờ lượt, Thì hệ thống cho phép tạo đơn và tiếp tục phát lệnh xịt bình thường.
 
 **Kiểm tra:** `test_FR_INV_31_close_refill_session`
+
+---
+
+## FR-INV-32 — Chặn mở phiếu nạp khi máy đang bận
+**Tuyên bố:** Hệ thống phải từ chối mở phiếu nạp trên máy còn lệnh xịt khách hàng đang hiệu lực hoặc đơn đang chờ thanh toán (ADR-0015).
+
+**Dấu vết:** BR-002, BR-010 · **Ưu tiên:** M · ADR-0015 mục 4 · **API:** `POST /inventory/refill-sessions`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Có lệnh xịt đang hiệu lực): Cho máy `M` đang có lệnh xịt khách hàng ở trạng thái `SENT` hoặc `ACKED` (chưa nhận kết quả hoàn tất hoặc timeout), Khi Inventory Staff gửi yêu cầu mở phiếu nạp trên máy `M`, Thì hệ thống từ chối với HTTP 409 `MACHINE_BUSY`.
+- AC2 (Có đơn chờ thanh toán): Cho máy `M` đang tồn tại đơn hàng ở trạng thái `CREATED` hoặc `PENDING_PAYMENT`, Khi Inventory Staff gửi yêu cầu mở phiếu nạp, Thì hệ thống từ chối với HTTP 409 `MACHINE_BUSY`.
+- AC3 (Thành công): Cho máy `M` không còn đơn chờ thanh toán và không còn lệnh xịt nào đang hiệu lực, Khi Inventory Staff gửi yêu cầu mở phiếu nạp, Thì hệ thống chấp nhận tạo phiếu.
+
+**Kiểm tra:** `test_FR_INV_32_reject_open_refill_when_machine_busy`
+
+---
+
+## FR-INV-33 — Nộp giấy tờ chứng minh hàng chính hãng
+**Tuyên bố:** Hệ thống phải cho phép Brand Admin nộp giấy tờ chứng minh hàng chính hãng cho lô hàng gửi đến kho trong `RENTAL_MAX_STOCKING_DAYS` ngày kể từ lúc thanh toán hóa đơn (ADR-0013).
+
+**Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M · ADR-0013 mục 2 · **API:** `POST /inventory-batches/{id}/authenticity-documents`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Nộp giấy tờ): Cho Brand Admin của thương hiệu `B` sở hữu lô hàng `L`, thời gian từ lúc thanh toán hóa đơn `<= RENTAL_MAX_STOCKING_DAYS = 30` ngày, Khi gửi tệp tài liệu / chứng từ chứng minh hàng chính hãng (`documentUrl`, `documentType`), Thì hệ thống lưu thông tin chứng từ vào lô hàng `L`, đặt trạng thái xác minh `authenticity_status = 'PENDING'` và ghi AuditLog.
+- AC2 (Phân quyền): Cho Brand Admin của thương hiệu khác, Khi nộp giấy tờ cho lô hàng `L`, Thì hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
+- AC3 (Quá hạn nộp giấy tờ): Cho thời gian kể từ lúc thanh toán hóa đơn đã vượt quá `RENTAL_MAX_STOCKING_DAYS`, Khi gửi yêu cầu nộp giấy tờ, Thì hệ thống từ chối với HTTP 409 `DOCUMENT_SUBMISSION_EXPIRED`.
+
+**Kiểm tra:** `test_FR_INV_33_submit_authenticity_documents`
+
+---
+
+## FR-INV-34 — Phê duyệt giấy tờ chính hãng của lô hàng
+**Tuyên bố:** Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối giấy tờ chính hãng của lô hàng, kèm lý do bắt buộc khi từ chối (ADR-0013).
+
+**Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M · ADR-0013 mục 2 · **API:** `POST /inventory-batches/{id}/approve-authenticity`, `POST /inventory-batches/{id}/reject-authenticity`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Duyệt thành công): Cho lô hàng `L` đang có giấy tờ ở trạng thái `PENDING`, Khi Platform Super Admin gửi `POST /inventory-batches/{id}/approve-authenticity`, Thì lô chuyển sang `authenticity_status = 'APPROVED'`, ghi nhận `verified_by = current_user_id`, `verified_at = CURRENT_TIMESTAMP`, và thông báo cho Brand Admin.
+- AC2 (Từ chối có lý do): Cho lô hàng `L` đang `PENDING`, Khi Platform Super Admin gửi `POST /inventory-batches/{id}/reject-authenticity` kèm `reason = "Chứng từ mờ không hợp lệ"`, Thì lô chuyển sang `authenticity_status = 'REJECTED'`, lưu lý do từ chối và thông báo cho Brand Admin.
+- AC3 (Từ chối thiếu lý do): Cho yêu cầu từ chối nhưng không cung cấp trường `reason`, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 400 `REASON_REQUIRED`.
+- AC4 (Phân quyền): Cho người dùng không phải Platform Super Admin gọi duyệt/từ chối, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
+
+**Kiểm tra:** `test_FR_INV_34_review_authenticity_documents`
+
+---
+
+## FR-INV-35 — Chặn lắp chai chưa có giấy tờ chính hãng được duyệt
+**Tuyên bố:** Hệ thống phải từ chối lắp vào slot chai thuộc lô hàng chưa có giấy tờ chính hãng được duyệt (ADR-0013).
+
+**Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M · ADR-0013 mục 2 · **API:** `POST /inventory/refill-sessions/{id}/close`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Chặn lắp chai chưa duyệt): Cho chai `C` thuộc lô hàng `L` có `authenticity_status != 'APPROVED'` (`PENDING`, `REJECTED`, hoặc chưa nộp giấy tờ), Khi Inventory Staff chọn chai `C` để lắp vào slot trong phiên nạp (`new_bottle_id = C`), Thì hệ thống từ chối với HTTP 409 `BATCH_NOT_APPROVED` và ngăn không cho đóng phiên nạp.
+- AC2 (Cho phép khi đã duyệt): Cho chai `C` thuộc lô hàng đã có `authenticity_status = 'APPROVED'`, Khi chọn chai `C` để nạp vào slot, Thì hệ thống chấp nhận lắp chai và đóng phiên nạp thành công.
+
+**Kiểm tra:** `test_FR_INV_35_reject_install_unapproved_batch_bottle`
