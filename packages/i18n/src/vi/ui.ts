@@ -527,7 +527,7 @@ export const ui = {
   checkoutAnnexAccepted: 'Đã đồng ý phụ lục',
   checkoutAnnexAcceptedSuccess: 'Đã ghi nhận đồng ý phụ lục hợp đồng',
   checkoutAnnexLegacy:
-    'Phiên thanh toán này không có phụ lục đính kèm (phiên tạo trước ADR-0013).',
+    'Phiên thanh toán này không có phụ lục đính kèm (phiên tạo trước khi áp dụng tính năng phụ lục).',
   contentHashLabel: 'Mã băm nội dung',
   swapSlot: 'Đổi slot',
   swapSlotTitle: 'Đổi sang slot trống khác',

@@ -126,3 +126,9 @@ lực, sắp hết hạn, vào ân hạn, sắp thanh lý, đã thanh lý, hàng
 | Khiếu nại số liệu | — | Cột `dispute_*` trên `brand_payouts`, mỗi kỳ một khiếu nại; `chk_payout_paid_dispute_resolved` chặn PAID khi chưa trả lời | FR-SLT-54 ở mức M chỉ cần một vòng hỏi–đáp |
 | Hợp đồng khung bất biến | — | `trg_agreement_versions_published_immutable` | Mã băm trong bằng chứng đồng ý phải trỏ tới đúng văn bản đã công bố |
 | Endpoint thêm | — | `/auth/verify-email/resend`, `GET/POST /agreements`, `/agreements/{version}/publish`, `/brands/{id}/legal-verification`, `/brands/me/legal-profile` | Cần cho FR-USR-07, FR-SLT-48, FR-BND-09, 10 — ADR chỉ liệt kê endpoint phía thương hiệu |
+
+**2026-10-20 — Bổ sung trường payoutAccountMasked vào schema BrandProfile (FR-BND-09)**:
+
+| Hạng mục | Đã làm |
+|---|---|
+| `openapi.yaml` | Thêm trường `payoutAccountMasked` vào schema `BrandProfile` (gồm `bankCode`, `maskedAccountNumber`, `accountHolder`) để hiển thị thông tin 4 số cuối tài khoản nhận doanh thu phục vụ đối soát pháp nhân mà vẫn tuân thủ NFR-DAT-04 (không lộ số tài khoản đầy đủ). |

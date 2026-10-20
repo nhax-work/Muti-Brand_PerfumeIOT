@@ -237,7 +237,8 @@ export class BndService {
 
     await this.queries.updateLegalProfile(actor.brandId, {
       taxCode: input.taxCode,
-      businessLicenseNumber: input.businessLicenseNumber ?? before.businessLicenseNumber ?? undefined,
+      businessLicenseNumber:
+        input.businessLicenseNumber ?? before.businessLicenseNumber ?? undefined,
       payoutAccountCiphertext,
       payoutAccountKeyVersion,
     });

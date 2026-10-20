@@ -106,7 +106,10 @@ afterAll(async () => {
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
-    await client.query(`DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
+    await client.query(
+      `DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`,
+      [ids],
+    );
     await client.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await client.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await client.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);

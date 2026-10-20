@@ -92,4 +92,3 @@ describe('BrandProfilePage (FR-BND-06, FR-BND-09)', () => {
     );
   });
 });
-

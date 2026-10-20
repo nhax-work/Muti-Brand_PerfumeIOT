@@ -104,7 +104,10 @@ async function deleteCheckouts(checkoutIds: readonly string[]): Promise<void> {
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
-    await raw.query(`DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
+    await raw.query(
+      `DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`,
+      [ids],
+    );
     await raw.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);

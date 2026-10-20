@@ -112,10 +112,7 @@ export class BndController {
 
   /** FR-BND-09: Brand Admin khai hồ sơ pháp nhân và tài khoản nhận doanh thu. */
   @Put('me/legal-profile')
-  updateMyBrandLegalProfile(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Body() body: unknown,
-  ) {
+  updateMyBrandLegalProfile(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     return this.brands.updateMyBrandLegalProfile(actor, parseBody(LegalProfileBody, body));
   }
 
@@ -149,10 +146,7 @@ export class BndController {
   @Post(':id/legal-verification')
   @RequirePermissions(BRAND_MANAGE)
   @RequireReauth()
-  verifyBrandLegal(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-  ) {
+  verifyBrandLegal(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     return this.brands.verifyBrandLegal(actor, parseBody(IdParam, id));
   }
 }

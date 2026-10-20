@@ -461,7 +461,10 @@ describe('BndService — FR-BND-10: Super Admin xác minh pháp nhân thương h
   });
 
   it('test_FR_BND_10_verify_idempotent', async () => {
-    const created = await service.create(admin, { code: 'VERIFY3', name: 'Verify Brand Idempotent' });
+    const created = await service.create(admin, {
+      code: 'VERIFY3',
+      name: 'Verify Brand Idempotent',
+    });
     const userWithBrand: AuthenticatedUser = {
       ...brandAdmin,
       brandId: created.id,
@@ -482,10 +485,12 @@ describe('BndService — FR-BND-10: Super Admin xác minh pháp nhân thương h
 
 describe('BndController & AccessGuard — Bảo vệ pháp nhân và phân quyền (FR-BND-09, FR-BND-10)', () => {
   it('test_FR_BND_10_endpoint_has_brand_manage_and_reauth_metadata', () => {
-    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, BndController.prototype.verifyBrandLegal)).toEqual([
-      'brand.manage',
-    ]);
-    expect(Reflect.getMetadata(REQUIRES_REAUTH, BndController.prototype.verifyBrandLegal)).toBe(true);
+    expect(
+      Reflect.getMetadata(REQUIRED_PERMISSIONS, BndController.prototype.verifyBrandLegal),
+    ).toEqual(['brand.manage']);
+    expect(Reflect.getMetadata(REQUIRES_REAUTH, BndController.prototype.verifyBrandLegal)).toBe(
+      true,
+    );
   });
 
   it('test_FR_BND_10_non_super_admin_cannot_verify_legal (FR-BND-10 AC3: 403 FORBIDDEN_SCOPE)', async () => {
@@ -608,5 +613,3 @@ describe('BndController & AccessGuard — Bảo vệ pháp nhân và phân quy�
     expect(list.items.some((b) => b.id === id)).toBe(true);
   });
 });
-
-

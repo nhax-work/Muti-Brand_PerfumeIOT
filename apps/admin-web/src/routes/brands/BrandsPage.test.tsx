@@ -81,4 +81,3 @@ describe('BrandsPage (FR-BND-01 ÷ 03, 07, FR-BND-10)', () => {
     await waitFor(() => expect(mockVerifyLegal).toHaveBeenCalledWith('b-1'));
   });
 });
-

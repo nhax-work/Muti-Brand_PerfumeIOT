@@ -19,12 +19,7 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
-import {
-  type Brand,
-  useMyBrand,
-  useUpdateMyBrand,
-  useUpdateMyBrandLegalProfile,
-} from './api';
+import { type Brand, useMyBrand, useUpdateMyBrand, useUpdateMyBrandLegalProfile } from './api';
 
 const STATUS_LABELS: Record<Brand['status'], MessageKey> = {
   ACTIVE: 'ui.brandActive',
@@ -305,4 +300,3 @@ export default function BrandProfilePage() {
     </RequireRole>
   );
 }
-

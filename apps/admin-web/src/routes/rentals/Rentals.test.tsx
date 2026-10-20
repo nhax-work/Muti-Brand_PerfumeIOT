@@ -397,7 +397,7 @@ describe('CheckoutDetailPage Component (Task 5, FR-SLT-50)', () => {
     // Hiển thị thông báo phụ lục legacy hợp lý, không crash trang
     expect(
       screen.getByText(
-        'Phiên thanh toán này không có phụ lục đính kèm (phiên tạo trước ADR-0013).',
+        'Phiên thanh toán này không có phụ lục đính kèm (phiên tạo trước khi áp dụng tính năng phụ lục).',
       ),
     ).toBeDefined();
 

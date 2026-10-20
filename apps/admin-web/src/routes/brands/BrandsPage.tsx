@@ -292,11 +292,9 @@ export default function BrandsPage() {
                   {verifyingBrand.businessLicenseNumber || '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.brandPayoutAccountMasked')}>
-                  {verifyingBrand.payoutAccountMasked ? (
-                    `${verifyingBrand.payoutAccountMasked.bankCode} · ${verifyingBrand.payoutAccountMasked.maskedAccountNumber} (${verifyingBrand.payoutAccountMasked.accountHolder})`
-                  ) : (
-                    '—'
-                  )}
+                  {verifyingBrand.payoutAccountMasked
+                    ? `${verifyingBrand.payoutAccountMasked.bankCode} · ${verifyingBrand.payoutAccountMasked.maskedAccountNumber} (${verifyingBrand.payoutAccountMasked.accountHolder})`
+                    : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.brandLegal')}>
                   {verifyingBrand.legalVerifiedAt ? (
@@ -311,19 +309,11 @@ export default function BrandsPage() {
               </Descriptions>
 
               {!verifyingBrand.taxCode && (
-                <Alert
-                  type="warning"
-                  showIcon
-                  message={t('ui.brandVerifyLegalTaxCodeMissing')}
-                />
+                <Alert type="warning" showIcon message={t('ui.brandVerifyLegalTaxCodeMissing')} />
               )}
 
               {verifyingBrand.taxCode && !verifyingBrand.legalVerifiedAt && (
-                <Alert
-                  type="info"
-                  showIcon
-                  message={t('ui.brandVerifyLegalConfirm')}
-                />
+                <Alert type="info" showIcon message={t('ui.brandVerifyLegalConfirm')} />
               )}
             </Space>
           )}
