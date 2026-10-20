@@ -47,8 +47,9 @@ vi.mock('./api', async () => ({
 
 beforeAll(() => {
   installDomStubs();
-  vi.spyOn(message, 'success').mockImplementation(() => () => {});
-  vi.spyOn(message, 'error').mockImplementation(() => () => {});
+  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as any;
+  vi.spyOn(message, 'success').mockReturnValue(dummyMessage);
+  vi.spyOn(message, 'error').mockReturnValue(dummyMessage);
 });
 
 afterEach(() => {
