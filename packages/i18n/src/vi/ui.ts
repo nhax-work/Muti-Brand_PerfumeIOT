@@ -539,4 +539,28 @@ export const ui = {
   noCandidateSlots: 'Không có slot trống nào cùng máy và cùng giá thuê niêm yết.',
   currentSlotInfo: 'Slot hiện tại',
   swappedFromNotice: 'Hóa đơn đã được đổi từ Slot #{slotNumber} vào lúc {time}.',
+  openPayosCheckout: 'Mở trang thanh toán PayOS',
+  checkoutExpiredNotice: 'Phiên thanh toán đã hết thời gian giữ chỗ',
+  // Không gia hạn (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)
+  nonRenewal: 'Không gia hạn',
+  requestNonRenewal: 'Báo không gia hạn',
+  withdrawNonRenewal: 'Rút lại yêu cầu',
+  nonRenewingTag: 'Không gia hạn',
+  nonRenewalModalTitle: 'Báo không gia hạn & nhận lại hàng',
+  nonRenewalModalDesc:
+    'Hóa đơn sẽ không vào thời gian ân hạn (GRACE) và không bị tính phí ân hạn khi hết hạn. Slot tiếp tục bán tới khi nhân viên tháo chai, và doanh thu vẫn thuộc thương hiệu của bạn.',
+  selectReturnMethod: 'Chọn hình thức nhận lại chai nước hoa',
+  warehousePickup: 'Tự đến kho lấy chai',
+  shipToBrand: 'Nền tảng gửi về địa chỉ thương hiệu (thương hiệu chịu phí ship)',
+  returnAddress: 'Địa chỉ nhận hàng',
+  noAddressConfigured:
+    'Chưa có địa chỉ trong hồ sơ thương hiệu (vui lòng cập nhật trong Hồ sơ thương hiệu)',
+  nonRenewalSuccess: 'Đã ghi nhận yêu cầu không gia hạn',
+  withdrawNonRenewalConfirmTitle: 'Xác nhận rút lại yêu cầu không gia hạn?',
+  withdrawNonRenewalConfirmDesc:
+    'Sau khi rút lại, hóa đơn có thể gia hạn bình thường trước khi hết hạn.',
+  withdrawNonRenewalSuccess: 'Đã rút lại yêu cầu không gia hạn thành công',
+  nonRenewalActiveTitle: 'Hóa đơn đã báo không gia hạn',
+  nonRenewalActiveDesc:
+    'Yêu cầu báo ngày {date}. Hình thức nhận hàng: {method}. Hóa đơn sẽ không vào ân hạn khi hết hạn.',
 } as const;

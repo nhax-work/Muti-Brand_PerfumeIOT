@@ -801,6 +801,29 @@ export const en: SameKeysAs<typeof vi> = {
     noCandidateSlots: 'No available slots on the same machine with the same monthly rent price.',
     currentSlotInfo: 'Current Slot',
     swappedFromNotice: 'This rental was swapped from Slot #{slotNumber} at {time}.',
+    openPayosCheckout: 'Open PayOS checkout page',
+    checkoutExpiredNotice: 'The checkout session hold time has expired',
+    // Non-renewal (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)
+    nonRenewal: 'Non-renewal',
+    requestNonRenewal: 'Request Non-renewal',
+    withdrawNonRenewal: 'Withdraw Request',
+    nonRenewingTag: 'Non-renewing',
+    nonRenewalModalTitle: 'Request Non-renewal & Bottle Return',
+    nonRenewalModalDesc:
+      'The rental will not enter GRACE period and incur no grace fee. The slot continues dispensing until bottle removal, with revenues attributed to your brand.',
+    selectReturnMethod: 'Select bottle return method',
+    warehousePickup: 'Self-pickup at warehouse',
+    shipToBrand: 'Platform ships to brand address (brand pays shipping)',
+    returnAddress: 'Delivery address',
+    noAddressConfigured: 'No address configured in brand profile (please update in Brand Profile)',
+    nonRenewalSuccess: 'Non-renewal requested successfully',
+    withdrawNonRenewalConfirmTitle: 'Confirm withdraw non-renewal request?',
+    withdrawNonRenewalConfirmDesc:
+      'After withdrawal, the rental can be renewed normally before expiration.',
+    withdrawNonRenewalSuccess: 'Non-renewal request withdrawn successfully',
+    nonRenewalActiveTitle: 'Non-renewal requested',
+    nonRenewalActiveDesc:
+      'Requested on {date}. Return method: {method}. Will not enter grace period upon expiry.',
   },
 
   kiosk: {

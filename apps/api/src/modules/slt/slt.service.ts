@@ -23,6 +23,7 @@ import {
   SltQueries,
   stageOf,
   type AgreementAcceptanceRecord,
+  type BottleReturnMethod,
   type CheckoutCreateItemData,
   type RentalCheckoutRecord,
   type RentalInvoiceDetailRecord,
@@ -337,6 +338,7 @@ export class SltService {
         }
 
         const reference = newPaymentReference('CHK', now, 'Asia/Ho_Chi_Minh');
+        const checkoutUrl = `${this.config.adminWebBaseUrl}/rentals/checkouts/${checkout.id}`;
         const created = await this.payments.createPending(
           {
             brandId: checkout.brandId,
@@ -346,6 +348,8 @@ export class SltService {
             currency: checkout.currency,
             expiresAt: checkout.holdExpiresAt,
             description: `ScentStation thuê slot ${reference}`,
+            returnUrl: checkoutUrl,
+            cancelUrl: checkoutUrl,
           },
           tx,
         );
@@ -742,6 +746,135 @@ export class SltService {
 
     return dto;
   }
+
+  /**
+   * FR-EXP-23, FR-EXP-25 (ADR-0014): Báo không gia hạn, lấy hàng về trước endsAt.
+   * Thứ tự kiểm tra:
+   * 1. 403: Người gọi phải là Brand Admin của thương hiệu sở hữu hóa đơn.
+   * 2. 404/403: Không tìm thấy hóa đơn.
+   * 3. 409 (RENTAL_NOT_ACTIVE): Quá endsAt hoặc không ở ACTIVE/EXPIRING.
+   * 4. Idempotent: Nếu đã báo với cùng returnMethod thì trả 200, không ghi duplicate audit.
+   */
+  async requestNonRenewal(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    rentalId: string,
+    returnMethod: BottleReturnMethod,
+  ): Promise<SlotRental> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const rental = await this.queries.findById(scope, rentalId);
+    if (!rental || rental.brandId !== scope.brandId) {
+      throw notFoundFor(actor);
+    }
+
+    const now = this.clock.now();
+
+    if (rental.endsAt && now.getTime() >= rental.endsAt.getTime()) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    if (!['ACTIVE', 'EXPIRING'].includes(rental.status)) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    // Idempotency: nếu đã báo với cùng hình thức nhận hàng thì trả kết quả, không ghi thêm audit
+    if (rental.nonRenewalRequestedAt !== null && rental.returnMethod === returnMethod) {
+      return toDto(rental);
+    }
+
+    const updated = await this.queries.requestNonRenewal({
+      rentalId,
+      brandId: scope.brandId,
+      requestedBy: actor.userId,
+      returnMethod,
+      now,
+    });
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId: scope.brandId,
+      action: 'slt.rental.non_renewal_requested',
+      targetType: 'SlotRental',
+      targetId: rentalId,
+      before: {
+        nonRenewalRequestedAt: rental.nonRenewalRequestedAt?.toISOString() ?? null,
+        returnMethod: rental.returnMethod,
+      },
+      after: {
+        nonRenewalRequestedAt: updated.nonRenewalRequestedAt?.toISOString() ?? null,
+        returnMethod: updated.returnMethod,
+      },
+    });
+
+    return toDto(updated);
+  }
+
+  /**
+   * FR-EXP-24 (ADR-0014): Rút lại việc báo không gia hạn trước endsAt.
+   * Thứ tự kiểm tra:
+   * 1. 403: Người gọi phải là Brand Admin của thương hiệu sở hữu hóa đơn.
+   * 2. 404/403: Không tìm thấy hóa đơn.
+   * 3. Idempotent: Nếu chưa từng báo thì trả 200 như cũ, không lỗi và không ghi audit.
+   * 4. 409 (RENTAL_NOT_ACTIVE): Quá endsAt hoặc không ở ACTIVE/EXPIRING.
+   */
+  async withdrawNonRenewal(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    rentalId: string,
+  ): Promise<SlotRental> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const rental = await this.queries.findById(scope, rentalId);
+    if (!rental || rental.brandId !== scope.brandId) {
+      throw notFoundFor(actor);
+    }
+
+    // Idempotency: nếu chưa từng báo (hoặc đã rút lại) thì trả 200 như cũ
+    if (rental.nonRenewalRequestedAt === null) {
+      return toDto(rental);
+    }
+
+    const now = this.clock.now();
+
+    if (rental.endsAt && now.getTime() >= rental.endsAt.getTime()) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    if (!['ACTIVE', 'EXPIRING'].includes(rental.status)) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    const updated = await this.queries.withdrawNonRenewal({
+      rentalId,
+      brandId: scope.brandId,
+      now,
+    });
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId: scope.brandId,
+      action: 'slt.rental.non_renewal_withdrawn',
+      targetType: 'SlotRental',
+      targetId: rentalId,
+      before: {
+        nonRenewalRequestedAt: rental.nonRenewalRequestedAt.toISOString(),
+        returnMethod: rental.returnMethod,
+      },
+      after: {
+        nonRenewalRequestedAt: null,
+        returnMethod: null,
+      },
+    });
+
+    return toDto(updated);
+  }
 }
 
 function toAcceptanceDto(record: AgreementAcceptanceRecord): AgreementAcceptance {
@@ -800,8 +933,8 @@ export function toDto(r: SlotRentalRecord): SlotRental {
     createdAt: r.createdAt.toISOString(),
     swappedFromSlotId: r.swappedFromSlotId,
     swappedAt: iso(r.swappedAt),
-    nonRenewalRequestedAt: null,
-    returnMethod: null,
+    nonRenewalRequestedAt: iso(r.nonRenewalRequestedAt),
+    returnMethod: r.returnMethod,
   };
 }
 

@@ -13,6 +13,7 @@ export type RentalInvoiceStage = components['schemas']['RentalInvoiceStage'];
 export type Product = components['schemas']['Product'];
 export type RentalCheckoutAnnex = components['schemas']['RentalCheckoutAnnex'];
 export type AgreementAcceptance = components['schemas']['AgreementAcceptance'];
+export type BottleReturnMethod = components['schemas']['BottleReturnMethod'];
 
 export interface AvailableSlotsParams {
   readonly page?: number;
@@ -76,7 +77,10 @@ export function useCreateCheckout() {
 }
 
 /** Chi tiết phiên thanh toán (FR-SLT-37). */
-export function useCheckout(id: string | undefined, refetchInterval?: number | false) {
+export function useCheckout(
+  id: string | undefined,
+  refetchInterval?: number | false | ((query: any) => number | false | undefined),
+) {
   return useQuery({
     queryKey: ['rental-checkout', id],
     queryFn: () =>
@@ -321,6 +325,49 @@ export function useSwapSlot() {
       void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
       void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
       void queryClient.invalidateQueries({ queryKey: ['available-slots'] });
+    },
+  });
+}
+
+/** Báo không gia hạn, lấy hàng về (FR-EXP-23, ADR-0014). */
+export function useRequestNonRenewal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      rentalId,
+      returnMethod,
+    }: {
+      rentalId: string;
+      returnMethod: BottleReturnMethod;
+    }) =>
+      unwrap(
+        api.POST('/slot-rentals/{id}/non-renewal', {
+          params: { path: { id: rentalId } },
+          body: { returnMethod },
+        }),
+      ),
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}
+
+/** Rút lại việc báo không gia hạn (FR-EXP-24, ADR-0014). */
+export function useWithdrawNonRenewal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rentalId: string) =>
+      unwrap(
+        api.DELETE('/slot-rentals/{id}/non-renewal', {
+          params: { path: { id: rentalId } },
+        }),
+      ),
+    onSuccess: (_, rentalId) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
     },
   });
 }

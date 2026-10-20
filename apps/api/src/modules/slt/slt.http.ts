@@ -12,6 +12,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -84,6 +85,10 @@ const PriceUpdateBody = z.object({
 
 const SlotSwapBody = z.object({
   targetSlotId: z.string().uuid(),
+});
+
+const NonRenewalBody = z.object({
+  returnMethod: z.enum(['WAREHOUSE_PICKUP', 'SHIP_TO_BRAND'] as const),
 });
 
 /** openapi.yaml: AgreementAccept. */
@@ -160,6 +165,32 @@ export class SltController {
     const { id } = parseBody(IdParam, params);
     const { targetSlotId } = parseBody(SlotSwapBody, body);
     return this.service.swapSlot(actor, scope, id, targetSlotId);
+  }
+
+  /** FR-EXP-23, FR-EXP-25 (ADR-0014): Báo không gia hạn, lấy hàng về trước endsAt. */
+  @Post(':id/non-renewal')
+  @HttpCode(200)
+  requestNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { returnMethod } = parseBody(NonRenewalBody, body);
+    return this.service.requestNonRenewal(actor, scope, id, returnMethod);
+  }
+
+  /** FR-EXP-24 (ADR-0014): Rút lại việc báo không gia hạn trước endsAt. */
+  @Delete(':id/non-renewal')
+  @HttpCode(200)
+  withdrawNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.withdrawNonRenewal(actor, scope, id);
   }
 }
 

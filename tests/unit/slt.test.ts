@@ -16,6 +16,7 @@ import { AppError } from '../../apps/api/src/shared/errors/index.js';
 import { SltService } from '../../apps/api/src/modules/slt/slt.service.js';
 import {
   stageOf,
+  type BottleReturnMethod,
   type CheckoutCreateItemData,
   type SlotRentalFilter,
   type SlotRentalRecord,
@@ -83,6 +84,8 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
     createdAt: new Date('2026-10-01T00:00:00Z'),
     swappedFromSlotId: null,
     swappedAt: null,
+    nonRenewalRequestedAt: null,
+    returnMethod: null,
     ...overrides,
   };
 }
@@ -201,6 +204,10 @@ class FakeSltQueries {
       paidAt: r.paidAt,
       startsAt: r.startsAt,
       endsAt: r.endsAt,
+      swappedFromSlotId: r.swappedFromSlotId,
+      swappedAt: r.swappedAt,
+      nonRenewalRequestedAt: r.nonRenewalRequestedAt,
+      returnMethod: r.returnMethod,
     };
   }
 
@@ -292,6 +299,8 @@ class FakeSltQueries {
       endsAt: r.endsAt,
       swappedFromSlotId: r.swappedFromSlotId,
       swappedAt: r.swappedAt,
+      nonRenewalRequestedAt: r.nonRenewalRequestedAt,
+      returnMethod: r.returnMethod,
     }));
   }
 
@@ -378,6 +387,44 @@ class FakeSltQueries {
     this.rentals[index] = updated;
 
     return { success: true as const, updated };
+  }
+
+  async requestNonRenewal(params: {
+    rentalId: string;
+    brandId: string;
+    requestedBy: string;
+    returnMethod: BottleReturnMethod;
+    now: Date;
+  }): Promise<SlotRentalRecord> {
+    const idx = this.rentals.findIndex(
+      (r) => r.id === params.rentalId && r.brandId === params.brandId,
+    );
+    if (idx === -1) throw new Error('Not found');
+    const updated: SlotRentalRecord = {
+      ...this.rentals[idx]!,
+      nonRenewalRequestedAt: params.now,
+      returnMethod: params.returnMethod,
+    };
+    this.rentals[idx] = updated;
+    return updated;
+  }
+
+  async withdrawNonRenewal(params: {
+    rentalId: string;
+    brandId: string;
+    now: Date;
+  }): Promise<SlotRentalRecord> {
+    const idx = this.rentals.findIndex(
+      (r) => r.id === params.rentalId && r.brandId === params.brandId,
+    );
+    if (idx === -1) throw new Error('Not found');
+    const updated: SlotRentalRecord = {
+      ...this.rentals[idx]!,
+      nonRenewalRequestedAt: null,
+      returnMethod: null,
+    };
+    this.rentals[idx] = updated;
+    return updated;
   }
 
   async createCheckoutTx(params: {
@@ -1593,5 +1640,261 @@ describe('SltJobs — job hủy phiên hết giờ giữ chỗ (FR-SLT-39)', () 
     const count = await jobs.cancelExpiredCheckouts(3);
     expect(queries.lastFindLimit).toBe(3);
     expect(count).toBe(3);
+  });
+});
+
+describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', () => {
+  let queries: FakeSltQueries;
+  let service: SltService;
+  let audits: Array<Record<string, unknown>>;
+  const brandActor = user({ brandId: BRAND_A });
+  const otherBrandActor = user({ brandId: BRAND_B });
+  const platformActor = user({ brandId: null, roles: ['PLATFORM_SUPER_ADMIN'] });
+
+  beforeEach(() => {
+    queries = new FakeSltQueries();
+    audits = [];
+    const audit = {
+      record: async (entry: Record<string, unknown>) => {
+        audits.push(entry);
+      },
+      log: async (entry: Record<string, unknown>) => {
+        audits.push(entry);
+      },
+    };
+    const fakeDb = {
+      transaction: () => ({
+        execute: async (fn: (tx: any) => Promise<any>) => fn({}),
+      }),
+    };
+    const fakeClock = { now: () => new Date('2026-10-15T10:00:00.000Z') };
+    const fakeConfig = {
+      constraint: () => 48,
+    };
+    service = new SltService(
+      queries as unknown as SltQueries,
+      {} as unknown as CatalogQueries,
+      {} as unknown as MchQueries,
+      audit as never,
+      {} as unknown as PaymentService,
+      fakeClock as never,
+      fakeDb as never,
+      fakeConfig as never,
+    );
+  });
+
+  it('test_FR_EXP_23_scope_check — người gọi không phải Brand Admin của thương hiệu bị 403', async () => {
+    const r = rental('r-active', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+    });
+    queries.rentals.push(r);
+
+    // Platform user (không có brandId)
+    await expect(
+      service.requestNonRenewal(
+        platformActor,
+        { kind: 'UNRESTRICTED' },
+        'r-active',
+        'WAREHOUSE_PICKUP',
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+
+    // Thương hiệu B gọi vào hóa đơn của thương hiệu A
+    await expect(
+      service.requestNonRenewal(
+        otherBrandActor,
+        { kind: 'BRAND', brandId: BRAND_B },
+        'r-active',
+        'WAREHOUSE_PICKUP',
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+  });
+
+  it('test_FR_EXP_23_not_found — không tìm thấy hóa đơn trả lỗi scoped', async () => {
+    await expect(
+      service.requestNonRenewal(
+        brandActor,
+        { kind: 'BRAND', brandId: BRAND_A },
+        'r-nonexistent',
+        'WAREHOUSE_PICKUP',
+      ),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+  });
+
+  it('test_FR_EXP_23_expired_or_not_active — quá endsAt hoặc status không phải ACTIVE/EXPIRING bị 409', async () => {
+    // 1. Quá endsAt
+    const rExpired = rental('r-expired', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-06-01T00:00:00Z'),
+      endsAt: new Date('2026-09-01T00:00:00Z'), // < 2026-10-15
+    });
+    queries.rentals.push(rExpired);
+
+    await expect(
+      service.requestNonRenewal(
+        brandActor,
+        { kind: 'BRAND', brandId: BRAND_A },
+        'r-expired',
+        'WAREHOUSE_PICKUP',
+      ),
+    ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
+
+    // 2. Status không phải ACTIVE/EXPIRING (ví dụ CLOSED)
+    const rClosed = rental('r-closed', {
+      brandId: BRAND_A,
+      status: 'CLOSED',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+    });
+    queries.rentals.push(rClosed);
+
+    await expect(
+      service.requestNonRenewal(
+        brandActor,
+        { kind: 'BRAND', brandId: BRAND_A },
+        'r-closed',
+        'WAREHOUSE_PICKUP',
+      ),
+    ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
+  });
+
+  it('test_FR_EXP_23_successful_request — báo không gia hạn trước endsAt thành công và ghi audit log', async () => {
+    const r = rental('r-active', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+    });
+    queries.rentals.push(r);
+
+    const result = await service.requestNonRenewal(
+      brandActor,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-active',
+      'SHIP_TO_BRAND',
+    );
+
+    expect(result.nonRenewalRequestedAt).toBe('2026-10-15T10:00:00.000Z');
+    expect(result.returnMethod).toBe('SHIP_TO_BRAND');
+
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!['action']).toBe('slt.rental.non_renewal_requested');
+    expect(audits[0]!['targetId']).toBe('r-active');
+    expect(audits[0]!['after']).toEqual({
+      nonRenewalRequestedAt: '2026-10-15T10:00:00.000Z',
+      returnMethod: 'SHIP_TO_BRAND',
+    });
+  });
+
+  it('test_FR_EXP_23_idempotent_repeat — gọi lại với cùng returnMethod không tạo duplicate audit log', async () => {
+    const r = rental('r-active', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+      nonRenewalRequestedAt: new Date('2026-10-10T00:00:00Z'),
+      returnMethod: 'WAREHOUSE_PICKUP',
+    });
+    queries.rentals.push(r);
+
+    const result = await service.requestNonRenewal(
+      brandActor,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-active',
+      'WAREHOUSE_PICKUP',
+    );
+
+    expect(result.nonRenewalRequestedAt).toBe('2026-10-10T00:00:00.000Z');
+    expect(result.returnMethod).toBe('WAREHOUSE_PICKUP');
+    expect(audits).toHaveLength(0); // Không ghi thêm audit
+  });
+
+  it('test_FR_EXP_24_withdraw_valid — rút lại trước endsAt thành công, xóa dữ liệu và ghi audit', async () => {
+    const r = rental('r-active', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+      nonRenewalRequestedAt: new Date('2026-10-10T00:00:00Z'),
+      returnMethod: 'WAREHOUSE_PICKUP',
+    });
+    queries.rentals.push(r);
+
+    const result = await service.withdrawNonRenewal(
+      brandActor,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-active',
+    );
+
+    expect(result.nonRenewalRequestedAt).toBeNull();
+    expect(result.returnMethod).toBeNull();
+
+    expect(audits).toHaveLength(1);
+    expect(audits[0]!['action']).toBe('slt.rental.non_renewal_withdrawn');
+    expect(audits[0]!['targetId']).toBe('r-active');
+  });
+
+  it('test_FR_EXP_24_withdraw_idempotent_when_never_requested — chưa từng báo thì trả 200 không lỗi và không ghi audit', async () => {
+    const r = rental('r-active', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-10-01T00:00:00Z'),
+      endsAt: new Date('2027-01-01T00:00:00Z'),
+      nonRenewalRequestedAt: null,
+      returnMethod: null,
+    });
+    queries.rentals.push(r);
+
+    const result = await service.withdrawNonRenewal(
+      brandActor,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-active',
+    );
+
+    expect(result.nonRenewalRequestedAt).toBeNull();
+    expect(result.returnMethod).toBeNull();
+    expect(audits).toHaveLength(0);
+  });
+
+  it('test_FR_EXP_24_withdraw_past_ends_at — quá endsAt thì từ chối rút lại với 409', async () => {
+    const r = rental('r-expired', {
+      brandId: BRAND_A,
+      status: 'ACTIVE',
+      startsAt: new Date('2026-06-01T00:00:00Z'),
+      endsAt: new Date('2026-09-01T00:00:00Z'),
+      nonRenewalRequestedAt: new Date('2026-08-01T00:00:00Z'),
+      returnMethod: 'WAREHOUSE_PICKUP',
+    });
+    queries.rentals.push(r);
+
+    await expect(
+      service.withdrawNonRenewal(brandActor, { kind: 'BRAND', brandId: BRAND_A }, 'r-expired'),
+    ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
+  });
+
+  it('test_FR_EXP_25_non_renewal_preserves_status_without_grace — giữ status ACTIVE/EXPIRING khi báo không gia hạn', async () => {
+    const r = rental('r-expiring', {
+      brandId: BRAND_A,
+      status: 'EXPIRING',
+      startsAt: new Date('2026-07-01T00:00:00Z'),
+      endsAt: new Date('2026-10-20T00:00:00Z'),
+    });
+    queries.rentals.push(r);
+
+    const result = await service.requestNonRenewal(
+      brandActor,
+      { kind: 'BRAND', brandId: BRAND_A },
+      'r-expiring',
+      'WAREHOUSE_PICKUP',
+    );
+
+    // Trạng thái vẫn là EXPIRING, không chuyển GRACE
+    expect(result.status).toBe('EXPIRING');
+    expect(result.nonRenewalRequestedAt).toBeTruthy();
+    expect(result.returnMethod).toBe('WAREHOUSE_PICKUP');
   });
 });

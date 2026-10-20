@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   Alert,
@@ -23,6 +23,7 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   CreditCardOutlined,
+  ExportOutlined,
   FileProtectOutlined,
   FileTextOutlined,
   QrcodeOutlined,
@@ -43,6 +44,16 @@ import {
 const { Title, Text, Paragraph } = Typography;
 const { Countdown } = Statistic;
 
+function isValidHttpsUrl(url?: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export default function CheckoutDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { t } = useI18n();
@@ -52,13 +63,42 @@ export default function CheckoutDetailPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [annexAgreed, setAnnexAgreed] = useState(false);
 
-  // Poll mỗi 2s khi phiên chưa PAID và chưa CANCELLED
+  // Poll mỗi 2s khi phiên chưa PAID, chưa CANCELLED, chưa hết hạn hold và unmount tự hủy
   const {
     data: checkout,
     isLoading,
     error,
     refetch,
-  } = useCheckout(id, paymentIntent ? 2000 : false);
+  } = useCheckout(id, (query) => {
+    if (!paymentIntent) return false;
+    const data = query?.state?.data as { stage?: string; holdExpiresAt?: string } | undefined;
+    if (!data) return 2000;
+    if (data.stage === 'PAID' || data.stage === 'CANCELLED') return false;
+    if (Date.now() >= new Date(data.holdExpiresAt || '').getTime()) return false;
+    return 2000;
+  });
+
+  const isPaid = checkout?.stage === 'PAID';
+  const isCancelled = checkout?.stage === 'CANCELLED';
+
+  // Hết hạn giữ chỗ (holdExpiresAt) so với đồng hồ client: đóng modal, báo rõ và dừng polling
+  useEffect(() => {
+    if (!checkout?.holdExpiresAt || isPaid || isCancelled) return;
+
+    const msUntilExpiry = new Date(checkout.holdExpiresAt).getTime() - Date.now();
+    const timer = setTimeout(
+      () => {
+        if (showPaymentModal) {
+          setShowPaymentModal(false);
+          message.warning(t('ui.checkoutExpiredNotice'));
+        }
+        void refetch();
+      },
+      Math.max(0, msUntilExpiry),
+    );
+
+    return () => clearTimeout(timer);
+  }, [checkout?.holdExpiresAt, isPaid, isCancelled, showPaymentModal, refetch, t]);
 
   const {
     data: annex,
@@ -153,8 +193,6 @@ export default function CheckoutDetailPage() {
     );
   }
 
-  const isPaid = checkout.stage === 'PAID';
-  const isCancelled = checkout.stage === 'CANCELLED';
   const holdDeadline = new Date(checkout.holdExpiresAt).getTime();
 
   return (
@@ -481,6 +519,20 @@ export default function CheckoutDetailPage() {
                 </Paragraph>
               );
             })()}
+
+            {isValidHttpsUrl(paymentIntent?.checkoutUrl) && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <Button
+                  type="primary"
+                  icon={<ExportOutlined />}
+                  onClick={() => {
+                    window.open(paymentIntent!.checkoutUrl!, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  {t('ui.openPayosCheckout')}
+                </Button>
+              </div>
+            )}
 
             <Paragraph type="secondary">{t('ui.scanQrInstructions')}</Paragraph>
 

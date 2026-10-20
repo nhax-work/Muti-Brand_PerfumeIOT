@@ -11,10 +11,10 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { MessageKey } from '@scentstation/i18n';
 import { sql, type Expression, type Kysely, type SqlBool, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
-import type { SlotRentalStatus } from '../../shared/db/types.generated.js';
+import type { BottleReturnMethod, SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
-export type { SlotRentalStatus };
+export type { BottleReturnMethod, SlotRentalStatus };
 export type Executor = Kysely<DB> | Transaction<DB>;
 
 /**
@@ -71,6 +71,8 @@ export interface SlotRentalRecord {
   /** Slot cũ khi hóa đơn đã đổi slot (FR-SLT-55). Khác NULL nghĩa là đã dùng lượt đổi duy nhất. */
   readonly swappedFromSlotId: string | null;
   readonly swappedAt: Date | null;
+  readonly nonRenewalRequestedAt: Date | null;
+  readonly returnMethod: BottleReturnMethod | null;
 }
 
 export interface SlotRentalFilter {
@@ -179,6 +181,8 @@ export interface RentalInvoiceDetailRecord {
   readonly endsAt: Date;
   readonly swappedFromSlotId: string | null;
   readonly swappedAt: Date | null;
+  readonly nonRenewalRequestedAt: Date | null;
+  readonly returnMethod: BottleReturnMethod | null;
 }
 
 export interface CheckoutCreateItemInput {
@@ -289,6 +293,8 @@ export class SltQueries {
         'sr.ends_at',
         'sr.swapped_from_slot_id',
         'sr.swapped_at',
+        'sr.non_renewal_requested_at',
+        'sr.return_method',
       ])
       .where('sr.id', '=', id)
       .where(brandScopedByColumn(scope, 'sr.brand_id'))
@@ -325,6 +331,8 @@ export class SltQueries {
       endsAt: row.ends_at,
       swappedFromSlotId: row.swapped_from_slot_id,
       swappedAt: row.swapped_at,
+      nonRenewalRequestedAt: row.non_renewal_requested_at,
+      returnMethod: row.return_method,
     };
   }
 
@@ -373,6 +381,8 @@ export class SltQueries {
         'sr.ends_at',
         'sr.swapped_from_slot_id',
         'sr.swapped_at',
+        'sr.non_renewal_requested_at',
+        'sr.return_method',
       ])
       .where('sr.checkout_id', '=', checkoutId)
       .orderBy('ms.slot_number', 'asc')
@@ -408,6 +418,8 @@ export class SltQueries {
       endsAt: row.ends_at,
       swappedFromSlotId: row.swapped_from_slot_id,
       swappedAt: row.swapped_at,
+      nonRenewalRequestedAt: row.non_renewal_requested_at,
+      returnMethod: row.return_method,
     }));
   }
 
@@ -1116,6 +1128,56 @@ export class SltQueries {
     });
   }
 
+  /** FR-EXP-23: Báo không gia hạn, lấy hàng về (ADR-0014). */
+  async requestNonRenewal(params: {
+    rentalId: string;
+    brandId: string;
+    requestedBy: string;
+    returnMethod: BottleReturnMethod;
+    now: Date;
+  }): Promise<SlotRentalRecord> {
+    await this.db
+      .updateTable('slot_rentals')
+      .set({
+        non_renewal_requested_at: params.now,
+        non_renewal_requested_by: params.requestedBy,
+        return_method: params.returnMethod,
+        updated_at: params.now,
+      })
+      .where('id', '=', params.rentalId)
+      .where('brand_id', '=', params.brandId)
+      .execute();
+
+    const row = await this.selectColumns(
+      this.base({ kind: 'BRAND', brandId: params.brandId }).where('sr.id', '=', params.rentalId),
+    ).executeTakeFirstOrThrow();
+    return toRecord(row);
+  }
+
+  /** FR-EXP-24: Rút lại việc báo không gia hạn (ADR-0014). */
+  async withdrawNonRenewal(params: {
+    rentalId: string;
+    brandId: string;
+    now: Date;
+  }): Promise<SlotRentalRecord> {
+    await this.db
+      .updateTable('slot_rentals')
+      .set({
+        non_renewal_requested_at: null,
+        non_renewal_requested_by: null,
+        return_method: null,
+        updated_at: params.now,
+      })
+      .where('id', '=', params.rentalId)
+      .where('brand_id', '=', params.brandId)
+      .execute();
+
+    const row = await this.selectColumns(
+      this.base({ kind: 'BRAND', brandId: params.brandId }).where('sr.id', '=', params.rentalId),
+    ).executeTakeFirstOrThrow();
+    return toRecord(row);
+  }
+
   private base(scope: BrandScope) {
     return this.db
       .selectFrom('slot_rentals as sr')
@@ -1170,6 +1232,8 @@ function toRecord(
     createdAt: row.created_at,
     swappedFromSlotId: row.swapped_from_slot_id ?? null,
     swappedAt: row.swapped_at ?? null,
+    nonRenewalRequestedAt: row.non_renewal_requested_at ?? null,
+    returnMethod: row.return_method ?? null,
   };
 }
 

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { message } from 'antd';
 import { ApiRequestError } from '@/shared/api';
 import { I18nProvider } from '@/shared/i18n';
 import AvailableSlotsPage from './AvailableSlotsPage';
@@ -34,6 +35,7 @@ beforeAll(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
 });
 
@@ -57,6 +59,25 @@ vi.mock('@/app/guards/RequireRole', () => ({
   RequireRole: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
+let mockMyBrandData: any = {
+  id: 'brand-1',
+  code: 'BRAND1',
+  name: 'Thương hiệu Test',
+  contactInfo: {
+    address: '123 Đường Hoa Lan, Quận 1, TP.HCM',
+    phone: '0901234567',
+    email: 'brand@test.vn',
+  },
+  status: 'ACTIVE',
+};
+
+vi.mock('@/routes/brand-profile/api', () => ({
+  useMyBrand: () => ({
+    data: mockMyBrandData,
+    isLoading: false,
+  }),
+}));
+
 // Mutable mock state for granular testing
 let mockCheckoutData: any = null;
 let mockAnnexData: any = null;
@@ -64,6 +85,7 @@ let mockAnnexError: any = null;
 let mockInvoiceData: any = null;
 let mockRentalData: any = null;
 let mockAvailableSlots: any = [];
+let mockCheckoutRefetchInterval: any = null;
 
 const mockPayCheckoutFn = vi.fn();
 const mockAcceptAnnexFn = vi.fn();
@@ -71,6 +93,8 @@ const mockCreateCheckoutFn = vi.fn();
 const mockSwapSlotFn = vi.fn();
 const mockResendVerificationFn = vi.fn();
 const mockAcceptAgreementFn = vi.fn();
+const mockRequestNonRenewalFn = vi.fn();
+const mockWithdrawNonRenewalFn = vi.fn();
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -140,12 +164,15 @@ vi.mock('./api', async () => {
       mutateAsync: mockCreateCheckoutFn,
       isPending: false,
     }),
-    useCheckout: () => ({
-      data: mockCheckoutData,
-      isLoading: false,
-      error: null,
-      refetch: vi.fn(),
-    }),
+    useCheckout: (_id?: string, refetchInterval?: any) => {
+      mockCheckoutRefetchInterval = refetchInterval;
+      return {
+        data: mockCheckoutData,
+        isLoading: false,
+        error: null,
+        refetch: vi.fn(),
+      };
+    },
     useCheckoutAnnex: () => ({
       data: mockAnnexData,
       isLoading: false,
@@ -178,6 +205,14 @@ vi.mock('./api', async () => {
     }),
     useSwapSlot: () => ({
       mutateAsync: mockSwapSlotFn,
+      isPending: false,
+    }),
+    useRequestNonRenewal: () => ({
+      mutateAsync: mockRequestNonRenewalFn,
+      isPending: false,
+    }),
+    useWithdrawNonRenewal: () => ({
+      mutateAsync: mockWithdrawNonRenewalFn,
       isPending: false,
     }),
     useBrandProducts: () => ({
@@ -292,6 +327,7 @@ describe('CheckoutDetailPage Component (Task 5, FR-SLT-50)', () => {
     mockAnnexError = null;
     mockPayCheckoutFn.mockReset();
     mockAcceptAnnexFn.mockReset();
+    mockCheckoutRefetchInterval = null;
   });
 
   it('hiển thị phụ lục từ GET .../annex (nội dung + mã băm), nút Thanh toán ngay bị disable khi chưa đồng ý', () => {
@@ -459,6 +495,203 @@ describe('CheckoutDetailPage Component (Task 5, FR-SLT-50)', () => {
     expect(screen.getByText('Thanh toán thành công!')).toBeDefined();
     expect(screen.getByText('HD-20261009-ABC123')).toBeDefined();
     expect(screen.getByText('Cấu hình slot')).toBeDefined();
+  });
+
+  it('hiển thị nút Mở trang thanh toán PayOS khi checkoutUrl là https hợp lệ, mở tab mới với noopener,noreferrer', async () => {
+    const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    mockAnnexData = {
+      ...sampleAnnex,
+      acceptance: {
+        id: 'acc-1',
+        acceptedAt: new Date().toISOString(),
+        contentHash: sampleAnnex.contentHash,
+      },
+    };
+    mockPayCheckoutFn.mockResolvedValue({
+      paymentId: 'pay-payos-1',
+      qrPayload: '000201010212VIETQR',
+      checkoutUrl: 'https://pay.payos.vn/web/test-checkout-123',
+    });
+
+    render(
+      <TestWrapper initialEntries={['/rentals/checkouts/chk-pending-1']}>
+        <Routes>
+          <Route path="/rentals/checkouts/:id" element={<CheckoutDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    const payBtn = screen.getByText('Thanh toán ngay').closest('button')!;
+    fireEvent.click(payBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Mở trang thanh toán PayOS')).toBeDefined();
+    });
+
+    const openPayosBtn = screen.getByText('Mở trang thanh toán PayOS').closest('button')!;
+    fireEvent.click(openPayosBtn);
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://pay.payos.vn/web/test-checkout-123',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    windowOpenSpy.mockRestore();
+  });
+
+  it('ẩn nút Mở trang thanh toán PayOS khi checkoutUrl là null (như mock gateway)', async () => {
+    mockAnnexData = {
+      ...sampleAnnex,
+      acceptance: {
+        id: 'acc-1',
+        acceptedAt: new Date().toISOString(),
+        contentHash: sampleAnnex.contentHash,
+      },
+    };
+    mockPayCheckoutFn.mockResolvedValue({
+      paymentId: 'pay-mock-1',
+      qrPayload: '000201010212VIETQR',
+      checkoutUrl: null,
+    });
+
+    render(
+      <TestWrapper initialEntries={['/rentals/checkouts/chk-pending-1']}>
+        <Routes>
+          <Route path="/rentals/checkouts/:id" element={<CheckoutDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    const payBtn = screen.getByText('Thanh toán ngay').closest('button')!;
+    fireEvent.click(payBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText('Mã QR thanh toán')).toBeDefined();
+    });
+
+    expect(screen.queryByText('Mở trang thanh toán PayOS')).toBeNull();
+  });
+
+  it('tự động đóng modal và cảnh báo khi hết thời gian giữ chỗ (holdExpiresAt qua đồng hồ client)', async () => {
+    vi.useFakeTimers();
+    try {
+      const warningSpy = vi.spyOn(message, 'warning');
+      const now = Date.now();
+      const futureExpiresAt = new Date(now + 5000).toISOString();
+      mockCheckoutData = {
+        ...pendingCheckout,
+        holdExpiresAt: futureExpiresAt,
+      };
+      mockAnnexData = {
+        ...sampleAnnex,
+        acceptance: {
+          id: 'acc-1',
+          acceptedAt: new Date().toISOString(),
+          contentHash: sampleAnnex.contentHash,
+        },
+      };
+      mockPayCheckoutFn.mockResolvedValue({
+        paymentId: 'pay-1',
+        qrPayload: 'QR123',
+        checkoutUrl: null,
+      });
+
+      render(
+        <TestWrapper initialEntries={['/rentals/checkouts/chk-pending-1']}>
+          <Routes>
+            <Route path="/rentals/checkouts/:id" element={<CheckoutDetailPage />} />
+          </Routes>
+        </TestWrapper>,
+      );
+
+      const payBtn = screen.getByText('Thanh toán ngay').closest('button')!;
+      fireEvent.click(payBtn);
+
+      // Chờ mockPayCheckoutFn resolve và React render modal
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(screen.getByText('Mã QR thanh toán')).toBeDefined();
+
+      // Tiến thời gian qua holdExpiresAt (5000ms)
+      await vi.advanceTimersByTimeAsync(5100);
+
+      expect(warningSpy).toHaveBeenCalledWith('Phiên thanh toán đã hết thời gian giữ chỗ');
+      warningSpy.mockRestore();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('dừng polling khi phiên chuyển sang PAID hoặc CANCELLED hoặc hết hạn hold', async () => {
+    mockAnnexData = {
+      ...sampleAnnex,
+      acceptance: {
+        id: 'acc-1',
+        acceptedAt: new Date().toISOString(),
+        contentHash: sampleAnnex.contentHash,
+      },
+    };
+    mockPayCheckoutFn.mockResolvedValue({
+      paymentId: 'pay-1',
+      qrPayload: 'QR123',
+    });
+
+    render(
+      <TestWrapper initialEntries={['/rentals/checkouts/chk-pending-1']}>
+        <Routes>
+          <Route path="/rentals/checkouts/:id" element={<CheckoutDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    const payBtn = screen.getByText('Thanh toán ngay').closest('button')!;
+    fireEvent.click(payBtn);
+
+    await waitFor(() => {
+      expect(typeof mockCheckoutRefetchInterval).toBe('function');
+    });
+
+    // Khi phiên đang chờ và còn hạn -> poll 2000
+    expect(
+      mockCheckoutRefetchInterval({
+        state: {
+          data: {
+            stage: 'AWAITING_PAYMENT',
+            holdExpiresAt: new Date(Date.now() + 60000).toISOString(),
+          },
+        },
+      }),
+    ).toBe(2000);
+
+    // Khi phiên đã PAID -> dừng poll (false)
+    expect(
+      mockCheckoutRefetchInterval({
+        state: {
+          data: { stage: 'PAID', holdExpiresAt: new Date(Date.now() + 60000).toISOString() },
+        },
+      }),
+    ).toBe(false);
+
+    // Khi phiên đã CANCELLED -> dừng poll (false)
+    expect(
+      mockCheckoutRefetchInterval({
+        state: {
+          data: { stage: 'CANCELLED', holdExpiresAt: new Date(Date.now() + 60000).toISOString() },
+        },
+      }),
+    ).toBe(false);
+
+    // Khi đã hết hạn hold -> dừng poll (false)
+    expect(
+      mockCheckoutRefetchInterval({
+        state: {
+          data: {
+            stage: 'AWAITING_PAYMENT',
+            holdExpiresAt: new Date(Date.now() - 1000).toISOString(),
+          },
+        },
+      }),
+    ).toBe(false);
   });
 });
 
@@ -814,5 +1047,293 @@ describe('RentalDetailPage Component (Task 5, FR-SLT-55)', () => {
     );
 
     expect(screen.queryByText('Đổi slot')).toBeNull();
+  });
+});
+
+describe('RentalDetailPage — Báo không gia hạn (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)', () => {
+  const activeRentalInvoice = {
+    rentalId: 'rental-active-1',
+    checkoutId: 'co-1',
+    invoiceNumber: 'HD-20261015-111222',
+    stage: 'ACTIVE',
+    brandId: 'brand-1',
+    slotId: 'slot-active-1',
+    slotNumber: 5,
+    machineId: 'mch-1',
+    machineDisplayName: 'Máy Kiosk 01',
+    locationName: 'Aeon Mall Tân Phú',
+    rentalPackage: { name: 'Gói 3 tháng', durationMonths: 3, discountPercent: 0 },
+    storagePlan: {
+      name: 'Gói Tiêu Chuẩn',
+      monthlyPrice: '100000.0000',
+      coveragePercent: 30,
+      coverageCap: '3000000.0000',
+    },
+    startsAt: '2026-10-01T00:00:00.000Z',
+    endsAt: '2027-01-01T00:00:00.000Z',
+    rentAmount: '3000000.0000',
+    storageAmount: '300000.0000',
+    graceFeeAmount: '0.0000',
+    totalAmount: '3300000.0000',
+    currency: 'VND',
+    paidAt: '2026-10-01T00:05:00.000Z',
+  };
+
+  const activeSlotRental = {
+    id: 'rental-active-1',
+    slotId: 'slot-active-1',
+    machineId: 'mch-1',
+    brandId: 'brand-1',
+    status: 'ACTIVE',
+    stage: 'ACTIVE',
+    startsAt: '2026-10-01T00:00:00.000Z',
+    endsAt: '2027-01-01T00:00:00.000Z',
+    currency: 'VND',
+    totalAmount: '3300000.0000',
+    invoiceNumber: 'HD-20261015-111222',
+    durationMonths: 3,
+    pricePerSpray: '15000.0000',
+    paidAt: '2026-10-01T00:05:00.000Z',
+    nonRenewalRequestedAt: null,
+    returnMethod: null,
+    swappedFromSlotId: null,
+    swappedAt: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('hiển thị nút "Không gia hạn" khi hóa đơn đang ACTIVE và chưa báo', () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = activeSlotRental;
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('Không gia hạn')).toBeDefined();
+  });
+
+  it('bấm "Không gia hạn" mở modal xác nhận, đổi hình thức và hiển thị địa chỉ từ brand profile', async () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = activeSlotRental;
+    mockRequestNonRenewalFn.mockResolvedValue({});
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    fireEvent.click(screen.getByText('Không gia hạn'));
+
+    // Modal hiển thị tiêu đề và các radio options
+    expect(screen.getByText('Báo không gia hạn & nhận lại hàng')).toBeDefined();
+    expect(screen.getByText('Tự đến kho lấy chai')).toBeDefined();
+    expect(
+      screen.getByText('Nền tảng gửi về địa chỉ thương hiệu (thương hiệu chịu phí ship)'),
+    ).toBeDefined();
+
+    // Chọn hình thức SHIP_TO_BRAND
+    fireEvent.click(
+      screen.getByText('Nền tảng gửi về địa chỉ thương hiệu (thương hiệu chịu phí ship)'),
+    );
+
+    // Địa chỉ từ brand profile được hiển thị
+    expect(screen.getByText('123 Đường Hoa Lan, Quận 1, TP.HCM')).toBeDefined();
+
+    // Bấm nút xác nhận
+    const okBtn = screen.getByRole('button', { name: 'Báo không gia hạn' });
+    fireEvent.click(okBtn);
+
+    await waitFor(() => {
+      expect(mockRequestNonRenewalFn).toHaveBeenCalledWith({
+        rentalId: 'rental-active-1',
+        returnMethod: 'SHIP_TO_BRAND',
+      });
+    });
+  });
+
+  it('hiển thị banner cảnh báo và nút "Rút lại yêu cầu" khi đã báo không gia hạn', () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = {
+      ...activeSlotRental,
+      nonRenewalRequestedAt: '2026-10-10T10:00:00.000Z',
+      returnMethod: 'WAREHOUSE_PICKUP',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    // Banner hiển thị
+    expect(screen.getByText('Hóa đơn đã báo không gia hạn')).toBeDefined();
+    expect(screen.getAllByText('Rút lại yêu cầu').length).toBeGreaterThan(0);
+  });
+
+  it('bấm "Rút lại yêu cầu" và xác nhận trong modal sẽ gọi mutate withdrawNonRenewal', async () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = {
+      ...activeSlotRental,
+      nonRenewalRequestedAt: '2026-10-10T10:00:00.000Z',
+      returnMethod: 'WAREHOUSE_PICKUP',
+    };
+    mockWithdrawNonRenewalFn.mockResolvedValue({});
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    // Bấm nút rút lại ở banner
+    const withdrawBtns = screen.getAllByText('Rút lại yêu cầu');
+    fireEvent.click(withdrawBtns[0]!);
+
+    // Modal xác nhận rút lại xuất hiện
+    expect(screen.getByText('Xác nhận rút lại yêu cầu không gia hạn?')).toBeDefined();
+
+    // Bấm nút xác nhận trong modal (nút cuối cùng trong các nút có cùng text)
+    const allBtns = screen.getAllByRole('button', { name: 'Rút lại yêu cầu' });
+    const modalConfirmBtn = allBtns[allBtns.length - 1];
+    fireEvent.click(modalConfirmBtn!);
+
+    await waitFor(() => {
+      expect(mockWithdrawNonRenewalFn).toHaveBeenCalledWith('rental-active-1');
+    });
+  });
+
+  it('nút "Không gia hạn" bị ẩn khi hóa đơn đã kết thúc (CLOSED)', () => {
+    mockInvoiceData = {
+      ...activeRentalInvoice,
+      stage: 'ENDED',
+      status: 'CLOSED',
+    };
+    mockRentalData = {
+      ...activeSlotRental,
+      stage: 'ENDED',
+      status: 'CLOSED',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.queryByText('Không gia hạn')).toBeNull();
+  });
+
+  it('nút "Rút lại" và banner bị ẩn khi now >= endsAt hoặc trạng thái không còn ACTIVE/EXPIRING', () => {
+    // Trường hợp 1: Quá endsAt (endsAt trong quá khứ so với đồng hồ client)
+    mockInvoiceData = {
+      ...activeRentalInvoice,
+      endsAt: '2026-01-01T00:00:00Z',
+    };
+    mockRentalData = {
+      ...activeSlotRental,
+      endsAt: '2026-01-01T00:00:00Z',
+      nonRenewalRequestedAt: '2025-12-15T10:00:00.000Z',
+      returnMethod: 'WAREHOUSE_PICKUP',
+    };
+
+    const { unmount } = render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.queryByText('Hóa đơn đã báo không gia hạn')).toBeNull();
+    expect(screen.queryByText('Rút lại yêu cầu')).toBeNull();
+    expect(screen.queryByText('Rút lại')).toBeNull();
+
+    unmount();
+
+    // Trường hợp 2: Trạng thái không còn ACTIVE/EXPIRING (CLOSED, ENDED)
+    mockInvoiceData = {
+      ...activeRentalInvoice,
+      stage: 'ENDED',
+      status: 'CLOSED',
+    };
+    mockRentalData = {
+      ...activeSlotRental,
+      stage: 'ENDED',
+      status: 'CLOSED',
+      nonRenewalRequestedAt: '2026-10-10T10:00:00.000Z',
+      returnMethod: 'WAREHOUSE_PICKUP',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.queryByText('Hóa đơn đã báo không gia hạn')).toBeNull();
+    expect(screen.queryByText('Rút lại yêu cầu')).toBeNull();
+    expect(screen.queryByText('Rút lại')).toBeNull();
+  });
+
+  it('chọn hình thức SHIP_TO_BRAND sẽ hiển thị cảnh báo khi hồ sơ thương hiệu chưa có địa chỉ', () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = activeSlotRental;
+    mockMyBrandData = {
+      ...mockMyBrandData,
+      contactInfo: { address: null, phone: null, email: null },
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    // Mở modal
+    const nonRenewalBtn = screen.getByText('Không gia hạn');
+    fireEvent.click(nonRenewalBtn);
+
+    // Chọn SHIP_TO_BRAND
+    const shipToBrandRadio = screen.getByText(
+      'Nền tảng gửi về địa chỉ thương hiệu (thương hiệu chịu phí ship)',
+    );
+    fireEvent.click(shipToBrandRadio);
+
+    // Cảnh báo chưa cấu hình địa chỉ hiển thị
+    expect(
+      screen.getByText(
+        'Chưa có địa chỉ trong hồ sơ thương hiệu (vui lòng cập nhật trong Hồ sơ thương hiệu)',
+      ),
+    ).toBeDefined();
+
+    // Khôi phục contactInfo
+    mockMyBrandData = {
+      ...mockMyBrandData,
+      contactInfo: {
+        address: '123 Đường Hoa Lan, Quận 1, TP.HCM',
+        phone: '0901234567',
+        email: 'brand@test.vn',
+      },
+    };
   });
 });

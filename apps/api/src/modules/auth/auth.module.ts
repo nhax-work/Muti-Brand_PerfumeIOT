@@ -7,6 +7,11 @@ import { AuthService } from './auth.service.js';
 import { tokenServiceProvider } from './auth.tokens.provider.js';
 import { PrincipalLoader } from './principal.loader.js';
 
+import {
+  EMAIL_VERIFICATION_SENDER,
+  LoggingEmailVerificationSender,
+} from './email-verification-sender.js';
+
 @Module({
   controllers: [AuthController],
   providers: [
@@ -14,9 +19,10 @@ import { PrincipalLoader } from './principal.loader.js';
     PrincipalLoader,
     tokenServiceProvider,
     AuthService,
+    { provide: EMAIL_VERIFICATION_SENDER, useClass: LoggingEmailVerificationSender },
     // Guard toàn cục: MỌI endpoint của MỌI module đều qua đây, trừ endpoint gắn @Public().
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
-  exports: [AuthService],
+  exports: [AuthService, EMAIL_VERIFICATION_SENDER],
 })
 export class AuthModule {}

@@ -64,9 +64,14 @@ export default function RentalsPage() {
       title: t('ui.rentalStage'),
       dataIndex: 'stage',
       key: 'stage',
-      render: (stage: RentalInvoiceStage) => {
+      render: (stage: RentalInvoiceStage, record) => {
         const config = STAGE_TAGS[stage] || { color: 'default', labelKey: stage };
-        return <Tag color={config.color}>{t(config.labelKey as never)}</Tag>;
+        return (
+          <Space>
+            <Tag color={config.color}>{t(config.labelKey as never)}</Tag>
+            {record.nonRenewalRequestedAt && <Tag color="orange">{t('ui.nonRenewingTag')}</Tag>}
+          </Space>
+        );
       },
     },
     {
