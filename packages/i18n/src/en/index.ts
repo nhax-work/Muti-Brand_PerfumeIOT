@@ -176,6 +176,9 @@ export const en: SameKeysAs<typeof vi> = {
   bnd: {
     codeTaken: 'Brand code already exists',
     brandAccountOnly: 'Only brand-scoped accounts have a brand of their own',
+    taxCodeRequiredForVerification: 'Brand has not declared tax code, cannot verify legal entity',
+    legalProfileSaved: 'Legal profile and payout account saved successfully',
+    legalVerifiedSuccess: 'Legal entity verification recorded successfully',
   },
 
   prd: {
@@ -205,6 +208,22 @@ export const en: SameKeysAs<typeof vi> = {
     agreementNotCurrent: 'Only the current framework agreement version can be accepted',
     agreementContentChanged:
       'The framework agreement has changed. Please reopen it to review the new version',
+    holdLimitReached:
+      'The number of unpaid holding slots exceeds the maximum limit (up to 5 slots per brand)',
+    slotSwapNotAllowed:
+      'Cannot swap slot due to 48-hour limit exceeded, bottle installed, already swapped, or different rent price',
+    annexNotAccepted: 'Checkout annex agreement has not been accepted',
+    annexNotFound: 'Checkout annex agreement not found',
+    annexContentChanged:
+      'The annex content has changed. Please reload to review the latest version',
+    slotSwapDifferentMachine: 'Can only swap to an available slot on the same machine',
+    slotSwapDifferentPrice: 'Target slot must have the same monthly rent price as the current slot',
+    slotSwapTimeExpired: 'The 48-hour window from payment to swap slots has expired',
+    slotSwapAlreadySwapped:
+      'This rental invoice has already been swapped once and cannot be swapped again',
+    slotSwapBottleInstalled: 'A bottle has already been installed on this slot. Cannot swap slot',
+    slotSwapNotDraft: 'Rental invoice is not in awaiting stock (DRAFT) status. Cannot swap slot',
+    slotSwapUnpaid: 'Rental invoice is unpaid. Cannot swap slot',
   },
 
   ord: {
@@ -616,6 +635,23 @@ export const en: SameKeysAs<typeof vi> = {
     brandSaved: 'Brand saved',
     brandProfile: 'Brand profile',
     brandProfileEdit: 'Display information',
+    brandLegalProfile: 'Legal Profile & Payout Account',
+    brandTaxCode: 'Tax code',
+    brandTaxCodeHint: '10 to 20 characters, required before legal entity verification',
+    brandBusinessLicense: 'Business license number',
+    brandPayoutAccount: 'Payout bank account',
+    brandBankCode: 'Bank code',
+    brandBankCodePlaceholder: 'e.g. VCB, TCB, MB...',
+    brandAccountNumber: 'Account number',
+    brandAccountHolder: 'Account holder name',
+    brandAccountHolderHint: 'Business name or legal representative',
+    brandLegalNotice:
+      'Notice: Editing after verification will reset status to Unverified for Platform Admin review.',
+    brandVerifyLegal: 'Verify legal entity',
+    brandVerifyLegalTitle: 'Verify Brand Legal Entity',
+    brandVerifyLegalConfirm: 'Confirm this brand has met legal requirements to receive payouts?',
+    brandVerifyLegalTaxCodeMissing: 'Brand has not declared a tax code yet and cannot be verified.',
+    brandPayoutAccountMasked: 'Payout account (last 4 digits)',
     brandSuspendedNotice:
       'Your brand is suspended: slots do not take orders. Contact the platform for help.',
     users: 'Accounts',
@@ -744,6 +780,27 @@ export const en: SameKeysAs<typeof vi> = {
     emailNotVerifiedNotice:
       'Your account email is not yet verified. Please check your inbox or click below to resend verification.',
     openAgreementModal: 'View and accept agreement',
+    // Phụ lục hợp đồng thuê slot & Đổi slot (Task 5, FR-SLT-50, FR-SLT-55)
+    checkoutAnnexTitle: 'Rental Checkout Annex',
+    checkoutAnnexDesc:
+      'Self-generated annex based on snapshot prices and service packages of this checkout.',
+    checkoutAnnexAgreed: 'I have read and agree to all terms in this contract annex',
+    checkoutAnnexAcceptBtn: 'Accept Annex',
+    checkoutAnnexAccepted: 'Annex Accepted',
+    checkoutAnnexAcceptedSuccess: 'Successfully accepted the contract annex',
+    checkoutAnnexLegacy:
+      'This checkout session does not have an annex attached (created prior to electronic annex adoption).',
+    contentHashLabel: 'Content Hash',
+    swapSlot: 'Swap Slot',
+    swapSlotTitle: 'Swap to another available slot',
+    swapSlotDesc:
+      'You can swap to another available slot on the same machine with the same monthly rent price within 48 hours of payment before bottle installation.',
+    swapSlotSuccess: 'Slot swapped successfully',
+    swapSlotConfirm: 'Confirm Slot Swap',
+    selectCandidateSlot: 'Select an available slot to swap',
+    noCandidateSlots: 'No available slots on the same machine with the same monthly rent price.',
+    currentSlotInfo: 'Current Slot',
+    swappedFromNotice: 'This rental was swapped from Slot #{slotNumber} at {time}.',
   },
 
   kiosk: {

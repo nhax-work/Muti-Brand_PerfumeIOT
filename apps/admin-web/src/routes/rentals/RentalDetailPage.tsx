@@ -6,9 +6,11 @@ import {
   Card,
   Descriptions,
   Divider,
+  Empty,
   Form,
   Input,
   Modal,
+  Radio,
   Select,
   Space,
   Spin,
@@ -20,6 +22,7 @@ import {
   ArrowLeftOutlined,
   DollarCircleOutlined,
   FileTextOutlined,
+  SwapOutlined,
   TagOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
@@ -27,13 +30,16 @@ import { errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 import {
   useAssignProduct,
+  useAvailableSlots,
   useBrandProducts,
   useRentalInvoice,
   useSetPricePerSpray,
+  useSlotRental,
+  useSwapSlot,
   type RentalInvoiceStage,
 } from './api';
 
-const { Title, Text } = Typography;
+const { Title, Text, Paragraph } = Typography;
 
 const STAGE_TAGS: Record<RentalInvoiceStage, { color: string; labelKey: string }> = {
   AWAITING_PAYMENT: { color: 'orange', labelKey: 'ui.stageAwaitingPayment' },
@@ -51,15 +57,26 @@ export default function RentalDetailPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
 
-  const { data: invoice, isLoading, error } = useRentalInvoice(id);
+  const { data: invoice, isLoading, error, refetch } = useRentalInvoice(id);
+  const { data: rental, refetch: refetchRental } = useSlotRental(id);
   const { data: productsData } = useBrandProducts();
   const assignProduct = useAssignProduct();
   const setPricePerSpray = useSetPricePerSpray();
+  const swapSlot = useSwapSlot();
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
   const [priceInput, setPriceInput] = useState<string>('');
+  const [selectedTargetSlotId, setSelectedTargetSlotId] = useState<string | undefined>(undefined);
+
+  const [currentTimestamp] = useState(() => Date.now());
+
+  const { data: availableSlotsData, isLoading: isAvailableSlotsLoading } = useAvailableSlots({
+    machineId: invoice?.machineId,
+    pageSize: 100,
+  });
 
   if (isLoading) {
     return (
@@ -91,6 +108,35 @@ export default function RentalDetailPage() {
   const products = productsData?.items ?? [];
   const isPaid = Boolean(invoice.paidAt);
   const stageConfig = STAGE_TAGS[invoice.stage] || { color: 'default', labelKey: invoice.stage };
+
+  const swapWindowHours = 48;
+  const isAwaitingStock = invoice.stage === 'AWAITING_STOCK' || rental?.status === 'DRAFT';
+  const hasNotSwapped = !rental?.swappedFromSlotId;
+  const within48Hours = Boolean(
+    invoice.paidAt &&
+    currentTimestamp - new Date(invoice.paidAt).getTime() <= swapWindowHours * 3600 * 1000,
+  );
+  const canSwap = isPaid && isAwaitingStock && hasNotSwapped && within48Hours;
+
+  const candidateSlots = (availableSlotsData?.items ?? []).filter(
+    (s) =>
+      s.slotId !== invoice.slotId &&
+      Number(s.monthlyRentPrice) === Number(invoice.monthlyRentPrice),
+  );
+
+  const handleSwapSlotSubmit = async () => {
+    if (!id || !selectedTargetSlotId) return;
+    try {
+      await swapSlot.mutateAsync({ rentalId: id, targetSlotId: selectedTargetSlotId });
+      message.success(t('ui.swapSlotSuccess'));
+      setIsSwapModalOpen(false);
+      setSelectedTargetSlotId(undefined);
+      void refetch();
+      void refetchRental();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
 
   const handleAssignProductSubmit = async () => {
     if (!id || !selectedProductId) return;
@@ -125,6 +171,18 @@ export default function RentalDetailPage() {
           {t('ui.rentalsList')}
         </Button>
 
+        {rental?.swappedFromSlotId && (
+          <Alert
+            type="info"
+            message={t('ui.swappedFromNotice', {
+              slotNumber: rental.swappedFromSlotId.slice(0, 8),
+              time: rental.swappedAt ? new Date(rental.swappedAt).toLocaleString('vi-VN') : '',
+            })}
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
         <Card style={{ marginBottom: 24 }}>
           <div
             style={{
@@ -149,6 +207,17 @@ export default function RentalDetailPage() {
 
             {isPaid && (
               <Space>
+                {canSwap && (
+                  <Button
+                    icon={<SwapOutlined />}
+                    onClick={() => {
+                      setSelectedTargetSlotId(undefined);
+                      setIsSwapModalOpen(true);
+                    }}
+                  >
+                    {t('ui.swapSlot')}
+                  </Button>
+                )}
                 <Button
                   icon={<TagOutlined />}
                   onClick={() => {
@@ -268,6 +337,68 @@ export default function RentalDetailPage() {
               />
             </Form.Item>
           </Form>
+        </Modal>
+
+        {/* Modal Đổi slot (FR-SLT-55, ADR-0014) */}
+        <Modal
+          title={t('ui.swapSlotTitle')}
+          open={isSwapModalOpen}
+          onCancel={() => {
+            setIsSwapModalOpen(false);
+            setSelectedTargetSlotId(undefined);
+          }}
+          onOk={handleSwapSlotSubmit}
+          confirmLoading={swapSlot.isPending}
+          okButtonProps={{ disabled: !selectedTargetSlotId }}
+          okText={t('ui.swapSlotConfirm')}
+        >
+          <Paragraph type="secondary">{t('ui.swapSlotDesc')}</Paragraph>
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '8px 12px',
+              background: '#fafafa',
+              borderRadius: 6,
+              border: '1px solid #f0f0f0',
+            }}
+          >
+            <Text strong>{t('ui.currentSlotInfo')}: </Text>
+            <Text>
+              Slot #{invoice.slotNumber} • Giá niêm yết:{' '}
+              {Number(invoice.monthlyRentPrice).toLocaleString('vi-VN')} {invoice.currency}/tháng
+            </Text>
+          </div>
+
+          <Title level={5}>{t('ui.selectCandidateSlot')}</Title>
+          {isAvailableSlotsLoading ? (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <Spin />
+            </div>
+          ) : candidateSlots.length === 0 ? (
+            <Empty description={t('ui.noCandidateSlots')} />
+          ) : (
+            <Radio.Group
+              value={selectedTargetSlotId}
+              onChange={(e) => setSelectedTargetSlotId(e.target.value)}
+              style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}
+            >
+              {candidateSlots.map((slot) => (
+                <Radio
+                  key={slot.slotId}
+                  value={slot.slotId}
+                  style={{
+                    padding: '10px 14px',
+                    border: '1px solid #d9d9d9',
+                    borderRadius: 6,
+                    background: selectedTargetSlotId === slot.slotId ? '#e6f4ff' : '#fff',
+                  }}
+                >
+                  <Text strong>Slot #{slot.slotNumber}</Text> • {slot.locationName} (
+                  {Number(slot.monthlyRentPrice).toLocaleString('vi-VN')} {invoice.currency}/tháng)
+                </Radio>
+              ))}
+            </Radio.Group>
+          )}
         </Modal>
       </div>
     </RequireRole>

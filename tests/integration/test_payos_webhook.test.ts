@@ -100,14 +100,17 @@ afterAll(async () => {
   const ids = checkouts.rows.map((r) => r.id);
   if (ids.length > 0) {
     await client.query('BEGIN');
+    await client.query("SET session_replication_role = 'replica'");
     await client.query(
       `DELETE FROM payment_events WHERE payment_id IN
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
+    await client.query(`DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await client.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await client.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await client.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
+    await client.query("SET session_replication_role = 'origin'");
     await client.query('COMMIT');
   }
   await client.query(`DELETE FROM machine_slots WHERE id = $1`, [vacantSlot]);
@@ -252,6 +255,11 @@ describe('PayOS — hóa đơn thuê slot (FR-SLT-37, FR-SLT-38)', () => {
     });
     expect(checkoutRes.statusCode, checkoutRes.body).toBe(201);
     const checkout = checkoutRes.json<{ id: string; totalAmount: string }>();
+
+    const annexRes = await brandA('GET', `/rental-checkouts/${checkout.id}/annex`);
+    await brandA('POST', `/rental-checkouts/${checkout.id}/annex/accept`, {
+      payload: { contentHash: annexRes.json<{ contentHash: string }>().contentHash },
+    });
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode, payRes.body).toBe(200);

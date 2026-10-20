@@ -1,8 +1,10 @@
 import { PlusOutlined } from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
+  Alert,
   Avatar,
   Button,
+  Descriptions,
   Form,
   Input,
   Modal,
@@ -20,7 +22,14 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
-import { type Brand, type BrandStatus, useBrands, useSaveBrand, useSetBrandStatus } from './api';
+import {
+  type Brand,
+  type BrandStatus,
+  useBrands,
+  useSaveBrand,
+  useSetBrandStatus,
+  useVerifyBrandLegal,
+} from './api';
 
 const STATUS_TAGS: Record<BrandStatus, { color: string; label: MessageKey }> = {
   ACTIVE: { color: 'green', label: 'ui.brandActive' },
@@ -45,8 +54,9 @@ function contactOf(brand: Brand): { email?: string; phone?: string; address?: st
 }
 
 /**
- * Quản lý thương hiệu của Platform Super Admin (FR-BND-01 ÷ 03, 07). Đình chỉ thì slot của thương
- * hiệu ngừng nhận đơn (FR-BND-04) — máy chủ bảo đảm, màn hình chỉ đổi trạng thái.
+ * Quản lý thương hiệu của Platform Super Admin (FR-BND-01 ÷ 03, 07, FR-BND-10). Đình chỉ thì slot của thương
+ * hiệu ngừng nhận đơn (FR-BND-04) — máy chủ bảo đảm, màn hình chỉ đổi trạng thái. Xác minh pháp nhân (FR-BND-10, ADR-0013)
+ * yêu cầu xác thực lại (reauth).
  */
 export default function BrandsPage() {
   const { t } = useI18n();
@@ -55,7 +65,9 @@ export default function BrandsPage() {
   const { data, isLoading } = useBrands({ page, pageSize: 20, status });
   const save = useSaveBrand();
   const setBrandStatus = useSetBrandStatus();
+  const verifyLegal = useVerifyBrandLegal();
   const [editing, setEditing] = useState<Brand | 'new' | null>(null);
+  const [verifyingBrand, setVerifyingBrand] = useState<Brand | null>(null);
   const [form] = Form.useForm<BrandForm>();
 
   const open = (brand: Brand | 'new') => {
@@ -144,6 +156,9 @@ export default function BrandsPage() {
         <Space>
           <Button type="link" size="small" onClick={() => open(b)}>
             {t('ui.pricingEdit')}
+          </Button>
+          <Button type="link" size="small" onClick={() => setVerifyingBrand(b)}>
+            {t('ui.brandVerifyLegal')}
           </Button>
           {b.status !== 'DISABLED' && (
             <Popconfirm
@@ -239,6 +254,79 @@ export default function BrandsPage() {
               <Input />
             </Form.Item>
           </Form>
+        </Modal>
+        <Modal
+          open={verifyingBrand !== null}
+          title={t('ui.brandVerifyLegalTitle')}
+          okText={t('ui.brandVerifyLegal')}
+          cancelText={t('ui.cancel')}
+          okButtonProps={{
+            disabled: !verifyingBrand?.taxCode || !!verifyingBrand?.legalVerifiedAt,
+            loading: verifyLegal.isPending,
+          }}
+          onOk={async () => {
+            if (!verifyingBrand) return;
+            try {
+              await verifyLegal.mutateAsync(verifyingBrand.id);
+              message.success(t('ui.brandSaved'));
+              setVerifyingBrand(null);
+            } catch (error) {
+              message.error(errorMessage(error, t));
+            }
+          }}
+          onCancel={() => setVerifyingBrand(null)}
+          destroyOnHidden
+        >
+          {verifyingBrand && (
+            <Space direction="vertical" style={{ width: '100%' }} size={16}>
+              <Descriptions column={1} size="small" bordered>
+                <Descriptions.Item label={t('ui.brandName')}>
+                  {verifyingBrand.name} ({verifyingBrand.code})
+                </Descriptions.Item>
+                <Descriptions.Item label={t('ui.brandTaxCode')}>
+                  {verifyingBrand.taxCode ?? (
+                    <Typography.Text type="danger">Chưa khai báo</Typography.Text>
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('ui.brandBusinessLicense')}>
+                  {verifyingBrand.businessLicenseNumber || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('ui.brandPayoutAccountMasked')}>
+                  {verifyingBrand.payoutAccountMasked ? (
+                    `${verifyingBrand.payoutAccountMasked.bankCode} · ${verifyingBrand.payoutAccountMasked.maskedAccountNumber} (${verifyingBrand.payoutAccountMasked.accountHolder})`
+                  ) : (
+                    '—'
+                  )}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('ui.brandLegal')}>
+                  {verifyingBrand.legalVerifiedAt ? (
+                    <Tag color="green">
+                      {t('ui.brandLegalVerified')} —{' '}
+                      {formatDateTime(verifyingBrand.legalVerifiedAt)}
+                    </Tag>
+                  ) : (
+                    <Tag>{t('ui.brandLegalUnverified')}</Tag>
+                  )}
+                </Descriptions.Item>
+              </Descriptions>
+
+              {!verifyingBrand.taxCode && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  message={t('ui.brandVerifyLegalTaxCodeMissing')}
+                />
+              )}
+
+              {verifyingBrand.taxCode && !verifyingBrand.legalVerifiedAt && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t('ui.brandVerifyLegalConfirm')}
+                />
+              )}
+            </Space>
+          )}
         </Modal>
       </div>
     </RequireRole>

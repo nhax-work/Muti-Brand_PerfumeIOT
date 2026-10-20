@@ -4,6 +4,7 @@ import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Divider,
   List,
@@ -22,14 +23,22 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   CreditCardOutlined,
+  FileProtectOutlined,
   FileTextOutlined,
   QrcodeOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
-import { errorMessage } from '@/shared/api';
+import { ApiRequestError, errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
-import { useCancelCheckout, useCheckout, usePayCheckout, type RentalPaymentIntent } from './api';
+import {
+  useAcceptCheckoutAnnex,
+  useCancelCheckout,
+  useCheckout,
+  useCheckoutAnnex,
+  usePayCheckout,
+  type RentalPaymentIntent,
+} from './api';
 
 const { Title, Text, Paragraph } = Typography;
 const { Countdown } = Statistic;
@@ -41,6 +50,7 @@ export default function CheckoutDetailPage() {
 
   const [paymentIntent, setPaymentIntent] = useState<RentalPaymentIntent | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [annexAgreed, setAnnexAgreed] = useState(false);
 
   // Poll mỗi 2s khi phiên chưa PAID và chưa CANCELLED
   const {
@@ -50,11 +60,40 @@ export default function CheckoutDetailPage() {
     refetch,
   } = useCheckout(id, paymentIntent ? 2000 : false);
 
+  const {
+    data: annex,
+    isLoading: isAnnexLoading,
+    error: annexError,
+    refetch: refetchAnnex,
+  } = useCheckoutAnnex(id);
+
   const payCheckout = usePayCheckout();
   const cancelCheckout = useCancelCheckout();
+  const acceptAnnex = useAcceptCheckoutAnnex();
+
+  const isLegacyCheckout = annexError instanceof ApiRequestError && annexError.status === 404;
+  const isAnnexAccepted = Boolean(annex?.acceptance) || isLegacyCheckout;
+
+  const handleAcceptAnnex = async () => {
+    if (!id || !annex) return;
+    try {
+      await acceptAnnex.mutateAsync({
+        checkoutId: id,
+        contentHash: annex.contentHash,
+      });
+      message.success(t('ui.checkoutAnnexAcceptedSuccess'));
+      void refetchAnnex();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
 
   const handlePay = async () => {
     if (!id) return;
+    if (!isAnnexAccepted) {
+      message.warning(t('slt.annexNotAccepted'));
+      return;
+    }
     try {
       const intent = await payCheckout.mutateAsync(id);
       setPaymentIntent(intent);
@@ -241,6 +280,82 @@ export default function CheckoutDetailPage() {
                   )}
                 />
               </Card>
+
+              {/* Phụ lục hợp đồng thuê slot (FR-SLT-50) */}
+              <Card
+                title={
+                  <span>
+                    <FileProtectOutlined style={{ marginRight: 8, color: '#1677ff' }} />
+                    {t('ui.checkoutAnnexTitle')}
+                  </span>
+                }
+                style={{ marginTop: 24 }}
+              >
+                <Paragraph type="secondary">{t('ui.checkoutAnnexDesc')}</Paragraph>
+                {isAnnexLoading ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                    <Spin />
+                  </div>
+                ) : isLegacyCheckout ? (
+                  <Alert type="info" message={t('ui.checkoutAnnexLegacy')} showIcon />
+                ) : annexError ? (
+                  <Alert type="error" message={errorMessage(annexError, t)} showIcon />
+                ) : annex ? (
+                  <div>
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary">{t('ui.contentHashLabel')}: </Text>
+                      <Text code copyable>
+                        {annex.contentHash}
+                      </Text>
+                    </div>
+
+                    <div
+                      style={{
+                        maxHeight: 280,
+                        overflowY: 'auto',
+                        padding: '12px 16px',
+                        background: '#fafafa',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 6,
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        marginBottom: 16,
+                      }}
+                    >
+                      {annex.content}
+                    </div>
+
+                    {annex.acceptance ? (
+                      <Alert
+                        type="success"
+                        message={t('ui.checkoutAnnexAccepted')}
+                        description={`Đồng ý lúc: ${new Date(annex.acceptance.acceptedAt).toLocaleString('vi-VN')}`}
+                        showIcon
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <Checkbox
+                          checked={annexAgreed}
+                          onChange={(e) => setAnnexAgreed(e.target.checked)}
+                        >
+                          {t('ui.checkoutAnnexAgreed')}
+                        </Checkbox>
+                        <div>
+                          <Button
+                            type="primary"
+                            disabled={!annexAgreed}
+                            loading={acceptAnnex.isPending}
+                            onClick={handleAcceptAnnex}
+                          >
+                            {t('ui.checkoutAnnexAcceptBtn')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </Card>
             </Col>
 
             <Col xs={24} lg={8}>
@@ -284,6 +399,7 @@ export default function CheckoutDetailPage() {
                     block
                     icon={<QrcodeOutlined />}
                     loading={payCheckout.isPending}
+                    disabled={!isAnnexAccepted || isAnnexLoading}
                     onClick={handlePay}
                   >
                     {t('ui.payNow')}

@@ -20,4 +20,18 @@ export const slt = {
   agreementNotFound: 'Không tìm thấy phiên bản hợp đồng khung',
   agreementNotCurrent: 'Chỉ đồng ý được phiên bản hợp đồng khung hiện hành',
   agreementContentChanged: 'Nội dung hợp đồng khung đã thay đổi, vui lòng mở lại để xem bản mới',
+  holdLimitReached:
+    'Số slot giữ chỗ chưa thanh toán vượt quá giới hạn tối đa (tối đa 5 slot cho mỗi thương hiệu)',
+  slotSwapNotAllowed:
+    'Không thể đổi slot do quá thời hạn 48 giờ, đã lắp chai, đã đổi trước đó hoặc slot đích khác giá niêm yết',
+  annexNotAccepted: 'Chưa đồng ý phụ lục điều khoản của phiên thanh toán',
+  annexNotFound: 'Không tìm thấy phụ lục điều khoản cho phiên thanh toán này',
+  annexContentChanged: 'Nội dung phụ lục đã thay đổi, vui lòng tải lại để xem bản mới nhất',
+  slotSwapDifferentMachine: 'Chỉ có thể đổi sang slot trống trên cùng máy',
+  slotSwapDifferentPrice: 'Slot đích phải có cùng giá thuê niêm yết với slot hiện tại',
+  slotSwapTimeExpired: 'Đã quá thời hạn 48 giờ kể từ lúc thanh toán để đổi slot',
+  slotSwapAlreadySwapped: 'Hóa đơn này đã được đổi slot một lần, không thể đổi tiếp',
+  slotSwapBottleInstalled: 'Hóa đơn đã lắp chai đầu tiên, không thể đổi slot',
+  slotSwapNotDraft: 'Hóa đơn không ở trạng thái chờ nạp hàng (DRAFT), không thể đổi slot',
+  slotSwapUnpaid: 'Hóa đơn chưa thanh toán, không thể đổi slot',
 } as const;

@@ -7,6 +7,7 @@
  * slot" (FR-SLT-02) do CSDL cưỡng chế và được chứng minh ở tests/integration/test_slot_constraint.
  */
 
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry, AuditService } from '../../apps/api/src/shared/audit/index.js';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
@@ -80,6 +81,8 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
     paidAt: null,
     cancelledAt: null,
     createdAt: new Date('2026-10-01T00:00:00Z'),
+    swappedFromSlotId: null,
+    swappedAt: null,
     ...overrides,
   };
 }
@@ -223,13 +226,184 @@ class FakeSltQueries {
     };
   }
 
+  checkouts: Map<string, RentalCheckoutRecord> = new Map();
+  annexAcceptances: Map<string, AgreementAcceptanceRecord> = new Map();
+  activeBottlesOnSlots: Set<string> = new Set();
+  occupiedSlots: Set<string> = new Set();
+  slotMachines: Map<string, string> = new Map([
+    ['slot-1', 'machine-1'],
+    ['slot-2', 'machine-1'],
+    ['slot-diff-mch', 'machine-2'],
+  ]);
+  slotPrices: Map<string, string> = new Map([
+    ['slot-1', '1000000.0000'],
+    ['slot-2', '1000000.0000'],
+    ['slot-diff-price', '2000000.0000'],
+  ]);
+
+  async findCheckoutRecordById(id: string) {
+    if (this.checkouts.has(id)) return this.checkouts.get(id)!;
+    const items = this.rentals.filter((r) => r.checkoutId === id);
+    if (items.length === 0) return null;
+    const first = items[0]!;
+    return {
+      id,
+      brandId: first.brandId,
+      currency: 'VND',
+      totalAmount: '3300000.0000',
+      holdExpiresAt: first.holdExpiresAt ?? new Date(),
+      paidAt: first.paidAt,
+      cancelledAt: first.cancelledAt,
+      createdBy: 'user-1',
+      createdAt: first.createdAt,
+      agreementVersionId: 'ag-1',
+    };
+  }
+
+  async findInvoiceDetailsByCheckoutId(checkoutId: string) {
+    const items = this.rentals.filter((r) => r.checkoutId === checkoutId);
+    return items.map((r, i) => ({
+      rentalId: r.id,
+      checkoutId: r.checkoutId,
+      invoiceNumber: r.invoiceNumber,
+      status: r.status,
+      brandId: r.brandId,
+      slotId: r.slotId,
+      slotNumber: i + 1,
+      machineId: r.machineId,
+      machineDisplayName: 'Máy Test',
+      locationName: 'Địa Điểm Test',
+      packageName: 'Gói 3 tháng',
+      durationMonths: r.durationMonths,
+      discountPercent: r.discountPercent,
+      planName: 'Bảo quản Tiêu Chuẩn',
+      storageMonthlyPrice: r.storageMonthlyPrice,
+      storageCoveragePercent: r.storageCoveragePercent,
+      storageCoverageCap: r.storageCoverageCap,
+      monthlyRentPrice: r.monthlyRentPrice,
+      rentAmount: r.rentAmount,
+      storageAmount: r.storageAmount,
+      graceFeeAmount: r.graceFeeAmount,
+      totalAmount: r.totalAmount,
+      currency: r.currency,
+      holdExpiresAt: r.holdExpiresAt,
+      paidAt: r.paidAt,
+      startsAt: r.startsAt,
+      endsAt: r.endsAt,
+      swappedFromSlotId: r.swappedFromSlotId,
+      swappedAt: r.swappedAt,
+    }));
+  }
+
+  async findAnnexAcceptance(checkoutId: string) {
+    return this.annexAcceptances.get(checkoutId) ?? null;
+  }
+
+  async insertAnnexAcceptance(params: {
+    brandId: string;
+    agreementVersionId: string;
+    rentalCheckoutId: string;
+    acceptedBy: string;
+    contentHash: string;
+    ipAddress: string;
+    userAgent: string | null;
+  }) {
+    const existing = this.annexAcceptances.get(params.rentalCheckoutId);
+    if (existing) return { acceptance: existing, created: false };
+    const acceptance: AgreementAcceptanceRecord = {
+      id: `annex-acc-${this.annexAcceptances.size + 1}`,
+      brandId: params.brandId,
+      acceptedBy: params.acceptedBy,
+      kind: 'ANNEX',
+      agreementVersionId: params.agreementVersionId,
+      rentalCheckoutId: params.rentalCheckoutId,
+      contentHash: params.contentHash,
+      acceptedAt: new Date(),
+    };
+    this.annexAcceptances.set(params.rentalCheckoutId, acceptance);
+    return { acceptance, created: true };
+  }
+
+  async lockCheckoutById(id: string) {
+    return this.findCheckoutRecordById(id);
+  }
+
+  async swapSlotTx(params: {
+    rentalId: string;
+    brandId: string;
+    targetSlotId: string;
+    now: Date;
+    swapWindowHours: number;
+  }) {
+    const rental = this.rentals.find((r) => r.id === params.rentalId);
+    if (!rental || rental.brandId !== params.brandId) return { notFound: true as const };
+
+    if (params.targetSlotId === 'slot-nonexistent') return { notFound: true as const };
+    if (params.targetSlotId === rental.slotId)
+      return { notAllowed: 'slt.slotSwapNotAllowed' as const };
+
+    const targetMachine = this.slotMachines.get(params.targetSlotId) ?? 'machine-1';
+    if (targetMachine !== rental.machineId)
+      return { notAllowed: 'slt.slotSwapDifferentMachine' as const };
+
+    const targetPrice = this.slotPrices.get(params.targetSlotId) ?? '1000000.0000';
+    if (Number(targetPrice) !== Number(rental.monthlyRentPrice))
+      return { notAllowed: 'slt.slotSwapDifferentPrice' as const };
+
+    if (rental.swappedFromSlotId !== null)
+      return { notAllowed: 'slt.slotSwapAlreadySwapped' as const };
+    if (rental.status !== 'DRAFT') return { notAllowed: 'slt.slotSwapNotDraft' as const };
+    if (!rental.paidAt) return { notAllowed: 'slt.slotSwapUnpaid' as const };
+
+    const windowMs = params.swapWindowHours * 3600 * 1000;
+    if (params.now.getTime() - new Date(rental.paidAt).getTime() > windowMs) {
+      return { notAllowed: 'slt.slotSwapTimeExpired' as const };
+    }
+
+    if (this.activeBottlesOnSlots.has(rental.slotId)) {
+      return { notAllowed: 'slt.slotSwapBottleInstalled' as const };
+    }
+
+    if (this.occupiedSlots.has(params.targetSlotId)) {
+      return { occupied: true as const };
+    }
+
+    const updated: SlotRentalRecord = {
+      ...rental,
+      slotId: params.targetSlotId,
+      swappedFromSlotId: rental.slotId,
+      swappedAt: params.now,
+    };
+    const index = this.rentals.findIndex((r) => r.id === rental.id);
+    this.rentals[index] = updated;
+
+    return { success: true as const, updated };
+  }
+
   async createCheckoutTx(params: {
     brandId: string;
     createdBy: string;
     holdExpiresAt: Date;
     totalAmount: string;
+    agreementVersionId?: string;
+    maxHeldSlots?: number;
     items: CheckoutCreateItemData[];
   }) {
+    if (params.maxHeldSlots !== undefined) {
+      const currentHeld = this.rentals.filter(
+        (r) =>
+          r.brandId === params.brandId &&
+          r.status === 'DRAFT' &&
+          r.paidAt === null &&
+          r.cancelledAt === null &&
+          r.holdExpiresAt &&
+          r.holdExpiresAt.getTime() > Date.now(),
+      ).length;
+      if (currentHeld + params.items.length > params.maxHeldSlots) {
+        return { holdLimitReached: true as const };
+      }
+    }
+
     const checkoutId = `co-${Date.now()}`;
     const newRentals: SlotRentalRecord[] = params.items.map((item, index) => {
       const rec = rental(`r-${Date.now()}-${index}`, {
@@ -257,18 +431,22 @@ class FakeSltQueries {
 
     this.rentals.push(...newRentals);
 
+    const checkout: RentalCheckoutRecord = {
+      id: checkoutId,
+      brandId: params.brandId,
+      currency: 'VND',
+      totalAmount: params.totalAmount,
+      holdExpiresAt: params.holdExpiresAt,
+      paidAt: null,
+      cancelledAt: null,
+      createdBy: params.createdBy,
+      createdAt: new Date(),
+      agreementVersionId: params.agreementVersionId ?? null,
+    };
+    this.checkouts.set(checkoutId, checkout);
+
     return {
-      checkout: {
-        id: checkoutId,
-        brandId: params.brandId,
-        currency: 'VND',
-        totalAmount: params.totalAmount,
-        holdExpiresAt: params.holdExpiresAt,
-        paidAt: null,
-        cancelledAt: null,
-        createdBy: params.createdBy,
-        createdAt: new Date(),
-      },
+      checkout,
       items: newRentals,
     };
   }
@@ -338,36 +516,93 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
   let queries: FakeSltQueries;
   let catalogQueries: FakeCatalogQueries;
   let service: SltService;
+  let audits: Array<Record<string, unknown>>;
 
   beforeEach(() => {
     queries = new FakeSltQueries();
     catalogQueries = new FakeCatalogQueries();
     catalogQueries.packages = [pkg('pkg-1', true)];
     catalogQueries.plans = [plan('plan-1', true)];
+    audits = [];
+
+    const audit = {
+      record: async (entry: Record<string, unknown>) => {
+        audits.push(entry);
+      },
+      log: async (entry: Record<string, unknown>) => {
+        audits.push(entry);
+      },
+    };
 
     const mchQueries = {
       findSlotById: async (id: string) => {
-        if (id === 'slot-closed') return { id, monthlyRentPrice: null, currentRentalId: null };
+        if (id === 'slot-closed')
+          return { id, machineId: 'machine-1', monthlyRentPrice: null, currentRentalId: null };
         if (id === 'slot-occupied')
-          return { id, monthlyRentPrice: '1000000.0000', currentRentalId: 'r-occ' };
-        return { id, monthlyRentPrice: '1000000.0000', currentRentalId: null };
+          return {
+            id,
+            machineId: 'machine-1',
+            monthlyRentPrice: '1000000.0000',
+            currentRentalId: 'r-occ',
+          };
+        if (id === 'slot-diff-mch')
+          return {
+            id,
+            machineId: 'machine-diff',
+            monthlyRentPrice: '1000000.0000',
+            currentRentalId: null,
+          };
+        if (id === 'slot-diff-price')
+          return {
+            id,
+            machineId: 'machine-1',
+            monthlyRentPrice: '2000000.0000',
+            currentRentalId: null,
+          };
+        return {
+          id,
+          machineId: 'machine-1',
+          monthlyRentPrice: '1000000.0000',
+          currentRentalId: null,
+        };
       },
     } as unknown as MchQueries;
 
-    const audit = { log: async () => {} } as unknown as AuditService;
+    const fakeDb = {
+      transaction: () => ({
+        execute: async (fn: (tx: any) => Promise<any>) => fn({}),
+      }),
+    };
+    const fakeClock = { now: () => new Date('2026-10-15T10:00:00Z') };
+    const paymentService = {
+      findPendingIntent: async () => null,
+      createPending: async (params: any) => ({
+        paymentId: 'pay-1',
+        amount: params.amount,
+        currency: params.currency,
+        status: 'PENDING',
+        checkoutUrl: 'https://pay.test/1',
+        qrPayload: 'qr-test',
+      }),
+    };
     const fakeConfig = {
-      constraint: (name: string) =>
-        name === 'RENTAL_MAX_STOCKING_DAYS' ? 30 : name === 'RENTAL_CHECKOUT_HOLD_MIN' ? 15 : 0,
+      constraint: (name: string) => {
+        if (name === 'RENTAL_MAX_STOCKING_DAYS') return 30;
+        if (name === 'RENTAL_CHECKOUT_HOLD_MIN') return 15;
+        if (name === 'BRAND_MAX_HELD_SLOTS') return 5;
+        if (name === 'SLOT_SWAP_WINDOW_HOURS') return 48;
+        return 0;
+      },
     };
 
     service = new SltService(
       queries as unknown as SltQueries,
       catalogQueries as unknown as CatalogQueries,
       mchQueries,
-      audit,
-      {} as never,
-      { now: () => new Date() } as never,
-      {} as never,
+      audit as never,
+      paymentService as never,
+      fakeClock as never,
+      fakeDb as never,
       fakeConfig as never,
     );
   });
@@ -618,6 +853,291 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
     queries.currentAgreement = prev;
   });
+
+  // -------------------------------------------------------------------------------------
+  // Task 5 tests: FR-SLT-56 (Hold limit), FR-SLT-50 (Annex), FR-SLT-55 (Swap slot)
+  // -------------------------------------------------------------------------------------
+
+  describe('FR-SLT-56: Giới hạn tổng số slot được giữ chỗ cùng thời điểm (BRAND_MAX_HELD_SLOTS = 5)', () => {
+    it('test_FR_SLT_56_brand_max_held_slots_limit — từ chối khi vượt 5 slot giữ chỗ', async () => {
+      // Giả lập thương hiệu đã có 4 slot chưa thanh toán đang giữ chỗ
+      const futureHold = new Date(Date.now() + 15 * 60 * 1000);
+      for (let i = 0; i < 4; i++) {
+        queries.rentals.push(
+          rental(`r-held-${i}`, {
+            brandId: BRAND_A,
+            status: 'DRAFT',
+            paidAt: null,
+            cancelledAt: null,
+            holdExpiresAt: futureHold,
+          }),
+        );
+      }
+
+      // Tạo thêm 2 slot -> tổng 6 > 5 -> bị từ chối 409 HOLD_LIMIT_REACHED
+      await expect(
+        service.createCheckout(
+          brandAdmin,
+          { kind: 'BRAND', brandId: BRAND_A },
+          {
+            items: [
+              { slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+              { slotId: 'slot-2', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' },
+            ],
+          },
+        ),
+      ).rejects.toMatchObject({
+        code: 'HOLD_LIMIT_REACHED',
+      });
+
+      // Tạo thêm 1 slot -> tổng 5 <= 5 -> thành công
+      const checkout = await service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      );
+      expect(checkout.id).toBeTruthy();
+    });
+  });
+
+  describe('FR-SLT-50: Phụ lục điều khoản cho từng phiên thanh toán', () => {
+    it('test_FR_SLT_50_generate_checkout_annex — sinh phụ lục xác định và kiểm tra hash', async () => {
+      // Tạo một checkout
+      const checkout = await service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      );
+
+      // Lấy phụ lục
+      const annex = await service.getCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+      expect(annex.checkoutId).toBe(checkout.id);
+      expect(annex.agreementVersionId).toBe('ag-1');
+      expect(annex.content).toContain('PHỤ LỤC HỢP ĐỒNG THUÊ SLOT KIOSK NƯỚC HOA');
+      expect(annex.content).toContain('Mã phiên thanh toán: ' + checkout.id);
+      expect(annex.acceptance).toBeNull();
+
+      // Hash xác định
+      const expectedHash = createHash('sha256').update(annex.content, 'utf8').digest('hex');
+      expect(annex.contentHash).toBe(expectedHash);
+
+      // Lấy lại phụ lục cho cùng hash (AC1: xác định)
+      const annex2 = await service.getCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+      expect(annex2.contentHash).toBe(annex.contentHash);
+
+      // Thương hiệu khác gọi -> 403 FORBIDDEN_SCOPE
+      await expect(
+        service.getCheckoutAnnex(brandAdmin, { kind: 'BRAND', brandId: BRAND_B }, checkout.id),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+    });
+
+    it('test_FR_SLT_50_accept_checkout_annex — đồng ý phụ lục hợp lệ và idempotent', async () => {
+      const checkout = await service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      );
+
+      const annex = await service.getCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+
+      // Hash sai -> 400 VALIDATION_ERROR
+      await expect(
+        service.acceptCheckoutAnnex(
+          brandAdmin,
+          { kind: 'BRAND', brandId: BRAND_A },
+          checkout.id,
+          { contentHash: 'wronghash'.padEnd(64, '0') },
+          { ip: '127.0.0.1', userAgent: 'test' },
+        ),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+      // Đồng ý thành công -> 201 (created = true)
+      const res1 = await service.acceptCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+        { contentHash: annex.contentHash },
+        { ip: '127.0.0.1', userAgent: 'test' },
+      );
+      expect(res1.created).toBe(true);
+      expect(res1.body.kind).toBe('ANNEX');
+      expect(res1.body.rentalCheckoutId).toBe(checkout.id);
+
+      // Gọi lại -> 200 (created = false, trả lại bản ghi cũ)
+      const res2 = await service.acceptCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+        { contentHash: annex.contentHash },
+        { ip: '127.0.0.1', userAgent: 'test' },
+      );
+      expect(res2.created).toBe(false);
+      expect(res2.body.id).toBe(res1.body.id);
+
+      // getCheckoutAnnex giờ trả kèm acceptance
+      const annexAfter = await service.getCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+      expect(annexAfter.acceptance).not.toBeNull();
+      expect(annexAfter.acceptance!.id).toBe(res1.body.id);
+    });
+
+    it('test_FR_SLT_50_payment_requires_annex_acceptance — chặn thanh toán khi chưa đồng ý phụ lục', async () => {
+      const checkout = await service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        {
+          items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }],
+        },
+      );
+
+      // Chưa đồng ý phụ lục -> 403 AGREEMENT_NOT_ACCEPTED (AC2)
+      await expect(
+        service.payCheckout(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, checkout.id),
+      ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+
+      // Đồng ý phụ lục
+      const annex = await service.getCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+      await service.acceptCheckoutAnnex(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+        { contentHash: annex.contentHash },
+        { ip: '127.0.0.1', userAgent: 'test' },
+      );
+
+      // Thanh toán thành công -> trả payment intent
+      const payment = await service.payCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        checkout.id,
+      );
+      expect(payment.paymentId).toBe('pay-1');
+      expect(payment.status).toBe('PENDING');
+    });
+  });
+
+  describe('FR-SLT-55: Đổi slot trong cùng máy sau khi mua gói', () => {
+    it('test_FR_SLT_55_swap_slot_success — đổi slot hợp lệ trong 48 giờ', async () => {
+      const paidAt = new Date('2026-10-15T08:00:00Z'); // 2 giờ trước (< 48h)
+      const r = rental('r-swap-1', {
+        slotId: 'slot-1',
+        machineId: 'machine-1',
+        monthlyRentPrice: '1000000.0000',
+        status: 'DRAFT',
+        paidAt,
+      });
+      queries.rentals.push(r);
+
+      const swapped = await service.swapSlot(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        r.id,
+        'slot-2',
+      );
+      expect(swapped.id).toBe(r.id);
+      expect(swapped.slotId).toBe('slot-2');
+      expect(swapped.swappedFromSlotId).toBe('slot-1');
+      expect(swapped.swappedAt).toBeTruthy();
+    });
+
+    it('test_FR_SLT_55_swap_slot_rejected_after_window — từ chối khi quá 48 giờ', async () => {
+      const paidAt = new Date('2026-10-10T08:00:00Z'); // 5 ngày trước (> 48h so với 2026-10-15)
+      const r = rental('r-swap-old', {
+        slotId: 'slot-1',
+        machineId: 'machine-1',
+        monthlyRentPrice: '1000000.0000',
+        status: 'DRAFT',
+        paidAt,
+      });
+      queries.rentals.push(r);
+
+      await expect(
+        service.swapSlot(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, r.id, 'slot-2'),
+      ).rejects.toMatchObject({ code: 'SLOT_SWAP_NOT_ALLOWED' });
+    });
+
+    it('test_FR_SLT_55_swap_slot_rejected_if_already_swapped — từ chối khi đã đổi 1 lần', async () => {
+      const paidAt = new Date('2026-10-15T08:00:00Z');
+      const r = rental('r-swapped-once', {
+        slotId: 'slot-2',
+        machineId: 'machine-1',
+        monthlyRentPrice: '1000000.0000',
+        status: 'DRAFT',
+        paidAt,
+        swappedFromSlotId: 'slot-1',
+        swappedAt: new Date('2026-10-15T09:00:00Z'),
+      });
+      queries.rentals.push(r);
+
+      await expect(
+        service.swapSlot(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, r.id, 'slot-1'),
+      ).rejects.toMatchObject({ code: 'SLOT_SWAP_NOT_ALLOWED' });
+    });
+
+    it('test_FR_SLT_55_swap_slot_rejected_if_diff_price_or_machine — từ chối khác máy hoặc khác giá', async () => {
+      const paidAt = new Date('2026-10-15T08:00:00Z');
+      const r = rental('r-swap-diff', {
+        slotId: 'slot-1',
+        machineId: 'machine-1',
+        monthlyRentPrice: '1000000.0000',
+        status: 'DRAFT',
+        paidAt,
+      });
+      queries.rentals.push(r);
+
+      // Khác máy
+      await expect(
+        service.swapSlot(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, r.id, 'slot-diff-mch'),
+      ).rejects.toMatchObject({ code: 'SLOT_SWAP_NOT_ALLOWED' });
+
+      // Khác giá niêm yết
+      await expect(
+        service.swapSlot(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, r.id, 'slot-diff-price'),
+      ).rejects.toMatchObject({ code: 'SLOT_SWAP_NOT_ALLOWED' });
+    });
+
+    it('test_FR_SLT_55_swap_slot_rejected_if_slot_occupied — từ chối khi slot đích đã bị giữ', async () => {
+      const paidAt = new Date('2026-10-15T08:00:00Z');
+      const r = rental('r-swap-occ', {
+        slotId: 'slot-1',
+        machineId: 'machine-1',
+        monthlyRentPrice: '1000000.0000',
+        status: 'DRAFT',
+        paidAt,
+      });
+      queries.rentals.push(r);
+      queries.occupiedSlots.add('slot-2');
+
+      await expect(
+        service.swapSlot(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, r.id, 'slot-2'),
+      ).rejects.toMatchObject({ code: 'SLOT_OCCUPIED' });
+    });
+  });
 });
 
 // -------------------------------------------------------------------------------------
@@ -760,6 +1280,7 @@ function checkoutRecord(
     cancelledAt: null,
     createdBy: 'user-1',
     createdAt: new Date('2026-10-01T00:00:00Z'),
+    agreementVersionId: null,
     ...overrides,
   };
 }

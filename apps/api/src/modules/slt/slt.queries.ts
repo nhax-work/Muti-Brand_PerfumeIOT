@@ -8,6 +8,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import type { MessageKey } from '@scentstation/i18n';
 import { sql, type Expression, type Kysely, type SqlBool, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { SlotRentalStatus } from '../../shared/db/types.generated.js';
@@ -67,6 +68,9 @@ export interface SlotRentalRecord {
   readonly paidAt: Date | null;
   readonly cancelledAt: Date | null;
   readonly createdAt: Date;
+  /** Slot cũ khi hóa đơn đã đổi slot (FR-SLT-55). Khác NULL nghĩa là đã dùng lượt đổi duy nhất. */
+  readonly swappedFromSlotId: string | null;
+  readonly swappedAt: Date | null;
 }
 
 export interface SlotRentalFilter {
@@ -117,6 +121,8 @@ export interface RentalCheckoutRecord {
   readonly cancelledAt: Date | null;
   readonly createdBy: string;
   readonly createdAt: Date;
+  /** Hợp đồng khung hiện hành lúc tạo phiên (ADR-0013). Null với phiên trước ADR-0013. */
+  readonly agreementVersionId: string | null;
 }
 
 /** FR-SLT-48 (ADR-0013) */
@@ -171,6 +177,8 @@ export interface RentalInvoiceDetailRecord {
   readonly paidAt: Date | null;
   readonly startsAt: Date;
   readonly endsAt: Date;
+  readonly swappedFromSlotId: string | null;
+  readonly swappedAt: Date | null;
 }
 
 export interface CheckoutCreateItemInput {
@@ -279,6 +287,8 @@ export class SltQueries {
         'sr.paid_at',
         'sr.starts_at',
         'sr.ends_at',
+        'sr.swapped_from_slot_id',
+        'sr.swapped_at',
       ])
       .where('sr.id', '=', id)
       .where(brandScopedByColumn(scope, 'sr.brand_id'))
@@ -313,7 +323,92 @@ export class SltQueries {
       paidAt: row.paid_at,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
+      swappedFromSlotId: row.swapped_from_slot_id,
+      swappedAt: row.swapped_at,
     };
+  }
+
+  /**
+   * FR-SLT-50 (ADR-0013): Lấy danh sách chi tiết hóa đơn của một phiên để sinh phụ lục.
+   */
+  async findInvoiceDetailsByCheckoutId(
+    checkoutId: string,
+    executor: Executor = this.db,
+  ): Promise<RentalInvoiceDetailRecord[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .innerJoin('machines as m', 'm.id', 'ms.machine_id')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
+      .leftJoin('rental_packages as rp', 'rp.id', 'sr.rental_package_id')
+      .leftJoin('storage_plans as sp', 'sp.id', 'sr.storage_plan_id')
+      .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+      .select([
+        'sr.id as rental_id',
+        'sr.checkout_id',
+        'sr.invoice_number',
+        'sr.status',
+        'sr.brand_id',
+        'sr.slot_id',
+        'ms.slot_number',
+        'ms.machine_id',
+        'm.display_name as machine_display_name',
+        'l.name as location_name',
+        'rp.name as package_name',
+        'sr.duration_months',
+        'sr.discount_percent',
+        'sp.name as plan_name',
+        'sr.storage_monthly_price',
+        'sr.storage_coverage_percent',
+        'sr.storage_coverage_cap',
+        'sr.monthly_rent_price',
+        'sr.rent_amount',
+        'sr.storage_amount',
+        'sr.grace_fee_amount',
+        'sr.total_amount',
+        'sr.currency',
+        'rc.hold_expires_at',
+        'sr.paid_at',
+        'sr.starts_at',
+        'sr.ends_at',
+        'sr.swapped_from_slot_id',
+        'sr.swapped_at',
+      ])
+      .where('sr.checkout_id', '=', checkoutId)
+      .orderBy('ms.slot_number', 'asc')
+      .execute();
+
+    return rows.map((row) => ({
+      rentalId: row.rental_id,
+      checkoutId: row.checkout_id,
+      invoiceNumber: row.invoice_number,
+      status: row.status,
+      brandId: row.brand_id,
+      slotId: row.slot_id,
+      slotNumber: row.slot_number,
+      machineId: row.machine_id,
+      machineDisplayName: row.machine_display_name,
+      locationName: row.location_name,
+      packageName: row.package_name,
+      durationMonths: row.duration_months,
+      discountPercent: row.discount_percent,
+      planName: row.plan_name,
+      storageMonthlyPrice: row.storage_monthly_price,
+      storageCoveragePercent: row.storage_coverage_percent,
+      storageCoverageCap: row.storage_coverage_cap,
+      monthlyRentPrice: row.monthly_rent_price,
+      rentAmount: row.rent_amount,
+      storageAmount: row.storage_amount,
+      graceFeeAmount: row.grace_fee_amount,
+      totalAmount: row.total_amount,
+      currency: row.currency,
+      holdExpiresAt: row.hold_expires_at,
+      paidAt: row.paid_at,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      swappedFromSlotId: row.swapped_from_slot_id,
+      swappedAt: row.swapped_at,
+    }));
   }
 
   async findCheckoutById(
@@ -344,6 +439,7 @@ export class SltQueries {
         cancelledAt: checkoutRow.cancelled_at,
         createdBy: checkoutRow.created_by,
         createdAt: checkoutRow.created_at,
+        agreementVersionId: checkoutRow.agreement_version_id ?? null,
       },
       items: rentalRows.map(toRecord),
     };
@@ -352,6 +448,7 @@ export class SltQueries {
   /**
    * Tạo phiên thanh toán và hóa đơn DRAFT trong một transaction.
    * Tất cả hoặc không có gì: nếu bất kỳ slot nào đang bị giữ chỗ / đã có hóa đơn -> trả `occupied: true`.
+   * Nếu vượt quá BRAND_MAX_HELD_SLOTS (FR-SLT-56) -> trả `holdLimitReached: true`.
    */
   async createCheckoutTx(params: {
     readonly brandId: string;
@@ -360,8 +457,13 @@ export class SltQueries {
     readonly totalAmount: string;
     /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
     readonly agreementVersionId?: string;
+    readonly maxHeldSlots?: number;
     readonly items: CheckoutCreateItemData[];
-  }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
+  }): Promise<
+    | { checkout: RentalCheckoutRecord; items: SlotRentalRecord[] }
+    | { occupied: true }
+    | { holdLimitReached: true }
+  > {
     try {
       return await this.insertCheckout(params);
     } catch (error) {
@@ -380,9 +482,36 @@ export class SltQueries {
     readonly totalAmount: string;
     /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
     readonly agreementVersionId?: string;
+    readonly maxHeldSlots?: number;
     readonly items: CheckoutCreateItemData[];
-  }): Promise<{ checkout: RentalCheckoutRecord; items: SlotRentalRecord[] } | { occupied: true }> {
+  }): Promise<
+    | { checkout: RentalCheckoutRecord; items: SlotRentalRecord[] }
+    | { occupied: true }
+    | { holdLimitReached: true }
+  > {
     return this.db.transaction().execute(async (tx) => {
+      // FR-SLT-56 (ADR-0014): Khóa advisory theo thương hiệu để chống race condition giữ chỗ
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${'brand_hold_slots:' + params.brandId}))`.execute(
+        tx,
+      );
+
+      if (params.maxHeldSlots !== undefined) {
+        const heldRow = await tx
+          .selectFrom('slot_rentals as sr')
+          .innerJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+          .select((eb) => eb.fn.count<string>('sr.id').as('count'))
+          .where('rc.brand_id', '=', params.brandId)
+          .where('rc.paid_at', 'is', null)
+          .where('rc.cancelled_at', 'is', null)
+          .where('rc.hold_expires_at', '>', new Date())
+          .executeTakeFirstOrThrow();
+
+        const currentHeld = Number(heldRow.count);
+        if (currentHeld + params.items.length > params.maxHeldSlots) {
+          return { holdLimitReached: true };
+        }
+      }
+
       const slotIds = params.items.map((i) => i.slotId);
 
       // Chống chồng lấn: Kiểm tra bất kỳ slot nào đã có rental blocking status
@@ -464,6 +593,7 @@ export class SltQueries {
           cancelledAt: checkoutRow.cancelled_at,
           createdBy: checkoutRow.created_by,
           createdAt: checkoutRow.created_at,
+          agreementVersionId: checkoutRow.agreement_version_id ?? null,
         },
         items: rentalRows.map(toRecord),
       };
@@ -546,6 +676,7 @@ export class SltQueries {
       cancelledAt: row.cancelled_at,
       createdBy: row.created_by,
       createdAt: row.created_at,
+      agreementVersionId: row.agreement_version_id ?? null,
     };
   }
 
@@ -571,6 +702,7 @@ export class SltQueries {
       cancelledAt: row.cancelled_at,
       createdBy: row.created_by,
       createdAt: row.created_at,
+      agreementVersionId: row.agreement_version_id ?? null,
     };
   }
 
@@ -799,6 +931,191 @@ export class SltQueries {
     return { acceptance: existing!, created: false };
   }
 
+  /** FR-SLT-50 (ADR-0013): lần thương hiệu đồng ý phụ lục của một phiên thanh toán. */
+  async findAnnexAcceptance(
+    rentalCheckoutId: string,
+    executor: Executor = this.db,
+  ): Promise<AgreementAcceptanceRecord | null> {
+    const row = await executor
+      .selectFrom('agreement_acceptances')
+      .select(AGREEMENT_ACCEPTANCE_COLUMNS)
+      .where('rental_checkout_id', '=', rentalCheckoutId)
+      .where('kind', '=', 'ANNEX')
+      .executeTakeFirst();
+    return row ? toAgreementAcceptance(row) : null;
+  }
+
+  /**
+   * FR-SLT-50 (ADR-0013): ghi bằng chứng đồng ý phụ lục. Bảng chỉ cho thêm mới; hai yêu cầu
+   * đồng thời thì uq_acceptance_annex giữ một dòng — `created = false` trả lại dòng đã có.
+   */
+  async insertAnnexAcceptance(
+    params: {
+      brandId: string;
+      agreementVersionId: string;
+      rentalCheckoutId: string;
+      acceptedBy: string;
+      contentHash: string;
+      ipAddress: string;
+      userAgent: string | null;
+    },
+    executor: Executor = this.db,
+  ): Promise<{ acceptance: AgreementAcceptanceRecord; created: boolean }> {
+    const row = await executor
+      .insertInto('agreement_acceptances')
+      .values({
+        brand_id: params.brandId,
+        agreement_version_id: params.agreementVersionId,
+        rental_checkout_id: params.rentalCheckoutId,
+        accepted_by: params.acceptedBy,
+        kind: 'ANNEX',
+        content_hash: params.contentHash,
+        ip_address: params.ipAddress,
+        user_agent: params.userAgent,
+      })
+      .onConflict((oc) => oc.column('rental_checkout_id').where('kind', '=', 'ANNEX').doNothing())
+      .returning(AGREEMENT_ACCEPTANCE_COLUMNS)
+      .executeTakeFirst();
+    if (row) return { acceptance: toAgreementAcceptance(row), created: true };
+
+    const existing = await this.findAnnexAcceptance(params.rentalCheckoutId, executor);
+    return { acceptance: existing!, created: false };
+  }
+
+  /**
+   * FR-SLT-55 (ADR-0014): Đổi hóa đơn sang slot khác trong cùng máy khi mua nhầm.
+   * Chạy trong transaction với SELECT ... FOR UPDATE trên cả hai slot và hóa đơn.
+   */
+  async swapSlotTx(params: {
+    rentalId: string;
+    brandId: string;
+    targetSlotId: string;
+    now: Date;
+    swapWindowHours: number;
+  }): Promise<
+    | { success: true; updated: SlotRentalRecord }
+    | { notFound: true }
+    | { notAllowed: MessageKey }
+    | { occupied: true }
+  > {
+    return this.db.transaction().execute(async (tx) => {
+      const rental = await tx
+        .selectFrom('slot_rentals as sr')
+        .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+        .selectAll('sr')
+        .select(['ms.machine_id', 'ms.slot_number'])
+        .where('sr.id', '=', params.rentalId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!rental || rental.brand_id !== params.brandId) {
+        return { notFound: true };
+      }
+
+      if (params.targetSlotId === rental.slot_id) {
+        return { notAllowed: 'slt.slotSwapNotAllowed' };
+      }
+
+      // Khóa cả hai slot theo thứ tự UUID tăng dần để chống deadlock khi có các giao dịch hoán đổi chéo nhau
+      const slotIds = [rental.slot_id, params.targetSlotId].sort();
+      const lockedSlots = await tx
+        .selectFrom('machine_slots')
+        .selectAll()
+        .where('id', 'in', slotIds)
+        .orderBy('id', 'asc')
+        .forUpdate()
+        .execute();
+
+      const currentSlot = lockedSlots.find((s) => s.id === rental.slot_id);
+      const targetSlot = lockedSlots.find((s) => s.id === params.targetSlotId);
+
+      if (!targetSlot || !currentSlot) {
+        return { notFound: true };
+      }
+
+      if (targetSlot.machine_id !== rental.machine_id) {
+        return { notAllowed: 'slt.slotSwapDifferentMachine' };
+      }
+
+      if (
+        targetSlot.monthly_rent_price === null ||
+        rental.monthly_rent_price === null ||
+        Number(targetSlot.monthly_rent_price) !== Number(rental.monthly_rent_price)
+      ) {
+        return { notAllowed: 'slt.slotSwapDifferentPrice' };
+      }
+
+      if (rental.swapped_from_slot_id !== null) {
+        return { notAllowed: 'slt.slotSwapAlreadySwapped' };
+      }
+
+      if (rental.status !== 'DRAFT') {
+        return { notAllowed: 'slt.slotSwapNotDraft' };
+      }
+
+      if (!rental.paid_at) {
+        return { notAllowed: 'slt.slotSwapUnpaid' };
+      }
+
+      const windowMs = params.swapWindowHours * 3600 * 1000;
+      if (params.now.getTime() - new Date(rental.paid_at).getTime() > windowMs) {
+        return { notAllowed: 'slt.slotSwapTimeExpired' };
+      }
+
+      if (currentSlot.active_bottle_id) {
+        return { notAllowed: 'slt.slotSwapBottleInstalled' };
+      }
+
+      if (targetSlot.status !== 'AVAILABLE' || targetSlot.active_bottle_id !== null) {
+        return { occupied: true };
+      }
+
+      const blocking = await tx
+        .selectFrom('slot_rentals')
+        .select('id')
+        .where('slot_id', '=', params.targetSlotId)
+        .where('status', 'in', BLOCKING_STATUSES)
+        .executeTakeFirst();
+
+      if (blocking) {
+        return { occupied: true };
+      }
+
+      // Cập nhật slot mới cho hóa đơn, lưu dấu slot cũ (FR-SLT-55, ADR-0014)
+      await tx
+        .updateTable('slot_rentals')
+        .set({
+          slot_id: params.targetSlotId,
+          swapped_from_slot_id: rental.slot_id,
+          swapped_at: params.now,
+          updated_at: params.now,
+        })
+        .where('id', '=', params.rentalId)
+        .execute();
+
+      // Đảm bảo S1 ở trạng thái AVAILABLE
+      await tx
+        .updateTable('machine_slots')
+        .set({
+          status: 'AVAILABLE',
+          updated_at: params.now,
+        })
+        .where('id', '=', rental.slot_id)
+        .execute();
+
+      const updatedRow = await tx
+        .selectFrom('slot_rentals as sr')
+        .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+        .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+        .selectAll('sr')
+        .select(['ms.machine_id', 'rc.hold_expires_at'])
+        .where('sr.id', '=', params.rentalId)
+        .executeTakeFirstOrThrow();
+
+      return { success: true, updated: toRecord(updatedRow) };
+    });
+  }
+
   private base(scope: BrandScope) {
     return this.db
       .selectFrom('slot_rentals as sr')
@@ -851,6 +1168,8 @@ function toRecord(
     paidAt: row.paid_at,
     cancelledAt: row.cancelled_at,
     createdAt: row.created_at,
+    swappedFromSlotId: row.swapped_from_slot_id ?? null,
+    swappedAt: row.swapped_at ?? null,
   };
 }
 

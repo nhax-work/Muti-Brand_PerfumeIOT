@@ -3277,6 +3277,12 @@ export interface components {
             businessLicenseNumber?: string | null;
             /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả nguyên văn qua API. */
             hasPayoutAccount?: boolean;
+            /** @description Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho Super Admin đối soát và Brand Admin xem lại. */
+            payoutAccountMasked?: {
+                bankCode?: string;
+                maskedAccountNumber?: string;
+                accountHolder?: string;
+            } | null;
             /**
              * Format: date-time
              * @description Super Admin đã xác minh pháp nhân (FR-BND-10). Null thì kỳ chi trả không chuyển PAID được (BRAND_NOT_VERIFIED).

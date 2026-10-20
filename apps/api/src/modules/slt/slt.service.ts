@@ -4,6 +4,7 @@
  * Tầng nghiệp vụ độc lập hoàn toàn với HTTP (QT2, ADR-0003).
  */
 
+import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import type { AgreementAcceptance, AgreementCurrent, Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
@@ -24,6 +25,7 @@ import {
   type AgreementAcceptanceRecord,
   type CheckoutCreateItemData,
   type RentalCheckoutRecord,
+  type RentalInvoiceDetailRecord,
   type SlotRentalFilter,
   type SlotRentalRecord,
 } from './slt.queries.js';
@@ -33,6 +35,7 @@ type RentalCheckout = Schema<'RentalCheckout'>;
 type RentalQuote = Schema<'RentalQuote'>;
 type RentalInvoice = Schema<'RentalInvoice'>;
 type RentalPaymentIntent = Schema<'RentalPaymentIntent'>;
+type RentalCheckoutAnnex = Schema<'RentalCheckoutAnnex'>;
 
 @Injectable()
 export class SltService {
@@ -211,11 +214,15 @@ export class SltService {
       holdExpiresAt,
       totalAmount: checkoutTotal.toFixed(4),
       agreementVersionId: currentAgreement.id,
+      maxHeldSlots: this.config.constraint('BRAND_MAX_HELD_SLOTS'),
       items: itemDatas,
     });
 
     if ('occupied' in result) {
       throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
+    }
+    if ('holdLimitReached' in result) {
+      throw new AppError('HOLD_LIMIT_REACHED', 'slt.holdLimitReached');
     }
 
     const dto = toCheckoutDto(result.checkout, result.items);
@@ -240,7 +247,8 @@ export class SltService {
   ): Promise<RentalCheckout> {
     const record = await this.queries.findCheckoutById(scope, id);
     if (!record) throw notFoundFor(actor);
-    return toCheckoutDto(record.checkout, record.items);
+    const annex = await this.queries.findAnnexAcceptance(id);
+    return toCheckoutDto(record.checkout, record.items, annex?.acceptedAt ?? null);
   }
 
   /** Chủ động hủy phiên thanh toán chưa trả và giải phóng slot ngay lập tức. */
@@ -310,6 +318,14 @@ export class SltService {
           now.getTime() > checkout.holdExpiresAt.getTime()
         ) {
           throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+        }
+
+        // FR-SLT-50 (ADR-0013): Brand Admin phải đồng ý phụ lục trước khi thanh toán
+        if (checkout.agreementVersionId) {
+          const annexAcceptance = await this.queries.findAnnexAcceptance(checkout.id, tx);
+          if (!annexAcceptance) {
+            throw new AppError('AGREEMENT_NOT_ACCEPTED', 'slt.annexNotAccepted');
+          }
         }
 
         const existing = await this.payments.findPendingIntent(
@@ -564,6 +580,168 @@ export class SltService {
 
     return { created, body };
   }
+
+  /**
+   * FR-SLT-50 (ADR-0013): Lấy phụ lục tự sinh của một phiên thanh toán kèm trạng thái đồng ý.
+   * Phiên tạo trước ADR-0013 (không có agreementVersionId) trả NOT_FOUND.
+   */
+  async getCheckoutAnnex(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    checkoutId: string,
+  ): Promise<RentalCheckoutAnnex> {
+    const checkout = await this.queries.findCheckoutRecordById(checkoutId);
+    if (!checkout) throw notFoundFor(actor);
+
+    if (scope.kind === 'BRAND' && checkout.brandId !== scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    if (!checkout.agreementVersionId) {
+      throw new AppError('NOT_FOUND', 'common.notFound');
+    }
+
+    const items = await this.queries.findInvoiceDetailsByCheckoutId(checkout.id);
+    const content = buildAnnexContent(checkout, items);
+    const contentHash = createHash('sha256').update(content, 'utf8').digest('hex');
+    const acceptance = await this.queries.findAnnexAcceptance(checkout.id);
+
+    return {
+      checkoutId: checkout.id,
+      agreementVersionId: checkout.agreementVersionId,
+      content,
+      contentHash,
+      acceptance: acceptance ? toAcceptanceDto(acceptance) : null,
+    };
+  }
+
+  /**
+   * FR-SLT-50 (ADR-0013): Brand Admin đồng ý phụ lục trước khi thanh toán.
+   * Gọi lại khi đã đồng ý trả HTTP 200 cùng bản ghi cũ (created = false).
+   */
+  async acceptCheckoutAnnex(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    checkoutId: string,
+    input: { contentHash: string },
+    origin: RequestOrigin,
+  ): Promise<{ created: boolean; body: AgreementAcceptance }> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const checkout = await this.queries.findCheckoutRecordById(checkoutId);
+    if (!checkout) throw notFoundFor(actor);
+
+    if (checkout.brandId !== scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    if (!checkout.agreementVersionId) {
+      throw new AppError('NOT_FOUND', 'common.notFound');
+    }
+
+    const now = this.clock.now();
+    if (
+      checkout.paidAt !== null ||
+      checkout.cancelledAt !== null ||
+      now.getTime() > checkout.holdExpiresAt.getTime()
+    ) {
+      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    }
+
+    const existing = await this.queries.findAnnexAcceptance(checkout.id);
+    if (existing) {
+      return { created: false, body: toAcceptanceDto(existing) };
+    }
+
+    const items = await this.queries.findInvoiceDetailsByCheckoutId(checkout.id);
+    const content = buildAnnexContent(checkout, items);
+    const expectedHash = createHash('sha256').update(content, 'utf8').digest('hex');
+
+    if (input.contentHash !== expectedHash) {
+      throw invalidField('contentHash', 'slt.annexContentChanged');
+    }
+
+    const { acceptance, created } = await this.queries.insertAnnexAcceptance({
+      brandId: scope.brandId,
+      agreementVersionId: checkout.agreementVersionId,
+      rentalCheckoutId: checkout.id,
+      acceptedBy: actor.userId,
+      contentHash: expectedHash,
+      ipAddress: origin.ip ?? '0.0.0.0',
+      userAgent: origin.userAgent,
+    });
+
+    const body = toAcceptanceDto(acceptance);
+
+    if (created) {
+      await this.audit.log({
+        actorType: 'USER',
+        actorId: actor.userId,
+        brandId: scope.brandId,
+        action: 'slt.rental_checkout.annex_accepted',
+        targetType: 'RentalCheckout',
+        targetId: checkout.id,
+        sourceIp: origin.ip,
+        userAgent: origin.userAgent,
+        metadata: { checkoutId, contentHash: expectedHash },
+      });
+    }
+
+    return { created, body };
+  }
+
+  /**
+   * FR-SLT-55 (ADR-0014): Đổi hóa đơn đã thanh toán sang slot khác trong cùng máy.
+   */
+  async swapSlot(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    rentalId: string,
+    targetSlotId: string,
+  ): Promise<SlotRental> {
+    if (scope.kind !== 'BRAND' || !scope.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const rental = await this.queries.findInvoiceDetailById(scope, rentalId);
+    if (!rental) throw notFoundFor(actor);
+
+    const now = this.clock.now();
+    const swapWindowHours = this.config.constraint('SLOT_SWAP_WINDOW_HOURS');
+
+    const result = await this.queries.swapSlotTx({
+      rentalId,
+      brandId: scope.brandId,
+      targetSlotId,
+      now,
+      swapWindowHours,
+    });
+
+    if ('notFound' in result) throw notFoundFor(actor);
+    if ('occupied' in result) throw new AppError('SLOT_OCCUPIED', 'slt.slotOccupied');
+    if ('notAllowed' in result) throw new AppError('SLOT_SWAP_NOT_ALLOWED', result.notAllowed);
+
+    const dto = toDto(result.updated);
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId: scope.brandId,
+      action: 'slt.rental.slot_swapped',
+      targetType: 'SlotRental',
+      targetId: rentalId,
+      before: { slotId: rental.slotId },
+      after: {
+        slotId: targetSlotId,
+        swappedFromSlotId: rental.slotId,
+        swappedAt: now.toISOString(),
+      },
+    });
+
+    return dto;
+  }
 }
 
 function toAcceptanceDto(record: AgreementAcceptanceRecord): AgreementAcceptance {
@@ -620,10 +798,18 @@ export function toDto(r: SlotRentalRecord): SlotRental {
     paidAt: iso(r.paidAt),
     cancelledAt: iso(r.cancelledAt),
     createdAt: r.createdAt.toISOString(),
+    swappedFromSlotId: r.swappedFromSlotId,
+    swappedAt: iso(r.swappedAt),
+    nonRenewalRequestedAt: null,
+    returnMethod: null,
   };
 }
 
-function toCheckoutDto(checkout: RentalCheckoutRecord, items: SlotRentalRecord[]): RentalCheckout {
+function toCheckoutDto(
+  checkout: RentalCheckoutRecord,
+  items: SlotRentalRecord[],
+  annexAcceptedAt: Date | null = null,
+): RentalCheckout {
   const stage = checkout.paidAt ? 'PAID' : checkout.cancelledAt ? 'CANCELLED' : 'AWAITING_PAYMENT';
 
   return {
@@ -637,7 +823,55 @@ function toCheckoutDto(checkout: RentalCheckoutRecord, items: SlotRentalRecord[]
     cancelledAt: iso(checkout.cancelledAt),
     createdAt: checkout.createdAt.toISOString(),
     invoices: items.map(toDto),
+    agreementVersionId: checkout.agreementVersionId,
+    annexAcceptedAt: iso(annexAcceptedAt),
   };
+}
+
+/**
+ * FR-SLT-50 (ADR-0013): Hàm sinh nội dung phụ lục hợp đồng thuê slot chuẩn hóa, xác định.
+ */
+export function buildAnnexContent(
+  checkout: RentalCheckoutRecord,
+  items: RentalInvoiceDetailRecord[],
+): string {
+  const sorted = [...items].sort((a, b) => {
+    if (a.slotNumber !== b.slotNumber) return a.slotNumber - b.slotNumber;
+    return a.rentalId.localeCompare(b.rentalId);
+  });
+
+  const lines = [
+    `# PHỤ LỤC HỢP ĐỒNG THUÊ SLOT KIOSK NƯỚC HOA`,
+    ``,
+    `Mã phiên thanh toán: ${checkout.id}`,
+    `Mã thương hiệu: ${checkout.brandId}`,
+    `Tổng tiền: ${checkout.totalAmount} ${checkout.currency}`,
+    ``,
+    `## Danh sách slot thuê`,
+    ``,
+  ];
+
+  for (const item of sorted) {
+    lines.push(
+      `### Slot ${item.slotNumber} - Máy: ${item.machineDisplayName} (${item.locationName})`,
+    );
+    lines.push(`- Mã hóa đơn: ${item.invoiceNumber ?? item.rentalId}`);
+    lines.push(`- Gói thuê: ${item.packageName ?? 'N/A'} (${item.durationMonths ?? 0} tháng)`);
+    lines.push(`- Giá thuê niêm yết: ${item.monthlyRentPrice ?? '0'} ${item.currency}/tháng`);
+    lines.push(`- Chiết khấu: ${item.discountPercent ?? '0'}%`);
+    lines.push(`- Tiền thuê slot: ${item.rentAmount ?? '0'} ${item.currency}`);
+    lines.push(`- Gói bảo quản: ${item.planName ?? 'N/A'}`);
+    lines.push(`- Phí bảo quản: ${item.storageMonthlyPrice ?? '0'} ${item.currency}/tháng`);
+    lines.push(
+      `- Mức bồi thường tối đa: ${item.storageCoverageCap ?? '0'} ${item.currency} (${item.storageCoveragePercent ?? '0'}%)`,
+    );
+    lines.push(`- Tiền bảo quản: ${item.storageAmount ?? '0'} ${item.currency}`);
+    lines.push(`- Tỷ lệ phí ân hạn: 5% (GRACE_FEE_RATE_DEFAULT)`);
+    lines.push(`- Tổng cộng hóa đơn: ${item.totalAmount ?? '0'} ${item.currency}`);
+    lines.push(``);
+  }
+
+  return lines.join('\n');
 }
 
 function toPaymentIntentDto(

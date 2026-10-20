@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Descriptions,
+  Divider,
   Form,
   Input,
   Space,
@@ -18,7 +19,12 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
-import { type Brand, useMyBrand, useUpdateMyBrand } from './api';
+import {
+  type Brand,
+  useMyBrand,
+  useUpdateMyBrand,
+  useUpdateMyBrandLegalProfile,
+} from './api';
 
 const STATUS_LABELS: Record<Brand['status'], MessageKey> = {
   ACTIVE: 'ui.brandActive',
@@ -35,6 +41,14 @@ interface ProfileForm {
   address?: string;
 }
 
+interface LegalForm {
+  taxCode: string;
+  businessLicenseNumber?: string;
+  bankCode?: string;
+  accountNumber?: string;
+  accountHolder?: string;
+}
+
 function contactOf(brand: Brand): Record<string, string | undefined> {
   const info = (brand.contactInfo ?? {}) as Record<string, unknown>;
   const pick = (k: string) => (typeof info[k] === 'string' ? (info[k] as string) : undefined);
@@ -42,15 +56,16 @@ function contactOf(brand: Brand): Record<string, string | undefined> {
 }
 
 /**
- * Hồ sơ thương hiệu của Brand Admin (FR-BND-06): tên hiển thị trên kiosk, logo, mô tả, liên hệ. Mã
- * định danh và trạng thái chỉ đọc — thuộc Platform Super Admin. Hồ sơ pháp nhân và tài khoản nhận
- * doanh thu (FR-BND-09) là mục riêng, làm cùng kỳ chi trả (ADR-0013).
+ * Hồ sơ thương hiệu của Brand Admin (FR-BND-06, FR-BND-09): tên hiển thị trên kiosk, logo, mô tả, liên hệ.
+ * Hồ sơ pháp nhân và tài khoản nhận doanh thu (FR-BND-09, ADR-0013) được mã hóa tầng ứng dụng.
  */
 export default function BrandProfilePage() {
   const { t } = useI18n();
   const { data: brand, isLoading } = useMyBrand();
   const update = useUpdateMyBrand();
+  const updateLegal = useUpdateMyBrandLegalProfile();
   const [form] = Form.useForm<ProfileForm>();
+  const [legalForm] = Form.useForm<LegalForm>();
 
   useEffect(() => {
     if (brand) {
@@ -60,8 +75,16 @@ export default function BrandProfilePage() {
         description: brand.description ?? undefined,
         ...contactOf(brand),
       });
+
+      legalForm.setFieldsValue({
+        taxCode: brand.taxCode ?? '',
+        businessLicenseNumber: brand.businessLicenseNumber ?? undefined,
+        bankCode: brand.payoutAccountMasked?.bankCode ?? undefined,
+        accountHolder: brand.payoutAccountMasked?.accountHolder ?? undefined,
+        accountNumber: undefined,
+      });
     }
-  }, [brand, form]);
+  }, [brand, form, legalForm]);
 
   const submit = async () => {
     const v = await form.validateFields();
@@ -80,6 +103,30 @@ export default function BrandProfilePage() {
         contactInfo,
       });
       message.success(t('ui.brandSaved'));
+    } catch (error) {
+      message.error(errorMessage(error, t));
+    }
+  };
+
+  const submitLegal = async () => {
+    const v = await legalForm.validateFields();
+    try {
+      const payoutAccount =
+        v.bankCode && v.accountNumber && v.accountHolder
+          ? {
+              bankCode: v.bankCode,
+              accountNumber: v.accountNumber,
+              accountHolder: v.accountHolder,
+            }
+          : undefined;
+
+      await updateLegal.mutateAsync({
+        taxCode: v.taxCode,
+        businessLicenseNumber: v.businessLicenseNumber || undefined,
+        payoutAccount,
+      });
+      message.success(t('ui.brandSaved'));
+      legalForm.setFieldValue('accountNumber', undefined);
     } catch (error) {
       message.error(errorMessage(error, t));
     }
@@ -134,7 +181,7 @@ export default function BrandProfilePage() {
           )}
         </Card>
 
-        <Card title={t('ui.brandProfileEdit')}>
+        <Card title={t('ui.brandProfileEdit')} style={{ marginBottom: 16 }}>
           <Form form={form} layout="vertical" onFinish={() => void submit()}>
             <Form.Item
               name="name"
@@ -172,7 +219,90 @@ export default function BrandProfilePage() {
             </Button>
           </Form>
         </Card>
+
+        <Card title={t('ui.brandLegalProfile')}>
+          {brand.legalVerifiedAt ? (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="success"
+              showIcon
+              message={`${t('ui.brandLegalVerified')} — ${formatDateTime(brand.legalVerifiedAt)}`}
+            />
+          ) : (
+            <Alert
+              style={{ marginBottom: 16 }}
+              type="info"
+              showIcon
+              message={t('ui.brandLegalUnverified')}
+            />
+          )}
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="warning"
+            showIcon
+            message={t('ui.brandLegalNotice')}
+          />
+          <Form form={legalForm} layout="vertical" onFinish={() => void submitLegal()}>
+            <Form.Item
+              name="taxCode"
+              label={t('ui.brandTaxCode')}
+              extra={t('ui.brandTaxCodeHint')}
+              rules={[
+                { required: true, message: t('validation.required') },
+                { min: 10, max: 20, message: t('ui.brandTaxCodeHint') },
+              ]}
+            >
+              <Input maxLength={20} />
+            </Form.Item>
+            <Form.Item
+              name="businessLicenseNumber"
+              label={t('ui.brandBusinessLicense')}
+              rules={[{ required: true, message: t('validation.required') }]}
+            >
+              <Input maxLength={100} />
+            </Form.Item>
+
+            <Divider>{t('ui.brandPayoutAccount')}</Divider>
+
+            {brand.payoutAccountMasked && (
+              <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
+                <Descriptions.Item label={t('ui.brandPayoutAccountMasked')}>
+                  {brand.payoutAccountMasked.bankCode} ·{' '}
+                  {brand.payoutAccountMasked.maskedAccountNumber} (
+                  {brand.payoutAccountMasked.accountHolder})
+                </Descriptions.Item>
+              </Descriptions>
+            )}
+
+            <Form.Item
+              name="bankCode"
+              label={t('ui.brandBankCode')}
+              rules={[{ required: true, message: t('validation.required') }]}
+            >
+              <Input placeholder={t('ui.brandBankCodePlaceholder')} maxLength={20} />
+            </Form.Item>
+            <Form.Item
+              name="accountNumber"
+              label={t('ui.brandAccountNumber')}
+              rules={[{ required: true, message: t('validation.required') }]}
+            >
+              <Input placeholder="Nhập số tài khoản" maxLength={30} />
+            </Form.Item>
+            <Form.Item
+              name="accountHolder"
+              label={t('ui.brandAccountHolder')}
+              extra={t('ui.brandAccountHolderHint')}
+              rules={[{ required: true, message: t('validation.required') }]}
+            >
+              <Input maxLength={200} />
+            </Form.Item>
+            <Button type="primary" htmlType="submit" loading={updateLegal.isPending}>
+              {t('ui.save')}
+            </Button>
+          </Form>
+        </Card>
       </div>
     </RequireRole>
   );
 }
+

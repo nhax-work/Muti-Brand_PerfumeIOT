@@ -532,6 +532,15 @@ components:
           description: >-
             Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả
             nguyên văn qua API.
+        payoutAccountMasked:
+          type: [object, 'null']
+          description: >-
+            Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho
+            Super Admin đối soát và Brand Admin xem lại.
+          properties:
+            bankCode: { type: string, maxLength: 20 }
+            maskedAccountNumber: { type: string, maxLength: 30 }
+            accountHolder: { type: string, maxLength: 200 }
         legalVerifiedAt:
           type: [string, 'null']
           format: date-time
