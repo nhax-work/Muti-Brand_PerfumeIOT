@@ -5,7 +5,9 @@ import {
   EnvironmentOutlined,
   ExperimentOutlined,
   IdcardOutlined,
+  InboxOutlined,
   MailOutlined,
+
   RollbackOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
@@ -103,4 +105,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: <MailOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
   },
+  {
+    path: '/shipments',
+    label: 'ui.shipments',
+    icon: <InboxOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
+  },
 ];
+

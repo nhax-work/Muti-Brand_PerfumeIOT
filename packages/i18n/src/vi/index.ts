@@ -11,6 +11,12 @@ import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
 import { common } from './common.js';
+import {
+  authenticityStatus,
+  inv,
+  refillSessionStatus,
+  shipmentStatus,
+} from './inv.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
 import { ord } from './ord.js';
@@ -44,4 +50,9 @@ export const vi = {
   usr,
   ui,
   kiosk,
+  inv,
+  shipmentStatus,
+  authenticityStatus,
+  refillSessionStatus,
 } as const;
+

@@ -700,6 +700,11 @@ export class OrdService {
       if (!machine) throw new AppError('NOT_FOUND', 'ord.machineNotFound');
       assertMachineServing(machine);
 
+      // FR-INV-30 AC3 (ADR-0015): Cả máy dừng nhận đơn mới khi có phiếu nạp đang mở
+      if (await this.queries.machineHasActiveRefillSession(machine.id, tx)) {
+        throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
+      }
+
       const [offer] = await this.queries.listSlotOffers(machine.id, input.slotId, tx);
       if (!offer) throw new AppError('NOT_FOUND', 'ord.slotNotFound');
       if (!isSellable(offer)) throw new AppError('SLOT_UNAVAILABLE', 'ord.slotUnavailable');

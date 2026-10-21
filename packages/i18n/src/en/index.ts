@@ -880,7 +880,31 @@ export const en: SameKeysAs<typeof vi> = {
     noNotificationsFound: 'No notifications recorded yet.',
     filterAllChannels: 'All Channels',
     filterAllStatuses: 'All Statuses',
+    shipments: 'Shipments & Inventory',
+    shipmentDeclarations: 'Shipment Declarations',
+    inventoryBatches: 'Batches & Authenticity',
+    refillSessions: 'Refill Sessions',
+    declareShipment: 'Declare New Shipment',
+    receiveShipment: 'Receive & Audit',
+    submitAuthenticity: 'Submit Authenticity Docs',
+    approveAuthenticity: 'Approve Authenticity',
+    rejectAuthenticity: 'Reject Authenticity',
+    openRefillSession: 'Open Refill Session',
+    closeRefillSession: 'Close Refill Session',
+    declaredQuantity: 'Declared Qty',
+    receivedQuantity: 'Received Qty',
+    bottleVolume: 'Bottle Volume (ml)',
+    expectedShipDate: 'Expected Ship Date',
+    discrepancyNotes: 'Discrepancy Notes',
+    authenticityStatusLabel: 'Authenticity Status',
+    batchNumberLabel: 'Batch Number',
+    documentUrlLabel: 'Document URL',
+    documentTypeLabel: 'Document Type',
+    rejectionReasonLabel: 'Rejection Reason',
+    checklistCompletedLabel: 'Checklist completed and safety verified',
+    initialMeasuredWeightLabel: 'Initial Measured Weight (g)',
   },
+
 
   kiosk: {
     welcome: 'Welcome to ScentStation',
@@ -980,4 +1004,39 @@ export const en: SameKeysAs<typeof vi> = {
     cancelAnyway: 'Cancel anyway',
     cancelling: 'Cancelling…',
   },
+
+  inv: {
+    shipmentDeclared: 'Shipment declaration created',
+    shipmentReceived: 'Shipment receipt confirmed',
+    shipmentDiscrepancy: 'Quantity discrepancy recorded',
+    batchCreated: 'New inventory batch created',
+    batchNotApproved: 'Inventory batch authenticity has not been approved',
+    batchApproved: 'Batch authenticity approved',
+    batchRejected: 'Batch authenticity rejected',
+    authenticitySubmitted: 'Authenticity documents submitted',
+    bottleRegistered: 'Perfume bottle registered',
+    refillSessionOpened: 'Refill session opened',
+    refillSessionClosed: 'Refill session closed with checklist verified',
+    checklistRequired: 'Checklist completion is required before closing session',
+  },
+
+  shipmentStatus: {
+    DECLARED: 'Declared',
+    RECEIVED: 'Received',
+    DISCREPANCY: 'Discrepancy',
+    CANCELLED: 'Cancelled',
+  },
+
+  authenticityStatus: {
+    PENDING: 'Pending review',
+    APPROVED: 'Approved authentic',
+    REJECTED: 'Rejected',
+  },
+
+  refillSessionStatus: {
+    STARTED: 'In progress',
+    COMPLETED: 'Completed',
+    ABORTED: 'Aborted',
+  },
 };
+
