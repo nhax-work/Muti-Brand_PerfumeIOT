@@ -15,26 +15,13 @@ import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
 import { Icon } from '@/shared/ui/Icon';
+import { ProductImage } from '@/shared/ui/ProductImage';
 import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
 import { useKioskOrderFlow } from '../checkout/useKioskOrderFlow';
+import { CatalogRail } from './CatalogRail';
 import styles from './CatalogScreen.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
-
-const FALLBACK_BOTTLES: Record<number, string> = {
-  1: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBjHLKHQ-e9v8rbVauKmO7a4XdFgitH2PX04adOLTIDcdpPwTMgj-ABCxgZT3y1iVk4EkVCclPnFJrm2AP7heA3adEYnqsJsWfuHluEESKmnpcpMphfmLkxdj5oTKVTETo2E8JdzRMpvqTaHozpF27TbIsqMhy3BEIWgUjwP0FNUks_8sX00O_fphckeGjDYOqtj7WxsNLAxCBLfThMPkP3xN9K3q-NAOeoySXLnRZdVHO09viZHUTm',
-  2: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCi8kgz8yWcTDwPznpLifDSV9mqx5f3T3sYLxfM6aJ_dbkYiY_UC6j3hY7txxWfnMG_isJJ_WxlMdGt86bRV0k5TcAN7LhxMhSljyTmn-S0JL3tHi7E5tKCO0o1rDcYx1bUoCUByKyl285EKIYD9FVctJyP40qzusM13xM7ejEW6CiqwAJQ0giQD8CVUL1YFtP4SrXTwDlazB_1IZIdSpdY4fOXGMnYaHb0jli_1Dxeu02TDqO-E1Ce',
-  3: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDrwnlACE74MpP3ze5UCHx_2MWHdGE2a8EZ9tRcjojME_0ZFCpdnP8jrPGBhM6K1Mgy7p_XSRWJLkdJ_wej47ts_3-MrYMHDU42ZQVo25IJO2lIXI8_BCcJ5IMtnb3uL-ftOT32o5Bvy9EoQXsQvhVifruPsELMB_uIfnTopfCgYTTWWVGV1kCOGuW8ZvwdU1C3JUXQZcGEjkAzJriCenzlJFxWW23Nk5LJXIhwJ_DJu1i9vd1buJsL',
-  4: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDhEcCtoyj-KiT2weL0jXt1iCyGCvxYPjrqSQ1hyqIdMsULOb2OpvFNcrpU-Oaz7Qd-fcogDGELsRPoK2ByYreFQ6wn7Z3PdFRLDz9DKjfQ9vllHdOZ-0K7e9Frpr_7mvKpGnpz1lQUl-NcssHIf8GV4tORcyBPSyLHP1uvMBw8U0nv4wa9oreMxMhsc28LTVNijTDmfP30P5J3ZboqBmEG9RPa935bwAEgRRe-XEJAGJVrtJg-_BwT',
-};
-
-const FAMILIES: Record<number, string> = {
-  1: 'ORIENTAL OUD',
-  2: 'AMBRE & CUIR',
-  3: 'SOLAR FLORAL',
-  4: 'ORIENTAL WOOD',
-  5: 'FLORAL NOBLE',
-};
 
 function parseNoteValues(val: unknown): string[] {
   if (!val) return [];
@@ -58,7 +45,7 @@ function formatCountdown(seconds: number): string {
 
 /**
  * Màn hình Kiosk duy nhất (Single-Screen Architecture):
- * - Băng chuyền nước hoa sang trọng hỗ trợ cuộn kéo vuốt mượt mà trái sang phải (Drag & Swipe).
+ * - Dải danh mục vuốt ngang (CatalogRail), xếp theo số nút trên máy.
  * - Các màn hình phụ (Chi tiết sản phẩm, Popup mã QR thanh toán) đều là MODAL hiển thị trực tiếp
  *   trên nền HomeScreen. Hiện chỉ có thanh toán QR (ADR-0016) nên không có bước chọn phương thức.
  */
@@ -69,17 +56,7 @@ export default function CatalogScreen() {
   const catalog = useKioskCatalog();
   const { kioskSessionId, startNewSession } = useKioskSession();
 
-  const trackRef = useRef<HTMLDivElement>(null);
   const reportedImpressionsRef = useRef<Set<string>>(new Set());
-
-  // Continuous loop state & refs
-  const offsetRef = useRef(0);
-  const cycleWidthRef = useRef(0);
-  const isDraggingRef = useRef(false);
-  const isPausedRef = useRef(false);
-  const startXRef = useRef(0);
-  const startOffsetRef = useRef(0);
-  const hasDraggedRef = useRef(false);
 
   const [selectedDetailItem, setSelectedDetailItem] = useState<KioskCatalogItem | null>(null);
   const [copiedCmd, setCopiedCmd] = useState(false);
@@ -98,7 +75,6 @@ export default function CatalogScreen() {
   const flow = useKioskOrderFlow(detailItem, () => {
     setSelectedDetailItem(null);
     startNewSession();
-    isPausedRef.current = false;
     void navigate('/');
   });
   const { created, phase, paymentOpen, isPostPayment, qrSecondsLeft, qrExpired, confirmingCancel } =
@@ -106,91 +82,6 @@ export default function CatalogScreen() {
   const handleCloseDetailModal = flow.exit;
   const handleRequestCancel = flow.requestCancel;
   const handleConfirmCancel = flow.confirmCancel;
-
-  // Danh sách lặp vô tận (3 bộ lặp lại liên tục cho chu kỳ marquee conveyor)
-  const loopItems = useMemo(() => {
-    if (import.meta.env.MODE === 'test' || items.length === 0) {
-      return items.map((it) => ({
-        ...it,
-        uniqueKey: it.slotId,
-        isCloned: false,
-      }));
-    }
-    const sets = [0, 1, 2];
-    return sets.flatMap((setIndex) =>
-      items.map((it) => ({
-        ...it,
-        uniqueKey: `${it.slotId}-set-${setIndex}`,
-        isCloned: setIndex !== 1,
-      })),
-    );
-  }, [items]);
-
-  // Đo chiều rộng 1 chu kỳ sản phẩm
-  useEffect(() => {
-    const measureCycle = () => {
-      if (!trackRef.current || items.length === 0) return;
-      const cards = trackRef.current.children;
-      if (cards.length >= items.length * 2) {
-        const firstCard = cards[0] as HTMLElement;
-        const nextSetFirstCard = cards[items.length] as HTMLElement;
-        const width = nextSetFirstCard.offsetLeft - firstCard.offsetLeft;
-        if (width > 0) {
-          cycleWidthRef.current = width;
-          if (offsetRef.current === 0) {
-            offsetRef.current = -width;
-            trackRef.current.style.transform = `translate3d(-${width}px, 0, 0)`;
-          }
-        }
-      } else if (cards.length > 0) {
-        const first = cards[0] as HTMLElement;
-        const last = cards[cards.length - 1] as HTMLElement;
-        cycleWidthRef.current = last.offsetLeft + last.offsetWidth - first.offsetLeft + 32;
-      }
-    };
-
-    measureCycle();
-    const timer = setTimeout(measureCycle, 150);
-    window.addEventListener('resize', measureCycle);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener('resize', measureCycle);
-    };
-  }, [items, loopItems]);
-
-  // Vòng lặp chuyển động chu kỳ liên tục từ trái sang phải (Left-to-Right Continuous Carousel)
-  useEffect(() => {
-    if (import.meta.env.MODE === 'test') return;
-
-    let animId: number;
-    const speed = 0.5; // Tốc độ trôi êm ái sang phải (left-to-right)
-
-    function animate() {
-      if (
-        !isDraggingRef.current &&
-        !isPausedRef.current &&
-        trackRef.current &&
-        cycleWidthRef.current > 0
-      ) {
-        // Di chuyển liên tục từ trái sang phải: tăng tọa độ X
-        offsetRef.current += speed;
-        const cycle = cycleWidthRef.current;
-
-        // Khi sang hết 1 chu kỳ, quấn lại liền mạch vô tận
-        if (offsetRef.current >= 0) {
-          offsetRef.current -= cycle;
-        } else if (offsetRef.current < -cycle * 2) {
-          offsetRef.current += cycle;
-        }
-
-        trackRef.current.style.transform = `translate3d(${offsetRef.current}px, 0, 0)`;
-      }
-      animId = requestAnimationFrame(animate);
-    }
-
-    animId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(animId);
-  }, [items]);
 
   // Đóng modal khi nhấn ESC — đi qua cùng đường đóng để bỏ đơn đang hiện, không mang sang sản phẩm khác.
   const escCloseRef = useRef<() => void>(() => {});
@@ -217,126 +108,9 @@ export default function CatalogScreen() {
     }
   }, [items, kioskSessionId]);
 
-  // Kéo vuốt chuột & cảm ứng (Pointer drag)
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0 && e.pointerType === 'mouse') return;
-    if (!trackRef.current) return;
-    isDraggingRef.current = true;
-    hasDraggedRef.current = false;
-    startXRef.current = e.clientX;
-    startOffsetRef.current = offsetRef.current;
-    isPausedRef.current = true;
-    if (styles.carouselDragging) {
-      trackRef.current.classList.add(styles.carouselDragging);
-    }
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingRef.current || !trackRef.current) return;
-    const deltaX = e.clientX - startXRef.current;
-    if (Math.abs(deltaX) > 6) {
-      hasDraggedRef.current = true;
-    }
-
-    let newOffset = startOffsetRef.current + deltaX;
-    const cycle = cycleWidthRef.current;
-    if (cycle > 0) {
-      while (newOffset >= 0) newOffset -= cycle;
-      while (newOffset < -cycle * 2) newOffset += cycle;
-    }
-
-    offsetRef.current = newOffset;
-    trackRef.current.style.transform = `translate3d(${newOffset}px, 0, 0)`;
-  };
-
-  const handlePointerUp = () => {
-    if (!isDraggingRef.current) return;
-    isDraggingRef.current = false;
-    if (trackRef.current && styles.carouselDragging) {
-      trackRef.current.classList.remove(styles.carouselDragging);
-    }
-    setTimeout(() => {
-      if (!detailItem) {
-        isPausedRef.current = false;
-      }
-    }, 1200);
-    setTimeout(() => {
-      hasDraggedRef.current = false;
-    }, 80);
-  };
-
-  const handlePointerCancel = () => {
-    isDraggingRef.current = false;
-    if (trackRef.current && styles.carouselDragging) {
-      trackRef.current.classList.remove(styles.carouselDragging);
-    }
-    if (!detailItem) {
-      isPausedRef.current = false;
-    }
-  };
-
-  // Cuộn bằng con lăn chuột ngang / dọc
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    if (!trackRef.current || cycleWidthRef.current === 0) return;
-    isPausedRef.current = true;
-    const delta = Math.abs(e.deltaY) > Math.abs(e.deltaX) ? -e.deltaY : -e.deltaX;
-    let newOffset = offsetRef.current + delta;
-    const cycle = cycleWidthRef.current;
-    while (newOffset >= 0) newOffset -= cycle;
-    while (newOffset < -cycle * 2) newOffset += cycle;
-
-    offsetRef.current = newOffset;
-    trackRef.current.style.transform = `translate3d(${newOffset}px, 0, 0)`;
-
-    setTimeout(() => {
-      if (!detailItem) {
-        isPausedRef.current = false;
-      }
-    }, 1200);
-  };
-
-  // Hover tạm dừng để xem
-  const handleMouseEnter = () => {
-    if (!isDraggingRef.current) {
-      isPausedRef.current = true;
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (!isDraggingRef.current && !detailItem) {
-      isPausedRef.current = false;
-    }
-  };
-
-  // Nút mũi tên di chuyển chu kỳ
-  const handleNudge = (direction: 'left' | 'right') => {
-    if (!trackRef.current || cycleWidthRef.current === 0) return;
-    isPausedRef.current = true;
-    const step = 350;
-    let newOffset = offsetRef.current + (direction === 'left' ? step : -step);
-    const cycle = cycleWidthRef.current;
-    while (newOffset >= 0) newOffset -= cycle;
-    while (newOffset < -cycle * 2) newOffset += cycle;
-
-    offsetRef.current = newOffset;
-    trackRef.current.style.transition = 'transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)';
-    trackRef.current.style.transform = `translate3d(${newOffset}px, 0, 0)`;
-
-    setTimeout(() => {
-      if (trackRef.current) {
-        trackRef.current.style.transition = 'none';
-      }
-      if (!detailItem) {
-        isPausedRef.current = false;
-      }
-    }, 450);
-  };
-
   // Chọn sản phẩm -> Mở modal chi tiết ngay trên HomeScreen; bỏ đơn của sản phẩm trước (nếu có).
   const handleSelectItem = (item: KioskCatalogItem) => {
-    if (hasDraggedRef.current) return;
     if (!item.available) return;
-    isPausedRef.current = true;
     recordKioskInteraction({
       eventType: 'PRODUCT_SELECTED',
       slotId: item.slotId,
@@ -379,11 +153,6 @@ export default function CatalogScreen() {
     return { top, heart, base };
   }, [detailItem?.product?.fragranceNotes]);
 
-  const detailBottleImg =
-    detailItem?.product?.imageUrl ||
-    (detailItem?.slotNumber ? FALLBACK_BOTTLES[detailItem.slotNumber] : undefined) ||
-    FALLBACK_BOTTLES[1];
-
   const detailPriceFormatted = formatPrice(
     detailItem?.pricePerSpray,
     detailItem?.currency ?? 'VND',
@@ -404,131 +173,7 @@ export default function CatalogScreen() {
           <p>{t('kiosk.emptyCatalog')}</p>
         </div>
       ) : (
-        <div
-          className={styles.carouselWrapper}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerCancel}
-          onWheel={handleWheel}
-        >
-          {/* Nút cuộn lùi sang trái */}
-          <button
-            type="button"
-            className={`${styles.navButton} ${styles.navButtonLeft}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNudge('left');
-            }}
-            aria-label={t('kiosk.scrollLeft')}
-          >
-            <Icon name="arrowLeft" />
-          </button>
-
-          {/* Dải băng chuyền sản phẩm chuyển động chu kỳ liên tục từ trái sang phải */}
-          <div ref={trackRef} className={styles.carouselTrack} id="parfumCarousel">
-            {loopItems.map((item) => {
-              const isAvailable = item.available;
-              const priceText = formatPrice(item.pricePerSpray, item.currency, locale);
-              const bottleImg =
-                item.product?.imageUrl || FALLBACK_BOTTLES[item.slotNumber] || FALLBACK_BOTTLES[1];
-              const familyName = FAMILIES[item.slotNumber] || 'HAUTE SILLAGE';
-
-              return (
-                <article
-                  key={item.uniqueKey}
-                  className={`${styles.card} ${!isAvailable ? styles.cardUnavailable : ''}`}
-                  onClick={() => handleSelectItem(item)}
-                  aria-disabled={!isAvailable}
-                  tabIndex={isAvailable ? 0 : -1}
-                  role="button"
-                  aria-hidden={item.isCloned ? true : undefined}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      handleSelectItem(item);
-                    }
-                  }}
-                >
-                  <div className={styles.cardHeader}>
-                    <span className={styles.batchBadge}>
-                      N° 0{item.slotNumber} • {isAvailable ? 'HAUTE SILLAGE' : 'RARE BATCH'}
-                    </span>
-                    {isAvailable ? (
-                      <span className={styles.volumeBadge}>100 ML</span>
-                    ) : (
-                      <span className={styles.soldOutPill}>
-                        <span className={styles.soldOutDot} />
-                        <span>{t('kiosk.outOfStock')}</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Khung trưng bày flacon nước hoa */}
-                  <div className={styles.imageFrame}>
-                    <img
-                      src={bottleImg}
-                      alt={item.product?.name ?? t('kiosk.productImageAlt')}
-                      className={styles.productImage}
-                      loading="lazy"
-                    />
-                  </div>
-
-                  <div className={styles.cardBody}>
-                    <div className={styles.metaRow}>
-                      <span className={styles.familyTag}>{familyName}</span>
-                      <span className={styles.priceTag}>
-                        {priceText ? t('kiosk.pricePerSpray', { price: priceText }) : ''}
-                      </span>
-                    </div>
-
-                    {item.brandName ? (
-                      <h2 className={styles.brandHeading}>{item.brandName}</h2>
-                    ) : (
-                      <span className={styles.brandHeading}>ScentStation PARIS</span>
-                    )}
-
-                    <h3 className={styles.productName}>
-                      {item.product?.name ?? t('kiosk.outOfStock')}
-                    </h3>
-
-                    <div className={styles.cardAction}>
-                      {isAvailable ? (
-                        <>
-                          <span style={{ display: 'flex', alignItems: 'center' }}>
-                            <span className={styles.actionDot} />
-                            {t('kiosk.tapToExplore')}
-                          </span>
-                          <Icon name="arrowRight" size={18} className={styles.actionArrow} />
-                        </>
-                      ) : (
-                        <>
-                          <span>{t('kiosk.outOfStockInfo')}</span>
-                          <Icon name="info" size={16} />
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-
-          {/* Nút cuộn tiến sang phải */}
-          <button
-            type="button"
-            className={`${styles.navButton} ${styles.navButtonRight}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              handleNudge('right');
-            }}
-            aria-label={t('kiosk.scrollRight')}
-          >
-            <Icon name="arrowRight" />
-          </button>
-        </div>
+        <CatalogRail items={items} onSelect={handleSelectItem} />
       )}
 
       {/* ========================================================
@@ -554,30 +199,18 @@ export default function CatalogScreen() {
 
             {/* Cột trái: Flacon Grasse */}
             <div className={styles.modalBottleColumn}>
-              <div className={styles.modalBatchBadge}>
-                N° 0{detailItem.slotNumber} • HAUTE SILLAGE
-              </div>
-              <div className={styles.modalImageFrame}>
-                <img
-                  src={detailBottleImg}
-                  alt={detailItem.product?.name ?? t('kiosk.productImageAlt')}
-                  className={styles.modalProductImage}
-                />
-              </div>
+              <div className={styles.modalBatchBadge}>N° {detailItem.slotNumber}</div>
+              <ProductImage
+                src={detailItem.product?.imageUrl}
+                alt={detailItem.product?.name ?? t('kiosk.productImageAlt')}
+                className={styles.modalImageFrame}
+              />
             </div>
 
             {/* Cột phải: Thông tin hương thơm & hành động */}
             <div className={styles.modalInfoColumn}>
               <div>
-                <div className={styles.modalTopBar}>
-                  <span className={styles.modalFamilyTag}>
-                    {FAMILIES[detailItem.slotNumber] || 'ORIENTAL SILLAGE'}
-                  </span>
-                </div>
-
-                <h2 className={styles.modalProductName}>
-                  {detailItem.product?.name ?? "Nuit d'Or"}
-                </h2>
+                <h2 className={styles.modalProductName}>{detailItem.product?.name}</h2>
 
                 <div className={styles.modalPriceRow}>
                   <span className={styles.modalPriceTag}>
@@ -734,11 +367,13 @@ export default function CatalogScreen() {
 
               <div className={styles.checkoutSummaryBanner}>
                 <div className={styles.checkoutSummaryLeft}>
-                  <img
-                    src={detailBottleImg}
-                    alt={detailItem?.product?.name ?? t('kiosk.productImageAlt')}
-                    className={styles.checkoutSummaryThumb}
-                  />
+                  {detailItem?.product?.imageUrl && (
+                    <img
+                      src={detailItem.product.imageUrl}
+                      alt={detailItem.product.name}
+                      className={styles.checkoutSummaryThumb}
+                    />
+                  )}
                   <div style={{ textAlign: 'left' }}>
                     <div
                       style={{

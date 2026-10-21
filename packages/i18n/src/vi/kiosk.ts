@@ -20,7 +20,6 @@ export const kiosk = {
   allBrands: 'Tất cả',
   slotNumber: 'Ngăn {slot}',
   pricePerSpray: '{price} / lượt xịt',
-  outOfStock: 'Bán hết',
   emptyCatalog: 'Hiện chưa có sản phẩm nào khả dụng trên máy này',
   backToHome: 'Trang chủ',
   backToCatalog: 'Quay lại danh mục',
@@ -96,12 +95,17 @@ export const kiosk = {
   cancelOrder: 'Hủy thanh toán',
   // Băng chuyền & modal chi tiết / mã QR ở màn danh mục
   language: 'Ngôn ngữ',
+  // Danh mục: ba bước dưới wordmark, nhãn thẻ (FR-ORD-01)
+  introChoose: 'Chọn hương',
+  introScan: 'Quét mã',
+  introPress: 'Nhấn nút trên máy',
+  perSpray: '/ lượt xịt',
+  slotUnavailable: 'Tạm ngừng',
+  buttonNumber: 'Nút số {slot}',
   scrollLeft: 'Cuộn sang trái',
   scrollRight: 'Cuộn sang phải',
   close: 'Đóng',
   productImageAlt: 'Ảnh chai nước hoa',
-  tapToExplore: 'CHẠM ĐỂ THỬ HƯƠNG & CHI TIẾT',
-  outOfStockInfo: 'TẠM HẾT HÀNG • XEM THÔNG TIN',
   paymentValidFor: 'Thời gian hiệu lực: {time}',
   cancelPaymentConfirmTitle: 'Bạn muốn hủy thanh toán?',
   cancelPaymentConfirm:

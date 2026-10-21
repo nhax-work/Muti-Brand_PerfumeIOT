@@ -153,31 +153,36 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     cleanup();
   });
 
-  it('test_FR_ORD_01_kiosk_display_available_products — hiển thị sản phẩm khả dụng kèm thương hiệu và làm mờ slot hết hàng', () => {
+  it('test_FR_ORD_01_kiosk_display_available_products — hiển thị sản phẩm khả dụng kèm thương hiệu và làm mờ slot tạm ngừng', () => {
     renderCatalog();
 
-    // Slot 1 & 2 hiển thị
-    expect(screen.getByRole('heading', { level: 2, name: 'Chanel' })).toBeTruthy();
-    expect(screen.getByText('Chanel No 5')).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 2, name: 'Dior' })).toBeTruthy();
-    expect(screen.getByText('Sauvage')).toBeTruthy();
-
-    // Slot 3 không khả dụng hiển thị "Bán hết"
-    const outOfStockBadges = screen.getAllByText('Bán hết');
-    expect(outOfStockBadges.length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { level: 2, name: 'Chanel No 5' })).toBeTruthy();
+    expect(screen.getByText('Chanel')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: 'Sauvage' })).toBeTruthy();
+    expect(screen.getByText('Dior')).toBeTruthy();
+    expect(screen.getByText('Tạm ngừng')).toBeTruthy();
   });
 
-  it('test_FR_ORD_01_unavailable_slot_cannot_be_selected — slot không khả dụng không chuyển trang khi bấm', () => {
+  it('test_FR_ORD_01_unavailable_slot_cannot_be_selected — slot không khả dụng không chạm được', () => {
     renderCatalog();
 
-    const unavailableCards = screen.getAllByRole('button', { hidden: true }).filter((el) => {
-      return el.getAttribute('aria-disabled') === 'true';
-    });
-
-    const target = unavailableCards[0];
-    expect(target).toBeDefined();
-    fireEvent.click(target!);
+    const unavailable = screen.getByText('Tạm ngừng').closest('button')!;
+    expect(unavailable.disabled).toBe(true);
+    fireEvent.click(unavailable);
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('test_FR_ORD_01_cards_follow_button_order — thẻ xếp theo số nút trên máy, không bịa dữ liệu', () => {
+    vi.mocked(useKioskCatalog).mockReturnValue({
+      data: { ...mockCatalogData, items: [...mockCatalogData.items].reverse() },
+    } as unknown as ReturnType<typeof useKioskCatalog>);
+    const { container } = renderCatalog();
+
+    const numbers = screen.getAllByLabelText(/^Nút số \d$/).map((el) => el.textContent);
+    expect(numbers).toEqual(['1', '2', '3']);
+    // Slot tạm ngừng không mang thương hiệu/ảnh bịa; không còn nhãn trang trí cũ.
+    expect(container.textContent).not.toMatch(/HAUTE SILLAGE|100 ML|ScentStation PARIS/);
+    expect(container.querySelectorAll('img')).toHaveLength(2);
   });
 
   it('test_FR_RPT_06_record_interactions — ghi nhận impression và chuyển hướng khi chọn sản phẩm khả dụng', () => {
@@ -198,7 +203,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     );
 
     // Bấm vào thẻ sản phẩm slot 1
-    const chanelCard = screen.getByText('Chanel No 5').closest('article');
+    const chanelCard = screen.getByText('Chanel No 5').closest('button');
     expect(chanelCard).not.toBeNull();
     fireEvent.click(chanelCard!);
 
@@ -213,7 +218,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
   });
 
   function openDetail(name: string) {
-    fireEvent.click(screen.getByText(name).closest('article')!);
+    fireEvent.click(screen.getByText(name).closest('button')!);
   }
 
   it('test_FR_ORD_25_show_press_terms_before_qr — điều khoản bấm nút hiện ở modal chi tiết, chưa tạo đơn', () => {
