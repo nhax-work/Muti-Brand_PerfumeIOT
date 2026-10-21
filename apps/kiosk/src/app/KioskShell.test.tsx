@@ -134,15 +134,11 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
-  it('ở màn hình chi tiết sản phẩm (/products/1) hiển thị nút Quay lại danh mục và điều hướng sang /catalog', () => {
+  it('ở trang chi tiết (/products/1) header không có nút quay lại — trang tự có, đi qua đường đóng bỏ đơn', () => {
     mockPathname = '/products/1';
     renderShell();
 
-    const backBtn = screen.getByRole('button', { name: /Quay lại danh mục/i });
-    expect(backBtn).toBeTruthy();
-
-    fireEvent.click(backBtn);
-    expect(mockNavigate).toHaveBeenCalledWith('/catalog');
+    expect(screen.queryByRole('button', { name: /Quay lại danh mục/i })).toBeNull();
   });
 
   it('nút gạt VI | EN: chạm một lần là đổi ngôn ngữ, không qua dropdown (NFR-USA-07)', () => {

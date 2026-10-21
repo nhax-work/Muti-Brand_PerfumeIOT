@@ -19,7 +19,6 @@ export const kiosk = {
   catalogSubtitle: 'Khám phá các mùi hương cao cấp và chạm để trải nghiệm',
   allBrands: 'Tất cả',
   slotNumber: 'Ngăn {slot}',
-  pricePerSpray: '{price} / lượt xịt',
   emptyCatalog: 'Hiện chưa có sản phẩm nào khả dụng trên máy này',
   backToHome: 'Trang chủ',
   backToCatalog: 'Quay lại danh mục',
@@ -32,14 +31,9 @@ export const kiosk = {
   priceLabel: 'Giá một lượt xịt',
   productNotFound: 'Không tìm thấy sản phẩm',
   productUnavailable: 'Mùi hương này hiện tạm thời không khả dụng',
-  brandLabel: 'Thương hiệu',
   slotLabel: 'Vị trí ngăn',
   // Thanh toán và nhận lượt xịt (FR-ORD-08, 11, 21, 25÷27)
   checkoutTitle: 'Thanh toán lượt xịt',
-  pressTermsTitle: 'Trước khi thanh toán',
-  pressTerms:
-    'Sau khi thanh toán, đèn nút số {slot} trên máy sẽ sáng. Bạn cần bấm nút đó trong {seconds} giây để nhận lượt xịt. Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
-  agreeAndPay: 'Đồng ý và thanh toán',
   cancel: 'Hủy',
   goBack: 'Quay lại',
   leavePaymentConfirm:
@@ -100,6 +94,10 @@ export const kiosk = {
   introScan: 'Quét mã',
   introPress: 'Nhấn nút trên máy',
   perSpray: '/ lượt xịt',
+  // Trang chi tiết: chỉ dẫn nút bấm hiện trước mã QR (FR-ORD-25)
+  pressGuide: 'Sau khi thanh toán, nhấn nút số {slot} trên máy trong {seconds} giây.',
+  pressNoRefund: 'Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
+  payAmount: 'Thanh toán {price}',
   slotUnavailable: 'Tạm ngừng',
   buttonNumber: 'Nút số {slot}',
   scrollLeft: 'Cuộn sang trái',

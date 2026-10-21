@@ -45,7 +45,6 @@ export function KioskShell() {
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
 
   const isCatalog = location.pathname === '/catalog';
-  const isProductDetail = location.pathname.startsWith('/products/');
   const isCheckout = location.pathname.startsWith('/checkout/');
 
   // Khách đang có đơn chưa kết thúc (có thể đã trả tiền, đèn đang sáng) thì không thay cả màn hình:
@@ -62,17 +61,8 @@ export function KioskShell() {
               <span>{t('kiosk.backToHome')}</span>
             </button>
           )}
-          {/* Đang thanh toán thì CatalogScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
-          {isProductDetail && (
-            <button
-              type="button"
-              className={styles.backButton}
-              onClick={() => void navigate('/catalog')}
-            >
-              <Icon name="arrowLeft" size={20} />
-              <span>{t('kiosk.backToCatalog')}</span>
-            </button>
-          )}
+          {/* Trang chi tiết tự có nút quay lại (bỏ đơn đúng đường đóng); đang thanh toán thì
+              CatalogScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
         </div>
 
         <span className={styles.wordmark}>ScentStation</span>

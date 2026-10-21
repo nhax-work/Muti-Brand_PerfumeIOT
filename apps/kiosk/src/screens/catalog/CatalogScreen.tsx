@@ -15,27 +15,13 @@ import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
 import { Icon } from '@/shared/ui/Icon';
-import { ProductImage } from '@/shared/ui/ProductImage';
 import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
 import { useKioskOrderFlow } from '../checkout/useKioskOrderFlow';
 import { CatalogRail } from './CatalogRail';
+import { ProductDetailPage } from './ProductDetailPage';
 import styles from './CatalogScreen.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
-
-function parseNoteValues(val: unknown): string[] {
-  if (!val) return [];
-  if (Array.isArray(val)) {
-    return val.map((v) => String(v).trim()).filter(Boolean);
-  }
-  if (typeof val === 'string') {
-    return val
-      .split(/[,;\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-  return [String(val)];
-}
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -133,25 +119,12 @@ export default function CatalogScreen() {
         : handleCloseDetailModal;
   });
 
-  // Khách bấm "Đồng ý và thanh toán" ở modal chi tiết (đã đọc điều khoản, FR-ORD-25) → vào thẳng mã QR.
+  // Khách bấm "Thanh toán" ở trang chi tiết (đã đọc chỉ dẫn nút bấm, FR-ORD-25) → vào thẳng mã QR.
   const handleOpenPayment = () => {
     if (!detailItem) return;
     flow.startPayment();
     void navigate(`/checkout/${detailItem.slotNumber}`);
   };
-
-  // Phân tích nốt hương cho modal chi tiết
-  const notes = useMemo(() => {
-    const rawNotes = detailItem?.product?.fragranceNotes;
-    if (!rawNotes || typeof rawNotes !== 'object') return null;
-    const raw = rawNotes as Record<string, unknown>;
-    const top = parseNoteValues(raw.top ?? raw.Top ?? raw.huongDau);
-    const heart = parseNoteValues(
-      raw.heart ?? raw.Heart ?? raw.middle ?? raw.Middle ?? raw.huongGiua,
-    );
-    const base = parseNoteValues(raw.base ?? raw.Base ?? raw.huongCuoi);
-    return { top, heart, base };
-  }, [detailItem?.product?.fragranceNotes]);
 
   const detailPriceFormatted = formatPrice(
     detailItem?.pricePerSpray,
@@ -159,170 +132,25 @@ export default function CatalogScreen() {
     locale,
   );
 
-  // Mô tả giữ nguyên như thương hiệu nhập (NFR-USA-07) — không có thì không bịa mô tả thay.
-  const detailIntro = detailItem?.product?.description;
-
   if (isMachineInMaintenance(flow.createError)) {
     return <OutOfServiceScreen />;
   }
 
   return (
     <section className={styles.catalogContainer} aria-label={t('kiosk.catalogTitle')}>
-      {items.length === 0 ? (
+      {/* Chi tiết là trang toàn màn thay chỗ danh mục; mã QR mở thì trang chi tiết nhường chỗ. */}
+      {detailItem && !paymentOpen ? (
+        <ProductDetailPage
+          item={detailItem}
+          onPay={handleOpenPayment}
+          onBack={handleCloseDetailModal}
+        />
+      ) : items.length === 0 ? (
         <div className={styles.emptyState}>
           <p>{t('kiosk.emptyCatalog')}</p>
         </div>
       ) : (
         <CatalogRail items={items} onSelect={handleSelectItem} />
-      )}
-
-      {/* ========================================================
-          1. MODAL CHI TIẾT SẢN PHẨM & QUICK VIEW (Stitch Screen 2)
-          ======================================================== */}
-      {detailItem && !paymentOpen && (
-        <div
-          className={styles.modalBackdrop}
-          onClick={handleCloseDetailModal}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div className={styles.productDetailBox} onClick={(e) => e.stopPropagation()}>
-            {/* Nút đóng */}
-            <button
-              type="button"
-              className={styles.closeModalBtn}
-              onClick={handleCloseDetailModal}
-              aria-label={t('kiosk.close')}
-            >
-              <Icon name="close" size={20} />
-            </button>
-
-            {/* Cột trái: Flacon Grasse */}
-            <div className={styles.modalBottleColumn}>
-              <div className={styles.modalBatchBadge}>N° {detailItem.slotNumber}</div>
-              <ProductImage
-                src={detailItem.product?.imageUrl}
-                alt={detailItem.product?.name ?? t('kiosk.productImageAlt')}
-                className={styles.modalImageFrame}
-              />
-            </div>
-
-            {/* Cột phải: Thông tin hương thơm & hành động */}
-            <div className={styles.modalInfoColumn}>
-              <div>
-                <h2 className={styles.modalProductName}>{detailItem.product?.name}</h2>
-
-                <div className={styles.modalPriceRow}>
-                  <span className={styles.modalPriceTag}>
-                    {detailPriceFormatted
-                      ? t('kiosk.pricePerSpray', { price: detailPriceFormatted })
-                      : ''}
-                  </span>
-                </div>
-
-                {detailIntro && <p className={styles.modalDesc}>{detailIntro}</p>}
-
-                <div className={styles.modalDetailsTable}>
-                  {/* Chỉ hiện thông tin thương hiệu đã nhập — không gán nhà chế tác/xuất xứ thay (NFR-USA-07). */}
-                  {detailItem.brandName && (
-                    <div className={styles.modalDetailRow}>
-                      <span className={styles.modalDetailLabel}>{t('kiosk.brandLabel')}</span>
-                      <span className={styles.modalDetailValue}>{detailItem.brandName}</span>
-                    </div>
-                  )}
-
-                  {notes && (
-                    <div className={styles.modalDetailRow}>
-                      <span className={styles.modalDetailLabel}>{t('kiosk.fragranceNotes')}</span>
-                      <div className={styles.modalDetailValue}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 6,
-                            alignItems: 'flex-end',
-                          }}
-                        >
-                          {notes.top.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                {t('kiosk.topNotes')}:
-                              </span>
-                              <div className={styles.modalNotesChips}>
-                                {notes.top.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>
-                                    {n}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {notes.heart.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                {t('kiosk.heartNotes')}:
-                              </span>
-                              <div className={styles.modalNotesChips}>
-                                {notes.heart.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>
-                                    {n}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          {notes.base.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
-                                {t('kiosk.baseNotes')}:
-                              </span>
-                              <div className={styles.modalNotesChips}>
-                                {notes.base.map((n) => (
-                                  <span key={n} className={styles.modalNoteChip}>
-                                    {n}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* FR-ORD-25: điều khoản bấm nút hiện TRƯỚC mã QR; bấm đồng ý mới tạo đơn và hiện mã. */}
-              <p
-                style={{
-                  marginTop: 20,
-                  fontSize: 12.5,
-                  lineHeight: 1.5,
-                  color: 'var(--color-text-secondary)',
-                  textAlign: 'left',
-                }}
-              >
-                <strong>{t('kiosk.pressTermsTitle')}: </strong>
-                {t('kiosk.pressTerms', {
-                  slot: detailItem.slotNumber,
-                  seconds: config.pressWindowSec,
-                })}
-              </p>
-
-              {/* Hàng nút hành động */}
-              <div className={styles.modalActionsRow}>
-                <button
-                  type="button"
-                  className={styles.modalCheckoutBtn}
-                  onClick={handleOpenPayment}
-                >
-                  <span>{t('kiosk.agreeAndPay')}</span>
-                  <Icon name="arrowRight" size={18} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* ========================================================
