@@ -952,12 +952,19 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Acceptance criteria:**
   * **AC1 (Kỳ tháng giờ Việt Nam):** Given các đơn hàng phát sinh,  
     When gom vào kỳ chi trả,  
-    Then kỳ được tính theo tháng dương lịch theo múi giờ Việt Nam (UTC+7, từ 00:00:00 ngày 1 đến 23:59:59 ngày cuối tháng).
+    Then kỳ được tính theo tháng dương lịch theo múi giờ Việt Nam (UTC+7, từ 00:00:00 ngày 1 đến 23:59:59 ngày cuối tháng); một đơn thuộc kỳ của tháng chứa `paid_at` quy về `Asia/Ho_Chi_Minh` (cùng mốc với báo cáo RPT). Ví dụ đơn có `paid_at` = 16:30 UTC ngày cuối tháng (23:30 giờ Việt Nam) thuộc tháng đó, 17:00 UTC thuộc tháng sau.
   * **AC2 (Đơn được tính):** Given kỳ chi trả `K`,  
     When tính số liệu,  
     Then chỉ gồm các đơn có `revenue_owner = 'BRAND'` ở trạng thái `DISPENSED` hoặc `FORFEITED` (ADR-0013 §3), không trừ phí cổng hay khoản đã hoàn cho khách.
-  * **AC3 (Chuyển CONFIRMED khi hết tháng):** When kết thúc tháng dương lịch,  
-    Then job định kỳ tự động chuyển kỳ chi trả từ `DRAFT` sang `CONFIRMED` để chốt số liệu đối soát.
+  * **AC3 (Cộng dồn khi DRAFT):** Given tháng hiện tại chưa kết thúc,  
+    When job định kỳ chạy,  
+    Then kỳ `DRAFT` của mỗi thương hiệu có đơn được tạo nếu chưa có (một kỳ mỗi thương hiệu mỗi tháng — `uq_brand_payout_period`) và `order_count`, `amount` được tính lại từ đầu theo AC2; chạy lại nhiều lần cho cùng kết quả.
+  * **AC4 (Chuyển CONFIRMED khi hết tháng):** Given kỳ `DRAFT` của một tháng đã kết thúc (giờ Việt Nam),  
+    When job định kỳ chạy — kể cả lần chạy đầu tiên sau một khoảng dịch vụ tắt,  
+    Then hệ thống tính số liệu lần cuối rồi chuyển kỳ sang `CONFIRMED`, đặt `confirmed_at`, trong cùng một transaction; từ đó `order_count`, `amount` không đổi nữa.
+  * **AC5 (Cô lập):** Given Brand Admin của thương hiệu `A`,  
+    When gọi `GET /brand-payouts` hoặc `GET /brand-payouts/{id}` với kỳ của thương hiệu `B`,  
+    Then danh sách chỉ có kỳ của `A`, còn đọc trực tiếp kỳ của `B` bị từ chối `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_SLT_52_monthly_payout_lifecycle`
 
 ---
@@ -965,17 +972,20 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ## FR-SLT-53 — Ghi nhận chuyển khoản chi trả doanh thu
 * **Statement:** Hệ thống phải cho phép Platform Super Admin chuyển kỳ chi trả sang PAID kèm mã giao dịch chuyển khoản, sau khi xác thực lại, và chỉ khi thương hiệu đã được xác minh pháp nhân và có tài khoản nhận doanh thu (ADR-0013).
 * **Traces:** BR-008, BR-009, ADR-0013 · **Priority:** M
-* **API:** `POST /brand-payouts/{id}/payout`
+* **API:** `POST /brand-payouts/{id}/pay`
 * **Acceptance criteria:**
   * **AC1 (Điều kiện chi trả hợp lệ):** Given kỳ chi trả ở trạng thái `CONFIRMED`, thương hiệu đã được xác minh pháp nhân (`legal_verified_at` không NULL) và có tài khoản nhận tiền, Super Admin đã xác thực lại,  
-    When thực hiện chi trả kèm `payout_reference`,  
-    Then kỳ chi trả chuyển sang `PAID`, lưu `paid_at = now()`, `paid_by` và ghi AuditLog.
-  * **AC2 (Chưa xác minh pháp nhân):** Given thương hiệu chưa xác minh pháp nhân (`legal_verified_at` NULL),  
+    When thực hiện chi trả kèm `transferReference`,  
+    Then kỳ chi trả chuyển sang `PAID`, lưu `paid_at = now()`, `paid_by`, `transfer_reference` và ghi AuditLog.
+  * **AC2 (Chưa xác minh pháp nhân):** Given thương hiệu chưa xác minh pháp nhân (`legal_verified_at` NULL) hoặc chưa có tài khoản nhận doanh thu (`payout_account_ciphertext` NULL),  
     When gọi ghi nhận chi trả,  
     Then hệ thống từ chối với HTTP 409 `BRAND_NOT_VERIFIED`.
   * **AC3 (Chưa xác thực lại):** Given Super Admin chưa xác thực lại,  
     When gọi chi trả,  
     Then hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED`.
+  * **AC4 (Kỳ không ở CONFIRMED):** Given kỳ chi trả ở `DRAFT` hoặc đã `PAID`,  
+    When gọi ghi nhận chi trả,  
+    Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE` (mã dùng chung cho "trạng thái không cho phép thao tác", theo `openapi.yaml`).
 * **Test:** `test_FR_SLT_53_payout_requires_legal_verification_and_reauth`
 
 ---
@@ -983,17 +993,17 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ## FR-SLT-54 — Khiếu nại số liệu kỳ chi trả
 * **Statement:** Hệ thống phải cho phép Brand Admin gửi khiếu nại số liệu trên kỳ chi trả CONFIRMED, và từ chối chuyển kỳ sang PAID khi khiếu nại chưa được Platform Super Admin trả lời (ADR-0013).
 * **Traces:** BR-008, BR-009, ADR-0013 · **Priority:** M
-* **API:** `POST /brand-payouts/{id}/dispute`, `POST /brand-payouts/{id}/resolve-dispute`
+* **API:** `POST /brand-payouts/{id}/dispute`, `POST /brand-payouts/{id}/dispute-response`
 * **Acceptance criteria:**
-  * **AC1 (Gửi khiếu nại):** Given kỳ chi trả `CONFIRMED`,  
-    When Brand Admin gửi khiếu nại kèm nội dung và số liệu đề xuất,  
-    Then hệ thống ghi nhận khiếu nại, gắn cờ `has_open_dispute = true` và thông báo cho Super Admin.
-  * **AC2 (Khóa chi trả khi có khiếu nại mở):** Given kỳ chi trả có khiếu nại chưa giải quyết (`has_open_dispute = true`),  
-    When Platform Super Admin gọi ghi nhận chi trả `POST /brand-payouts/{id}/payout`,  
-    Then hệ thống từ chối với HTTP 409 `DISPUTE_PENDING`.
-  * **AC3 (Giải quyết khiếu nại):** Given Super Admin phản hồi hoặc điều chỉnh số liệu và đóng khiếu nại,  
-    When cờ `has_open_dispute` được gỡ,  
-    Then kỳ chi trả được phép chuyển sang `PAID`.
+  * **AC1 (Gửi khiếu nại):** Given kỳ chi trả `CONFIRMED` của thương hiệu mình, chưa có khiếu nại,  
+    When Brand Admin gửi khiếu nại kèm nội dung (`note`),  
+    Then hệ thống ghi `dispute_note`, `disputed_at`, `disputed_by` và thông báo cho Super Admin. Mỗi kỳ chỉ một khiếu nại; kỳ `DRAFT`/`PAID` hoặc đã có khiếu nại → HTTP 409 `RENTAL_NOT_ACTIVE`; kỳ của thương hiệu khác → `FORBIDDEN_SCOPE`.
+  * **AC2 (Khóa chi trả khi có khiếu nại mở):** Given kỳ chi trả có khiếu nại chưa được trả lời (`disputed_at` có, `dispute_resolved_at` NULL),  
+    When Platform Super Admin gọi `POST /brand-payouts/{id}/pay`,  
+    Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE`; CSDL cũng chặn bằng `chk_payout_paid_dispute_resolved`.
+  * **AC3 (Trả lời khiếu nại):** Given kỳ có khiếu nại chưa trả lời,  
+    When Super Admin gọi `POST /brand-payouts/{id}/dispute-response` kèm `response`,  
+    Then hệ thống ghi `dispute_response`, `dispute_resolved_at`, `dispute_resolved_by`, và kỳ được phép chuyển sang `PAID`. Số liệu kỳ không đổi — điều chỉnh (nếu có) xử lý ngoài hệ thống ở mức M. Kỳ không có khiếu nại hoặc đã trả lời → `RENTAL_NOT_ACTIVE`.
 * **Test:** `test_FR_SLT_54_dispute_blocks_payout`
 
 ---
