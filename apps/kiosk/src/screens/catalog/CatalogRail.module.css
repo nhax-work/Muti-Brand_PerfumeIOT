@@ -48,29 +48,45 @@
   transition: opacity var(--dur) var(--ease);
 }
 
-.arrow:disabled {
-  opacity: 0.3;
-  cursor: default;
+.arrow:active {
+  background: var(--surface-2);
 }
 
-/* Bốn thẻ vừa một màn 1280px; vuốt ngang, dừng đúng mép thẻ. */
+/* Khung nhìn của băng chuyền: kéo ngang do JS xử lý, kéo dọc để trình duyệt lo. */
+.viewport {
+  overflow: hidden;
+  padding-bottom: var(--sp-4);
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+/* Không trôi (chế độ giảm chuyển động, test): cuộn ngang thường. */
+.viewportStatic {
+  overflow-x: auto;
+  padding-bottom: var(--sp-4);
+}
+
+/* Bốn thẻ vừa một màn 1280px. */
 .track {
   --card-w: clamp(240px, calc((100vw - 2 * var(--gutter) - 3 * var(--sp-3)) / 4), 360px);
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: var(--card-w);
   column-gap: var(--sp-3);
+  width: max-content;
   margin: 0;
-  padding: 0 var(--gutter) var(--sp-4);
+  padding: 0 var(--gutter);
   list-style: none;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  scroll-snap-type: x mandatory;
-  scroll-padding: 0 var(--gutter);
+  will-change: transform;
+}
+
+/* Chạm mũi tên: trượt một thẻ có chuyển động ngắn thay vì nhảy. */
+.stepping {
+  transition: transform var(--dur) var(--ease);
 }
 
 .slot {
-  scroll-snap-align: start;
+  min-width: 0;
 }
 
 .card {

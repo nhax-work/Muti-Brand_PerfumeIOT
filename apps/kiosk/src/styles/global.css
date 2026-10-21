@@ -6,19 +6,19 @@
  */
 :root {
   /* --- Màu: nền sáng là mặc định. Đổi sang nền tối: đặt data-theme="dark" ở <html> (index.html). */
-  --bg: #f6f3ee;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #ece7df;
-  --text: #141312;
-  --text-muted: #5f574d;
-  --line: rgba(20, 19, 18, 0.12);
-  /* Nút hành động chính (thanh toán, bắt đầu): đen trên nền sáng. */
-  --action: #141312;
+  --surface-2: #f3f3f3;
+  --text: #111111;
+  --text-muted: #5c5c5c;
+  --line: rgba(0, 0, 0, 0.12);
+  /* Nút hành động chính (thanh toán, bắt đầu): đen trên nền trắng. */
+  --action: #111111;
   --on-action: #ffffff;
-  /* CHỈ dùng cho thứ gắn với đèn nút vật lý trên máy: số nút, vòng sáng, đếm ngược. */
+  /* Màu duy nhất ngoài trắng đen, CHỈ cho thứ gắn với đèn nút vật lý: số nút, vòng sáng. */
   --accent: #c9a46a;
-  --on-accent: #141312;
-  /* Chữ/nét màu accent đặt trên nền — đậm hơn để đủ tương phản. */
+  --on-accent: #111111;
+  /* Chữ/nét màu accent đặt trên nền trắng — đậm hơn để đủ tương phản. */
   --accent-ink: #7a5a28;
   --danger: #a5463c;
   /* QR luôn đen trên trắng để app ngân hàng quét được, bất kể nền màn hình. */
