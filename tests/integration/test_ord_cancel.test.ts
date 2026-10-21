@@ -15,6 +15,7 @@ import {
   MockPaymentGateway,
   signMockPayload,
 } from '../../apps/api/src/modules/ord/payment/mock-gateway.js';
+import { OrdService } from '../../apps/api/src/modules/ord/index.js';
 import { createTestApp, TEST_PAYMENT_WEBHOOK_SECRET } from './helpers/app.js';
 import { openRawClient } from './helpers/db.js';
 import {
@@ -228,5 +229,92 @@ describe('FR-ORD-33 — khách hủy đơn trên kiosk', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json<{ code: string }>().code).toBe('ORDER_NOT_CANCELLABLE');
     expect((await state(order.id)).order?.status).not.toBe('EXPIRED');
+  });
+});
+
+// -------------------------------------------------------------------------------------
+// FR-ORD-16 — hết hạn thanh toán cũng hủy link ở cổng
+// Khách mở màn chuyển khoản lúc mã còn hạn rồi bấm xác nhận sau hạn: không thể chỉ trông vào
+// `expiredAt` cổng tự áp — hệ thống hủy link ngay khi đơn hết hạn.
+// -------------------------------------------------------------------------------------
+
+describe('FR-ORD-16 — đơn hết hạn hủy luôn link thanh toán ở cổng', () => {
+  async function overdueOrder(): Promise<OrderBody> {
+    const order = await newOrder(0);
+    await client.query(`UPDATE orders SET expires_at = now() - interval '1 second' WHERE id = $1`, [
+      order.id,
+    ]);
+    return order;
+  }
+
+  const expireJob = () => app.get(OrdService).expireOverdueOrders();
+
+  it('test_FR_ORD_16_expiry_cancels_gateway_link — job hết hạn gọi hủy link rồi mới EXPIRED', async () => {
+    const order = await overdueOrder();
+    const gatewayCancel = vi.spyOn(MockPaymentGateway.prototype, 'cancelPayment');
+
+    await expireJob();
+
+    expect(gatewayCancel).toHaveBeenCalledTimes(1);
+    const after = await state(order.id);
+    expect(after.order?.status).toBe('EXPIRED');
+    expect(after.paymentStatus).toBe('EXPIRED');
+    expect(after.history.at(-1)).toMatchObject({
+      to_status: 'EXPIRED',
+      reason: 'ORDER_PAYMENT_TTL',
+      metadata: { gatewayCancelled: true },
+    });
+  });
+
+  it('test_FR_ORD_16_kiosk_poll_expiry_cancels_gateway_link — kiosk hỏi trạng thái đơn quá hạn', async () => {
+    const order = await overdueOrder();
+    const gatewayCancel = vi.spyOn(MockPaymentGateway.prototype, 'cancelPayment');
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/kiosk/orders/${order.id}/status` });
+    expect(res.json<{ status: string }>().status).toBe('EXPIRED');
+    expect(gatewayCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_FR_ORD_16_expiry_waits_when_gateway_already_paid — cổng đã nhận tiền thì để webhook quyết', async () => {
+    const order = await overdueOrder();
+    vi.spyOn(MockPaymentGateway.prototype, 'cancelPayment').mockResolvedValue({
+      kind: 'ALREADY_PAID',
+    });
+
+    expect(await expireJob()).toBe(0);
+    expect((await state(order.id)).order?.status).toBe('PENDING_PAYMENT');
+
+    // Webhook tới sau hạn → hoàn tiền, không xịt (settleOrderPayment so thời điểm giao dịch).
+    expect((await payWebhook(order)).statusCode).toBe(200);
+    const after = await state(order.id);
+    expect(after.order?.status).toBe('REFUND_PENDING');
+    expect(after.commandCount).toBe(0);
+  });
+
+  it('test_FR_ORD_16_expiry_applies_when_gateway_unreachable — mất liên lạc cổng vẫn EXPIRED', async () => {
+    const order = await overdueOrder();
+    vi.spyOn(MockPaymentGateway.prototype, 'cancelPayment').mockRejectedValue(
+      new Error('ECONNRESET'),
+    );
+
+    await expireJob();
+
+    const after = await state(order.id);
+    expect(after.order?.status).toBe('EXPIRED');
+    expect(after.history.at(-1)).toMatchObject({
+      reason: 'ORDER_PAYMENT_TTL',
+      metadata: { gatewayCancelled: false },
+    });
+  });
+
+  it('test_FR_ORD_16_live_order_link_untouched — đơn còn hạn thì không bao giờ gọi hủy link', async () => {
+    const order = await newOrder(0);
+    const gatewayCancel = vi.spyOn(MockPaymentGateway.prototype, 'cancelPayment');
+
+    await expireJob();
+    await app.get(OrdService).expireOrder(order.id);
+
+    expect(gatewayCancel).not.toHaveBeenCalled();
+    expect((await state(order.id)).order?.status).toBe('PENDING_PAYMENT');
   });
 });
