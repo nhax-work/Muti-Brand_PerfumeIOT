@@ -9,4 +9,8 @@ export const dsp = {
   machineBusy:
     'Máy đang phục vụ khách hoặc đang chạy một lệnh khác. Vui lòng thử lại sau khi máy rảnh.',
   commandNotFound: 'Đơn này chưa có lệnh xịt',
+  // Thông báo FR-MNT-07 khi máy tự hết DRAINING (ADR-0015 mục 7)
+  maintenanceSubject: 'Máy {machine} đã chuyển sang bảo trì',
+  maintenanceContent:
+    'Máy {machine} đã phục vụ xong các đơn đang dở và chuyển sang bảo trì. Slot của bạn trên máy này tạm ngưng bán cho tới khi bảo trì xong.',
 } as const;

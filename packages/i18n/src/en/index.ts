@@ -261,6 +261,9 @@ export const en: SameKeysAs<typeof vi> = {
     machineBusy:
       'The machine is serving a customer or running another command. Please try again once it is idle.',
     commandNotFound: 'This order has no dispense command yet',
+    maintenanceSubject: 'Machine {machine} is now under maintenance',
+    maintenanceContent:
+      'Machine {machine} has finished serving pending orders and is now under maintenance. Your slots on this machine are paused until maintenance is complete.',
   },
 
   usr: {

@@ -12,6 +12,7 @@
  *   handleDeviceResult ─tx─▶ ACKNOWLEDGED | SUCCEEDED/FAILED/REJECTED + đơn DISPENSED/FAILED/FORFEITED
  *   sweepTimeouts ─tx─▶ UNKNOWN (FR-DSP-18) | EXPIRED
  *   failQueueTimeouts ─tx─▶ đơn PAID chờ lượt quá PAID_QUEUE_MAX_SEC → FAILED QUEUE_TIMEOUT (FR-ORD-34)
+ *   completeDraining ─tx─▶ máy DRAINING hết việc → MAINTENANCE + thông báo Brand Admin (FR-MNT-05, 07)
  *
  * Mỗi lần lệnh CUSTOMER kết thúc bằng lỗi máy, cùng transaction đó đếm chuỗi lỗi liên tiếp trên slot;
  * đủ CONSECUTIVE_FAIL_ALERT thì cảnh báo và tự tắt slot (FR-ALR-04, FR-MCH-18, ADR-0015 mục 5).
@@ -20,6 +21,7 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { createCommandSigner, type CommandSigner } from '../../adapters/mqtt/command-signature.js';
 import { AuditService } from '../../shared/audit/index.js';
@@ -93,6 +95,9 @@ const UNIQUE_VIOLATION = '23505';
 
 /** Hành động AuditLog khi slot tự tắt — cũng là mốc đếm lại chuỗi lỗi (DspQueries.lastAutoMaintenanceAt). */
 export const SLOT_AUTO_MAINTENANCE_ACTION = 'dsp.slot.auto_maintenance';
+
+/** Lý do ghi vào lịch sử trạng thái và AuditLog khi máy tự hết DRAINING (FR-MNT-05 AC2). */
+const DRAINING_COMPLETED = 'DRAINING_COMPLETED';
 
 /** Số đơn tối đa xử lý mỗi nhịp của job chờ lượt — nhịp sau làm tiếp phần còn lại. */
 const QUEUE_TIMEOUT_BATCH = 200;
@@ -434,6 +439,59 @@ export class DspService {
       }
     }
     return failed;
+  }
+
+  /**
+   * FR-MNT-05 AC2, AC3 (ADR-0015 mục 7): máy DRAINING không còn lệnh CUSTOMER hiệu lực, đơn chờ thanh
+   * toán hay đơn chờ lượt → tự sang MAINTENANCE, ghi lịch sử nguồn SYSTEM, thông báo Brand Admin có
+   * slot trên máy (FR-MNT-07) và AuditLog. Quét theo trạng thái trong CSDL nên bù được sau downtime;
+   * máy vừa vào DRAINING mà đã rảnh thì chuyển ngay ở nhịp kế tiếp.
+   *
+   * @returns số máy đã chuyển
+   */
+  async completeDraining(): Promise<number> {
+    let completed = 0;
+    for (const machineId of await this.queries.listDrainedMachineIds()) {
+      const done = await this.queries.transaction(async (tx) => {
+        const machine = await this.queries.lockDrainedMachine(machineId, tx);
+        if (!machine) return false;
+        const now = this.clock.now();
+        await this.queries.enterMaintenance(machine.id, DRAINING_COMPLETED, now, tx);
+        const params = { machine: machine.displayName };
+        for (const admin of await this.queries.listAffectedBrandAdmins(machine.id, tx)) {
+          await this.queries.insertNotification(
+            {
+              brandId: admin.brandId,
+              recipientUserId: admin.userId,
+              type: 'MACHINE_MAINTENANCE',
+              subject: translate(DEFAULT_LOCALE, 'dsp.maintenanceSubject', params),
+              content: translate(DEFAULT_LOCALE, 'dsp.maintenanceContent', params),
+              at: now,
+            },
+            tx,
+          );
+        }
+        await this.audit.log(
+          {
+            actorType: 'SYSTEM',
+            action: 'dsp.machine.draining_completed',
+            targetType: 'machine',
+            targetId: machine.id,
+            severity: 'WARNING',
+            before: { operatingMode: 'DRAINING' },
+            after: { operatingMode: 'MAINTENANCE' },
+            metadata: { reason: DRAINING_COMPLETED },
+          },
+          tx,
+        );
+        return true;
+      });
+      if (done) {
+        completed++;
+        this.logger.log(`Máy ${machineId} hết đơn → DRAINING sang MAINTENANCE`);
+      }
+    }
+    return completed;
   }
 
   /**

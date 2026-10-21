@@ -19,7 +19,6 @@ import type { AuthenticatedUser } from '../auth/index.js';
 import { canCreateDispenseCommand, canTransition } from './order-status.js';
 import {
   OrdQueries,
-  type KioskMachineRecord,
   type OrderRecord,
   type OrderSearchFilter,
   type OrderStateColumns,
@@ -30,6 +29,7 @@ import { newPaymentReference } from './payment/payment-reference.js';
 import { PaymentQueries } from './payment/payment.queries.js';
 import { PaymentService } from './payment/payment.service.js';
 import { revenueOwnerFor } from './revenue-owner.js';
+import { assertMachineAcceptsOrders } from './sales-stop.js';
 
 type Order = Schema<'Order'>;
 type OrderCreated = Schema<'OrderCreated'>;
@@ -698,7 +698,7 @@ export class OrdService {
     return this.queries.transaction(async (tx) => {
       const machine = await this.queries.findMachineBySerial(input.machineSerial, tx);
       if (!machine) throw new AppError('NOT_FOUND', 'ord.machineNotFound');
-      assertMachineServing(machine);
+      assertMachineAcceptsOrders(machine);
 
       const [offer] = await this.queries.listSlotOffers(machine.id, input.slotId, tx);
       if (!offer) throw new AppError('NOT_FOUND', 'ord.slotNotFound');
@@ -812,14 +812,6 @@ export function isSellable(offer: SlotOfferRecord): boolean {
     // Chưa hiệu chuẩn thì lệnh xịt không có liều để gửi (FR-MCH-06, mqtt.md §5 `dosage_ml`).
     offer.calibratedDosageMl !== null
   );
-}
-
-/** FR-ORD-04 AC2, AC3. */
-function assertMachineServing(machine: KioskMachineRecord): void {
-  if (machine.status !== 'ONLINE') throw new AppError('MACHINE_OFFLINE', 'ord.machineOffline');
-  if (machine.operatingMode !== 'NORMAL') {
-    throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
-  }
 }
 
 /** Ảnh chụp đơn từ slot bán được (FR-ORD-05) — gọi sau `isSellable`. */
