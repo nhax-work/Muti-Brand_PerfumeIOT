@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
+import { AlrModule } from './modules/alr/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { DspModule } from './modules/dsp/index.js';
@@ -18,6 +19,7 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
   imports: [
     CoreModule,
     AuthModule,
+    AlrModule,
     BndModule,
     PrdModule,
     UsrModule,

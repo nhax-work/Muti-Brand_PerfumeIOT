@@ -5,6 +5,7 @@ import {
   EnvironmentOutlined,
   ExperimentOutlined,
   IdcardOutlined,
+  MailOutlined,
   RollbackOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
@@ -95,5 +96,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.brandProfile',
     icon: <IdcardOutlined />,
     roles: ['BRAND_ADMIN'],
+  },
+  {
+    path: '/notifications',
+    label: 'ui.notifications',
+    icon: <MailOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
   },
 ];

@@ -6,6 +6,7 @@
  * ở `en/` trong cùng commit (spec/PROJECT.md Mục 3).
  */
 
+import { alr, notificationChannel, notificationStatus } from './alr.js';
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
@@ -24,6 +25,9 @@ export const vi = {
   validation,
   auth,
   mch,
+  alr,
+  notificationStatus,
+  notificationChannel,
   slotStatus,
   machineStatus,
   machineOperatingMode,

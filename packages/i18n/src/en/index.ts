@@ -92,6 +92,24 @@ export const en: SameKeysAs<typeof vi> = {
     reasonRequired: 'A reason is required when forcing emergency maintenance',
   },
 
+  alr: {
+    notificationNotFound: 'Notification or sending evidence not found.',
+    retryOnlyFailed: 'Can only retry sending for notifications with FAILED status.',
+    emailChannelRequired: 'Can only retry for email notifications with a recipient address.',
+  },
+
+  notificationStatus: {
+    PENDING: 'Pending',
+    SENT: 'Sent',
+    FAILED: 'Failed',
+    READ: 'Read',
+  },
+
+  notificationChannel: {
+    EMAIL: 'Email',
+    IN_APP: 'In-app',
+  },
+
   slotStatus: {
     AVAILABLE: 'available',
     UNAVAILABLE: 'unavailable',
@@ -842,6 +860,26 @@ export const en: SameKeysAs<typeof vi> = {
     nonRenewalActiveTitle: 'Non-renewal requested',
     nonRenewalActiveDesc:
       'Requested on {date}. Return method: {method}. Will not enter grace period upon expiry.',
+    // Notifications & Email sending evidence (Task 3, FR-ALR-16, ADR-0013)
+    notifications: 'Notifications',
+    notificationListTitle: 'Notification History & Dispatch Evidence',
+    notificationListSubtitle:
+      'Store all email dispatch evidence and transaction notifications as legal audit records.',
+    notificationChannelLabel: 'Channel',
+    notificationRecipientLabel: 'Recipient',
+    notificationTypeLabel: 'Event Type',
+    notificationSubjectLabel: 'Subject',
+    notificationSentAtLabel: 'Sent At',
+    notificationCreatedAtLabel: 'Created At',
+    viewNotificationEvidence: 'View Dispatch Evidence',
+    retryNotificationSend: 'Retry Email',
+    retryNotificationSuccess: 'Retried sending email successfully',
+    retryNotificationFailed: 'Failed to resend email',
+    notificationEvidenceModalTitle: 'Notification Audit Evidence',
+    notificationContentLabel: 'Notification / Email Content',
+    noNotificationsFound: 'No notifications recorded yet.',
+    filterAllChannels: 'All Channels',
+    filterAllStatuses: 'All Statuses',
   },
 
   kiosk: {

@@ -578,4 +578,24 @@ export const ui = {
   nonRenewalActiveTitle: 'Hóa đơn đã báo không gia hạn',
   nonRenewalActiveDesc:
     'Yêu cầu báo ngày {date}. Hình thức nhận hàng: {method}. Hóa đơn sẽ không vào ân hạn khi hết hạn.',
+  // Thông báo & Bằng chứng gửi email (Task 3, FR-ALR-16, ADR-0013)
+  notifications: 'Thông báo',
+  notificationListTitle: 'Lịch sử thông báo & Bằng chứng gửi',
+  notificationListSubtitle:
+    'Lưu trữ toàn bộ bằng chứng gửi email và thông báo giao dịch làm căn cứ đối soát pháp lý.',
+  notificationChannelLabel: 'Kênh gửi',
+  notificationRecipientLabel: 'Người nhận',
+  notificationTypeLabel: 'Loại sự kiện',
+  notificationSubjectLabel: 'Tiêu đề thông báo',
+  notificationSentAtLabel: 'Thời điểm gửi',
+  notificationCreatedAtLabel: 'Thời điểm tạo',
+  viewNotificationEvidence: 'Xem bằng chứng gửi',
+  retryNotificationSend: 'Gửi lại email',
+  retryNotificationSuccess: 'Đã thử gửi lại email thành công',
+  retryNotificationFailed: 'Gửi lại email thất bại',
+  notificationEvidenceModalTitle: 'Bằng chứng thông báo đối soát pháp lý',
+  notificationContentLabel: 'Nội dung thông báo / email',
+  noNotificationsFound: 'Chưa có thông báo nào được lưu.',
+  filterAllChannels: 'Tất cả kênh',
+  filterAllStatuses: 'Tất cả trạng thái',
 } as const;

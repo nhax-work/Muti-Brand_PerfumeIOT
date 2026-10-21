@@ -130,6 +130,11 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/rentals/RentalDetailPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/notifications',
+        lazy: () =>
+          import('@/routes/notifications/NotificationsPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
   {
