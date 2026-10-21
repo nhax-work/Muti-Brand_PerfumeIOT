@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
@@ -145,24 +145,21 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/catalog');
   });
 
-  it('dropdown ngôn ngữ: bấm mở menu dropdown và chuyển đổi sang English', () => {
+  it('nút gạt VI | EN: chạm một lần là đổi ngôn ngữ, không qua dropdown (NFR-USA-07)', () => {
+    mockPathname = '/catalog';
     renderShell();
 
-    const trigger = screen.getByRole('button', { name: /Chọn ngôn ngữ/i });
-    expect(trigger).toBeTruthy();
-    expect(screen.getByText('Tiếng Việt')).toBeTruthy();
+    const group = screen.getByRole('group', { name: 'Ngôn ngữ' });
+    const vi = within(group).getByRole('button', { name: 'Tiếng Việt' });
+    const en = within(group).getByRole('button', { name: 'English' });
+    expect(vi.getAttribute('aria-pressed')).toBe('true');
+    expect(en.getAttribute('aria-pressed')).toBe('false');
 
-    // Mở dropdown
-    fireEvent.click(trigger);
+    fireEvent.click(en);
 
-    // Tìm và chọn English trong dropdown
-    const englishOption = screen.getByRole('option', { name: /English/i });
-    expect(englishOption).toBeTruthy();
-    fireEvent.click(englishOption);
-
-    // Dropdown đóng lại và ngôn ngữ đổi sang English
-    expect(screen.queryByRole('listbox')).toBeNull();
-    expect(screen.getByText('English')).toBeTruthy();
+    expect(en.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('group', { name: 'Language' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Home/ })).toBeTruthy();
   });
 
   it('giữ màn giao dịch khi máy mất kết nối và không cho rời checkout bằng header', () => {

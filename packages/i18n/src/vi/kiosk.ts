@@ -95,6 +95,7 @@ export const kiosk = {
   waitingPaymentDesc: 'Đang chờ xác nhận từ ngân hàng / ví điện tử…',
   cancelOrder: 'Hủy thanh toán',
   // Băng chuyền & modal chi tiết / mã QR ở màn danh mục
+  language: 'Ngôn ngữ',
   scrollLeft: 'Cuộn sang trái',
   scrollRight: 'Cuộn sang phải',
   close: 'Đóng',

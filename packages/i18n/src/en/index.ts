@@ -1031,6 +1031,7 @@ export const en: SameKeysAs<typeof vi> = {
     copyCommand: 'Copy test command',
     waitingPaymentDesc: 'Waiting for payment confirmation from bank / e-wallet…',
     cancelOrder: 'Cancel payment',
+    language: 'Language',
     scrollLeft: 'Scroll left',
     scrollRight: 'Scroll right',
     close: 'Close',
