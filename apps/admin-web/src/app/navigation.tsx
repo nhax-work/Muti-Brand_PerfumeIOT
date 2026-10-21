@@ -1,9 +1,11 @@
 import {
   AppstoreOutlined,
+  BankOutlined,
   DashboardOutlined,
   DollarOutlined,
   EnvironmentOutlined,
   ExperimentOutlined,
+  FundOutlined,
   IdcardOutlined,
   RollbackOutlined,
   ShopOutlined,
@@ -11,6 +13,7 @@ import {
   SkinOutlined,
   TagsOutlined,
   TeamOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
@@ -47,6 +50,24 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.orders',
     icon: <ShoppingCartOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/dispense-commands',
+    label: 'ui.dispenseCommands',
+    icon: <ThunderboltOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
+  {
+    path: '/brand-payouts',
+    label: 'ui.brandPayouts',
+    icon: <BankOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/revenue',
+    label: 'ui.revenueSplit',
+    icon: <FundOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN'],
   },
   {
     path: '/refund-claims',

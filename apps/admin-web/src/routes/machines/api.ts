@@ -183,6 +183,25 @@ export function useSetMachineMode() {
   });
 }
 
+/**
+ * Lượt xịt chẩn đoán (FR-MNT-09) — cần xác thực lại. Máy chủ trả 202 khi đã ghi lệnh; kết quả từ
+ * thiết bị về sau, xem ở màn Lệnh xịt.
+ */
+export function useDiagnosticDispense() {
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (input: { machineId: string; slotId: string; note?: string }) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/diagnostic-dispense', {
+          params: { path: { id: input.machineId }, header: { 'X-Reauth-Token': reauthToken } },
+          body: { slotId: input.slotId, ...(input.note ? { note: input.note } : {}) },
+        }),
+      );
+    },
+  });
+}
+
 /** Bật / tắt slot từ xa (FR-MCH-12). */
 export function useSetSlotEnabled() {
   const queryClient = useQueryClient();

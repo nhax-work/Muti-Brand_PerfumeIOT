@@ -167,6 +167,28 @@ export const en: SameKeysAs<typeof vi> = {
     EXPIRED: 'Expired',
   },
 
+  commandStatus: {
+    CREATED: 'Waiting to send',
+    SENT: 'Sent',
+    ACKNOWLEDGED: 'Received by machine',
+    SUCCEEDED: 'Succeeded',
+    FAILED: 'Failed',
+    REJECTED: 'Rejected by machine',
+    EXPIRED: 'Expired before sending',
+    UNKNOWN: 'Result unknown',
+  },
+
+  dispenseType: {
+    CUSTOMER: 'Customer',
+    DIAGNOSTIC: 'Diagnostic',
+  },
+
+  brandPayoutStatus: {
+    DRAFT: 'Accumulating',
+    CONFIRMED: 'Locked',
+    PAID: 'Transferred',
+  },
+
   statusSource: {
     HEARTBEAT: 'Reported by the machine',
     OPERATOR: 'Staff',
@@ -860,6 +882,65 @@ export const en: SameKeysAs<typeof vi> = {
     nonRenewalActiveTitle: 'Non-renewal requested',
     nonRenewalActiveDesc:
       'Requested on {date}. Return method: {method}. Will not enter grace period upon expiry.',
+    diagnosticDispense: 'Diagnostic spray',
+    diagnosticTitle: 'Diagnostic spray on slot {slotNumber}',
+    diagnosticHint:
+      'The machine sprays once right away without waiting for a button press. No order is created and no revenue is recorded. You will be asked to re-enter your password.',
+    diagnosticNote: 'Note (optional)',
+    diagnosticSent: 'Diagnostic command {token} sent. Follow the result under Dispense commands.',
+    diagnosticNotCalibrated:
+      'This slot has no calibrated dosage, so it cannot run a diagnostic spray',
+    viewDispenseCommands: "View this machine's commands",
+    dispenseCommands: 'Dispense commands',
+    dispenseCommandsHint:
+      'Diagnostic sprays are recorded separately: no order, not counted in revenue or customer spray statistics.',
+    filteredByMachine: 'Filtered by one machine',
+    clearFilter: 'Clear filter',
+    allCommandTypes: 'All command types',
+    commandType: 'Command type',
+    commandToken: 'Command code',
+    commandResult: 'Result',
+    commandSentAt: 'Sent at',
+    commandAcknowledgedAt: 'Received by machine at',
+    commandCompletedAt: 'Finished at',
+    commandSucceeded: 'Succeeded',
+    commandFailedWith: 'Failed: {code}',
+    orderDispenseCommand: 'Dispense command',
+    orderNoDispenseCommand: 'This order has no dispense command yet',
+    brandPayouts: 'Payouts',
+    payoutHint:
+      "Each brand's monthly spray revenue (Vietnam time), counting orders that were sprayed or forfeited by the customer. A period is locked after the month ends.",
+    payoutPeriod: 'Period',
+    payoutBrand: 'Brand',
+    payoutOrderCount: 'Orders',
+    payoutAmount: 'Amount',
+    payoutConfirmedAt: 'Locked at',
+    payoutPaidAt: 'Transferred at',
+    payoutTransferReference: 'Transaction reference',
+    payoutDetail: 'Details',
+    payoutDisputed: 'Disputed',
+    payoutDraftHint: 'This period is still accumulating — figures may change until the month ends.',
+    payoutDisputeNote: 'Dispute',
+    payoutDisputeResponse: "Platform's answer",
+    payoutDispute: 'Dispute figures',
+    payoutDisputePlaceholder: 'Describe the figures you believe are wrong',
+    payoutDisputeSent: 'Dispute sent',
+    payoutRespond: 'Answer dispute',
+    payoutResponsePlaceholder: 'Answer to send to the brand',
+    payoutResponded: 'Dispute answered',
+    payoutPay: 'Record transfer',
+    payoutPayHint:
+      'Record only after the money has actually been transferred. The brand must be legally verified and have a payout account. You will be asked to re-enter your password.',
+    payoutPaidDone: 'Transfer recorded',
+    allBrands: 'All brands',
+    revenueSplit: 'Revenue',
+    revenueSplitHint:
+      'Spray revenue split by beneficiary: the brand, or the platform once stock has been liquidated. Only orders that were sprayed or forfeited are counted.',
+    revenueBrand: 'Brand revenue',
+    revenuePlatform: 'Platform revenue',
+    revenueOrderCount: '{count} orders',
+    revenuePeriod: 'From {from} to {to}',
+    allMachines: 'All machines',
   },
 
   kiosk: {

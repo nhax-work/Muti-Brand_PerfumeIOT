@@ -8,7 +8,16 @@
 
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
-import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
+import {
+  actorType,
+  brandPayoutStatus,
+  commandStatus,
+  credentialStatus,
+  dispenseType,
+  orderCode,
+  revenueOwner,
+  statusSource,
+} from './codes.js';
 import { common } from './common.js';
 import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
@@ -35,6 +44,9 @@ export const vi = {
   revenueOwner,
   credentialStatus,
   statusSource,
+  commandStatus,
+  dispenseType,
+  brandPayoutStatus,
   bnd,
   prd,
   slt,

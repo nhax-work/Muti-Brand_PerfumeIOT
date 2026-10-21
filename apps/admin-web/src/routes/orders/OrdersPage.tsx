@@ -28,6 +28,7 @@ import {
   type Order,
   type OrderStatus,
   useManualReviewOrders,
+  useOrderDispenseCommand,
   useOrderHistory,
   useOrders,
 } from './api';
@@ -244,6 +245,7 @@ function OrderDrawer({
 }) {
   const { t } = useI18n();
   const history = useOrderHistory(order?.id);
+  const command = useOrderDispenseCommand(order?.id);
   if (!order) return null;
   return (
     <Drawer open width={520} title={order.paymentReference} onClose={onClose} destroyOnHidden>
@@ -283,6 +285,40 @@ function OrderDrawer({
           {codeLabel(t, 'orderCode', order.failureCode)}
         </Descriptions.Item>
       </Descriptions>
+      <Typography.Title level={5} style={{ marginTop: 24 }}>
+        {t('ui.orderDispenseCommand')}
+      </Typography.Title>
+      {command.data ? (
+        <Descriptions column={1} size="small" bordered>
+          <Descriptions.Item label={t('ui.pricingStatus')}>
+            {codeLabel(t, 'commandStatus', command.data.status)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandToken')}>
+            <Typography.Text copyable style={{ fontSize: 12 }}>
+              {command.data.commandToken}
+            </Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandSentAt')}>
+            {formatDateTime(command.data.sentAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandAcknowledgedAt')}>
+            {formatDateTime(command.data.acknowledgedAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandResult')}>
+            {!command.data.result
+              ? '—'
+              : command.data.result.success
+                ? t('ui.commandSucceeded')
+                : t('ui.commandFailedWith', {
+                    code: codeLabel(t, 'orderCode', command.data.result.failureCode ?? null),
+                  })}
+          </Descriptions.Item>
+        </Descriptions>
+      ) : (
+        <Typography.Text type="secondary">
+          {command.isLoading ? '…' : t('ui.orderNoDispenseCommand')}
+        </Typography.Text>
+      )}
       <Typography.Title level={5} style={{ marginTop: 24 }}>
         {t('ui.orderHistory')}
       </Typography.Title>

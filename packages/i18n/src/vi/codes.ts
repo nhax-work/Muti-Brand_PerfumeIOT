@@ -51,6 +51,29 @@ export const credentialStatus = {
   EXPIRED: 'Hết hạn',
 } as const;
 
+/** Trạng thái lệnh xịt (spec/glossary.md — DispenseCommand). */
+export const commandStatus = {
+  CREATED: 'Chờ gửi',
+  SENT: 'Đã gửi',
+  ACKNOWLEDGED: 'Máy đã nhận',
+  SUCCEEDED: 'Thành công',
+  FAILED: 'Thất bại',
+  REJECTED: 'Máy từ chối',
+  EXPIRED: 'Quá hạn chưa gửi',
+  UNKNOWN: 'Không rõ kết quả',
+} as const;
+
+export const dispenseType = {
+  CUSTOMER: 'Khách hàng',
+  DIAGNOSTIC: 'Chẩn đoán',
+} as const;
+
+export const brandPayoutStatus = {
+  DRAFT: 'Đang cộng dồn',
+  CONFIRMED: 'Đã chốt số liệu',
+  PAID: 'Đã chuyển khoản',
+} as const;
+
 /** `machine_status_histories.source`. */
 export const statusSource = {
   HEARTBEAT: 'Máy tự báo',
