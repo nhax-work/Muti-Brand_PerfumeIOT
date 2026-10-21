@@ -9,8 +9,12 @@
   border: none;
   background: var(--bg);
   color: var(--text);
-  text-align: left;
+  text-align: center;
   animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.screenTextOnly {
+  grid-template-columns: 1fr;
 }
 
 .stage {
@@ -34,12 +38,14 @@
   opacity: 1;
 }
 
+/* Căn giữa cả hai chiều trong nửa phải (hoặc cả màn khi không có ảnh). */
 .copy {
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   gap: var(--sp-3);
-  padding: var(--sp-6) var(--gutter);
+  padding: var(--sp-4) var(--gutter);
 }
 
 .cta {

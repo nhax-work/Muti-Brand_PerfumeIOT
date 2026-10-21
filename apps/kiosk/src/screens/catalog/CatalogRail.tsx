@@ -24,7 +24,7 @@ function shouldDrift(): boolean {
 }
 
 /**
- * Băng chuyền danh mục trôi chậm từ trái sang phải, lặp vô tận; khách vuốt tay hay chạm mũi tên
+ * Băng chuyền danh mục trôi chậm từ phải sang trái (số nút tăng dần theo chiều đọc), lặp vô tận; khách vuốt tay hay chạm mũi tên
  * để xem nhanh (FR-ORD-01). Thẻ xếp theo số slot — cũng là số nút có đèn trên máy (ADR-0007). Chỉ
  * hiện đúng dữ liệu máy chủ trả: slot không khả dụng không có thương hiệu hay sản phẩm (BR-012).
  */
@@ -87,13 +87,15 @@ export function CatalogRail({
     if (copies === 1) return;
     let frame = 0;
     let last = performance.now();
+    // Vào màn: đứng yên một nhịp để khách thấy thẻ số 1 sát lề trái rồi mới trôi.
+    pausedUntil.current = last + RESUME_AFTER_MS;
     const tick = (now: number) => {
       const dt = Math.min(now - last, 100);
       last = now;
       if (!drag.current && now >= pausedUntil.current && cycle.current > 0) {
         // Trượt bằng mũi tên đã xong từ lâu — gỡ chuyển động để vòng trôi không bị trễ theo.
         if (STEPPING) trackRef.current?.classList.remove(STEPPING);
-        offset.current += (DRIFT_PX_PER_SEC * dt) / 1000;
+        offset.current -= (DRIFT_PX_PER_SEC * dt) / 1000;
         apply();
       }
       frame = requestAnimationFrame(tick);

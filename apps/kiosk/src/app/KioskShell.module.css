@@ -1,12 +1,12 @@
 .shell {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100dvh;
   width: 100%;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   position: relative;
-  overflow-x: hidden;
 }
 
 /* Ba cột bằng nhau để wordmark luôn nằm chính giữa dù bên trái có nút quay lại hay không. */
@@ -17,10 +17,21 @@
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  min-height: calc(var(--touch-min) + var(--sp-3));
-  padding: var(--sp-1) var(--gutter);
+  flex-shrink: 0;
+  height: var(--header-h);
+  padding: 0 var(--gutter);
   background: var(--bg);
+  color: var(--text);
   border-bottom: 1px solid var(--line);
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.headerDark {
+  background: var(--action);
+  color: var(--on-action);
+  border-bottom-color: transparent;
 }
 
 .navLeft {
@@ -41,7 +52,7 @@
   padding: 0 var(--sp-2) 0 0;
   border: none;
   background: none;
-  color: var(--text);
+  color: inherit;
   font-size: var(--fs-small);
 }
 
@@ -50,7 +61,7 @@
   font-size: var(--fs-h2);
   font-weight: 500;
   letter-spacing: 0.04em;
-  color: var(--text);
+  color: inherit;
 }
 
 .langToggle {
@@ -86,9 +97,11 @@
 
 .content {
   flex: 1;
+  min-height: 0;
   width: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Mất kết nối khi khách đang có đơn: báo nhẹ, không che màn thanh toán (FR-IOT-13). */

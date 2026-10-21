@@ -55,6 +55,8 @@
 
   --radius: 4px;
   --touch-min: 56px;
+  /* Header cố định; mọi màn tính chiều cao còn lại theo 100dvh trừ header — không màn nào cuộn. */
+  --header-h: 64px;
 
   /* --- Chuyển động: chỉ fade + dịch 8px, không nảy. */
   --dur: 320ms;

@@ -86,12 +86,13 @@ export function ProductDetailPage({
               ))}
             </dl>
           )}
-          {price && (
-            <p className={styles.price}>
-              {price} <span className={styles.perSpray}>{t('kiosk.perSpray')}</span>
-            </p>
-          )}
         </div>
+
+        {price && (
+          <p className={styles.price}>
+            {price} <span className={styles.perSpray}>{t('kiosk.perSpray')}</span>
+          </p>
+        )}
 
         {/* FR-ORD-25: số nút và số giây (DISPENSE_PRESS_WINDOW_SEC) hiện TRƯỚC khi có mã QR. */}
         <div className={styles.guide}>

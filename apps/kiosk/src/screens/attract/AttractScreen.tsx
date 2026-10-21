@@ -9,8 +9,8 @@ const SLIDE_MS = 6000;
 
 /**
  * Màn chờ khi không ai dùng (NFR-USA-02): kiosk tự về đây sau KIOSK_IDLE_TIMEOUT_SEC. Ảnh sản phẩm
- * đang bán chuyển chậm; chạm bất kỳ đâu để vào danh mục. Chỉ dùng ảnh máy chủ trả — slot không khả
- * dụng hay sản phẩm chưa có ảnh thì bỏ qua, không hiện ảnh thay.
+ * đang bán chuyển chậm (chỉ một ảnh thì đứng yên); chạm bất kỳ đâu để vào danh mục. Chỉ dùng ảnh
+ * máy chủ trả — slot không khả dụng hay sản phẩm chưa có ảnh thì bỏ qua, không hiện ảnh thay.
  */
 export default function AttractScreen() {
   const { t } = useI18n();
@@ -35,19 +35,26 @@ export default function AttractScreen() {
 
   const current = slides.length > 0 ? index % slides.length : -1;
 
+  // Chưa thương hiệu nào có ảnh: chữ chiếm trọn màn, không để nửa trái là ô xám trống.
   return (
-    <button type="button" className={styles.screen} onClick={() => void navigate('/catalog')}>
-      <div className={styles.stage} aria-hidden="true">
-        {slides.map((s, i) => (
-          <img
-            key={s.key}
-            src={s.src}
-            alt=""
-            draggable={false}
-            className={`${styles.slide} ${i === current ? styles.slideOn : ''}`}
-          />
-        ))}
-      </div>
+    <button
+      type="button"
+      className={`${styles.screen} ${slides.length === 0 ? styles.screenTextOnly : ''}`}
+      onClick={() => void navigate('/catalog')}
+    >
+      {slides.length > 0 && (
+        <div className={styles.stage} aria-hidden="true">
+          {slides.map((s, i) => (
+            <img
+              key={s.key}
+              src={s.src}
+              alt=""
+              draggable={false}
+              className={`${styles.slide} ${i === current ? styles.slideOn : ''}`}
+            />
+          ))}
+        </div>
+      )}
       <span className={styles.copy}>
         <span className={styles.cta}>{t('kiosk.tapToStart')}</span>
         <span className={styles.steps}>

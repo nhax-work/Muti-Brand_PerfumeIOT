@@ -3,6 +3,7 @@
   flex: 1;
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   animation: kiosk-enter var(--dur) var(--ease) both;
 }
@@ -18,7 +19,8 @@
   flex-direction: column;
   gap: var(--sp-3);
   min-height: 0;
-  padding: var(--sp-2) var(--gutter) var(--sp-4);
+  overflow: hidden;
+  padding: var(--sp-1) var(--gutter) var(--sp-3);
 }
 
 .back {
@@ -34,11 +36,13 @@
   font-size: var(--fs-small);
 }
 
-/* Mô tả dài thì cuộn trong cột, khối chỉ dẫn và nút thanh toán luôn nằm cuối màn. */
+/* Mô tả dài thì cuộn trong cột (mép dưới mờ dần báo còn chữ); giá, chỉ dẫn và nút thanh toán luôn
+   nằm cuối màn. */
 .scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--sp-3)), transparent);
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -85,7 +89,8 @@
 }
 
 .price {
-  margin: var(--sp-1) 0 0;
+  flex-shrink: 0;
+  margin: 0;
   font-size: var(--fs-h2);
 }
 
@@ -131,6 +136,7 @@
 }
 
 .pay {
+  flex-shrink: 0;
   min-height: calc(var(--touch-min) + var(--sp-2));
   border: none;
   border-radius: var(--radius);
@@ -138,4 +144,32 @@
   color: var(--on-action);
   font-size: var(--fs-body);
   font-weight: 500;
+}
+
+.guide,
+.back {
+  flex-shrink: 0;
+}
+
+/* Màn thấp (1024×600): thu tên, khoảng cách và nút để chỉ dẫn + nút thanh toán vẫn nằm trong màn. */
+@media (max-height: 680px) {
+  .info {
+    gap: var(--sp-2);
+  }
+
+  .name {
+    font-size: var(--fs-h1);
+  }
+
+  .price {
+    font-size: var(--fs-body);
+  }
+
+  .guideText {
+    font-size: var(--fs-small);
+  }
+
+  .pay {
+    min-height: var(--touch-min);
+  }
 }

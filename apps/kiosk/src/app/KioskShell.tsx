@@ -1,5 +1,5 @@
 import { DEFAULT_LOCALE, LOCALES } from '@scentstation/i18n';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { cancelKioskOrder } from '@/shared/api';
@@ -9,6 +9,7 @@ import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
+import { ShellChromeContext } from '@/shared/shell/chrome';
 import { Icon } from '@/shared/ui/Icon';
 import type { KioskRouteHandle } from './route-handle';
 import styles from './KioskShell.module.css';
@@ -31,6 +32,8 @@ export function KioskShell() {
   const matches = useMatches();
   const outOfService = useOutOfService();
   const { startNewSession, activeOrder } = useKioskSession();
+  // Màn nhấn nút bật header tối (useDarkShell) — cả màn một nền, không còn dải trắng phía trên.
+  const [darkHeader, setDarkHeader] = useState(false);
 
   // Chỉ giữ màn khi thật sự có đơn (khách đang quét mã, chờ lượt, chờ bấm, xem kết quả). Tạo đơn lỗi
   // ở màn thanh toán thì vẫn tự về màn chờ — khách bỏ đi không để kiosk đứng mãi ở màn lỗi.
@@ -65,7 +68,7 @@ export function KioskShell() {
 
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
+      <header className={`${styles.header} ${darkHeader ? styles.headerDark : ''}`}>
         <div className={styles.navLeft}>
           {isCatalog && (
             <button type="button" className={styles.backButton} onClick={() => void navigate('/')}>
@@ -80,20 +83,23 @@ export function KioskShell() {
         <span className={styles.wordmark}>ScentStation</span>
 
         <div className={styles.navRight}>
-          <div className={styles.langToggle} role="group" aria-label={t('kiosk.language')}>
-            {LOCALES.map((l) => (
-              <button
-                key={l}
-                type="button"
-                className={styles.langOption}
-                aria-pressed={l === locale}
-                aria-label={LANGUAGE_LABELS[l] ?? l}
-                onClick={() => setLocale(l)}
-              >
-                {l.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          {/* Màn nhấn nút: khách chỉ cần nhìn nút số N — ẩn đổi ngôn ngữ để không chạm nhầm. */}
+          {!darkHeader && (
+            <div className={styles.langToggle} role="group" aria-label={t('kiosk.language')}>
+              {LOCALES.map((l) => (
+                <button
+                  key={l}
+                  type="button"
+                  className={styles.langOption}
+                  aria-pressed={l === locale}
+                  aria-label={LANGUAGE_LABELS[l] ?? l}
+                  onClick={() => setLocale(l)}
+                >
+                  {l.toUpperCase()}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -104,7 +110,9 @@ export function KioskShell() {
       )}
 
       <main className={styles.content}>
-        <Outlet />
+        <ShellChromeContext.Provider value={setDarkHeader}>
+          <Outlet />
+        </ShellChromeContext.Provider>
       </main>
     </div>
   );
