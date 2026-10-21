@@ -3,17 +3,11 @@ import { useNavigate, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import type { components } from '@scentstation/contracts';
 import {
-  cancelOrphanedOrder,
   errorMessage,
-  forgetPendingOrder,
   isMachineInMaintenance,
   isNotCancellable,
   recordKioskInteraction,
-  rememberPendingOrder,
-  useCancelOrder,
-  useCreateOrder,
   useKioskCatalog,
-  useOrderStatus,
 } from '@/shared/api';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { config } from '@/shared/config';
@@ -21,8 +15,8 @@ import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
 import { Icon } from '@/shared/ui/Icon';
-import { phaseOf, secondsUntil } from '../checkout/checkout-phase';
 import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
+import { useKioskOrderFlow } from '../checkout/useKioskOrderFlow';
 import styles from './CatalogScreen.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
@@ -56,12 +50,6 @@ function parseNoteValues(val: unknown): string[] {
   return [String(val)];
 }
 
-function newIdempotencyKey(): string {
-  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
@@ -93,39 +81,8 @@ export default function CatalogScreen() {
   const startOffsetRef = useRef(0);
   const hasDraggedRef = useRef(false);
 
-  // Modal states
   const [selectedDetailItem, setSelectedDetailItem] = useState<KioskCatalogItem | null>(null);
-  // Khách đã đồng ý điều khoản bấm nút (FR-ORD-25) và đang ở modal mã QR.
-  const [paying, setPaying] = useState(false);
-  // Khách vừa bấm hủy khi đã có mã QR — đang hỏi lại trước khi bỏ đơn.
-  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState(false);
-
-  // Hook tạo đơn và theo dõi trạng thái thanh toán từ backend
-  const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
-  const createOrder = useCreateOrder();
-  const cancelOrder = useCancelOrder();
-  const created = createOrder.data;
-  // Theo dõi cả sau khi mã hết hạn, chừng nào modal còn mở (xem useOrderStatus).
-  const statusQuery = useOrderStatus(created?.order.id ?? null, { followLatePayment: paying });
-  const orderStatusView = statusQuery.data;
-
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(timer);
-  }, []);
-
-  const [prevStatus, setPrevStatus] = useState<string | null>(null);
-  const [paidSince, setPaidSince] = useState<number | null>(null);
-  const currentStatus = orderStatusView?.status ?? null;
-  if (currentStatus !== prevStatus) {
-    setPrevStatus(currentStatus);
-    setPaidSince(currentStatus === 'PAID' ? now : null);
-  }
-
-  const phase = phaseOf(orderStatusView, paidSince === null ? 0 : now - paidSince);
-  const isPostPayment = created !== undefined && phase !== 'PAYING' && phase !== 'EXPIRED';
 
   const items = useMemo(() => catalog.data?.items ?? [], [catalog.data?.items]);
 
@@ -136,62 +93,19 @@ export default function CatalogScreen() {
   }, [params.slotNumber, items]);
 
   const detailItem = selectedDetailItem ?? routeMatchedItem;
-  // Mở thẳng /checkout/:slot (vd. tải lại trang) vẫn phải qua modal chi tiết có điều khoản trước
-  // (FR-ORD-25): chỉ khi khách bấm đồng ý thì mới mở mã QR.
-  const paymentOpen = paying && detailItem !== null;
 
-  // Đếm theo hạn của chính đơn đang hiện (máy chủ trả), không đếm cục bộ — đơn mới thì hạn mới.
-  const qrSecondsLeft = secondsUntil(created?.order.expiresAt, now);
-  // Hết hạn: máy chủ đã báo EXPIRED, hoặc đồng hồ về 0 mà lần poll kế chưa tới. Từ lúc này không bao
-  // giờ hiện mã QR nữa — khách không được quét một mã đã (hoặc sắp) bị hủy ở cổng (FR-ORD-16, 33).
-  const qrExpired =
-    created !== undefined &&
-    (phase === 'EXPIRED' || (phase === 'PAYING' && qrSecondsLeft !== null && qrSecondsLeft <= 0));
-
-  // Phiên trước bị cắt ngang (tải lại trang) khi còn mã QR → hủy đơn đó trước (ADR-0015 mục 3).
-  useEffect(() => {
-    void cancelOrphanedOrder();
-  }, []);
-
-  // Ghi nhớ đơn chỉ trong lúc nó còn chờ thanh toán — đã trả tiền hay đã kết thúc thì không hủy nữa.
-  const pendingOrderId = created && phase === 'PAYING' ? created.order.id : null;
-  useEffect(() => {
-    if (pendingOrderId) rememberPendingOrder(pendingOrderId);
-    else forgetPendingOrder();
-  }, [pendingOrderId]);
-
-  // Tự động gọi API tạo đơn khi khách đã đồng ý điều khoản. Lỗi thì DỪNG — không tự gọi lại: lỗi như
-  // MACHINE_BUSY sẽ lặp lại ở mọi lần render sau, dội 409 liên tục vào máy chủ. Khách bấm "Thử lại".
-  useEffect(() => {
-    if (detailItem && paymentOpen && !created && !createOrder.isPending && !createOrder.isError) {
-      createOrder.mutate({
-        slotId: detailItem.slotId,
-        kioskSessionId,
-        idempotencyKey,
-      });
-    }
-  }, [detailItem, paymentOpen, created, createOrder, kioskSessionId, idempotencyKey]);
-
-  const timeoutCancelledRef = useRef(false);
-  useEffect(() => {
-    if (!paymentOpen) {
-      timeoutCancelledRef.current = false;
-    }
-  }, [paymentOpen]);
-
-  useEffect(() => {
-    if (
-      created &&
-      paymentOpen &&
-      phase === 'PAYING' &&
-      qrSecondsLeft !== null &&
-      qrSecondsLeft <= 0 &&
-      !timeoutCancelledRef.current
-    ) {
-      timeoutCancelledRef.current = true;
-      cancelOrder.mutate(created.order.id);
-    }
-  }, [created, paymentOpen, phase, qrSecondsLeft, cancelOrder]);
+  // Khách rời luồng: đóng lớp phủ, mở phiên mới, về trang chủ (đơn đang hiện đã được bỏ trong hook).
+  const flow = useKioskOrderFlow(detailItem, () => {
+    setSelectedDetailItem(null);
+    startNewSession();
+    isPausedRef.current = false;
+    void navigate('/');
+  });
+  const { created, phase, paymentOpen, isPostPayment, qrSecondsLeft, qrExpired, confirmingCancel } =
+    flow;
+  const handleCloseDetailModal = flow.exit;
+  const handleRequestCancel = flow.requestCancel;
+  const handleConfirmCancel = flow.confirmCancel;
 
   // Danh sách lặp vô tận (3 bộ lặp lại liên tục cho chu kỳ marquee conveyor)
   const loopItems = useMemo(() => {
@@ -418,19 +332,7 @@ export default function CatalogScreen() {
     }, 450);
   };
 
-  // Chọn sản phẩm -> Mở modal chi tiết ngay trên HomeScreen
-  // Bỏ đơn đang hiện (nếu có). Đơn chưa trả tiền tự hết hạn phía máy chủ; khách chọn lại là đơn mới,
-  // khoá idempotency mới — không bao giờ hiện lại mã QR/đồng hồ của sản phẩm trước.
-  const discardOrder = () => {
-    setPaying(false);
-    setConfirmingCancel(false);
-    cancelOrder.reset();
-    createOrder.reset();
-    setPaidSince(null);
-    setPrevStatus(null);
-    setIdempotencyKey(newIdempotencyKey());
-  };
-
+  // Chọn sản phẩm -> Mở modal chi tiết ngay trên HomeScreen; bỏ đơn của sản phẩm trước (nếu có).
   const handleSelectItem = (item: KioskCatalogItem) => {
     if (hasDraggedRef.current) return;
     if (!item.available) return;
@@ -440,73 +342,27 @@ export default function CatalogScreen() {
       slotId: item.slotId,
       kioskSessionId,
     });
-    discardOrder();
+    flow.discard();
     setSelectedDetailItem(item);
     void navigate(`/products/${item.slotNumber}`);
   };
 
-  const handleCloseDetailModal = () => {
-    setSelectedDetailItem(null);
-    discardOrder();
-    startNewSession();
-    isPausedRef.current = false;
-    void navigate('/');
-  };
-
-  // Khách có thể đã chuyển khoản dù đang bấm hủy — đã có mã QR thì phải hỏi lại. Chưa có mã (đang
-  // tạo đơn) thì khách chưa thể trả tiền, đóng luôn.
-  const handleRequestCancel = () => {
-    // Mã đã hết hạn thì đơn đã (hoặc đang) bị hủy ở máy chủ — không còn gì để hỏi lại.
-    if (created && !qrExpired) setConfirmingCancel(true);
-    else handleCloseDetailModal();
-  };
-
-  // FR-ORD-33: hủy đơn ở máy chủ (máy chủ hủy luôn link ở cổng) rồi mới đóng. Cổng báo tiền đã/đang
-  // về → ở lại màn QR, poll trạng thái sẽ đưa khách sang màn nhận lượt xịt. Lỗi khác (mất mạng…) →
-  // vẫn đóng: khách đã quyết rời đi, và tiền nếu vẫn tới sẽ vào danh sách hoàn tiền.
-  const handleConfirmCancel = () => {
-    if (!created) {
-      handleCloseDetailModal();
-      return;
-    }
-    cancelOrder.mutate(created.order.id, {
-      onSuccess: handleCloseDetailModal,
-      onError: (error) => {
-        if (isNotCancellable(error)) setConfirmingCancel(false);
-        else handleCloseDetailModal();
-      },
-    });
-  };
-
-  const settled =
-    created !== undefined && ['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase);
-
-  // Luôn trỏ tới bản đóng mới nhất để hẹn giờ/phím ESC không gọi closure cũ.
-  const closeRef = useRef<() => void>(() => {});
+  // Luôn trỏ tới bản đóng mới nhất để phím ESC không gọi closure cũ.
   useEffect(() => {
-    closeRef.current = handleCloseDetailModal;
     // Màn hướng dẫn sau thanh toán không đóng bằng phím ESC — khách đang chờ lượt xịt đã trả tiền.
     escCloseRef.current = isPostPayment
       ? () => {}
       : paymentOpen
         ? confirmingCancel
-          ? () => setConfirmingCancel(false)
+          ? flow.dismissCancel
           : handleRequestCancel
         : handleCloseDetailModal;
   });
 
-  // Đếm lại khi đổi pha: tiền về muộn đưa màn "hết hạn" sang màn hoàn tiền — khách cần đủ thời gian
-  // quét QR khiếu nại.
-  useEffect(() => {
-    if (!settled) return;
-    const timer = setTimeout(() => closeRef.current(), 60_000);
-    return () => clearTimeout(timer);
-  }, [settled, phase]);
-
   // Khách bấm "Đồng ý và thanh toán" ở modal chi tiết (đã đọc điều khoản, FR-ORD-25) → vào thẳng mã QR.
   const handleOpenPayment = () => {
     if (!detailItem) return;
-    setPaying(true);
+    flow.startPayment();
     void navigate(`/checkout/${detailItem.slotNumber}`);
   };
 
@@ -537,7 +393,7 @@ export default function CatalogScreen() {
   // Mô tả giữ nguyên như thương hiệu nhập (NFR-USA-07) — không có thì không bịa mô tả thay.
   const detailIntro = detailItem?.product?.description;
 
-  if (isMachineInMaintenance(createOrder.error)) {
+  if (isMachineInMaintenance(flow.createError)) {
     return <OutOfServiceScreen />;
   }
 
@@ -843,9 +699,9 @@ export default function CatalogScreen() {
         <DispenseSuccessGuide
           slot={detailItem?.slotNumber ?? 1}
           order={created.order}
-          view={orderStatusView}
+          view={flow.view}
           phase={phase}
-          now={now}
+          now={flow.now}
           pressWindowSec={config.pressWindowSec}
           goHome={handleCloseDetailModal}
         />
@@ -951,16 +807,13 @@ export default function CatalogScreen() {
                         role="img"
                         aria-label={t('kiosk.scanToPay')}
                       />
-                    ) : createOrder.isError ? (
+                    ) : flow.createFailed ? (
                       <div role="alert" style={{ textAlign: 'center', padding: 12 }}>
-                        <p style={{ margin: '0 0 12px' }}>{errorMessage(createOrder.error, t)}</p>
+                        <p style={{ margin: '0 0 12px' }}>{errorMessage(flow.createError, t)}</p>
                         <button
                           type="button"
                           className={styles.checkoutBtnPrimary}
-                          onClick={() => {
-                            createOrder.reset();
-                            setIdempotencyKey(newIdempotencyKey());
-                          }}
+                          onClick={flow.retryCreate}
                         >
                           {t('kiosk.retryCreateOrder')}
                         </button>
@@ -1071,9 +924,9 @@ export default function CatalogScreen() {
 
             <div className={styles.checkoutFooterButtons} style={{ justifyContent: 'flex-end' }}>
               {/* Hủy không được vì tiền đã/đang về — nói rõ để khách yên tâm đứng chờ. */}
-              {isNotCancellable(cancelOrder.error) && (
+              {isNotCancellable(flow.cancelError) && (
                 <p role="status" style={{ margin: 0, marginRight: 'auto', fontSize: 13 }}>
-                  {errorMessage(cancelOrder.error, t)}
+                  {errorMessage(flow.cancelError, t)}
                 </p>
               )}
               <button
@@ -1094,7 +947,7 @@ export default function CatalogScreen() {
         <div
           className={styles.confirmBackdrop}
           onClick={() => {
-            if (!cancelOrder.isPending) setConfirmingCancel(false);
+            if (!flow.cancelPending) flow.dismissCancel();
           }}
         >
           <div
@@ -1117,15 +970,15 @@ export default function CatalogScreen() {
                 type="button"
                 className={styles.checkoutBtnSecondary}
                 onClick={handleConfirmCancel}
-                disabled={cancelOrder.isPending}
+                disabled={flow.cancelPending}
               >
-                {cancelOrder.isPending ? t('kiosk.cancelling') : t('kiosk.cancelAnyway')}
+                {flow.cancelPending ? t('kiosk.cancelling') : t('kiosk.cancelAnyway')}
               </button>
               <button
                 type="button"
                 className={styles.checkoutBtnPrimary}
-                onClick={() => setConfirmingCancel(false)}
-                disabled={cancelOrder.isPending}
+                onClick={flow.dismissCancel}
+                disabled={flow.cancelPending}
                 autoFocus
               >
                 {t('kiosk.continuePayment')}
