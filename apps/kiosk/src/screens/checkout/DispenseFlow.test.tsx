@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OrderStatusView } from '@/shared/api';
 import { playChime } from '@/shared/audio/chime';
 import { I18nProvider } from '@/shared/i18n';
+import { ShellChromeContext } from '@/shared/shell/chrome';
 import { phaseOf, type CheckoutPhase } from './checkout-phase';
 import DispenseFlow from './DispenseFlow';
 
@@ -62,10 +63,14 @@ function Harness(props: { view: OrderStatusView; phase?: CheckoutPhase; goHome: 
 
 const goHome = vi.fn();
 
+const setDarkHeader = vi.fn();
+
 function renderFlow(v: OrderStatusView, phase?: CheckoutPhase) {
   const ui = (next: OrderStatusView) => (
     <I18nProvider>
-      <Harness view={next} phase={phase} goHome={goHome} />
+      <ShellChromeContext.Provider value={setDarkHeader}>
+        <Harness view={next} phase={phase} goHome={goHome} />
+      </ShellChromeContext.Provider>
     </I18nProvider>
   );
   const result = render(ui(v));
@@ -128,17 +133,36 @@ describe('DispenseFlow — ánh xạ trạng thái máy chủ sang màn (FR-ORD-
     expect(screen.queryByText(/Xin lỗi/)).toBeNull();
   });
 
-  it('test_FR_ORD_26_prompt_press_with_countdown — đèn sáng: số nút lớn, "Nhấn nút ngay", đếm theo pressDeadline máy chủ', () => {
+  it('test_FR_ORD_26_prompt_press_with_countdown — đèn sáng: số nút lớn, "Nhấn nút số N", đếm theo pressDeadline máy chủ', () => {
     vi.useFakeTimers();
     renderFlow(lit(45));
 
-    expect(screen.getByRole('heading', { name: 'Nhấn nút ngay' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Nhấn nút số 2' })).toBeTruthy();
     expect(screen.getByLabelText('Nút số 2').textContent).toBe('2');
     expect(screen.getByRole('timer').textContent).toMatch(/Còn 4[45] giây/);
     expect(playChime).toHaveBeenCalledOnce();
+    // Header chuyển nền tối cùng màn, ẩn đổi ngôn ngữ.
+    expect(setDarkHeader).toHaveBeenLastCalledWith(true);
 
     advance(10_000);
     expect(screen.getByRole('timer').textContent).toMatch(/Còn 3[45] giây/);
+  });
+
+  it('test_FR_ORD_26_press_steps_light_in_turn — ba bước sáng lần lượt 01 → 02 → 03', () => {
+    vi.useFakeTimers();
+    renderFlow(lit(45));
+    const active = () =>
+      screen.getAllByRole('listitem').findIndex((li) => li.getAttribute('data-active') === 'true');
+
+    expect(screen.getByText('Đưa cổ tay cách vòi 10–15 cm')).toBeTruthy();
+    expect(screen.getByText('Nhấn nút số 2 đang sáng')).toBeTruthy();
+    expect(active()).toBe(0);
+    advance(2500);
+    expect(active()).toBe(1);
+    advance(2500);
+    expect(active()).toBe(2);
+    advance(2500);
+    expect(active()).toBe(0);
   });
 
   it('test_FR_ORD_26_deadline_passed_waits_for_server — quá hạn mà máy chủ chưa báo: chỉ "đang xác nhận", không tự kết luận', () => {

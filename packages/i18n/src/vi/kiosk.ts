@@ -66,8 +66,6 @@ export const kiosk = {
   supportHintNoContact:
     'Hệ thống đã ghi nhận sự cố. Vui lòng chụp lại mã {reference} để được hỗ trợ khi cần.',
   // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (ADR-0007)
-  guideStepApproach: 'Đưa cổ tay hoặc cổ cách vòi 10–15 cm',
-  guideStepPress: 'Nhấn nút ô số {slot} khi đèn sáng',
   guideStepHold: 'Giữ yên 2–3 giây',
   copied: 'Đã sao chép!',
   copyCommand: 'Sao chép lệnh test',
@@ -99,10 +97,8 @@ export const kiosk = {
   // Sau thanh toán: chuẩn bị, chờ lượt, nhấn nút, kết quả (FR-ORD-11, 21, 26, 27)
   paidTitle: 'Đã nhận thanh toán',
   preparingHint: 'Đang chuẩn bị máy…',
-  pressNow: 'Nhấn nút ngay',
   pressTimeoutHint: 'Rất tiếc, đã qua {seconds} giây để nhấn nút nên máy không xịt lượt này.',
   orderProblemTitle: 'Xin lỗi, máy chưa xịt được lượt của bạn',
-  illustrationPending: 'Hình minh họa tư thế nhận xịt — chờ nhóm phần cứng cung cấp',
   // Màn chờ (NFR-USA-02)
   tapToStart: 'Chạm để bắt đầu',
   // Khối đồng hồ dưới mã QR; màn máy bận khi chưa tạo được đơn (FR-ORD-24, 35)
@@ -111,4 +107,8 @@ export const kiosk = {
   machineBusyHint: 'Vui lòng chờ trong giây lát',
   chooseAnother: 'Chọn hương khác',
   waitingTurnHint: 'Bạn là lượt tiếp theo · Máy sẽ sẵn sàng trong giây lát',
+  // Màn nhấn nút: tiêu đề và ba bước (FR-ORD-26)
+  pressButtonN: 'Nhấn nút số {slot}',
+  guideStepApproach: 'Đưa cổ tay cách vòi 10–15 cm',
+  guideStepPress: 'Nhấn nút số {slot} đang sáng',
 } as const;

@@ -1003,8 +1003,6 @@ export const en: SameKeysAs<typeof vi> = {
       'Scan with your phone and enter the account to receive the money. Our staff will transfer the refund within {hours} hours.',
     supportHintNoContact:
       'We have recorded the problem. Please take a photo of code {reference} in case you need help.',
-    guideStepApproach: 'Hold your wrist or neck 10–15 cm from the nozzle',
-    guideStepPress: 'Press button {slot} when it lights up',
     guideStepHold: 'Hold still for 2–3 seconds',
     copied: 'Copied!',
     copyCommand: 'Copy test command',
@@ -1031,16 +1029,17 @@ export const en: SameKeysAs<typeof vi> = {
     afterPayLookUp: 'Once paid, look at the machine — button {slot} will light up.',
     paidTitle: 'Payment received',
     preparingHint: 'Getting the machine ready…',
-    pressNow: 'Press the button now',
     pressTimeoutHint:
       'Sorry, the {seconds} seconds to press the button have passed, so this spray was not released.',
     orderProblemTitle: 'Sorry, the machine could not release your spray',
-    illustrationPending: 'Spray posture illustration — pending from the hardware team',
     tapToStart: 'Tap to start',
     qrExpiresIn: 'QR code expires in',
     machineBusyTitle: 'The machine is serving another customer',
     machineBusyHint: 'Please wait a moment',
     chooseAnother: 'Choose another scent',
     waitingTurnHint: 'You are next · The machine will be ready in a moment',
+    pressButtonN: 'Press button {slot}',
+    guideStepApproach: 'Wrist 10–15 cm from the nozzle',
+    guideStepPress: 'Press the lit button {slot}',
   },
 };

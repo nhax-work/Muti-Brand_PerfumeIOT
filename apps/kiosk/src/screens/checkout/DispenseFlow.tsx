@@ -5,6 +5,7 @@ import { playChime } from '@/shared/audio/chime';
 import { claimUrlFor, config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { secondsUntil, type CheckoutPhase } from './checkout-phase';
+import { PressScreen } from './PressScreen';
 import styles from './DispenseFlow.module.css';
 
 export interface DispenseFlowProps {
@@ -55,48 +56,7 @@ export default function DispenseFlow({
     if (phase !== 'PRESS') chimed.current = false;
   }, [phase]);
 
-  if (shown === 'PRESS') {
-    const fraction = secondsLeft === null ? 1 : Math.min(1, secondsLeft / config.pressWindowSec);
-    return (
-      <section className={`${styles.page} ${styles.lit}`} aria-labelledby="dispense-title">
-        <div className={styles.lamp}>
-          <svg className={styles.ring} viewBox="0 0 100 100" aria-hidden="true">
-            <circle cx="50" cy="50" r="48" pathLength={100} />
-            <circle
-              className={styles.ringLeft}
-              cx="50"
-              cy="50"
-              r="48"
-              pathLength={100}
-              strokeDasharray={`${fraction * 100} 100`}
-            />
-          </svg>
-          <span className={styles.lampNo} aria-label={t('kiosk.buttonNumber', { slot: slotNo })}>
-            {slotNo}
-          </span>
-        </div>
-        <h1 id="dispense-title" className={styles.pressTitle}>
-          {t('kiosk.pressNow')}
-        </h1>
-        {secondsLeft !== null && (
-          <p className={styles.countdown} role="timer">
-            {t('kiosk.pressCountdown', { seconds: secondsLeft })}
-          </p>
-        )}
-        <ol className={styles.steps}>
-          <li>{t('kiosk.guideStepApproach')}</li>
-          <li>{t('kiosk.guideStepPress', { slot: slotNo })}</li>
-          <li>{t('kiosk.guideStepHold')}</li>
-        </ol>
-        {/* Hình tư thế nhận xịt do nhóm phần cứng cung cấp sau — tạm để khung trống ở bản dev. */}
-        {config.showDevTools && (
-          <figure className={styles.illustration}>
-            <figcaption>{t('kiosk.illustrationPending')}</figcaption>
-          </figure>
-        )}
-      </section>
-    );
-  }
+  if (shown === 'PRESS') return <PressScreen slot={slotNo} secondsLeft={secondsLeft} />;
 
   // Đã trả tiền, máy còn phục vụ khách trước (FR-DSP-26): trấn an, không có nút thử lại — đơn đã
   // giữ chỗ, máy chủ tự tạo lệnh khi tới lượt.
