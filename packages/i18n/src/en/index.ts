@@ -946,7 +946,6 @@ export const en: SameKeysAs<typeof vi> = {
   kiosk: {
     welcome: 'Welcome to ScentStation',
     homeSubtitle: 'Discover & experience premium fragrances with a single tap',
-    tapToStart: 'Tap to choose a scent',
     featureAuthentic: '100% Authentic Fragrances',
     featureFineMist: 'Ultra-Fine Micro Mist',
     featureQrPay: 'Instant QR Payment',
@@ -1039,5 +1038,6 @@ export const en: SameKeysAs<typeof vi> = {
       'Sorry, the {seconds} seconds to press the button have passed, so this spray was not released.',
     orderProblemTitle: 'Sorry, the machine could not release your spray',
     illustrationPending: 'Spray posture illustration — pending from the hardware team',
+    tapToStart: 'Tap to start',
   },
 };

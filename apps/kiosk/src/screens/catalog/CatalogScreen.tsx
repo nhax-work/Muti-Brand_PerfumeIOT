@@ -41,14 +41,16 @@ export default function CatalogScreen() {
 
   const detailItem = selectedDetailItem ?? routeMatchedItem;
 
-  // Khách rời luồng: đóng lớp phủ, mở phiên mới, về trang chủ (đơn đang hiện đã được bỏ trong hook).
-  const flow = useKioskOrderFlow(detailItem, () => {
+  // Khách rời luồng: đóng trang đang mở, mở phiên mới; đổi ý thì về danh mục, xong lượt thì về màn
+  // chờ (đơn đang hiện đã được bỏ trong hook).
+  const flow = useKioskOrderFlow(detailItem, (to) => {
     setSelectedDetailItem(null);
     startNewSession();
-    void navigate('/');
+    void navigate(to === 'home' ? '/' : '/catalog');
   });
   const { created, phase, paymentOpen, isPostPayment, confirmingCancel } = flow;
-  const handleCloseDetailModal = flow.exit;
+  // Rời trang chi tiết (nút quay lại, phím ESC): về danh mục.
+  const handleCloseDetailModal = () => flow.exit('catalog');
 
   // Đóng modal khi nhấn ESC — đi qua cùng đường đóng để bỏ đơn đang hiện, không mang sang sản phẩm khác.
   const escCloseRef = useRef<() => void>(() => {});
@@ -122,7 +124,7 @@ export default function CatalogScreen() {
         view={flow.view}
         phase={phase}
         now={flow.now}
-        goHome={handleCloseDetailModal}
+        goHome={() => flow.exit('home')}
       />
     );
   } else if (paymentOpen && detailItem) {

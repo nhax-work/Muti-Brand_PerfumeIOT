@@ -17,6 +17,9 @@ type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
 
 export type KioskOrderFlow = ReturnType<typeof useKioskOrderFlow>;
 
+/** Rời luồng về đâu: danh mục (khách đổi ý, chọn mùi khác) hay màn chờ (lượt đã kết thúc). */
+export type ExitTarget = 'catalog' | 'home';
+
 function newIdempotencyKey(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
@@ -29,11 +32,11 @@ function newIdempotencyKey(): string {
  * hoặc mã hết hạn, và tự rời màn khi đơn đã kết thúc. Chỉ đọc trạng thái máy chủ trả — không tự suy
  * nghiệp vụ (QT5).
  *
- * @param onExit việc của màn hình khi khách rời luồng (đóng lớp phủ, về trang chủ). Đơn đang hiện đã
- *   được bỏ trước khi gọi.
+ * @param onExit việc của màn hình khi khách rời luồng (đóng trang, điều hướng tới `to`). Đơn đang
+ *   hiện đã được bỏ trước khi gọi.
  */
-export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => void) {
-  const { kioskSessionId } = useKioskSession();
+export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: (to: ExitTarget) => void) {
+  const { kioskSessionId, setActiveOrder } = useKioskSession();
 
   // Khách đã đồng ý điều khoản bấm nút (FR-ORD-25) và đang ở màn mã QR.
   const [paying, setPaying] = useState(false);
@@ -47,6 +50,20 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
   // Theo dõi cả sau khi mã hết hạn, chừng nào màn thanh toán còn mở (xem useOrderStatus).
   const statusQuery = useOrderStatus(created?.order.id ?? null, { followLatePayment: paying });
   const view = statusQuery.data;
+
+  // Báo cho khung kiosk biết đang có đơn: chỉ khi đó mới tắt tự về màn chờ, giữ màn giao dịch khi mất
+  // kết nối, và hủy đơn nếu phiên bị reset (KioskShell, ADR-0015 mục 3). Tạo đơn lỗi thì không có
+  // đơn — kiosk vẫn tự về màn chờ nếu khách bỏ đi.
+  const activeOrderId = created?.order.id;
+  const activeReference = created?.order.paymentReference;
+  useEffect(() => {
+    setActiveOrder(
+      activeOrderId && activeReference
+        ? { id: activeOrderId, paymentReference: activeReference }
+        : null,
+    );
+  }, [activeOrderId, activeReference, setActiveOrder]);
+  useEffect(() => () => setActiveOrder(null), [setActiveOrder]);
 
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -129,9 +146,9 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
     setIdempotencyKey(newIdempotencyKey());
   };
 
-  const exit = () => {
+  const exit = (to: ExitTarget = 'catalog') => {
     discard();
-    onExit();
+    onExit(to);
   };
 
   // Khách có thể đã chuyển khoản dù đang bấm hủy — đã có mã QR thì phải hỏi lại. Chưa có mã (đang
@@ -139,7 +156,7 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
   const requestCancel = () => {
     // Mã đã hết hạn thì đơn đã (hoặc đang) bị hủy ở máy chủ — không còn gì để hỏi lại.
     if (created && !qrExpired) setConfirmingCancel(true);
-    else exit();
+    else exit(qrExpired ? 'home' : 'catalog');
   };
 
   // FR-ORD-33: hủy đơn ở máy chủ (máy chủ hủy luôn link ở cổng) rồi mới đóng. Cổng báo tiền đã/đang
@@ -151,7 +168,7 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
       return;
     }
     cancelOrder.mutate(created.order.id, {
-      onSuccess: exit,
+      onSuccess: () => exit(),
       onError: (error) => {
         if (isNotCancellable(error)) setConfirmingCancel(false);
         else exit();
@@ -172,7 +189,7 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
   // về muộn đưa màn "hết hạn" sang màn hoàn tiền — khách cần đủ thời gian quét QR khiếu nại.
   useEffect(() => {
     if (!settled) return;
-    const timer = setTimeout(() => exitRef.current(), config.idleTimeoutMs);
+    const timer = setTimeout(() => exitRef.current('home'), config.idleTimeoutMs);
     return () => clearTimeout(timer);
   }, [settled, phase]);
 

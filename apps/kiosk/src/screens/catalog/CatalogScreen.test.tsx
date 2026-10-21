@@ -300,7 +300,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     // FR-ORD-33: hủy đơn ở máy chủ rồi mới đóng.
     expect(mockCancel).toHaveBeenCalledWith('order-1', expect.any(Object));
     expect(mockReset).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenLastCalledWith('/');
+    expect(mockNavigate).toHaveBeenLastCalledWith('/catalog');
   });
 
   it('test_FR_ORD_16_expired_qr_is_hidden — hết hạn thì ẩn mã QR, tự hủy đơn, về trang chủ không hỏi lại', () => {
@@ -419,7 +419,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
       act(() => {
         vi.advanceTimersByTime(1);
       });
-      expect(mockNavigate).toHaveBeenCalled();
+      expect(mockNavigate).toHaveBeenLastCalledWith('/');
     } finally {
       vi.useRealTimers();
     }
@@ -528,7 +528,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
 
     expect(screen.queryByRole('article')).toBeNull();
     expect(screen.getByRole('heading', { level: 2, name: 'Sauvage' })).toBeTruthy();
-    expect(mockNavigate).toHaveBeenLastCalledWith('/');
+    expect(mockNavigate).toHaveBeenLastCalledWith('/catalog');
     expect(mockReset).toHaveBeenCalled();
     expect(mockMutate).not.toHaveBeenCalled();
   });

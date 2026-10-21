@@ -6,7 +6,6 @@
 export const kiosk = {
   welcome: 'Chào mừng bạn đến với ScentStation',
   homeSubtitle: 'Khám phá & trải nghiệm hương thơm cao cấp chỉ với một chạm',
-  tapToStart: 'Chạm để chọn mùi hương',
   featureAuthentic: 'Nước hoa chính hãng',
   featureFineMist: 'Xịt sương vi hạt cao cấp',
   featureQrPay: 'Thanh toán QR nhanh chóng',
@@ -106,4 +105,6 @@ export const kiosk = {
   pressTimeoutHint: 'Rất tiếc, đã qua {seconds} giây để nhấn nút nên máy không xịt lượt này.',
   orderProblemTitle: 'Xin lỗi, máy chưa xịt được lượt của bạn',
   illustrationPending: 'Hình minh họa tư thế nhận xịt — chờ nhóm phần cứng cung cấp',
+  // Màn chờ (NFR-USA-02)
+  tapToStart: 'Chạm để bắt đầu',
 } as const;

@@ -32,7 +32,11 @@ export function KioskShell() {
   const outOfService = useOutOfService();
   const { startNewSession, activeOrder } = useKioskSession();
 
-  const keepAwake = matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
+  // Chỉ giữ màn khi thật sự có đơn (khách đang quét mã, chờ lượt, chờ bấm, xem kết quả). Tạo đơn lỗi
+  // ở màn thanh toán thì vẫn tự về màn chờ — khách bỏ đi không để kiosk đứng mãi ở màn lỗi.
+  const keepAwake =
+    activeOrder !== null &&
+    matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
 
   const resetSession = useCallback(() => {
     if (activeOrder?.id) {
