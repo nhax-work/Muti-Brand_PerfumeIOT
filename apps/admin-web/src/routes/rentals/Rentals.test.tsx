@@ -978,7 +978,7 @@ describe('RentalDetailPage Component (Task 5, FR-SLT-55)', () => {
     expect(screen.queryByText('Đổi slot')).toBeNull();
 
     // Xuất hiện thông báo đã đổi từ slot trước
-    expect(screen.getByText(/Hóa đơn đã được đổi từ Slot/)).toBeDefined();
+    expect(screen.getByText(/Hóa đơn đã được đổi slot vào lúc/)).toBeDefined();
   });
 
   it('nút "Đổi slot" bị ẩn khi hóa đơn đã kích hoạt / lắp chai (stage ACTIVE)', () => {

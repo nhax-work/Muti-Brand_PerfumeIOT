@@ -538,7 +538,7 @@ export const ui = {
   selectCandidateSlot: 'Chọn slot trống để đổi',
   noCandidateSlots: 'Không có slot trống nào cùng máy và cùng giá thuê niêm yết.',
   currentSlotInfo: 'Slot hiện tại',
-  swappedFromNotice: 'Hóa đơn đã được đổi từ Slot #{slotNumber} vào lúc {time}.',
+  swappedFromNotice: 'Hóa đơn đã được đổi slot vào lúc {time}.',
   openPayosCheckout: 'Mở trang thanh toán PayOS',
   checkoutExpiredNotice: 'Phiên thanh toán đã hết thời gian giữ chỗ',
   // Không gia hạn (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)

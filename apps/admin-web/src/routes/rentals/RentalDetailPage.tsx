@@ -30,6 +30,7 @@ import {
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useMyBrand } from '@/routes/brand-profile/api';
 import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
 import {
   useAssignProduct,
@@ -121,14 +122,14 @@ export default function RentalDetailPage() {
   const isPaid = Boolean(invoice.paidAt);
   const stageConfig = STAGE_TAGS[invoice.stage] || { color: 'default', labelKey: invoice.stage };
 
-  const swapWindowHours = 48;
+  const swapWindowHours = SPEC_CONSTRAINTS.SLOT_SWAP_WINDOW_HOURS;
   const isAwaitingStock = invoice.stage === 'AWAITING_STOCK' || rental?.status === 'DRAFT';
   const hasNotSwapped = !rental?.swappedFromSlotId;
-  const within48Hours = Boolean(
+  const withinSwapWindow = Boolean(
     invoice.paidAt &&
     currentTimestamp - new Date(invoice.paidAt).getTime() <= swapWindowHours * 3600 * 1000,
   );
-  const canSwap = isPaid && isAwaitingStock && hasNotSwapped && within48Hours;
+  const canSwap = isPaid && isAwaitingStock && hasNotSwapped && withinSwapWindow;
 
   const isRentalActiveOrExpiring = ['ACTIVE', 'EXPIRING'].includes(rental?.status ?? invoice.stage);
   const isBeforeEndsAt = invoice.endsAt
@@ -228,7 +229,6 @@ export default function RentalDetailPage() {
           <Alert
             type="info"
             message={t('ui.swappedFromNotice', {
-              slotNumber: rental.swappedFromSlotId.slice(0, 8),
               time: rental.swappedAt ? new Date(rental.swappedAt).toLocaleString('vi-VN') : '',
             })}
             showIcon

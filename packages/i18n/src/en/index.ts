@@ -800,7 +800,7 @@ export const en: SameKeysAs<typeof vi> = {
     selectCandidateSlot: 'Select an available slot to swap',
     noCandidateSlots: 'No available slots on the same machine with the same monthly rent price.',
     currentSlotInfo: 'Current Slot',
-    swappedFromNotice: 'This rental was swapped from Slot #{slotNumber} at {time}.',
+    swappedFromNotice: 'This rental was moved to another slot at {time}.',
     openPayosCheckout: 'Open PayOS checkout page',
     checkoutExpiredNotice: 'The checkout session hold time has expired',
     // Non-renewal (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)
