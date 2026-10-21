@@ -333,6 +333,7 @@ export class BndService {
       contactInfo: record.contactInfo,
       taxCode: record.taxCode,
       businessLicenseNumber: record.businessLicenseNumber,
+      hasPayoutAccount: record.payoutAccountCiphertext !== null,
       payoutAccountMasked,
       legalVerifiedAt: record.legalVerifiedAt?.toISOString() ?? null,
       status: record.status,

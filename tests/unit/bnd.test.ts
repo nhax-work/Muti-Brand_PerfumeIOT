@@ -336,6 +336,7 @@ describe('BndService — FR-BND-07: Platform Super Admin xem danh sách & chi ti
 describe('BndService — FR-BND-09: Brand Admin khai hồ sơ pháp nhân & tài khoản nhận doanh thu', () => {
   it('test_FR_BND_09_declare_legal_profile_success', async () => {
     const created = await service.create(admin, { code: 'LEGAL1', name: 'Legal Brand' });
+    expect(created.hasPayoutAccount).toBe(false);
     const userWithBrand: AuthenticatedUser = {
       ...brandAdmin,
       brandId: created.id,
@@ -356,6 +357,7 @@ describe('BndService — FR-BND-09: Brand Admin khai hồ sơ pháp nhân & tài
     expect(updated.taxCode).toBe('0123456789');
     expect(updated.businessLicenseNumber).toBe('GP-987654');
     expect(updated.legalVerifiedAt).toBeNull();
+    expect(updated.hasPayoutAccount).toBe(true);
     expect(updated.payoutAccountMasked).toEqual({
       bankCode: 'VCB',
       maskedAccountNumber: '****3210',
