@@ -31,6 +31,9 @@ export const config = {
    */
   orderStatusPollMs: (SPEC_CONSTRAINTS.ORDER_STATUS_POLL_MAX_SEC * 1000) / 3,
 
+  /** FR-ORD-09: hạn của mã thanh toán — vòng thời gian quanh mã QR tính theo tỷ lệ còn lại. */
+  paymentTtlSec: SPEC_CONSTRAINTS.ORDER_PAYMENT_TTL_SEC,
+
   /** FR-ORD-25: thời gian khách có để bấm nút — hiện trong điều khoản trước khi trả tiền. */
   pressWindowSec: SPEC_CONSTRAINTS.DISPENSE_PRESS_WINDOW_SEC,
 

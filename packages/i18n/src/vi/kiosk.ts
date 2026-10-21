@@ -81,12 +81,8 @@ export const kiosk = {
   guideStepApproach: 'Đưa cổ tay hoặc cổ cách vòi 10–15 cm',
   guideStepPress: 'Nhấn nút ô số {slot} khi đèn sáng',
   guideStepHold: 'Giữ yên 2–3 giây',
-  copyCode: 'Sao chép mã',
   copied: 'Đã sao chép!',
-  mockPayGuide: 'Lệnh thanh toán giả lập (Dev / Test):',
   copyCommand: 'Sao chép lệnh test',
-  waitingPaymentDesc: 'Đang chờ xác nhận từ ngân hàng / ví điện tử…',
-  cancelOrder: 'Hủy thanh toán',
   // Băng chuyền & modal chi tiết / mã QR ở màn danh mục
   language: 'Ngôn ngữ',
   // Danh mục: ba bước dưới wordmark, nhãn thẻ (FR-ORD-01)
@@ -102,13 +98,14 @@ export const kiosk = {
   buttonNumber: 'Nút số {slot}',
   scrollLeft: 'Cuộn sang trái',
   scrollRight: 'Cuộn sang phải',
-  close: 'Đóng',
   productImageAlt: 'Ảnh chai nước hoa',
-  paymentValidFor: 'Thời gian hiệu lực: {time}',
   cancelPaymentConfirmTitle: 'Bạn muốn hủy thanh toán?',
   cancelPaymentConfirm:
     'Nếu bạn đã quét mã và chuyển khoản, xin đừng hủy — hệ thống cần vài giây để nhận tiền. Rời đi lúc này, lượt xịt có thể bắt đầu khi bạn không còn đứng trước máy.',
   continuePayment: 'Tiếp tục thanh toán',
   cancelAnyway: 'Vẫn hủy',
   cancelling: 'Đang hủy…',
+  // Màn quét mã thanh toán (FR-ORD-08)
+  paymentMethod: 'VietQR · App ngân hàng',
+  afterPayLookUp: 'Thanh toán xong, hãy nhìn lên máy — nút số {slot} sẽ sáng.',
 } as const;

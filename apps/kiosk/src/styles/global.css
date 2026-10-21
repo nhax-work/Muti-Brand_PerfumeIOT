@@ -24,6 +24,8 @@
   /* QR luôn đen trên trắng để app ngân hàng quét được, bất kể nền màn hình. */
   --qr-bg: #ffffff;
   --qr-fg: #000000;
+  /* Lớp mờ sau hộp xác nhận. */
+  --scrim: rgba(0, 0, 0, 0.4);
 
   /* --- Chữ: serif cho tên sản phẩm và tiêu đề, sans cho phần còn lại (cả hai đủ dấu tiếng Việt). */
   --font-serif: 'Playfair Display', Georgia, serif;

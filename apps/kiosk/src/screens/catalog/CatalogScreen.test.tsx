@@ -258,7 +258,11 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
 
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
-    expect(screen.getByText(/Thời gian hiệu lực: 01:(30|29)/)).toBeTruthy();
+    expect(screen.getByText(/^01:(30|29)$/)).toBeTruthy();
+    // Chỉ một phương thức đang có (ADR-0016) và lời báo trước nút sẽ sáng.
+    expect(screen.getByText('VietQR · App ngân hàng')).toBeTruthy();
+    expect(screen.queryByText(/MOMO|ZALOPAY|VNPAY|NAPAS/)).toBeNull();
+    expect(screen.getByText(/nút số 1 sẽ sáng/)).toBeTruthy();
     expect(screen.getByText('ORD-20261014-ABC123')).toBeTruthy();
   });
 
@@ -278,8 +282,8 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
     mockReset.mockClear();
 
-    // Nút hủy và nút X đều chỉ mở hộp xác nhận, không bỏ đơn.
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    // Nút Hủy — lối thoát duy nhất — chỉ mở hộp xác nhận, không bỏ đơn.
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
     expect(screen.getByRole('alertdialog')).toBeTruthy();
     expect(screen.getByText(/đã quét mã và chuyển khoản/)).toBeTruthy();
     expect(mockReset).not.toHaveBeenCalled();
@@ -289,7 +293,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
     expect(screen.getByRole('alertdialog')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Vẫn hủy' }));
     // FR-ORD-33: hủy đơn ở máy chủ rồi mới đóng.
@@ -346,6 +350,11 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
   });
 
   it('test_FR_ORD_16_late_payment_shows_refund_screen — tiền về sau hạn thì sang màn hoàn tiền, không xịt', () => {
+    const view = renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
+
+    // Mã đã hết hạn, rồi máy chủ báo tiền vẫn về: đơn REFUND_PENDING, chưa từng có lệnh xịt.
     mockCreated = {
       order: {
         id: 'order-1',
@@ -362,9 +371,13 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
       revenueOwner: 'BRAND',
       claimToken: null,
     };
-    renderCatalog();
-    openDetail('Chanel No 5');
-    fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
+    view.rerender(
+      <I18nProvider>
+        <KioskSessionProvider>
+          <CatalogScreen />
+        </KioskSessionProvider>
+      </I18nProvider>,
+    );
 
     expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
     expect(screen.getByText('Tiền về sau khi mã đã hết hạn')).toBeTruthy();
@@ -437,7 +450,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     renderCatalog();
     openDetail('Chanel No 5');
     fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
     mockReset.mockClear();
     mockNavigate.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Vẫn hủy' }));
@@ -519,7 +532,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     renderCatalog();
     openDetail('Chanel No 5');
     fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy thanh toán' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }));
     expect(mockReset).toHaveBeenCalled();
 
     mockReset.mockClear();

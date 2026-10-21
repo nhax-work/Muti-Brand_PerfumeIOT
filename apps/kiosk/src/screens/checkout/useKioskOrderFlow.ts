@@ -14,6 +14,8 @@ import { phaseOf, secondsUntil } from './checkout-phase';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
 
+export type KioskOrderFlow = ReturnType<typeof useKioskOrderFlow>;
+
 function newIdempotencyKey(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
