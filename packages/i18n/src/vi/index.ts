@@ -15,6 +15,7 @@ import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
+import { rev } from './rev.js';
 import { slt } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
@@ -39,6 +40,7 @@ export const vi = {
   slt,
   ord,
   dsp,
+  rev,
   usr,
   ui,
   kiosk,

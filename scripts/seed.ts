@@ -124,6 +124,10 @@ const PERMISSIONS = [
   ['maintenance.handle', 'Tạo và xử lý phiếu bảo trì (FR-MNT-01..13)'],
   ['report.brand', 'Xem báo cáo trong phạm vi thương hiệu mình (FR-RPT-08/10)'],
   ['report.platform', 'Xem báo cáo tổng hợp toàn nền tảng (FR-RPT-15)'],
+  [
+    'revenue.manage',
+    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, xem doanh thu tách hai nguồn (FR-SLT-53, 54, FR-REV-04)',
+  ],
   ['audit.read', 'Tra cứu nhật ký kiểm toán (FR-AUD-10)'],
 ] as const;
 

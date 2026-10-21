@@ -266,6 +266,29 @@ export const en: SameKeysAs<typeof vi> = {
       'Machine {machine} has finished serving pending orders and is now under maintenance. Your slots on this machine are paused until maintenance is complete.',
   },
 
+  rev: {
+    payoutNotConfirmed:
+      'A transfer can only be recorded for a period whose figures are locked (CONFIRMED)',
+    payoutDisputeOpen:
+      'This period has an unanswered dispute. Answer the dispute before recording the transfer.',
+    brandNotVerified:
+      'The brand has not been legally verified or has no payout account yet, so the transfer cannot be recorded',
+    disputeBrandOnly: "Only the brand's Brand Admin can dispute payout figures",
+    disputeNotAllowed: 'Only a locked period that has not been disputed before can be disputed',
+    noOpenDispute: 'This period has no dispute waiting for an answer',
+    brandIdRequired: 'Choose the brand whose settlement you want to see',
+    periodEndBeforeStart: 'The end date must be after the start date',
+    payoutDisputedSubject: 'A brand disputed the payout figures for {period}',
+    payoutDisputedContent:
+      'A brand has disputed the payout figures for {period}. The transfer cannot be recorded until the dispute is answered.',
+    payoutDisputeAnsweredSubject: 'Your dispute for the {period} payout has been answered',
+    payoutDisputeAnsweredContent:
+      'The platform has answered your dispute about the {period} payout figures. See the details under Payouts.',
+    payoutPaidSubject: 'Revenue for {period} has been transferred',
+    payoutPaidContent:
+      'The platform has transferred your spray revenue for {period}. The transaction reference is under Payouts.',
+  },
+
   usr: {
     brandAdminNeedsBrand: 'A Brand Admin must be attached to exactly one brand',
     platformRoleNoBrand: 'Platform roles must not be attached to a brand',

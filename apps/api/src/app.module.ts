@@ -9,6 +9,7 @@ import { MchModule } from './modules/mch/index.js';
 import { IotModule } from './modules/iot/iot.module.js';
 import { OrdModule, PaymentModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
+import { RevModule } from './modules/rev/index.js';
 import { RptModule } from './modules/rpt/index.js';
 import { SltCheckoutPaymentModule, SltModule } from './modules/slt/index.js';
 import { UsrModule } from './modules/usr/index.js';
@@ -23,6 +24,7 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     UsrModule,
     MchModule,
     RptModule,
+    RevModule,
     SltModule,
     // Thanh toán dùng chung (@Global) + handler phiên thuê slot của SLT (@Global) — ADR-0008.
     PaymentModule,
