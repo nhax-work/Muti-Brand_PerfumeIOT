@@ -3,6 +3,7 @@ import type { components } from '@scentstation/contracts';
 import {
   cancelOrphanedOrder,
   forgetPendingOrder,
+  isMachineBusy,
   isNotCancellable,
   rememberPendingOrder,
   useCancelOrder,
@@ -113,6 +114,25 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: (to: Ex
     }
   }, [item, paymentOpen, created, createOrder, kioskSessionId, idempotencyKey]);
 
+  // Máy đang bận với khách khác (chưa tạo được đơn): tự thử lại theo chu kỳ kiosk hỏi lại máy chủ
+  // (HEARTBEAT_INTERVAL_SEC — thưa hơn hẳn ORDER_RATE_LIMIT_PER_MIN), được thì tự sang mã QR. Không
+  // thử dồn dập: lỗi 409 lặp ở mọi lần render từng dội máy chủ (FR-ORD-35).
+  const machineBusy = paymentOpen && isMachineBusy(createOrder.error);
+  const retryCreate = () => {
+    createOrder.reset();
+    setIdempotencyKey(newIdempotencyKey());
+  };
+  // Hẹn giờ chỉ đặt lại khi trạng thái bận đổi — không đặt lại theo nhịp đồng hồ 500ms.
+  const retryRef = useRef(retryCreate);
+  useEffect(() => {
+    retryRef.current = retryCreate;
+  });
+  useEffect(() => {
+    if (!machineBusy) return;
+    const timer = setTimeout(() => retryRef.current(), config.catalogPollMs);
+    return () => clearTimeout(timer);
+  }, [machineBusy]);
+
   const timeoutCancelledRef = useRef(false);
   useEffect(() => {
     if (!paymentOpen) {
@@ -204,15 +224,13 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: (to: Ex
     qrExpired,
     confirmingCancel,
     createFailed: createOrder.isError,
+    machineBusy,
     createError: createOrder.error,
     cancelError: cancelOrder.error,
     cancelPending: cancelOrder.isPending,
     /** Khách bấm đồng ý điều khoản (FR-ORD-25) → vào thẳng mã QR. */
     startPayment: () => setPaying(true),
-    retryCreate: () => {
-      createOrder.reset();
-      setIdempotencyKey(newIdempotencyKey());
-    },
+    retryCreate,
     discard,
     exit,
     requestCancel,

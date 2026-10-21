@@ -99,12 +99,16 @@ export const kiosk = {
   // Sau thanh toán: chuẩn bị, chờ lượt, nhấn nút, kết quả (FR-ORD-11, 21, 26, 27)
   paidTitle: 'Đã nhận thanh toán',
   preparingHint: 'Đang chuẩn bị máy…',
-  waitingTurnHint:
-    'Máy đang phục vụ khách trước. Lượt của bạn đã được giữ — vui lòng chờ trong giây lát.',
   pressNow: 'Nhấn nút ngay',
   pressTimeoutHint: 'Rất tiếc, đã qua {seconds} giây để nhấn nút nên máy không xịt lượt này.',
   orderProblemTitle: 'Xin lỗi, máy chưa xịt được lượt của bạn',
   illustrationPending: 'Hình minh họa tư thế nhận xịt — chờ nhóm phần cứng cung cấp',
   // Màn chờ (NFR-USA-02)
   tapToStart: 'Chạm để bắt đầu',
+  // Khối đồng hồ dưới mã QR; màn máy bận khi chưa tạo được đơn (FR-ORD-24, 35)
+  qrExpiresIn: 'Mã QR hết hạn sau',
+  machineBusyTitle: 'Máy đang phục vụ khách khác',
+  machineBusyHint: 'Vui lòng chờ trong giây lát',
+  chooseAnother: 'Chọn hương khác',
+  waitingTurnHint: 'Bạn là lượt tiếp theo · Máy sẽ sẵn sàng trong giây lát',
 } as const;

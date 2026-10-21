@@ -50,6 +50,59 @@
   }
 }
 
+/* --- Chờ lượt: số nút + tên hương, ba chấm sáng lần lượt thật chậm. */
+.queued {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.queuedNo {
+  display: grid;
+  place-items: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  font-size: var(--fs-h2);
+  font-weight: 600;
+}
+
+.queuedName {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+}
+
+.waitDots {
+  display: flex;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+
+.waitDots i {
+  width: var(--sp-1);
+  height: var(--sp-1);
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.25;
+  animation: wait 1.8s ease-in-out infinite;
+}
+
+.waitDots i:nth-child(2) {
+  animation-delay: 0.3s;
+}
+
+.waitDots i:nth-child(3) {
+  animation-delay: 0.6s;
+}
+
+@keyframes wait {
+  30% {
+    opacity: 1;
+  }
+}
+
 /* --- Đèn đã sáng: đổi hẳn nền để khách nhận ra ngay cả khi đứng lệch màn. */
 .lit {
   /* Đèn trên máy sáng liên tục (firmware không nháy) — số nút "thở" chậm để hút mắt; chỉnh nhịp ở đây. */

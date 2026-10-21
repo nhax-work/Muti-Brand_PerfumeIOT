@@ -22,7 +22,8 @@ export interface DispenseFlowProps {
  * màn, kiosk không tự suy nghiệp vụ (QT5).
  *
  * - PAID / lệnh chưa tới máy: "Đã nhận thanh toán · Đang chuẩn bị máy" — KHÔNG có đồng hồ.
- * - PAID lâu (máy đang phục vụ khách trước, FR-DSP-26): lời trấn an, không báo lỗi.
+ * - PAID lâu (máy đang phục vụ khách trước, FR-DSP-26): "Bạn là lượt tiếp theo" kèm tên hương, số
+ *   nút, chuyển động chờ nhẹ — không báo lỗi, không nút thử lại.
  * - Đèn đã sáng (lệnh ACKNOWLEDGED): đổi nền, âm báo, số nút lớn, đồng hồ theo `pressDeadline`
  *   máy chủ trả (acknowledgedAt + DISPENSE_PRESS_WINDOW_SEC). Hết giờ mà máy chủ chưa báo kết quả
  *   thì chỉ hiện "đang xác nhận" — ghi nhận bỏ lượt là việc của thiết bị và máy chủ.
@@ -97,7 +98,33 @@ export default function DispenseFlow({
     );
   }
 
-  if (shown === 'PREPARING' || shown === 'WAITING_TURN' || shown === 'CHECKING') {
+  // Đã trả tiền, máy còn phục vụ khách trước (FR-DSP-26): trấn an, không có nút thử lại — đơn đã
+  // giữ chỗ, máy chủ tự tạo lệnh khi tới lượt.
+  if (shown === 'WAITING_TURN') {
+    return (
+      <section className={styles.page} aria-labelledby="dispense-title">
+        <h1 id="dispense-title" className={styles.title}>
+          {t('kiosk.paidTitle')}
+        </h1>
+        <p className={styles.hint} role="status">
+          {t('kiosk.waitingTurnHint')}
+        </p>
+        <div className={styles.queued}>
+          <span className={styles.queuedNo} aria-label={t('kiosk.buttonNumber', { slot: slotNo })}>
+            {slotNo}
+          </span>
+          {productName && <span className={styles.queuedName}>{productName}</span>}
+        </div>
+        <span className={styles.waitDots} aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </span>
+      </section>
+    );
+  }
+
+  if (shown === 'PREPARING' || shown === 'CHECKING') {
     const checking = shown === 'CHECKING';
     return (
       <section className={styles.page} aria-labelledby="dispense-title">
@@ -108,7 +135,7 @@ export default function DispenseFlow({
           <>
             <p className={styles.hint} role="status">
               <span className={styles.pulse} aria-hidden="true" />
-              {shown === 'WAITING_TURN' ? t('kiosk.waitingTurnHint') : t('kiosk.preparingHint')}
+              {t('kiosk.preparingHint')}
             </p>
             <p className={styles.note}>{t('kiosk.afterPayLookUp', { slot: slotNo })}</p>
           </>

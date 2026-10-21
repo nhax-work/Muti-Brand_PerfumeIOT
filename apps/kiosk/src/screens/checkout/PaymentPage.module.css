@@ -1,11 +1,12 @@
-/* Thông tin bên trái, mã QR chiếm phần lớn bên phải; mã đơn và công cụ dev ở dòng cuối. */
+/* Thông tin bên trái (mã đơn, công cụ dev ở cuối cột), mã QR + đồng hồ chiếm phần lớn bên phải. */
 .page {
   flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: 1fr auto;
+  grid-template-rows: minmax(0, 1fr);
   column-gap: var(--sp-8);
-  padding: var(--sp-4) var(--gutter) var(--sp-3);
+  padding: var(--sp-3) var(--gutter);
   animation: kiosk-enter var(--dur) var(--ease) both;
 }
 
@@ -14,6 +15,7 @@
   flex-direction: column;
   justify-content: center;
   gap: var(--sp-2);
+  min-height: 0;
 }
 
 .title {
@@ -100,58 +102,55 @@
   place-items: center;
 }
 
-/* Cạnh tối thiểu 420px ở 1280×800, lớn dần theo chiều cao màn. */
+/* Cạnh QR lấy theo phần cao còn lại (trừ header, lề, khối đồng hồ): ~560px ở 1280×800, vẫn vừa
+   1024×600. Khối đồng hồ cùng bề rộng với mã. */
 .qrFrame {
-  position: relative;
-  width: clamp(420px, 62vh, 640px);
+  display: grid;
+  gap: var(--sp-2);
+  width: clamp(240px, calc(100dvh - var(--header-h) - 176px), 560px);
   margin: 0;
-  padding: var(--sp-2);
 }
 
 .qr {
   display: block;
   width: 100%;
   height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   background: var(--qr-bg);
 }
 
-/* Viền tiến trình mảnh quanh mã: phần còn lại đậm, phần đã trôi mờ. */
-.ring {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  fill: none;
-  stroke: var(--line);
-  stroke-width: 2;
-  overflow: visible;
+/* Khối đồng hồ: nền đen chữ trắng; 60 giây cuối đổi sang màu accent, chữ đen — không đỏ, không nháy. */
+.clock {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  /* 12×20 và cỡ số 32px theo bản thiết kế khối đồng hồ. */
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--on-action);
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
 }
 
-.ring rect {
-  vector-effect: non-scaling-stroke;
+.clockUrgent {
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
-.ringLeft {
-  stroke: var(--text);
-  transition: stroke-dasharray 500ms linear;
-}
-
-.ringUrgent .ringLeft {
-  stroke: var(--accent-ink);
-}
-
-.time {
-  position: absolute;
-  right: 0;
-  bottom: calc(-1 * var(--sp-5));
+.clockLabel {
   font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-muted);
+  opacity: 0.75;
 }
 
-.timeUrgent {
-  color: var(--accent-ink);
-  font-weight: 600;
+.clockTime {
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
 }
 
 .expired {
@@ -180,8 +179,7 @@
 }
 
 .reference {
-  grid-column: 1 / -1;
-  margin: var(--sp-3) 0 0;
+  margin: var(--sp-2) 0 0;
   font-size: var(--fs-small);
   color: var(--text-muted);
 }
@@ -192,7 +190,6 @@
 }
 
 .dev {
-  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: var(--sp-2);
@@ -252,4 +249,30 @@
 .confirmActions .cancel {
   margin-top: 0;
   min-width: 0;
+}
+
+/* Màn thấp (1024×600): thu tiêu đề và khoảng cách để cột thông tin vừa cạnh mã QR. */
+@media (max-height: 680px) {
+  .info {
+    gap: var(--sp-1);
+  }
+
+  .title {
+    font-size: var(--fs-h2);
+  }
+
+  .product,
+  .amount {
+    font-size: var(--fs-body);
+  }
+
+  .cancel {
+    margin-top: var(--sp-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
 }

@@ -1031,13 +1031,16 @@ export const en: SameKeysAs<typeof vi> = {
     afterPayLookUp: 'Once paid, look at the machine — button {slot} will light up.',
     paidTitle: 'Payment received',
     preparingHint: 'Getting the machine ready…',
-    waitingTurnHint:
-      'The machine is serving the previous customer. Your turn is reserved — please wait a moment.',
     pressNow: 'Press the button now',
     pressTimeoutHint:
       'Sorry, the {seconds} seconds to press the button have passed, so this spray was not released.',
     orderProblemTitle: 'Sorry, the machine could not release your spray',
     illustrationPending: 'Spray posture illustration — pending from the hardware team',
     tapToStart: 'Tap to start',
+    qrExpiresIn: 'QR code expires in',
+    machineBusyTitle: 'The machine is serving another customer',
+    machineBusyHint: 'Please wait a moment',
+    chooseAnother: 'Choose another scent',
+    waitingTurnHint: 'You are next · The machine will be ready in a moment',
   },
 };

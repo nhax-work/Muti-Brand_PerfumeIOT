@@ -6,13 +6,14 @@ import { config } from '@/shared/config';
 import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { Icon } from '@/shared/ui/Icon';
+import { MachineBusyPage } from './MachineBusyPage';
 import type { KioskOrderFlow } from './useKioskOrderFlow';
 import styles from './PaymentPage.module.css';
 
 type KioskCatalogItem = components['schemas']['KioskCatalogItem'];
 
-/** Chỉ trong chừng này giây cuối đồng hồ mới đổi màu nhấn — trước đó để yên cho khách quét. */
-const QR_URGENT_SEC = 30;
+/** Chỉ trong chừng này giây cuối khối đồng hồ mới đổi màu nhấn — trước đó để yên cho khách quét. */
+const QR_URGENT_SEC = 60;
 
 function formatCountdown(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -21,9 +22,10 @@ function formatCountdown(seconds: number): string {
 }
 
 /**
- * Màn quét mã thanh toán (FR-ORD-08, FR-ORD-16, FR-ORD-33): mã QR là trung tâm, viền tiến trình mảnh
- * chạy quanh mã theo hạn máy chủ trả; một lối thoát duy nhất là nút "Hủy" — đã có mã thì hỏi lại
- * trước khi hủy đơn (máy chủ hủy luôn link ở cổng). Hiện chỉ có thanh toán QR qua PayOS (ADR-0016).
+ * Màn quét mã thanh toán (FR-ORD-08, FR-ORD-16, FR-ORD-33): mã QR là trung tâm, khối đồng hồ ngay
+ * dưới đếm theo hạn máy chủ trả; một lối thoát duy nhất là nút "Hủy" — đã có mã thì hỏi lại trước
+ * khi hủy đơn (máy chủ hủy luôn link ở cổng). Hiện chỉ có thanh toán QR qua PayOS (ADR-0016).
+ * Máy đang bận với khách khác thì thay cả màn bằng MachineBusyPage.
  */
 export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: KioskOrderFlow }) {
   const { t, locale } = useI18n();
@@ -33,10 +35,11 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
   const amount = created
     ? formatPrice(created.order.amount, created.order.currency, locale)
     : formatPrice(item.pricePerSpray, item.currency, locale);
-  const fraction = qrSecondsLeft === null ? 1 : Math.min(1, qrSecondsLeft / config.paymentTtlSec);
   const urgent = qrSecondsLeft !== null && qrSecondsLeft <= QR_URGENT_SEC;
   const reference = created?.order.paymentReference;
   const mockCommand = reference ? `npm run pay:mock -- ${reference}` : null;
+
+  if (flow.machineBusy) return <MachineBusyPage flow={flow} />;
 
   return (
     <section className={styles.page} aria-labelledby="payment-title">
@@ -69,6 +72,28 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
         <button type="button" className={styles.cancel} onClick={flow.requestCancel}>
           {qrExpired ? t('kiosk.backToHome') : t('kiosk.cancel')}
         </button>
+
+        {reference && (
+          <p className={styles.reference}>
+            {t('kiosk.paymentReference')}: <span>{reference}</span>
+          </p>
+        )}
+
+        {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
+        {config.showDevTools && mockCommand && (
+          <div className={styles.dev}>
+            <code>{mockCommand}</code>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard?.writeText(mockCommand);
+                setCopied(true);
+              }}
+            >
+              {copied ? t('kiosk.copied') : t('kiosk.copyCommand')}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className={styles.qrArea}>
@@ -84,24 +109,6 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
           </div>
         ) : created?.qrPayload ? (
           <figure className={styles.qrFrame}>
-            <svg
-              className={`${styles.ring} ${urgent ? styles.ringUrgent : ''}`}
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              aria-hidden="true"
-            >
-              <rect x="0.5" y="0.5" width="99" height="99" rx="1" pathLength={100} />
-              <rect
-                className={styles.ringLeft}
-                x="0.5"
-                y="0.5"
-                width="99"
-                height="99"
-                rx="1"
-                pathLength={100}
-                strokeDasharray={`${fraction * 100} 100`}
-              />
-            </svg>
             {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08).
                 Luôn đen trên trắng, viền trắng rộng để app ngân hàng bắt được góc mã. */}
             <QRCodeSVG
@@ -114,8 +121,9 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
               aria-label={t('kiosk.scanToPay')}
             />
             {qrSecondsLeft !== null && (
-              <figcaption className={`${styles.time} ${urgent ? styles.timeUrgent : ''}`}>
-                {formatCountdown(qrSecondsLeft)}
+              <figcaption className={`${styles.clock} ${urgent ? styles.clockUrgent : ''}`}>
+                <span className={styles.clockLabel}>{t('kiosk.qrExpiresIn')}</span>
+                <span className={styles.clockTime}>{formatCountdown(qrSecondsLeft)}</span>
               </figcaption>
             )}
           </figure>
@@ -130,28 +138,6 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
           <p className={styles.muted}>{t('kiosk.creatingOrder')}</p>
         )}
       </div>
-
-      {reference && (
-        <p className={styles.reference}>
-          {t('kiosk.paymentReference')}: <span>{reference}</span>
-        </p>
-      )}
-
-      {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
-      {config.showDevTools && mockCommand && (
-        <div className={styles.dev}>
-          <code>{mockCommand}</code>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard?.writeText(mockCommand);
-              setCopied(true);
-            }}
-          >
-            {copied ? t('kiosk.copied') : t('kiosk.copyCommand')}
-          </button>
-        </div>
-      )}
 
       {/* Chạm ra ngoài = ở lại (lựa chọn an toàn cho khách có thể đã chuyển khoản), không phải hủy. */}
       {confirmingCancel && (

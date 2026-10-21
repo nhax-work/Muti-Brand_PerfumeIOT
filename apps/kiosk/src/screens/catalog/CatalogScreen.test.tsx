@@ -260,6 +260,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
 
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
     expect(screen.getByText(/^01:(30|29)$/)).toBeTruthy();
+    expect(screen.getByText('Mã QR hết hạn sau')).toBeTruthy();
     // Chỉ một phương thức đang có (ADR-0016) và lời báo trước nút sẽ sáng.
     expect(screen.getByText('VietQR · App ngân hàng')).toBeTruthy();
     expect(screen.queryByText(/MOMO|ZALOPAY|VNPAY|NAPAS/)).toBeNull();
@@ -425,7 +426,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     }
   });
 
-  it('test_FR_ORD_35_create_error_does_not_retry_in_loop — MACHINE_BUSY thì dừng, hiện lỗi và nút thử lại', () => {
+  it('test_FR_ORD_35_create_error_does_not_retry_in_loop — MACHINE_BUSY: màn máy bận toàn màn, không dội lại máy chủ', () => {
     mockCreateError = new ApiRequestError(409, {
       code: 'MACHINE_BUSY',
       message: 'Máy đang phục vụ khách khác. Vui lòng chờ trong giây lát.',
@@ -444,10 +445,38 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
 
     // Không gọi tạo đơn lại sau lỗi — trước đây mỗi lần render là một lần 409 nữa.
     expect(mockMutate).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert').textContent).toMatch(/đang phục vụ khách khác/);
+    // Chưa trả tiền: màn riêng, không còn cột thông tin sản phẩm / mã QR.
+    expect(screen.getByRole('heading', { name: 'Máy đang phục vụ khách khác' })).toBeTruthy();
+    expect(screen.getByText('Vui lòng chờ trong giây lát')).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Quét mã để thanh toán' })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
     expect(mockReset).toHaveBeenCalled();
+  });
+
+  it('test_FR_ORD_35_machine_busy_retries_on_poll_interval — máy bận thì tự thử lại theo chu kỳ hỏi máy chủ; "Chọn hương khác" về danh mục', () => {
+    vi.useFakeTimers();
+    try {
+      mockCreateError = new ApiRequestError(409, { code: 'MACHINE_BUSY', message: 'busy' });
+      renderCatalog();
+      openDetail('Chanel No 5');
+      fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
+      mockReset.mockClear();
+
+      act(() => {
+        vi.advanceTimersByTime(config.catalogPollMs - 1);
+      });
+      expect(mockReset).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(mockReset).toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Chọn hương khác' }));
+      expect(mockNavigate).toHaveBeenLastCalledWith('/catalog');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('test_FR_ORD_33_orphaned_order_cancelled_after_reload — khởi động lại thì hủy đơn của phiên trước', () => {

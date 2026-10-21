@@ -106,10 +106,14 @@ describe('DispenseFlow — ánh xạ trạng thái máy chủ sang màn (FR-ORD-
     expect(screen.queryByText(/ORD-20261004-ABC123/)).toBeNull();
   });
 
-  it('test_FR_ORD_26_waiting_turn_reassures_without_error — chờ lượt (FR-DSP-26): trấn an, không đếm, không báo lỗi', () => {
+  it('test_FR_ORD_26_waiting_turn_reassures_without_error — đã trả tiền, chờ lượt (FR-DSP-26): lượt tiếp theo, tên hương, số nút, không nút thử lại', () => {
     renderFlow(view({ status: 'PAID' }), 'WAITING_TURN');
 
-    expect(screen.getByText(/Lượt của bạn đã được giữ/)).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Đã nhận thanh toán' })).toBeTruthy();
+    expect(screen.getByText(/Bạn là lượt tiếp theo/)).toBeTruthy();
+    expect(screen.getByText('Matinale')).toBeTruthy();
+    expect(screen.getByLabelText('Nút số 2').textContent).toBe('2');
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
     expect(screen.queryByRole('timer')).toBeNull();
     expect(screen.queryByText(/sự cố|Xin lỗi/)).toBeNull();
   });
