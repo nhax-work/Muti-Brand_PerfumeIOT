@@ -47,20 +47,14 @@ export const kiosk = {
   amountLabel: 'Số tiền',
   paymentExpiresIn: 'Mã hết hạn sau {seconds} giây',
   waitingForPayment: 'Đang chờ xác nhận thanh toán…',
-  waitingForTurn: 'Đã thanh toán. Máy đang phục vụ khách trước, vui lòng chờ trong giây lát.',
-  preparingMachine: 'Đã thanh toán. Đang chuẩn bị máy…',
-  pressButtonNow: 'Mời bấm nút số {slot}',
   pressCountdown: 'Còn {seconds} giây',
   dispensedTitle: 'Cảm ơn bạn!',
   dispensedHint: 'Chúc bạn một ngày thơm tho.',
   pressTimeoutTitle: 'Đã hết thời gian bấm nút',
-  pressTimeoutHint:
-    'Đã hết {seconds} giây chờ bấm nút. Lần sau, bạn hãy đứng sẵn trước máy và để ý nút sáng đèn ngay sau khi thanh toán nhé.',
   paymentExpiredTitle: 'Mã thanh toán đã hết hạn',
   paymentExpiredHint: 'Nếu bạn chưa chuyển khoản, chỉ cần chọn lại mùi hương để thử lại.',
   paymentExpiredLatePayment:
     'Nếu bạn đã chuyển khoản, đừng lo: giao dịch vẫn được ghi nhận để hoàn tiền. Hãy lưu lại mã {reference}.',
-  orderProblemTitle: 'Lượt xịt gặp sự cố',
   latePaymentTitle: 'Tiền về sau khi mã đã hết hạn',
   latePaymentHint:
     'Máy không xịt cho giao dịch này. Bạn sẽ được hoàn lại tiền — hãy quét mã bên dưới để gửi thông tin nhận hoàn tiền.',
@@ -73,11 +67,6 @@ export const kiosk = {
   supportHintNoContact:
     'Hệ thống đã ghi nhận sự cố. Vui lòng chụp lại mã {reference} để được hỗ trợ khi cần.',
   // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (ADR-0007)
-  paymentSuccessTitle: 'Thanh toán thành công',
-  guidePressHeading: 'Nhấn nút ở ô số',
-  guideStatusPreparing: 'Đèn nút sắp sáng…',
-  guideStatusWaiting: 'Máy đang phục vụ khách trước, chờ giây lát…',
-  guideStatusLit: 'Đèn đã sáng — bấm ngay',
   guideStepApproach: 'Đưa cổ tay hoặc cổ cách vòi 10–15 cm',
   guideStepPress: 'Nhấn nút ô số {slot} khi đèn sáng',
   guideStepHold: 'Giữ yên 2–3 giây',
@@ -108,4 +97,13 @@ export const kiosk = {
   // Màn quét mã thanh toán (FR-ORD-08)
   paymentMethod: 'VietQR · App ngân hàng',
   afterPayLookUp: 'Thanh toán xong, hãy nhìn lên máy — nút số {slot} sẽ sáng.',
+  // Sau thanh toán: chuẩn bị, chờ lượt, nhấn nút, kết quả (FR-ORD-11, 21, 26, 27)
+  paidTitle: 'Đã nhận thanh toán',
+  preparingHint: 'Đang chuẩn bị máy…',
+  waitingTurnHint:
+    'Máy đang phục vụ khách trước. Lượt của bạn đã được giữ — vui lòng chờ trong giây lát.',
+  pressNow: 'Nhấn nút ngay',
+  pressTimeoutHint: 'Rất tiếc, đã qua {seconds} giây để nhấn nút nên máy không xịt lượt này.',
+  orderProblemTitle: 'Xin lỗi, máy chưa xịt được lượt của bạn',
+  illustrationPending: 'Hình minh họa tư thế nhận xịt — chờ nhóm phần cứng cung cấp',
 } as const;

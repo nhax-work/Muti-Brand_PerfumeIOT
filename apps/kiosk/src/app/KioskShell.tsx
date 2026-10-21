@@ -1,8 +1,9 @@
 import { DEFAULT_LOCALE, LOCALES } from '@scentstation/i18n';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { cancelKioskOrder } from '@/shared/api';
+import { unlockAudio } from '@/shared/audio/chime';
 import { config } from '@/shared/config';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
@@ -43,6 +44,13 @@ export function KioskShell() {
   }, [navigate, setLocale, startNewSession, activeOrder]);
 
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
+
+  // Trình duyệt chỉ cho phát âm thanh sau khi người dùng chạm: mở khóa ngay từ lần chạm đầu của
+  // phiên để âm báo "đèn đã sáng" kêu được (DispenseFlow).
+  useEffect(() => {
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    return () => window.removeEventListener('pointerdown', unlockAudio);
+  }, []);
 
   const isCatalog = location.pathname === '/catalog';
   const isCheckout = location.pathname.startsWith('/checkout/');

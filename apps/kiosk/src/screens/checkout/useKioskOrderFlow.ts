@@ -9,6 +9,7 @@ import {
   useCreateOrder,
   useOrderStatus,
 } from '@/shared/api';
+import { config } from '@/shared/config';
 import { useKioskSession } from '@/shared/session';
 import { phaseOf, secondsUntil } from './checkout-phase';
 
@@ -167,11 +168,11 @@ export function useKioskOrderFlow(item: KioskCatalogItem | null, onExit: () => v
     exitRef.current = exit;
   });
 
-  // Đếm lại khi đổi pha: tiền về muộn đưa màn "hết hạn" sang màn hoàn tiền — khách cần đủ thời gian
-  // quét QR khiếu nại.
+  // FR-ORD-26 AC3: hiện kết quả rồi về màn chờ sau KIOSK_IDLE_TIMEOUT_SEC. Đếm lại khi đổi pha: tiền
+  // về muộn đưa màn "hết hạn" sang màn hoàn tiền — khách cần đủ thời gian quét QR khiếu nại.
   useEffect(() => {
     if (!settled) return;
-    const timer = setTimeout(() => exitRef.current(), 60_000);
+    const timer = setTimeout(() => exitRef.current(), config.idleTimeoutMs);
     return () => clearTimeout(timer);
   }, [settled, phase]);
 

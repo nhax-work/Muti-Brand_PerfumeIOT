@@ -986,20 +986,14 @@ export const en: SameKeysAs<typeof vi> = {
     amountLabel: 'Amount',
     paymentExpiresIn: 'Code expires in {seconds} seconds',
     waitingForPayment: 'Waiting for payment confirmation…',
-    waitingForTurn: 'Paid. The machine is serving the previous customer, please wait a moment.',
-    preparingMachine: 'Paid. Preparing the machine…',
-    pressButtonNow: 'Press button {slot} now',
     pressCountdown: '{seconds} seconds left',
     dispensedTitle: 'Thank you!',
     dispensedHint: 'Have a fragrant day.',
     pressTimeoutTitle: 'Time to press the button has run out',
-    pressTimeoutHint:
-      'The {seconds}-second window to press the button has ended. Next time, stand by the machine and watch for the lit button right after paying.',
     paymentExpiredTitle: 'The payment code has expired',
     paymentExpiredHint: 'If you have not paid yet, just choose a scent again to retry.',
     paymentExpiredLatePayment:
       "If you already paid, don't worry: the payment is still recorded for a refund. Please keep code {reference}.",
-    orderProblemTitle: 'Something went wrong with your spray',
     latePaymentTitle: 'Your payment arrived after the code expired',
     latePaymentHint:
       'The machine will not spray for this payment. You will be refunded — scan the code below to send your refund details.',
@@ -1010,11 +1004,6 @@ export const en: SameKeysAs<typeof vi> = {
       'Scan with your phone and enter the account to receive the money. Our staff will transfer the refund within {hours} hours.',
     supportHintNoContact:
       'We have recorded the problem. Please take a photo of code {reference} in case you need help.',
-    paymentSuccessTitle: 'Payment Successful',
-    guidePressHeading: 'Press the button at slot',
-    guideStatusPreparing: 'Button lighting up…',
-    guideStatusWaiting: 'Serving the previous customer, please wait…',
-    guideStatusLit: 'Button is lit — press now',
     guideStepApproach: 'Hold your wrist or neck 10–15 cm from the nozzle',
     guideStepPress: 'Press button {slot} when it lights up',
     guideStepHold: 'Hold still for 2–3 seconds',
@@ -1041,5 +1030,14 @@ export const en: SameKeysAs<typeof vi> = {
     cancelling: 'Cancelling…',
     paymentMethod: 'VietQR · Banking app',
     afterPayLookUp: 'Once paid, look at the machine — button {slot} will light up.',
+    paidTitle: 'Payment received',
+    preparingHint: 'Getting the machine ready…',
+    waitingTurnHint:
+      'The machine is serving the previous customer. Your turn is reserved — please wait a moment.',
+    pressNow: 'Press the button now',
+    pressTimeoutHint:
+      'Sorry, the {seconds} seconds to press the button have passed, so this spray was not released.',
+    orderProblemTitle: 'Sorry, the machine could not release your spray',
+    illustrationPending: 'Spray posture illustration — pending from the hardware team',
   },
 };

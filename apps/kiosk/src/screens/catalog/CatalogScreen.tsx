@@ -3,10 +3,9 @@ import { useNavigate, useParams } from 'react-router';
 import type { components } from '@scentstation/contracts';
 import { isMachineInMaintenance, recordKioskInteraction, useKioskCatalog } from '@/shared/api';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
-import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
-import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
+import DispenseFlow from '../checkout/DispenseFlow';
 import { PaymentPage } from '../checkout/PaymentPage';
 import { useKioskOrderFlow } from '../checkout/useKioskOrderFlow';
 import { CatalogRail } from './CatalogRail';
@@ -116,13 +115,13 @@ export default function CatalogScreen() {
   let page;
   if (isPostPayment && created) {
     page = (
-      <DispenseSuccessGuide
+      <DispenseFlow
         slot={detailItem?.slotNumber ?? 1}
+        productName={detailItem?.product?.name}
         order={created.order}
         view={flow.view}
         phase={phase}
         now={flow.now}
-        pressWindowSec={config.pressWindowSec}
         goHome={handleCloseDetailModal}
       />
     );

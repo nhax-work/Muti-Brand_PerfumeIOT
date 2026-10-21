@@ -1,0 +1,222 @@
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--gutter);
+  text-align: center;
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-display);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+.hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  max-width: 36em;
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+
+.note {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.pulse {
+  flex-shrink: 0;
+  width: var(--sp-1);
+  height: var(--sp-1);
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* --- Đèn đã sáng: đổi hẳn nền để khách nhận ra ngay cả khi đứng lệch màn. */
+.lit {
+  /* Đèn trên máy sáng liên tục (firmware không nháy) — số nút "thở" chậm để hút mắt; chỉnh nhịp ở đây. */
+  --lamp-period: 2.4s;
+  background: var(--action);
+  color: var(--on-action);
+  gap: var(--sp-2);
+}
+
+.lamp {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: clamp(240px, 42vh, 420px);
+  aspect-ratio: 1;
+}
+
+.ring {
+  position: absolute;
+  inset: 0;
+  fill: none;
+  stroke: color-mix(in srgb, var(--on-action) 18%, transparent);
+  stroke-width: 1.5;
+  transform: rotate(-90deg);
+}
+
+.ringLeft {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 500ms linear;
+}
+
+.lampNo {
+  display: grid;
+  place-items: center;
+  width: 72%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-serif);
+  font-size: clamp(120px, 24vh, 240px);
+  line-height: 1;
+  animation: lamp var(--lamp-period) ease-in-out infinite;
+}
+
+@keyframes lamp {
+  50% {
+    box-shadow: 0 0 0 var(--sp-3) color-mix(in srgb, var(--accent) 35%, transparent);
+    filter: brightness(1.12);
+  }
+}
+
+.pressTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-display);
+  font-weight: 400;
+}
+
+.countdown {
+  margin: 0;
+  font-size: var(--fs-h2);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ba bước thu nhỏ thành hàng phụ phía dưới. */
+.steps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: var(--sp-2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-small);
+  opacity: 0.75;
+}
+
+.steps li + li::before {
+  content: '·';
+  padding: 0 var(--sp-2);
+}
+
+.illustration {
+  display: grid;
+  place-items: center;
+  width: 320px;
+  aspect-ratio: 4 / 3;
+  margin: 0;
+  border: 1px dashed currentColor;
+  border-radius: var(--radius);
+  font-size: var(--fs-small);
+  opacity: 0.6;
+}
+
+/* --- Kết quả. */
+.slow {
+  animation-duration: calc(var(--dur) * 3);
+}
+
+.product {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+}
+
+.home {
+  min-width: calc(var(--touch-min) * 4);
+  min-height: var(--touch-min);
+  margin-top: var(--sp-2);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--text);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.problem {
+  flex-direction: row;
+  gap: var(--sp-8);
+  text-align: left;
+}
+
+.problemText {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  max-width: 36em;
+}
+
+.problemText .title {
+  font-size: var(--fs-h1);
+}
+
+.problemText .hint {
+  justify-content: flex-start;
+}
+
+.reference {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.reference span {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.claim {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  max-width: 360px;
+  text-align: center;
+  font-size: var(--fs-small);
+}
+
+.claim figcaption {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.claimQr {
+  width: 320px;
+  height: auto;
+  background: var(--qr-bg);
+}

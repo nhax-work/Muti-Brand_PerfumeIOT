@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, recordKioskInteraction, useKioskCatalog } from '@/shared/api';
+import { config } from '@/shared/config';
 import { I18nProvider } from '@/shared/i18n';
 import { KioskSessionProvider } from '@/shared/session';
 import CatalogScreen from './CatalogScreen';
@@ -382,6 +383,46 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
     expect(screen.getByText('Tiền về sau khi mã đã hết hạn')).toBeTruthy();
     expect(screen.getByText(/Máy không xịt cho giao dịch này/)).toBeTruthy();
+  });
+
+  it('test_FR_ORD_26_result_returns_home_after_idle_timeout — có kết quả rồi về màn chờ sau KIOSK_IDLE_TIMEOUT_SEC', () => {
+    vi.useFakeTimers();
+    try {
+      const view = renderCatalog();
+      openDetail('Chanel No 5');
+      fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
+      mockCreated = {
+        order: {
+          id: 'order-1',
+          paymentReference: 'ORD-20261021-SAG9YC',
+          amount: '35000.0000',
+          currency: 'VND',
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        },
+        qrPayload: '00020101021238570010A000000727',
+      };
+      mockStatus = { orderId: 'order-1', status: 'DISPENSED', revenueOwner: 'BRAND' };
+      view.rerender(
+        <I18nProvider>
+          <KioskSessionProvider>
+            <CatalogScreen />
+          </KioskSessionProvider>
+        </I18nProvider>,
+      );
+      expect(screen.getByRole('heading', { name: 'Cảm ơn bạn!' })).toBeTruthy();
+      mockNavigate.mockClear();
+
+      act(() => {
+        vi.advanceTimersByTime(config.idleTimeoutMs - 1);
+      });
+      expect(mockNavigate).not.toHaveBeenCalled();
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(mockNavigate).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('test_FR_ORD_35_create_error_does_not_retry_in_loop — MACHINE_BUSY thì dừng, hiện lỗi và nút thử lại', () => {
