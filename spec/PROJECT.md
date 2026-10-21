@@ -74,7 +74,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > Trạng thái acceptance criteria trong `spec/modules/` (cập nhật ngày 2026-10-17 sau khi hoàn thành 28 FR mới theo ADR-0013, 0014, 0015 và 12 FR của RFQ; 7 FR mức X đã bãi bỏ không tính):
 >
 > - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`, `RFQ`
-> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-21..27 — nút bấm vật lý), `RPT` (FR-RPT-04)
+> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-18..27 — timeout, chẩn đoán, nút bấm vật lý), `RPT` (FR-RPT-04)
 > - **Còn rỗng:** `IOT`, `AUD`, `PRD`
 >
 > **Đã hoàn thành ngày 2026-10-17:** Viết đủ AC cho 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
