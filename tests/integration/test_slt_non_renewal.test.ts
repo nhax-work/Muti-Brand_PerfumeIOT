@@ -60,7 +60,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     }
   });
 
-  it('từ chối 403 FORBIDDEN_SCOPE khi Brand B gọi vào hóa đơn của Brand A', async () => {
+  it('test_FR_EXP_23_forbidden_other_brand — từ chối 403 FORBIDDEN_SCOPE khi Brand B gọi vào hóa đơn của Brand A', async () => {
     const rentalId = fx.rentals[0]; // thuộc Brand A
     const res = await brandB('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -70,7 +70,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(body.code).toBe('FORBIDDEN_SCOPE');
   });
 
-  it('từ chối 403 FORBIDDEN_SCOPE khi Platform Admin (không có brandId) gọi báo không gia hạn', async () => {
+  it('test_FR_EXP_23_forbidden_platform_admin — từ chối 403 FORBIDDEN_SCOPE khi Platform Admin (không có brandId) gọi báo không gia hạn', async () => {
     const rentalId = fx.rentals[0];
     const res = await superAdmin('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -80,7 +80,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(body.code).toBe('FORBIDDEN_SCOPE');
   });
 
-  it('từ chối 403/404 khi không tìm thấy hóa đơn', async () => {
+  it('test_FR_EXP_23_not_found — từ chối 403/404 khi không tìm thấy hóa đơn', async () => {
     const nonExistentId = randomUUID();
     const res = await brandA('POST', `/slot-rentals/${nonExistentId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -88,7 +88,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect([403, 404]).toContain(res.statusCode);
   });
 
-  it('từ chối 409 RENTAL_NOT_ACTIVE khi hóa đơn đã quá hạn hoặc không còn ACTIVE', async () => {
+  it('test_FR_EXP_23_rental_not_active — từ chối 409 RENTAL_NOT_ACTIVE khi hóa đơn đã quá hạn hoặc không còn ACTIVE', async () => {
     const liquidatedRentalId = fx.rentals[4]; // LIQUIDATED, ends_at trong quá khứ
     const res = await brandA('POST', `/slot-rentals/${liquidatedRentalId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -98,7 +98,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(body.code).toBe('RENTAL_NOT_ACTIVE');
   });
 
-  it('từ chối 400 khi body returnMethod không hợp lệ', async () => {
+  it('test_FR_EXP_23_invalid_return_method — từ chối 400 khi body returnMethod không hợp lệ', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'INVALID_METHOD' },
@@ -106,7 +106,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('báo không gia hạn thành công (POST) và ghi nhận vào CSDL cùng audit log', async () => {
+  it('test_FR_EXP_23_request_non_renewal — báo không gia hạn thành công (POST) và ghi nhận vào CSDL cùng audit log', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -137,7 +137,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(auditRes.rows.length).toBe(1);
   });
 
-  it('idempotent khi gọi lại POST với cùng returnMethod — không sinh thêm audit log', async () => {
+  it('test_FR_EXP_23_idempotent_repeat — idempotent khi gọi lại POST với cùng returnMethod — không sinh thêm audit log', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'WAREHOUSE_PICKUP' },
@@ -154,7 +154,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(auditRes.rows.length).toBe(1);
   });
 
-  it('cho phép đổi phương thức nhận hàng (POST SHIP_TO_BRAND) và ghi audit log mới', async () => {
+  it('test_FR_EXP_23_change_return_method — cho phép đổi phương thức nhận hàng (POST SHIP_TO_BRAND) và ghi audit log mới', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('POST', `/slot-rentals/${rentalId}/non-renewal`, {
       payload: { returnMethod: 'SHIP_TO_BRAND' },
@@ -176,7 +176,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(auditRes.rows.length).toBe(2);
   });
 
-  it('rút lại yêu cầu không gia hạn (DELETE) — xóa thông tin trong CSDL và ghi audit log', async () => {
+  it('test_FR_EXP_24_cancel_non_renewal_request — rút lại yêu cầu không gia hạn (DELETE) — xóa thông tin trong CSDL và ghi audit log', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('DELETE', `/slot-rentals/${rentalId}/non-renewal`);
     expect(res.statusCode).toBe(200);
@@ -204,7 +204,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(auditRes.rows.length).toBe(1);
   });
 
-  it('idempotent khi gọi lại DELETE khi chưa/không còn báo không gia hạn — trả 200, không lỗi và không ghi audit log trùng', async () => {
+  it('test_FR_EXP_24_withdraw_idempotent — idempotent khi gọi lại DELETE khi chưa/không còn báo không gia hạn — trả 200, không lỗi và không ghi audit log trùng', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandA('DELETE', `/slot-rentals/${rentalId}/non-renewal`);
     expect(res.statusCode).toBe(200);
@@ -220,7 +220,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(auditRes.rows.length).toBe(1);
   });
 
-  it('từ chối DELETE khi gọi từ Brand B (403 FORBIDDEN_SCOPE)', async () => {
+  it('test_FR_EXP_24_forbidden_other_brand — từ chối DELETE khi gọi từ Brand B (403 FORBIDDEN_SCOPE)', async () => {
     const rentalId = fx.rentals[0];
     const res = await brandB('DELETE', `/slot-rentals/${rentalId}/non-renewal`);
     expect(res.statusCode).toBe(403);
@@ -228,7 +228,7 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(body.code).toBe('FORBIDDEN_SCOPE');
   });
 
-  it('FR-EXP-25 AC2: đơn kiosk tạo sau ends_at trên slot đã báo không gia hạn — đơn thành công, revenue_owner=BRAND, hóa đơn vẫn ACTIVE/EXPIRING', async () => {
+  it('test_FR_EXP_25_no_grace_transition_for_non_renewal — AC2: đơn kiosk tạo sau ends_at trên slot đã báo không gia hạn — đơn thành công, revenue_owner=BRAND, hóa đơn vẫn ACTIVE/EXPIRING', async () => {
     const rentalId = fx.rentals[1];
     const slotId = fx.slots[1];
 
@@ -279,4 +279,10 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(['ACTIVE', 'EXPIRING']).toContain(dbRental.rows[0].status);
     expect(dbRental.rows[0].non_renewal_requested_at).not.toBeNull();
   });
+
+  // FR-EXP-25 AC1 cần job chuyển GRACE (FR-EXP-06, lịch T8) — chưa có job nên chưa kiểm được. Job đó
+  // phải lọc `non_renewal_requested_at IS NULL`: không vào GRACE, không phí ân hạn, không phí lưu kho.
+  it.todo(
+    'test_FR_EXP_25_grace_job_skips_non_renewal — job GRACE (T8) bỏ qua hóa đơn đã báo không gia hạn',
+  );
 });

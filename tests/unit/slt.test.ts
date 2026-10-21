@@ -267,40 +267,23 @@ class FakeSltQueries {
     };
   }
 
-  async findInvoiceDetailsByCheckoutId(checkoutId: string) {
+  async findAnnexItemsByCheckoutId(checkoutId: string) {
     const items = this.rentals.filter((r) => r.checkoutId === checkoutId);
     return items.map((r, i) => ({
       rentalId: r.id,
-      checkoutId: r.checkoutId,
-      invoiceNumber: r.invoiceNumber,
-      status: r.status,
-      brandId: r.brandId,
-      slotId: r.slotId,
+      originalSlotId: r.swappedFromSlotId ?? r.slotId,
       slotNumber: i + 1,
-      machineId: r.machineId,
-      machineDisplayName: 'Máy Test',
-      locationName: 'Địa Điểm Test',
-      packageName: 'Gói 3 tháng',
+      machineSerialNumber: 'SN-TEST-1',
       durationMonths: r.durationMonths,
       discountPercent: r.discountPercent,
-      planName: 'Bảo quản Tiêu Chuẩn',
+      monthlyRentPrice: r.monthlyRentPrice,
+      rentAmount: r.rentAmount,
       storageMonthlyPrice: r.storageMonthlyPrice,
       storageCoveragePercent: r.storageCoveragePercent,
       storageCoverageCap: r.storageCoverageCap,
-      monthlyRentPrice: r.monthlyRentPrice,
-      rentAmount: r.rentAmount,
       storageAmount: r.storageAmount,
-      graceFeeAmount: r.graceFeeAmount,
       totalAmount: r.totalAmount,
       currency: r.currency,
-      holdExpiresAt: r.holdExpiresAt,
-      paidAt: r.paidAt,
-      startsAt: r.startsAt,
-      endsAt: r.endsAt,
-      swappedFromSlotId: r.swappedFromSlotId,
-      swappedAt: r.swappedAt,
-      nonRenewalRequestedAt: r.nonRenewalRequestedAt,
-      returnMethod: r.returnMethod,
     }));
   }
 
@@ -638,6 +621,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
         if (name === 'RENTAL_CHECKOUT_HOLD_MIN') return 15;
         if (name === 'BRAND_MAX_HELD_SLOTS') return 5;
         if (name === 'SLOT_SWAP_WINDOW_HOURS') return 48;
+        if (name === 'GRACE_FEE_RATE_DEFAULT') return 0.05;
         return 0;
       },
     };
@@ -970,6 +954,8 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       expect(annex.agreementVersionId).toBe('ag-1');
       expect(annex.content).toContain('PHỤ LỤC HỢP ĐỒNG THUÊ SLOT KIOSK NƯỚC HOA');
       expect(annex.content).toContain('Mã phiên thanh toán: ' + checkout.id);
+      // Tỷ lệ phí ân hạn lấy từ GRACE_FEE_RATE_DEFAULT (0.05), không viết cứng
+      expect(annex.content).toContain('Tỷ lệ phí ân hạn: 5%');
       expect(annex.acceptance).toBeNull();
 
       // Hash xác định
@@ -1762,7 +1748,7 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
     ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
   });
 
-  it('test_FR_EXP_23_successful_request — báo không gia hạn trước endsAt thành công và ghi audit log', async () => {
+  it('test_FR_EXP_23_request_non_renewal — báo không gia hạn trước endsAt thành công và ghi audit log', async () => {
     const r = rental('r-active', {
       brandId: BRAND_A,
       status: 'ACTIVE',
@@ -1813,7 +1799,7 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
     expect(audits).toHaveLength(0); // Không ghi thêm audit
   });
 
-  it('test_FR_EXP_24_withdraw_valid — rút lại trước endsAt thành công, xóa dữ liệu và ghi audit', async () => {
+  it('test_FR_EXP_24_cancel_non_renewal_request — rút lại trước endsAt thành công, xóa dữ liệu và ghi audit', async () => {
     const r = rental('r-active', {
       brandId: BRAND_A,
       status: 'ACTIVE',
@@ -1876,7 +1862,7 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
     ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
   });
 
-  it('test_FR_EXP_25_non_renewal_preserves_status_without_grace — giữ status ACTIVE/EXPIRING khi báo không gia hạn', async () => {
+  it('test_FR_EXP_25_request_keeps_active_or_expiring_status — giữ status ACTIVE/EXPIRING khi báo không gia hạn', async () => {
     const r = rental('r-expiring', {
       brandId: BRAND_A,
       status: 'EXPIRING',

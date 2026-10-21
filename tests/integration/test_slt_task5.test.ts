@@ -309,8 +309,9 @@ describe('FR-SLT-50: Phụ lục thanh toán & Chữ ký điện tử', () => {
     // Kiểm tra các trường thông tin trong phụ lục (FR-SLT-50 AC1)
     expect(data1.content).toContain('PHỤ LỤC HỢP ĐỒNG THUÊ SLOT');
     expect(data1.content).toContain('1000000'); // monthly_rent_price
-    expect(data1.content).toContain('Bảo quản'); // storage plan
+    expect(data1.content).toContain('100000'); // storage_monthly_price
     expect(data1.content).toContain('3000000'); // coverage_cap
+    expect(data1.content).toContain('Tỷ lệ phí ân hạn: 5%'); // GRACE_FEE_RATE_DEFAULT
     expect(data1.content).toContain(checkout.totalAmount); // tổng tiền
     expect(data1.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
@@ -339,6 +340,75 @@ describe('FR-SLT-50: Phụ lục thanh toán & Chữ ký điện tử', () => {
     ]);
 
     await deleteCheckouts([checkout.id]);
+  });
+
+  it('test_FR_SLT_50_annex_hash_stable_after_payment_rename_and_swap', async () => {
+    const res = await brandA('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlots[0], rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    const checkoutId = res.json<{ id: string }>().id;
+
+    // Đồng ý rồi thanh toán: số hóa đơn HD-… được cấp lúc này
+    await payCheckoutFully(checkoutId, brandA);
+    const accepted = await raw.query<{ content_hash: string }>(
+      `SELECT content_hash FROM agreement_acceptances WHERE rental_checkout_id = $1 AND kind = 'ANNEX'`,
+      [checkoutId],
+    );
+    const acceptedHash = accepted.rows[0]!.content_hash;
+
+    const annexAfterPay = await brandA('GET', `/rental-checkouts/${checkoutId}/annex`);
+    expect(annexAfterPay.json<{ contentHash: string }>().contentHash).toBe(acceptedHash);
+
+    // Đổi tên máy, tên gói thuê và gói bảo quản: phụ lục không phụ thuộc dữ liệu đổi được
+    const machineBefore = await raw.query<{ display_name: string }>(
+      `SELECT display_name FROM machines WHERE id = $1`,
+      [fx.machineId],
+    );
+    await raw.query(`UPDATE machines SET display_name = 'Tên máy mới' WHERE id = $1`, [
+      fx.machineId,
+    ]);
+    await raw.query(`UPDATE rental_packages SET name = 'Tên gói mới' WHERE id = $1`, [packageId]);
+    await raw.query(`UPDATE storage_plans SET name = 'Tên bảo quản mới' WHERE id = $1`, [
+      storagePlanId,
+    ]);
+
+    try {
+      const annexAfterRename = await brandA('GET', `/rental-checkouts/${checkoutId}/annex`);
+      expect(annexAfterRename.json<{ contentHash: string }>().contentHash).toBe(acceptedHash);
+
+      // Đổi slot sau thanh toán (FR-SLT-55): phụ lục vẫn mô tả slot lúc đồng ý
+      const rentalId = (
+        await raw.query<{ id: string }>(`SELECT id FROM slot_rentals WHERE checkout_id = $1`, [
+          checkoutId,
+        ])
+      ).rows[0]!.id;
+      const swapRes = await brandA('POST', `/slot-rentals/${rentalId}/swap-slot`, {
+        payload: { targetSlotId: vacantSlots[1] },
+      });
+      expect(swapRes.statusCode).toBe(200);
+
+      const annexAfterSwap = await brandA('GET', `/rental-checkouts/${checkoutId}/annex`);
+      const afterSwap = annexAfterSwap.json<{ content: string; contentHash: string }>();
+      expect(afterSwap.contentHash).toBe(acceptedHash);
+      expect(afterSwap.content).toContain(vacantSlots[0]);
+    } finally {
+      await raw.query(`UPDATE machines SET display_name = $1 WHERE id = $2`, [
+        machineBefore.rows[0]!.display_name,
+        fx.machineId,
+      ]);
+      await raw.query(`UPDATE rental_packages SET name = $1 WHERE id = $2`, [
+        `Gói Task5 3 tháng ${fx.runId}`,
+        packageId,
+      ]);
+      await raw.query(`UPDATE storage_plans SET name = $1 WHERE id = $2`, [
+        `Bảo quản Task5 ${fx.runId}`,
+        storagePlanId,
+      ]);
+    }
+
+    await deleteCheckouts([checkoutId]);
   });
 
   it('test_FR_SLT_50_payment_blocked_when_annex_unaccepted', async () => {
@@ -471,7 +541,7 @@ describe('FR-SLT-50: Phụ lục thanh toán & Chữ ký điện tử', () => {
 });
 
 describe('FR-SLT-55: Đổi slot trong 48 giờ sau thanh toán', () => {
-  it('test_FR_SLT_55_swap_slot_success_and_db_consistency', async () => {
+  it('test_FR_SLT_55_swap_slot_within_window', async () => {
     // 1. Tạo checkout slot 0 và thanh toán đầy đủ
     const res = await brandA('POST', '/rental-checkouts', {
       payload: {
@@ -493,7 +563,14 @@ describe('FR-SLT-55: Đổi slot trong 48 giờ sau thanh toán', () => {
     }>(`SELECT * FROM slot_rentals WHERE checkout_id = $1`, [checkoutId]);
     const rental = rentals.rows[0]!;
 
-    // 2. Thực hiện đổi sang slot 1 (cùng máy, cùng giá 1.000.000, đang AVAILABLE)
+    // Slot trống chào thuê không nhất thiết AVAILABLE (FR-MCH-16: AVAILABLE là trạng thái vận hành,
+    // chỉ có khi đã có hóa đơn hiệu lực và chai). Đặt cả hai slot UNAVAILABLE để chứng minh đổi slot
+    // không phụ thuộc cột này và không ghi đè nó.
+    await raw.query(`UPDATE machine_slots SET status = 'UNAVAILABLE' WHERE id = ANY($1::uuid[])`, [
+      [vacantSlots[0], vacantSlots[1]],
+    ]);
+
+    // 2. Thực hiện đổi sang slot 1 (cùng máy, cùng giá 1.000.000)
     const swapRes = await brandA('POST', `/slot-rentals/${rental.id}/swap-slot`, {
       payload: { targetSlotId: vacantSlots[1] },
     });
@@ -510,20 +587,27 @@ describe('FR-SLT-55: Đổi slot trong 48 giờ sau thanh toán', () => {
     expect(swapData.swappedAt).toBeTruthy();
 
     // 3. Kiểm tra tính nhất quán CSDL:
-    // Slot cũ (vacantSlots[0]): trạng thái AVAILABLE, active_bottle_id = null
+    // Trạng thái vận hành của cả hai slot giữ nguyên (chiếm dụng do slot_rentals kiểm soát)
     const slot0Row = await raw.query<{ status: string; active_bottle_id: string | null }>(
       `SELECT status, active_bottle_id FROM machine_slots WHERE id = $1`,
       [vacantSlots[0]],
     );
-    expect(slot0Row.rows[0]!.status).toBe('AVAILABLE');
+    expect(slot0Row.rows[0]!.status).toBe('UNAVAILABLE');
     expect(slot0Row.rows[0]!.active_bottle_id).toBeNull();
 
-    // Slot mới (vacantSlots[1]): AVAILABLE (slot occupancy do slot_rentals kiểm soát)
     const slot1Row = await raw.query<{ status: string }>(
       `SELECT status FROM machine_slots WHERE id = $1`,
       [vacantSlots[1]],
     );
-    expect(slot1Row.rows[0]!.status).toBe('AVAILABLE');
+    expect(slot1Row.rows[0]!.status).toBe('UNAVAILABLE');
+
+    // Slot cũ được giải phóng: thương hiệu khác tạo phiên thuê được ngay
+    const reRent = await brandB('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlots[0], rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    expect(reRent.statusCode).toBe(201);
 
     // Hóa đơn slot_rentals: giữ nguyên số hóa đơn, gói thuê, số tiền, ngày thanh toán
     const updatedRental = await raw.query<{
@@ -757,5 +841,67 @@ describe('FR-SLT-55: Đổi slot trong 48 giờ sau thanh toán', () => {
     expect(failed.json()).toMatchObject({ code: 'SLOT_OCCUPIED' });
 
     await deleteCheckouts([checkoutId1, checkoutId2]);
+  });
+
+  it('test_FR_SLT_55_swap_slot_disabled_target_rejected', async () => {
+    const res = await brandA('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlots[0], rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    const checkoutId = res.json<{ id: string }>().id;
+    await payCheckoutFully(checkoutId, brandA);
+    const rentalId = (
+      await raw.query<{ id: string }>(`SELECT id FROM slot_rentals WHERE checkout_id = $1`, [
+        checkoutId,
+      ])
+    ).rows[0]!.id;
+
+    // Slot DISABLED (đã xóa) không còn chào thuê (FR-SLT-19) nên không phải đích đổi hợp lệ
+    await raw.query(`UPDATE machine_slots SET status = 'DISABLED' WHERE id = $1`, [vacantSlots[1]]);
+
+    const swapRes = await brandA('POST', `/slot-rentals/${rentalId}/swap-slot`, {
+      payload: { targetSlotId: vacantSlots[1] },
+    });
+    expect(swapRes.statusCode).toBe(409);
+    expect(swapRes.json()).toMatchObject({ code: 'SLOT_SWAP_NOT_ALLOWED' });
+
+    await deleteCheckouts([checkoutId]);
+  });
+
+  it('test_FR_SLT_55_swap_vs_concurrent_checkout', async () => {
+    const res = await brandA('POST', '/rental-checkouts', {
+      payload: {
+        items: [{ slotId: vacantSlots[0], rentalPackageId: packageId, storagePlanId }],
+      },
+    });
+    const checkoutId = res.json<{ id: string }>().id;
+    await payCheckoutFully(checkoutId, brandA);
+    const rentalId = (
+      await raw.query<{ id: string }>(`SELECT id FROM slot_rentals WHERE checkout_id = $1`, [
+        checkoutId,
+      ])
+    ).rows[0]!.id;
+
+    // Brand A đổi sang slot 1 đúng lúc Brand B tạo phiên giữ slot 1: checkout không khóa
+    // machine_slots, nên bên tới sau bị excl_slot_rental_overlap chặn — phải là 409, không phải 500.
+    const [swapRes, checkoutRes] = await Promise.all([
+      brandA('POST', `/slot-rentals/${rentalId}/swap-slot`, {
+        payload: { targetSlotId: vacantSlots[1] },
+      }),
+      brandB('POST', '/rental-checkouts', {
+        payload: {
+          items: [{ slotId: vacantSlots[1], rentalPackageId: packageId, storagePlanId }],
+        },
+      }),
+    ]);
+
+    const succeeded = [swapRes.statusCode === 200, checkoutRes.statusCode === 201];
+    expect(succeeded.filter(Boolean)).toHaveLength(1);
+    const failed = swapRes.statusCode === 200 ? checkoutRes : swapRes;
+    expect(failed.statusCode).toBe(409);
+    expect(failed.json()).toMatchObject({ code: 'SLOT_OCCUPIED' });
+
+    await deleteCheckouts([checkoutId]);
   });
 });

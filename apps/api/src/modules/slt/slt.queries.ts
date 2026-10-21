@@ -185,6 +185,25 @@ export interface RentalInvoiceDetailRecord {
   readonly returnMethod: BottleReturnMethod | null;
 }
 
+/** FR-SLT-50: một dòng của phụ lục — chỉ gồm dữ liệu không đổi sau khi tạo phiên. */
+export interface AnnexItemRecord {
+  readonly rentalId: string;
+  /** Slot lúc tạo phiên — trước lần đổi slot (FR-SLT-55) nếu có. */
+  readonly originalSlotId: string;
+  readonly slotNumber: number;
+  readonly machineSerialNumber: string;
+  readonly durationMonths: number | null;
+  readonly discountPercent: string | null;
+  readonly monthlyRentPrice: string | null;
+  readonly rentAmount: string | null;
+  readonly storageMonthlyPrice: string | null;
+  readonly storageCoveragePercent: string | null;
+  readonly storageCoverageCap: string | null;
+  readonly storageAmount: string | null;
+  readonly totalAmount: string | null;
+  readonly currency: string;
+}
+
 export interface CheckoutCreateItemInput {
   readonly slotId: string;
   readonly rentalPackageId: string;
@@ -209,6 +228,23 @@ export interface CheckoutCreateItemData {
 }
 
 const BLOCKING_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
+
+/** Hóa đơn còn được báo/rút không gia hạn (FR-EXP-23, 24). */
+const NON_RENEWAL_STATUSES = ['ACTIVE', 'EXPIRING'] as const;
+
+interface SwapSlotParams {
+  readonly rentalId: string;
+  readonly brandId: string;
+  readonly targetSlotId: string;
+  readonly now: Date;
+  readonly swapWindowHours: number;
+}
+
+type SwapSlotResult =
+  | { success: true; updated: SlotRentalRecord }
+  | { notFound: true }
+  | { notAllowed: MessageKey }
+  | { occupied: true };
 
 /** Lỗi CSDL do slot đã bị giữ: chồng lấn kỳ hạn (23P01) hoặc trùng hóa đơn hiệu lực (23505). */
 function isSlotHoldConflict(error: unknown): boolean {
@@ -337,89 +373,55 @@ export class SltQueries {
   }
 
   /**
-   * FR-SLT-50 (ADR-0013): Lấy danh sách chi tiết hóa đơn của một phiên để sinh phụ lục.
+   * FR-SLT-50 (ADR-0013): dữ liệu sinh phụ lục của một phiên. Chỉ đọc cột BẤT BIẾN — ảnh chụp giá trên
+   * hóa đơn, slot gốc lúc tạo phiên (`swapped_from_slot_id` nếu đã đổi slot), số serial máy — để sinh
+   * lại sau thanh toán, sau khi đổi slot hay đổi tên máy/gói vẫn ra đúng `contentHash` đã đồng ý.
    */
-  async findInvoiceDetailsByCheckoutId(
+  async findAnnexItemsByCheckoutId(
     checkoutId: string,
     executor: Executor = this.db,
-  ): Promise<RentalInvoiceDetailRecord[]> {
+  ): Promise<AnnexItemRecord[]> {
     const rows = await executor
       .selectFrom('slot_rentals as sr')
-      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .innerJoin('machine_slots as ms', (join) =>
+        join.on((eb) => eb('ms.id', '=', eb.fn.coalesce('sr.swapped_from_slot_id', 'sr.slot_id'))),
+      )
       .innerJoin('machines as m', 'm.id', 'ms.machine_id')
-      .innerJoin('locations as l', 'l.id', 'm.location_id')
-      .leftJoin('rental_packages as rp', 'rp.id', 'sr.rental_package_id')
-      .leftJoin('storage_plans as sp', 'sp.id', 'sr.storage_plan_id')
-      .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
       .select([
         'sr.id as rental_id',
-        'sr.checkout_id',
-        'sr.invoice_number',
-        'sr.status',
-        'sr.brand_id',
-        'sr.slot_id',
+        'ms.id as original_slot_id',
         'ms.slot_number',
-        'ms.machine_id',
-        'm.display_name as machine_display_name',
-        'l.name as location_name',
-        'rp.name as package_name',
+        'm.serial_number as machine_serial_number',
         'sr.duration_months',
         'sr.discount_percent',
-        'sp.name as plan_name',
+        'sr.monthly_rent_price',
+        'sr.rent_amount',
         'sr.storage_monthly_price',
         'sr.storage_coverage_percent',
         'sr.storage_coverage_cap',
-        'sr.monthly_rent_price',
-        'sr.rent_amount',
         'sr.storage_amount',
-        'sr.grace_fee_amount',
         'sr.total_amount',
         'sr.currency',
-        'rc.hold_expires_at',
-        'sr.paid_at',
-        'sr.starts_at',
-        'sr.ends_at',
-        'sr.swapped_from_slot_id',
-        'sr.swapped_at',
-        'sr.non_renewal_requested_at',
-        'sr.return_method',
       ])
       .where('sr.checkout_id', '=', checkoutId)
-      .orderBy('ms.slot_number', 'asc')
+      .orderBy('sr.id', 'asc')
       .execute();
 
     return rows.map((row) => ({
       rentalId: row.rental_id,
-      checkoutId: row.checkout_id,
-      invoiceNumber: row.invoice_number,
-      status: row.status,
-      brandId: row.brand_id,
-      slotId: row.slot_id,
+      originalSlotId: row.original_slot_id,
       slotNumber: row.slot_number,
-      machineId: row.machine_id,
-      machineDisplayName: row.machine_display_name,
-      locationName: row.location_name,
-      packageName: row.package_name,
+      machineSerialNumber: row.machine_serial_number,
       durationMonths: row.duration_months,
       discountPercent: row.discount_percent,
-      planName: row.plan_name,
+      monthlyRentPrice: row.monthly_rent_price,
+      rentAmount: row.rent_amount,
       storageMonthlyPrice: row.storage_monthly_price,
       storageCoveragePercent: row.storage_coverage_percent,
       storageCoverageCap: row.storage_coverage_cap,
-      monthlyRentPrice: row.monthly_rent_price,
-      rentAmount: row.rent_amount,
       storageAmount: row.storage_amount,
-      graceFeeAmount: row.grace_fee_amount,
       totalAmount: row.total_amount,
       currency: row.currency,
-      holdExpiresAt: row.hold_expires_at,
-      paidAt: row.paid_at,
-      startsAt: row.starts_at,
-      endsAt: row.ends_at,
-      swappedFromSlotId: row.swapped_from_slot_id,
-      swappedAt: row.swapped_at,
-      nonRenewalRequestedAt: row.non_renewal_requested_at,
-      returnMethod: row.return_method,
     }));
   }
 
@@ -470,6 +472,8 @@ export class SltQueries {
     /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
     readonly agreementVersionId?: string;
     readonly maxHeldSlots?: number;
+    /** Mốc tính slot còn đang giữ (FR-SLT-56) — cùng mốc với holdExpiresAt của phiên mới. */
+    readonly now: Date;
     readonly items: CheckoutCreateItemData[];
   }): Promise<
     | { checkout: RentalCheckoutRecord; items: SlotRentalRecord[] }
@@ -495,6 +499,8 @@ export class SltQueries {
     /** Hợp đồng khung hiện hành lúc tạo phiên (FR-SLT-49, ADR-0013). */
     readonly agreementVersionId?: string;
     readonly maxHeldSlots?: number;
+    /** Mốc tính slot còn đang giữ (FR-SLT-56) — cùng mốc với holdExpiresAt của phiên mới. */
+    readonly now: Date;
     readonly items: CheckoutCreateItemData[];
   }): Promise<
     | { checkout: RentalCheckoutRecord; items: SlotRentalRecord[] }
@@ -515,7 +521,7 @@ export class SltQueries {
           .where('rc.brand_id', '=', params.brandId)
           .where('rc.paid_at', 'is', null)
           .where('rc.cancelled_at', 'is', null)
-          .where('rc.hold_expires_at', '>', new Date())
+          .where('rc.hold_expires_at', '>', params.now)
           .executeTakeFirstOrThrow();
 
         const currentHeld = Number(heldRow.count);
@@ -998,18 +1004,18 @@ export class SltQueries {
    * FR-SLT-55 (ADR-0014): Đổi hóa đơn sang slot khác trong cùng máy khi mua nhầm.
    * Chạy trong transaction với SELECT ... FOR UPDATE trên cả hai slot và hóa đơn.
    */
-  async swapSlotTx(params: {
-    rentalId: string;
-    brandId: string;
-    targetSlotId: string;
-    now: Date;
-    swapWindowHours: number;
-  }): Promise<
-    | { success: true; updated: SlotRentalRecord }
-    | { notFound: true }
-    | { notAllowed: MessageKey }
-    | { occupied: true }
-  > {
+  async swapSlotTx(params: SwapSlotParams): Promise<SwapSlotResult> {
+    try {
+      return await this.swapSlotInTx(params);
+    } catch (error) {
+      // Checkout của thương hiệu khác giữ slot đích cùng lúc: checkout không khoá machine_slots nên
+      // hai bên cùng qua bước kiểm tra, ràng buộc CSDL chặn bên tới sau — trả SLOT_OCCUPIED, không 500.
+      if (isSlotHoldConflict(error)) return { occupied: true };
+      throw error;
+    }
+  }
+
+  private async swapSlotInTx(params: SwapSlotParams): Promise<SwapSlotResult> {
     return this.db.transaction().execute(async (tx) => {
       const rental = await tx
         .selectFrom('slot_rentals as sr')
@@ -1078,7 +1084,14 @@ export class SltQueries {
         return { notAllowed: 'slt.slotSwapBottleInstalled' };
       }
 
-      if (targetSlot.status !== 'AVAILABLE' || targetSlot.active_bottle_id !== null) {
+      // Slot đích còn chào thuê theo cùng tiêu chí với listAvailableSlots (FR-SLT-19): chỉ loại slot
+      // DISABLED (đã xóa). KHÔNG đòi status = 'AVAILABLE' — đó là trạng thái vận hành, chỉ có khi slot
+      // đã có hóa đơn hiệu lực và chai đang lắp (FR-MCH-16).
+      if (targetSlot.status === 'DISABLED') {
+        return { notAllowed: 'slt.slotSwapNotAllowed' };
+      }
+
+      if (targetSlot.active_bottle_id !== null) {
         return { occupied: true };
       }
 
@@ -1105,15 +1118,8 @@ export class SltQueries {
         .where('id', '=', params.rentalId)
         .execute();
 
-      // Đảm bảo S1 ở trạng thái AVAILABLE
-      await tx
-        .updateTable('machine_slots')
-        .set({
-          status: 'AVAILABLE',
-          updated_at: params.now,
-        })
-        .where('id', '=', rental.slot_id)
-        .execute();
+      // Slot cũ được giải phóng ngay khi hóa đơn rời đi (chiếm dụng do slot_rentals quyết định).
+      // Không đổi machine_slots.status: trạng thái vận hành thuộc MCH (FR-MCH-16).
 
       const updatedRow = await tx
         .selectFrom('slot_rentals as sr')
@@ -1128,15 +1134,18 @@ export class SltQueries {
     });
   }
 
-  /** FR-EXP-23: Báo không gia hạn, lấy hàng về (ADR-0014). */
+  /**
+   * FR-EXP-23: Báo không gia hạn, lấy hàng về (ADR-0014). Chỉ ghi khi hóa đơn còn ACTIVE/EXPIRING và
+   * chưa tới endsAt ngay tại lúc UPDATE — trả null nếu điều kiện đã đổi sau bước kiểm tra của service.
+   */
   async requestNonRenewal(params: {
     rentalId: string;
     brandId: string;
     requestedBy: string;
     returnMethod: BottleReturnMethod;
     now: Date;
-  }): Promise<SlotRentalRecord> {
-    await this.db
+  }): Promise<SlotRentalRecord | null> {
+    const result = await this.db
       .updateTable('slot_rentals')
       .set({
         non_renewal_requested_at: params.now,
@@ -1146,7 +1155,10 @@ export class SltQueries {
       })
       .where('id', '=', params.rentalId)
       .where('brand_id', '=', params.brandId)
-      .execute();
+      .where('status', 'in', NON_RENEWAL_STATUSES)
+      .where('ends_at', '>', params.now)
+      .executeTakeFirst();
+    if (result.numUpdatedRows === 0n) return null;
 
     const row = await this.selectColumns(
       this.base({ kind: 'BRAND', brandId: params.brandId }).where('sr.id', '=', params.rentalId),
@@ -1154,13 +1166,13 @@ export class SltQueries {
     return toRecord(row);
   }
 
-  /** FR-EXP-24: Rút lại việc báo không gia hạn (ADR-0014). */
+  /** FR-EXP-24: Rút lại việc báo không gia hạn (ADR-0014). Cùng điều kiện ghi với requestNonRenewal. */
   async withdrawNonRenewal(params: {
     rentalId: string;
     brandId: string;
     now: Date;
-  }): Promise<SlotRentalRecord> {
-    await this.db
+  }): Promise<SlotRentalRecord | null> {
+    const result = await this.db
       .updateTable('slot_rentals')
       .set({
         non_renewal_requested_at: null,
@@ -1170,7 +1182,10 @@ export class SltQueries {
       })
       .where('id', '=', params.rentalId)
       .where('brand_id', '=', params.brandId)
-      .execute();
+      .where('status', 'in', NON_RENEWAL_STATUSES)
+      .where('ends_at', '>', params.now)
+      .executeTakeFirst();
+    if (result.numUpdatedRows === 0n) return null;
 
     const row = await this.selectColumns(
       this.base({ kind: 'BRAND', brandId: params.brandId }).where('sr.id', '=', params.rentalId),

@@ -23,10 +23,10 @@ import {
   SltQueries,
   stageOf,
   type AgreementAcceptanceRecord,
+  type AnnexItemRecord,
   type BottleReturnMethod,
   type CheckoutCreateItemData,
   type RentalCheckoutRecord,
-  type RentalInvoiceDetailRecord,
   type SlotRentalFilter,
   type SlotRentalRecord,
 } from './slt.queries.js';
@@ -216,6 +216,7 @@ export class SltService {
       totalAmount: checkoutTotal.toFixed(4),
       agreementVersionId: currentAgreement.id,
       maxHeldSlots: this.config.constraint('BRAND_MAX_HELD_SLOTS'),
+      now: t0,
       items: itemDatas,
     });
 
@@ -605,8 +606,12 @@ export class SltService {
       throw new AppError('NOT_FOUND', 'common.notFound');
     }
 
-    const items = await this.queries.findInvoiceDetailsByCheckoutId(checkout.id);
-    const content = buildAnnexContent(checkout, items);
+    const items = await this.queries.findAnnexItemsByCheckoutId(checkout.id);
+    const content = buildAnnexContent(
+      checkout,
+      items,
+      this.config.constraint('GRACE_FEE_RATE_DEFAULT'),
+    );
     const contentHash = createHash('sha256').update(content, 'utf8').digest('hex');
     const acceptance = await this.queries.findAnnexAcceptance(checkout.id);
 
@@ -659,8 +664,12 @@ export class SltService {
       return { created: false, body: toAcceptanceDto(existing) };
     }
 
-    const items = await this.queries.findInvoiceDetailsByCheckoutId(checkout.id);
-    const content = buildAnnexContent(checkout, items);
+    const items = await this.queries.findAnnexItemsByCheckoutId(checkout.id);
+    const content = buildAnnexContent(
+      checkout,
+      items,
+      this.config.constraint('GRACE_FEE_RATE_DEFAULT'),
+    );
     const expectedHash = createHash('sha256').update(content, 'utf8').digest('hex');
 
     if (input.contentHash !== expectedHash) {
@@ -792,6 +801,7 @@ export class SltService {
       returnMethod,
       now,
     });
+    if (!updated) throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
 
     await this.audit.log({
       actorType: 'USER',
@@ -855,6 +865,7 @@ export class SltService {
       brandId: scope.brandId,
       now,
     });
+    if (!updated) throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
 
     await this.audit.log({
       actorType: 'USER',
@@ -962,22 +973,27 @@ function toCheckoutDto(
 }
 
 /**
- * FR-SLT-50 (ADR-0013): Hàm sinh nội dung phụ lục hợp đồng thuê slot chuẩn hóa, xác định.
+ * FR-SLT-50 (ADR-0013): sinh nội dung phụ lục chuẩn hóa, xác định. Chỉ dùng dữ liệu không đổi sau khi
+ * tạo phiên (`AnnexItemRecord`), nên `contentHash` sinh lại luôn khớp bản đã đồng ý — kể cả sau thanh
+ * toán (số hóa đơn được cấp), sau khi đổi slot (FR-SLT-55) hay khi đổi tên máy, gói.
+ *
+ * `graceFeeRate` lấy từ GRACE_FEE_RATE_DEFAULT: đổi cấu hình này làm đổi phụ lục của phiên chưa đồng ý
+ * — đúng ý đồ, vì tỷ lệ áp cho hóa đơn là tỷ lệ hiện hành lúc thương hiệu đồng ý.
  */
 export function buildAnnexContent(
   checkout: RentalCheckoutRecord,
-  items: RentalInvoiceDetailRecord[],
+  items: readonly AnnexItemRecord[],
+  graceFeeRate: number,
 ): string {
-  const sorted = [...items].sort((a, b) => {
-    if (a.slotNumber !== b.slotNumber) return a.slotNumber - b.slotNumber;
-    return a.rentalId.localeCompare(b.rentalId);
-  });
+  const sorted = [...items].sort((a, b) => a.rentalId.localeCompare(b.rentalId));
+  const graceFeePercent = Number((graceFeeRate * 100).toFixed(4));
 
   const lines = [
     `# PHỤ LỤC HỢP ĐỒNG THUÊ SLOT KIOSK NƯỚC HOA`,
     ``,
     `Mã phiên thanh toán: ${checkout.id}`,
     `Mã thương hiệu: ${checkout.brandId}`,
+    `Hợp đồng khung: ${checkout.agreementVersionId ?? 'N/A'}`,
     `Tổng tiền: ${checkout.totalAmount} ${checkout.currency}`,
     ``,
     `## Danh sách slot thuê`,
@@ -985,21 +1001,19 @@ export function buildAnnexContent(
   ];
 
   for (const item of sorted) {
-    lines.push(
-      `### Slot ${item.slotNumber} - Máy: ${item.machineDisplayName} (${item.locationName})`,
-    );
-    lines.push(`- Mã hóa đơn: ${item.invoiceNumber ?? item.rentalId}`);
-    lines.push(`- Gói thuê: ${item.packageName ?? 'N/A'} (${item.durationMonths ?? 0} tháng)`);
+    lines.push(`### Slot ${item.slotNumber} - Máy ${item.machineSerialNumber}`);
+    lines.push(`- Mã hóa đơn: ${item.rentalId}`);
+    lines.push(`- Mã slot: ${item.originalSlotId}`);
+    lines.push(`- Thời hạn thuê: ${item.durationMonths ?? 0} tháng`);
     lines.push(`- Giá thuê niêm yết: ${item.monthlyRentPrice ?? '0'} ${item.currency}/tháng`);
     lines.push(`- Chiết khấu: ${item.discountPercent ?? '0'}%`);
     lines.push(`- Tiền thuê slot: ${item.rentAmount ?? '0'} ${item.currency}`);
-    lines.push(`- Gói bảo quản: ${item.planName ?? 'N/A'}`);
     lines.push(`- Phí bảo quản: ${item.storageMonthlyPrice ?? '0'} ${item.currency}/tháng`);
     lines.push(
       `- Mức bồi thường tối đa: ${item.storageCoverageCap ?? '0'} ${item.currency} (${item.storageCoveragePercent ?? '0'}%)`,
     );
     lines.push(`- Tiền bảo quản: ${item.storageAmount ?? '0'} ${item.currency}`);
-    lines.push(`- Tỷ lệ phí ân hạn: 5% (GRACE_FEE_RATE_DEFAULT)`);
+    lines.push(`- Tỷ lệ phí ân hạn: ${graceFeePercent}%`);
     lines.push(`- Tổng cộng hóa đơn: ${item.totalAmount ?? '0'} ${item.currency}`);
     lines.push(``);
   }
