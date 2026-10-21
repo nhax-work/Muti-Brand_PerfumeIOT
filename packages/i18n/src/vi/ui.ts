@@ -136,6 +136,21 @@ export const ui = {
   modeMaintBadge: 'Tạm ngưng nhận đơn',
   modeMaintDesc:
     'Màn hình Kiosk chuyển sang giao diện bảo trì buồng chứa, kỹ thuật viên thao tác an toàn.',
+  modeMaintDescSoft:
+    'Kiosk dừng nhận đơn mới. Nếu còn đơn đang dở, máy vào DRAINING phục vụ nốt rồi tự sang Bảo trì.',
+  modeDrainingTitle: 'Dừng bán chờ bảo trì',
+  modeDrainingBadge: 'Phục vụ nốt đơn',
+  modeDrainingDesc:
+    'Kiosk dừng nhận đơn mới, tiếp tục phục vụ nốt các đơn đã trả tiền rồi tự sang Bảo trì.',
+  forceMaintenanceCheckbox: 'Ép bảo trì ngay lập tức (Khẩn cấp)',
+  forceMaintenanceWarning:
+    'CẢNH BÁO: Ép bảo trì khẩn cấp sẽ dừng máy ngay lập tức. Toàn bộ đơn hàng dở dang sẽ bị hủy và đưa vào danh sách kiểm tra thủ công để hoàn tiền.',
+  forceReasonRequired: 'Bắt buộc nhập lý do khi ép bảo trì khẩn cấp',
+  btnForceMaintenance: 'Ép sang Bảo trì ngay',
+  drainingOrdersCountBadge: '{count} đơn đang phục vụ nốt',
+  drainingStatusBanner:
+    'Máy đang ở chế độ DRAINING (còn {count} đơn dở dang). Máy sẽ tự chuyển sang Bảo trì khi hoàn tất.',
+  forceMaintenanceNow: 'Ép bảo trì ngay (Khẩn cấp)',
   modeDisabledTitle: 'Vô hiệu hóa',
   modeDisabledBadge: 'Tắt hệ thống',
   modeDisabledDesc:

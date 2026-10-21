@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Button, Form, Input, Modal, Tag, Typography, notification } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Modal, Tag, Typography, notification } from 'antd';
 import {
   ThunderboltFilled,
   CheckCircleFilled,
@@ -33,18 +33,37 @@ interface ModeCardOption {
 
 export function MachineModeModal({ machine, open, onClose }: MachineModeModalProps) {
   const { t } = useI18n();
-  const [form] = Form.useForm<{ operatingMode: MachineOperatingMode; reason?: string }>();
+  const [form] = Form.useForm<{ operatingMode: MachineOperatingMode; reason?: string; force?: boolean }>();
   const [submitting, setSubmitting] = useState(false);
   const setMachineMode = useSetMachineMode();
 
   const currentMode = machine?.operatingMode ?? 'NORMAL';
-  const selectedMode = Form.useWatch('operatingMode', form) ?? currentMode;
+  const [selectedMode, setSelectedMode] = useState<MachineOperatingMode>(
+    currentMode === 'DRAINING' ? 'MAINTENANCE' : currentMode,
+  );
+  const [isForce, setIsForce] = useState(false);
+
+  const [prevTrackKey, setPrevTrackKey] = useState<string | null>(null);
+  const trackKey = open && machine ? `${machine.id}-${machine.operatingMode}` : null;
+
+  if (trackKey !== prevTrackKey) {
+    setPrevTrackKey(trackKey);
+    if (open && machine) {
+      const initMode = machine.operatingMode === 'DRAINING' ? 'MAINTENANCE' : machine.operatingMode;
+      const initForce = machine.operatingMode === 'DRAINING';
+      setSelectedMode(initMode);
+      setIsForce(initForce);
+    }
+  }
 
   useEffect(() => {
     if (open && machine) {
+      const initMode = machine.operatingMode === 'DRAINING' ? 'MAINTENANCE' : machine.operatingMode;
+      const initForce = machine.operatingMode === 'DRAINING';
       form.setFieldsValue({
-        operatingMode: machine.operatingMode,
+        operatingMode: initMode,
         reason: '',
+        force: initForce,
       });
     }
   }, [open, machine, form]);
@@ -64,7 +83,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
       value: 'MAINTENANCE',
       title: t('ui.modeMaintTitle'),
       badge: t('ui.modeMaintBadge'),
-      description: t('ui.modeMaintDesc'),
+      description: t('ui.modeMaintDescSoft'),
       icon: <ToolFilled style={{ fontSize: 22, color: '#f59e0b' }} />,
       themeColor: '#f59e0b',
       activeBg: '#fffbeb',
@@ -94,6 +113,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         id: machine.id,
         operatingMode: values.operatingMode,
         reason: values.reason?.trim() ? values.reason.trim() : undefined,
+        force: values.operatingMode === 'MAINTENANCE' ? values.force : undefined,
       });
 
       notification.open({
@@ -143,7 +163,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
       footer={null}
       centered
       width={580}
-      destroyOnClose
+      destroyOnHidden
       styles={{
         body: {
           padding: '24px 28px',
@@ -203,8 +223,17 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         form={form}
         layout="vertical"
         initialValues={{
-          operatingMode: currentMode,
+          operatingMode: currentMode === 'DRAINING' ? 'MAINTENANCE' : currentMode,
           reason: '',
+          force: currentMode === 'DRAINING',
+        }}
+        onValuesChange={(changed) => {
+          if (changed.force !== undefined) {
+            setIsForce(Boolean(changed.force));
+          }
+          if (changed.operatingMode !== undefined) {
+            setSelectedMode(changed.operatingMode);
+          }
         }}
       >
         {/* TIÊU ĐỀ & TRẠNG THÁI HIỆN TẠI VỚI KHOẢNG CÁCH RỘNG RÃI */}
@@ -247,9 +276,11 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               color={
                 currentMode === 'NORMAL'
                   ? 'success'
-                  : currentMode === 'MAINTENANCE'
-                    ? 'warning'
-                    : 'error'
+                  : currentMode === 'DRAINING'
+                    ? 'gold'
+                    : currentMode === 'MAINTENANCE'
+                      ? 'warning'
+                      : 'error'
               }
               style={{
                 margin: 0,
@@ -260,13 +291,25 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
                 lineHeight: '20px',
               }}
             >
-              {modeOptions.find((m) => m.value === currentMode)?.title}
+              {currentMode === 'DRAINING'
+                ? `${t('ui.modeDrainingTitle')} ${machine?.drainingOrdersCount !== undefined ? `(${machine.drainingOrdersCount})` : ''}`
+                : modeOptions.find((m) => m.value === currentMode)?.title}
             </Tag>
           </div>
         </div>
 
+        {/* THÔNG BÁO NẾU MÁY ĐANG Ở DRAINING */}
+        {machine?.operatingMode === 'DRAINING' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 10 }}
+            message={t('ui.drainingStatusBanner', { count: machine.drainingOrdersCount ?? 0 })}
+          />
+        )}
+
         {/* DANH SÁCH 3 CHẾ ĐỘ THIẾT KẾ CARD THÔNG MINH */}
-        <Form.Item name="operatingMode" style={{ marginBottom: 20 }}>
+        <Form.Item name="operatingMode" style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {modeOptions.map((opt) => {
               const isSelected = selectedMode === opt.value;
@@ -275,7 +318,10 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               return (
                 <div
                   key={opt.value}
-                  onClick={() => form.setFieldValue('operatingMode', opt.value)}
+                  onClick={() => {
+                    setSelectedMode(opt.value);
+                    form.setFieldValue('operatingMode', opt.value);
+                  }}
                   style={{
                     border: `1.5px solid ${isSelected ? opt.activeBorder : '#e2e8f0'}`,
                     background: isSelected ? opt.activeBg : '#ffffff',
@@ -371,6 +417,39 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
           </div>
         </Form.Item>
 
+        {/* TÙY CHỌN ÉP BẢO TRÌ KHẨN CẤP KHI CHỌN MAINTENANCE (FR-MNT-17) */}
+        {selectedMode === 'MAINTENANCE' && (
+          <div
+            style={{
+              background: isForce ? '#fef2f2' : '#fffbeb',
+              border: `1.5px solid ${isForce ? '#fca5a5' : '#fde68a'}`,
+              borderRadius: 12,
+              padding: '12px 16px',
+              marginBottom: 16,
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Form.Item name="force" valuePropName="checked" style={{ marginBottom: isForce ? 6 : 0 }}>
+              <Checkbox
+                data-testid="force-maintenance-checkbox"
+                onChange={(e) => {
+                  setIsForce(e.target.checked);
+                  form.setFieldValue('force', e.target.checked);
+                }}
+                style={{ fontWeight: 700, color: isForce ? '#dc2626' : '#b45309', fontSize: 13 }}
+              >
+                {t('ui.forceMaintenanceCheckbox')}
+              </Checkbox>
+            </Form.Item>
+            <Typography.Text
+              type={isForce ? 'danger' : 'secondary'}
+              style={{ fontSize: 12, display: 'block', lineHeight: 1.45 }}
+            >
+              {isForce ? t('ui.forceMaintenanceWarning') : t('ui.modeMaintDescSoft')}
+            </Typography.Text>
+          </div>
+        )}
+
         {/* CẢNH BÁO BẢO MẬT & THAO TÁC NHẠY CẢM */}
         <div
           style={{
@@ -393,16 +472,17 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         {/* Ô NHẬP LÝ DO THAY ĐỔI */}
         <Form.Item
           name="reason"
+          rules={isForce ? [{ required: true, message: t('ui.forceReasonRequired') }] : []}
           label={
             <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
-              {t('ui.reasonLabel')}
+              {t('ui.reasonLabel')} {isForce && <span style={{ color: '#ef4444' }}>*</span>}
             </span>
           }
           style={{ marginBottom: 20 }}
         >
           <Input.TextArea
             rows={2}
-            placeholder={t('ui.reasonPlaceholderFull')}
+            placeholder={isForce ? t('ui.forceReasonRequired') : t('ui.reasonPlaceholderFull')}
             maxLength={255}
             showCount
             style={{ borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
@@ -445,20 +525,26 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               height: 40,
               padding: '0 24px',
               background:
-                selectedMode === 'NORMAL'
-                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
-                  : selectedMode === 'MAINTENANCE'
-                    ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                    : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                isForce
+                  ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
+                  : selectedMode === 'NORMAL'
+                    ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                    : selectedMode === 'MAINTENANCE'
+                      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                      : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
               borderColor: 'transparent',
-              boxShadow: `0 4px 14px ${currentOption.themeColor}35`,
+              boxShadow: isForce
+                ? '0 4px 14px rgba(239, 68, 68, 0.4)'
+                : `0 4px 14px ${currentOption.themeColor}35`,
             }}
           >
-            {selectedMode === 'NORMAL'
-              ? t('ui.btnActivateNormal')
-              : selectedMode === 'MAINTENANCE'
-                ? t('ui.btnSwitchMaintenance')
-                : t('ui.btnConfirmDisabled')}
+            {isForce
+              ? t('ui.btnForceMaintenance')
+              : selectedMode === 'NORMAL'
+                ? t('ui.btnActivateNormal')
+                : selectedMode === 'MAINTENANCE'
+                  ? t('ui.btnSwitchMaintenance')
+                  : t('ui.btnConfirmDisabled')}
           </Button>
         </div>
       </Form>

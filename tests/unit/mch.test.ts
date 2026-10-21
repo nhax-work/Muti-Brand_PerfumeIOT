@@ -192,6 +192,33 @@ class FakeMchQueries {
     return updated;
   }
 
+  pendingOrdersByMachine = new Map<string, number>();
+
+  async countPendingOrdersAndCommands(machineId: string) {
+    return this.pendingOrdersByMachine.get(machineId) ?? 0;
+  }
+
+  async transitionDrainingToMaintenance(id: string) {
+    const mch = this.machines.get(id);
+    if (!mch || mch.operatingMode !== 'DRAINING') return null;
+    const updated: MachineRecord = {
+      ...mch,
+      operatingMode: 'MAINTENANCE',
+      updatedAt: new Date(),
+    };
+    this.machines.set(id, updated);
+    this.statusHistories.push({ machineId: id, mode: 'MAINTENANCE', actorId: undefined });
+    return updated;
+  }
+
+  failedOnForceCount = 0;
+  async failAffectedOrdersOnForceMaintenance(machineId: string, _reason: string, _actorId: string) {
+    const count = this.pendingOrdersByMachine.get(machineId) ?? 0;
+    this.pendingOrdersByMachine.set(machineId, 0);
+    this.failedOnForceCount = count;
+    return count;
+  }
+
   // Slots
   async listSlotsByMachineId(machineId: string) {
     return [...this.slots.values()].filter((s) => s.machineId === machineId);
@@ -656,9 +683,129 @@ describe('MchService (Machine, Slot, Location)', () => {
 
     it('đổi chế độ máy và hiệu chuẩn slot cần X-Reauth-Token (FR-AUTH-09)', () => {
       expect(Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.setMode)).toBe(true);
+      expect(Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.forceMaintenance)).toBe(
+        true,
+      );
       expect(Reflect.getMetadata(REQUIRES_REAUTH, SlotsController.prototype.updateConfig)).toBe(
         true,
       );
+    });
+
+    it('ép bảo trì khẩn cấp yêu cầu quyền machine.operate', () => {
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.forceMaintenance),
+      ).toEqual(['machine.operate']);
+    });
+  });
+
+  describe('FR-MNT-05, FR-MNT-17, FR-MCH-09 — Chế độ DRAINING và Dừng bán an toàn (ADR-0015)', () => {
+    let locId: string;
+    let machineId: string;
+
+    beforeEach(async () => {
+      const loc = await service.createLocation({ code: 'LOC_MNT', name: 'Điểm bảo trì' });
+      locId = loc.id;
+      const mch = await service.createMachine(SUPER_ADMIN, {
+        locationId: locId,
+        serialNumber: 'M_DRAIN_01',
+        displayName: 'Máy Draining Test',
+        slotCount: 2,
+      });
+      machineId = mch.id;
+    });
+
+    it('test_FR_MNT_05_enter_maintenance — máy có đơn dở dang sẽ vào DRAINING', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 2);
+
+      const result = await service.setMachineMode(SUPER_ADMIN, machineId, {
+        operatingMode: 'MAINTENANCE',
+        reason: 'Bảo trì thay vòi xịt',
+      });
+
+      expect(result.operatingMode).toBe('DRAINING');
+      expect(result.drainingOrdersCount).toBe(2);
+      expect(queries.statusHistories.at(-1)?.mode).toBe('DRAINING');
+    });
+
+    it('test_FR_MNT_05_enter_maintenance — máy rảnh chuyển thẳng sang MAINTENANCE (AC3)', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 0);
+
+      const result = await service.setMachineMode(SUPER_ADMIN, machineId, {
+        operatingMode: 'MAINTENANCE',
+        reason: 'Bảo trì máy rảnh',
+      });
+
+      expect(result.operatingMode).toBe('MAINTENANCE');
+      expect(result.drainingOrdersCount).toBeUndefined();
+      expect(queries.statusHistories.at(-1)?.mode).toBe('MAINTENANCE');
+    });
+
+    it('chặn đặt trực tiếp DRAINING từ bên ngoài (OpenAPI constraint)', async () => {
+      await expect(
+        service.setMachineMode(SUPER_ADMIN, machineId, {
+          operatingMode: 'DRAINING',
+        }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('test_FR_MNT_05_auto_transition_draining — tự động chuyển MAINTENANCE khi cạn đơn (AC2, FR-MCH-09 AC2)', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 1);
+      await service.setMachineMode(SUPER_ADMIN, machineId, {
+        operatingMode: 'MAINTENANCE',
+      });
+      expect((await service.getMachine(machineId)).operatingMode).toBe('DRAINING');
+
+      // Đơn dở dang hoàn tất -> số đơn về 0
+      queries.pendingOrdersByMachine.set(machineId, 0);
+
+      const refreshed = await service.getMachine(machineId);
+      expect(refreshed.operatingMode).toBe('MAINTENANCE');
+      expect(queries.statusHistories.at(-1)).toMatchObject({
+        machineId,
+        mode: 'MAINTENANCE',
+      });
+    });
+
+    it('test_FR_MNT_17_force_emergency_maintenance — ép bảo trì khẩn cấp thành công kèm lý do', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 3);
+
+      const forced = await service.setMachineMode(SUPER_ADMIN, machineId, {
+        operatingMode: 'MAINTENANCE',
+        force: true,
+        reason: 'Chập điện khẩn cấp tại trạm',
+      });
+
+      expect(forced.operatingMode).toBe('MAINTENANCE');
+      expect(queries.failedOnForceCount).toBe(3);
+      expect(audit.entries.at(-1)).toMatchObject({
+        action: 'mch.machine.mode_changed',
+        metadata: expect.objectContaining({ force: true, reason: 'Chập điện khẩn cấp tại trạm' }),
+      });
+    });
+
+    it('test_FR_MNT_17_force_emergency_maintenance — thiếu lý do bị từ chối 400 (AC3)', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 2);
+
+      await expect(
+        service.setMachineMode(SUPER_ADMIN, machineId, {
+          operatingMode: 'MAINTENANCE',
+          force: true,
+          reason: '',
+        }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    });
+
+    it('test_FR_MCH_09_display_operating_mode — listMachines hiển thị drainingOrdersCount', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 5);
+      await service.setMachineMode(SUPER_ADMIN, machineId, {
+        operatingMode: 'MAINTENANCE',
+      });
+
+      const { items } = await service.listMachines({ page: 1, pageSize: 10 });
+      const found = items.find((m) => m.id === machineId);
+      expect(found).toBeDefined();
+      expect(found?.operatingMode).toBe('DRAINING');
+      expect(found?.drainingOrdersCount).toBe(5);
     });
   });
 });

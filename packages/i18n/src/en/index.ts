@@ -87,6 +87,9 @@ export const en: SameKeysAs<typeof vi> = {
     slotOccupied: 'The slot has an active rental and cannot be removed',
     slotChangedConcurrently:
       'The slot was changed by another operation, please reload and try again',
+    drainingDirectSetForbidden:
+      'Cannot set DRAINING mode directly. Choose Maintenance mode for safe draining',
+    reasonRequired: 'A reason is required when forcing emergency maintenance',
   },
 
   slotStatus: {
@@ -393,6 +396,21 @@ export const en: SameKeysAs<typeof vi> = {
     modeMaintBadge: 'Suspended',
     modeMaintDesc:
       'Kiosk displays maintenance screen, safely suspending dispensing for technicians.',
+    modeMaintDescSoft:
+      'Kiosk stops accepting new orders. If there are pending orders, the machine will drain first then switch to Maintenance.',
+    modeDrainingTitle: 'Draining before maintenance',
+    modeDrainingBadge: 'Serving remaining orders',
+    modeDrainingDesc:
+      'Kiosk stops accepting new orders, finishes remaining paid orders, then enters Maintenance.',
+    forceMaintenanceCheckbox: 'Force emergency maintenance (Immediate)',
+    forceMaintenanceWarning:
+      'WARNING: Emergency maintenance will halt the machine immediately. All pending orders will be marked FAILED and flagged for manual refund review.',
+    forceReasonRequired: 'A reason is required when forcing emergency maintenance',
+    btnForceMaintenance: 'Force Maintenance Now',
+    drainingOrdersCountBadge: '{count} remaining orders',
+    drainingStatusBanner:
+      'The machine is DRAINING ({count} pending orders). It will automatically switch to Maintenance once done.',
+    forceMaintenanceNow: 'Force Maintenance Now (Emergency)',
     modeDisabledTitle: 'Disabled',
     modeDisabledBadge: 'System Offline',
     modeDisabledDesc:

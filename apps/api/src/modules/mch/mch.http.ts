@@ -118,14 +118,19 @@ const MachineUpdateBody = z.object({
 });
 
 const MachineModeBody = z.object({
-  operatingMode: z.enum(['NORMAL', 'MAINTENANCE', 'DISABLED']),
+  operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']),
   reason: z.string().optional(),
+  force: z.boolean().optional(),
+});
+
+const ForceMaintenanceBody = z.object({
+  reason: z.string().min(1, 'mch.reasonRequired'),
 });
 
 const MachineListQuery = PageQuery.extend({
   locationId: z.string().uuid().optional(),
   status: z.enum(['ONLINE', 'UNSTABLE', 'OFFLINE']).optional(),
-  operatingMode: z.enum(['NORMAL', 'MAINTENANCE', 'DISABLED']).optional(),
+  operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']).optional(),
 });
 
 @Controller('machines')
@@ -163,7 +168,7 @@ export class MachinesController {
     return this.mch.updateMachine(validatedId, input);
   }
 
-  /** FR-MCH-11, FR-MNT-05: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */
+  /** FR-MCH-11, FR-MNT-05, FR-MNT-17: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */
   @Put(':id/mode')
   @RequirePermissions(MACHINE_OPERATE)
   @RequireReauth()
@@ -171,6 +176,24 @@ export class MachinesController {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(MachineModeBody, body);
     return this.mch.setMachineMode(actor, validatedId, input);
+  }
+
+  /** FR-MNT-17: Ép máy chuyển sang MAINTENANCE khẩn cấp kèm lý do bắt buộc. Thao tác nhạy cảm (FR-AUTH-09). */
+  @Post(':id/force-maintenance')
+  @RequirePermissions(MACHINE_OPERATE)
+  @RequireReauth()
+  forceMaintenance(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const validatedId = parseBody(IdParam, id);
+    const input = parseBody(ForceMaintenanceBody, body);
+    return this.mch.setMachineMode(actor, validatedId, {
+      operatingMode: 'MAINTENANCE',
+      force: true,
+      reason: input.reason.trim(),
+    });
   }
 
   /** Xóa mềm máy (chuyển sang DISABLED) */

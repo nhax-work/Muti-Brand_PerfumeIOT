@@ -282,6 +282,11 @@ export default function MachineDetailPage() {
                 >
                   {t(`machineOperatingMode.${machine.operatingMode}`)}
                 </Tag>
+                {machine.operatingMode === 'DRAINING' && (
+                  <Tag color="gold" style={{ margin: 0, fontWeight: 700 }}>
+                    {t('ui.drainingOrdersCountBadge', { count: machine.drainingOrdersCount ?? 0 })}
+                  </Tag>
+                )}
                 {location && (
                   <Space size={4} style={{ color: '#475569', fontSize: 13 }}>
                     <EnvironmentOutlined style={{ color: '#0284c7' }} />
@@ -307,6 +312,33 @@ export default function MachineDetailPage() {
             </Button>
           </div>
         </div>
+
+        {/* CẢNH BÁO MÁY ĐANG DRAINING */}
+        {machine.operatingMode === 'DRAINING' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 20, borderRadius: 10, border: '1px solid #fde047' }}
+            message={
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  {t('ui.drainingStatusBanner', { count: machine.drainingOrdersCount ?? 0 })}
+                </span>
+                <Button danger type="primary" size="small" onClick={() => setModeModalOpen(true)}>
+                  {t('ui.forceMaintenanceNow')}
+                </Button>
+              </div>
+            }
+          />
+        )}
 
         {/* CÁC THẺ THỐNG KÊ NHANH CHO MÁY NÀY */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>

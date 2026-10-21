@@ -30,7 +30,7 @@ export type LocationDto = Schema<'Location'>;
 export type LocationCreateInput = Omit<Schema<'LocationCreate'>, 'timezone'> & {
   timezone?: string | undefined;
 };
-export type MachineDto = Schema<'Machine'>;
+export type MachineDto = Schema<'Machine'> & { drainingOrdersCount?: number };
 export type MachineCreateInput = Schema<'MachineCreate'>;
 export type MachineSlotDto = Schema<'MachineSlot'>;
 export type AvailableSlotDto = Schema<'AvailableSlot'>;
@@ -65,6 +65,7 @@ function toMachineDto(r: MachineRecord): MachineDto {
     firmwareVersion: r.firmwareVersion,
     configurationVersion: r.configurationVersion,
     slotCount: r.slotCount,
+    ...(r.drainingOrdersCount !== undefined ? { drainingOrdersCount: r.drainingOrdersCount } : {}),
   };
 }
 
@@ -217,14 +218,64 @@ export class MchService {
 
   async listMachines(filter: MachineFilter): Promise<{ items: MachineDto[]; total: number }> {
     const { items, total } = await this.queries.listMachines(filter);
-    return { items: items.map(toMachineDto), total };
+    const enriched = await Promise.all(
+      items.map(async (m) => {
+        if (m.operatingMode === 'DRAINING') {
+          const pendingCount = await this.queries.countPendingOrdersAndCommands(m.id);
+          if (pendingCount === 0) {
+            const autoUpdated = await this.queries.transitionDrainingToMaintenance(m.id);
+            if (autoUpdated) {
+              await this.audit.log({
+                actorType: 'SYSTEM',
+                actorId: 'system',
+                action: 'mch.machine.mode_changed',
+                targetType: 'machine',
+                targetId: m.id,
+                severity: 'WARNING',
+                before: { operatingMode: 'DRAINING' },
+                after: { operatingMode: 'MAINTENANCE' },
+                metadata: { reason: 'Tự động chuyển sang MAINTENANCE khi cạn đơn dở dang' },
+              });
+              return toMachineDto(autoUpdated);
+            }
+          }
+          return toMachineDto({ ...m, drainingOrdersCount: pendingCount });
+        }
+        return toMachineDto(m);
+      }),
+    );
+    return { items: enriched, total };
   }
 
   async getMachine(id: string): Promise<MachineDto> {
-    const record = await this.queries.findMachineById(id);
+    let record = await this.queries.findMachineById(id);
     if (!record) {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
+
+    if (record.operatingMode === 'DRAINING') {
+      const pendingCount = await this.queries.countPendingOrdersAndCommands(id);
+      if (pendingCount === 0) {
+        const autoUpdated = await this.queries.transitionDrainingToMaintenance(id);
+        if (autoUpdated) {
+          record = autoUpdated;
+          await this.audit.log({
+            actorType: 'SYSTEM',
+            actorId: 'system',
+            action: 'mch.machine.mode_changed',
+            targetType: 'machine',
+            targetId: id,
+            severity: 'WARNING',
+            before: { operatingMode: 'DRAINING' },
+            after: { operatingMode: 'MAINTENANCE' },
+            metadata: { reason: 'Tự động chuyển sang MAINTENANCE khi cạn đơn dở dang' },
+          });
+        }
+      } else {
+        record = { ...record, drainingOrdersCount: pendingCount };
+      }
+    }
+
     return toMachineDto(record);
   }
 
@@ -283,7 +334,7 @@ export class MchService {
   }
 
   /**
-   * Đổi chế độ hoạt động của máy (FR-MCH-11, FR-MNT-05, FR-MNT-12).
+   * Đổi chế độ hoạt động của máy (FR-MCH-11, FR-MNT-05, FR-MNT-12, FR-MNT-17).
    */
   async setMachineMode(
     actor: AuthenticatedUser,
@@ -295,9 +346,41 @@ export class MchService {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
 
+    if ((input.operatingMode as string) === 'DRAINING') {
+      throw new AppError('VALIDATION_ERROR', 'mch.drainingDirectSetForbidden');
+    }
+
+    let targetMode: MachineRecord['operatingMode'] = input.operatingMode;
+    let pendingCount = 0;
+
+    if (input.operatingMode === 'MAINTENANCE') {
+      if (input.force) {
+        if (!input.reason || !input.reason.trim()) {
+          throw new AppError('VALIDATION_ERROR', 'mch.reasonRequired');
+        }
+        // Ép sang MAINTENANCE ngay lập tức (FR-MNT-17)
+        targetMode = 'MAINTENANCE';
+        await this.queries.failAffectedOrdersOnForceMaintenance(
+          id,
+          input.reason.trim(),
+          actor.userId,
+        );
+      } else {
+        // Yêu cầu bảo trì thường (FR-MNT-05)
+        pendingCount = await this.queries.countPendingOrdersAndCommands(id);
+        if (pendingCount > 0) {
+          // Còn đơn/lệnh dở dang -> vào DRAINING (AC1)
+          targetMode = 'DRAINING';
+        } else {
+          // Máy rảnh không có đơn dở dang -> chuyển thẳng MAINTENANCE (AC3)
+          targetMode = 'MAINTENANCE';
+        }
+      }
+    }
+
     const updated = await this.queries.updateMachineMode(
       id,
-      input.operatingMode,
+      targetMode,
       input.reason,
       actor.userId,
     );
@@ -312,12 +395,21 @@ export class MchService {
       targetType: 'machine',
       targetId: id,
       // Tắt máy hoặc đưa vào bảo trì ảnh hưởng mọi thương hiệu có slot trên máy.
-      severity: input.operatingMode === 'NORMAL' ? 'INFO' : 'WARNING',
+      severity: targetMode === 'NORMAL' ? 'INFO' : 'WARNING',
       before: { operatingMode: machine.operatingMode },
       after: { operatingMode: updated.operatingMode },
-      metadata: { reason: input.reason ?? null },
+      metadata: {
+        reason: input.reason ?? null,
+        force: Boolean(input.force),
+        pendingOrdersCount: pendingCount,
+      },
     });
-    return toMachineDto(updated);
+
+    const result = {
+      ...updated,
+      drainingOrdersCount: targetMode === 'DRAINING' ? pendingCount : undefined,
+    };
+    return toMachineDto(result);
   }
 
   /**

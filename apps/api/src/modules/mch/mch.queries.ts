@@ -41,6 +41,7 @@ export interface MachineRecord {
   readonly configurationVersion: number;
   readonly simulatorEnabled: boolean;
   readonly slotCount: number;
+  readonly drainingOrdersCount?: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -506,6 +507,180 @@ export class MchQueries {
 
     // Đọc lại sau transaction để có slotCount thật thay vì tự dựng record.
     return changed ? this.findMachineById(id) : null;
+  }
+
+  /** Đếm số đơn hàng và lệnh xịt dở dang trên máy (FR-MNT-05, ADR-0015). */
+  async countPendingOrdersAndCommands(machineId: string): Promise<number> {
+    const ordersCountRow = await this.db
+      .selectFrom('orders')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', ['CREATED', 'PENDING_PAYMENT', 'PAID', 'DISPENSE_REQUESTED'])
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirstOrThrow();
+
+    const commandsCountRow = await this.db
+      .selectFrom('dispense_commands')
+      .where('machine_id', '=', machineId)
+      .where('order_id', 'is', null)
+      .where('status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .executeTakeFirstOrThrow();
+
+    return Number(ordersCountRow.count) + Number(commandsCountRow.count);
+  }
+
+  /** Tự động chuyển máy từ DRAINING sang MAINTENANCE khi đã cạn đơn (FR-MNT-05 AC2, FR-MCH-09 AC2). */
+  async transitionDrainingToMaintenance(id: string): Promise<MachineRecord | null> {
+    const changed = await this.db.transaction().execute(async (trx) => {
+      const current = await trx
+        .selectFrom('machines')
+        .select('operating_mode')
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!current || current.operating_mode !== 'DRAINING') return false;
+
+      await trx
+        .updateTable('machines')
+        .set({
+          operating_mode: 'MAINTENANCE',
+          updated_at: new Date(),
+        })
+        .where('id', '=', id)
+        .execute();
+
+      await trx
+        .insertInto('machine_status_histories')
+        .values({
+          machine_id: id,
+          from_operating_mode: 'DRAINING',
+          to_operating_mode: 'MAINTENANCE',
+          reason: 'Tự động chuyển sang MAINTENANCE khi cạn đơn dở dang',
+          source: 'SYSTEM',
+          changed_by: null,
+          occurred_at: new Date(),
+        })
+        .execute();
+
+      return true;
+    });
+
+    return changed ? this.findMachineById(id) : null;
+  }
+
+  /**
+   * Ép máy sang MAINTENANCE: hủy toàn bộ đơn dở dang theo FR-ORD-19 (FR-MNT-17 AC2).
+   * Các đơn PAID / DISPENSE_REQUESTED -> FAILED + needs_manual_review = true.
+   * Các đơn CREATED / PENDING_PAYMENT -> EXPIRED.
+   * Sinh cảnh báo mức máy trong bảng alerts.
+   */
+  async failAffectedOrdersOnForceMaintenance(
+    machineId: string,
+    reason: string,
+    actorId: string,
+  ): Promise<number> {
+    const now = new Date();
+    return this.db.transaction().execute(async (trx) => {
+      // 1. Các đơn đã thanh toán / đang xịt dở dang -> FAILED + needs_manual_review = true (FR-ORD-19)
+      const paidOrders = await trx
+        .selectFrom('orders')
+        .selectAll()
+        .where('machine_id', '=', machineId)
+        .where('status', 'in', ['PAID', 'DISPENSE_REQUESTED'])
+        .forUpdate()
+        .execute();
+
+      for (const order of paidOrders) {
+        await trx
+          .updateTable('orders')
+          .set({
+            status: 'FAILED',
+            failure_code: 'FORCE_MAINTENANCE',
+            needs_manual_review: true,
+            updated_at: now,
+          })
+          .where('id', '=', order.id)
+          .execute();
+
+        await trx
+          .insertInto('order_status_histories')
+          .values({
+            order_id: order.id,
+            brand_id: order.brand_id,
+            from_status: order.status,
+            to_status: 'FAILED',
+            reason: 'FORCE_MAINTENANCE',
+            metadata: JSON.stringify({ reason, actorId }),
+            actor_type: 'SYSTEM',
+            occurred_at: now,
+          })
+          .execute();
+      }
+
+      // 2. Các đơn chưa thanh toán (CREATED, PENDING_PAYMENT) -> EXPIRED
+      const unpaidOrders = await trx
+        .selectFrom('orders')
+        .selectAll()
+        .where('machine_id', '=', machineId)
+        .where('status', 'in', ['CREATED', 'PENDING_PAYMENT'])
+        .forUpdate()
+        .execute();
+
+      for (const order of unpaidOrders) {
+        await trx
+          .updateTable('orders')
+          .set({
+            status: 'EXPIRED',
+            failure_code: 'FORCE_MAINTENANCE',
+            updated_at: now,
+          })
+          .where('id', '=', order.id)
+          .execute();
+
+        await trx
+          .insertInto('order_status_histories')
+          .values({
+            order_id: order.id,
+            brand_id: order.brand_id,
+            from_status: order.status,
+            to_status: 'EXPIRED',
+            reason: 'FORCE_MAINTENANCE',
+            metadata: JSON.stringify({ reason, actorId }),
+            actor_type: 'SYSTEM',
+            occurred_at: now,
+          })
+          .execute();
+      }
+
+      // 3. Hủy các lệnh xịt dở dang
+      await trx
+        .updateTable('dispense_commands')
+        .set({
+          status: 'FAILED',
+        })
+        .where('machine_id', '=', machineId)
+        .where('status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
+        .execute();
+
+      // 4. Sinh alert cho máy
+      await trx
+        .insertInto('alerts')
+        .values({
+          machine_id: machineId,
+          brand_id: null,
+          type: 'FORCE_MAINTENANCE',
+          severity: 'HIGH',
+          deduplication_key: `FORCE_MAINTENANCE:${machineId}:${now.getTime()}`,
+          title: 'Máy bị ép bảo trì khẩn cấp',
+          description: reason,
+          first_occurred_at: now,
+          last_occurred_at: now,
+        })
+        .execute();
+
+      return paidOrders.length + unpaidOrders.length;
+    });
   }
 
   // =========================================================================
