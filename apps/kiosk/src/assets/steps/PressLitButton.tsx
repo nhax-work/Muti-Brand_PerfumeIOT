@@ -20,7 +20,8 @@ export function PressLitButton({ slot }: { slot: number }) {
           <circle cx={cx(n)} cy="88" r="9" className={n === target ? styles.lit : undefined} />
           <text
             x={cx(n)}
-            y="92"
+            y="88"
+            dominantBaseline="central"
             className={n === target ? `${styles.label} ${styles.litLabel}` : styles.label}
           >
             {n}

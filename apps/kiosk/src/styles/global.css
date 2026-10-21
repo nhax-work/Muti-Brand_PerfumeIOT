@@ -55,8 +55,9 @@
 
   --radius: 4px;
   --touch-min: 56px;
-  /* Header cố định; mọi màn tính chiều cao còn lại theo 100dvh trừ header — không màn nào cuộn. */
-  --header-h: 64px;
+  /* Header cao theo màn (80px ở 1280×800, 64px ở màn thấp); mọi màn tính chiều cao còn lại theo
+     100dvh trừ header — không màn nào cuộn. */
+  --header-h: clamp(64px, 10dvh, 80px);
 
   /* --- Chuyển động: chỉ fade + dịch 8px, không nảy. */
   --dur: 320ms;
@@ -93,6 +94,8 @@ body {
   font-family: var(--font-sans);
   font-size: var(--fs-body);
   line-height: var(--lh-body);
+  /* Playfair mặc định dùng số kiểu cổ (chân số lơ lửng) — số nút, giá, đồng hồ phải đứng đúng tâm. */
+  font-variant-numeric: lining-nums;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
