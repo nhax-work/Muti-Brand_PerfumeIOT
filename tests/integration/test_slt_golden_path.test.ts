@@ -106,6 +106,18 @@ describe('Golden Path Integration Test (Task 6)', () => {
       }
       await raw.query(`DELETE FROM email_verifications WHERE email LIKE $1`, [`%${fx.runId}%`]);
       await raw.query(`DELETE FROM agreement_acceptances WHERE brand_id = $1`, [createdBrandId]);
+      await raw.query(
+        `DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE brand_id = $1) OR scope_id = $1`,
+        [createdBrandId],
+      );
+      await raw.query(
+        `DELETE FROM refresh_sessions WHERE user_id IN (SELECT id FROM users WHERE brand_id = $1)`,
+        [createdBrandId],
+      );
+      await raw.query(
+        `DELETE FROM audit_logs WHERE brand_id = $1 OR actor_id IN (SELECT id FROM users WHERE brand_id = $1)`,
+        [createdBrandId],
+      );
       await raw.query(`DELETE FROM users WHERE brand_id = $1`, [createdBrandId]);
       await raw.query(`DELETE FROM brands WHERE id = $1`, [createdBrandId]);
     }
