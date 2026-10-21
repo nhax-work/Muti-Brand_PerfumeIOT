@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import {
   Alert,
   Button,
   Card,
+  Checkbox,
   Col,
   Divider,
   List,
@@ -22,17 +23,36 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   CreditCardOutlined,
+  ExportOutlined,
+  FileProtectOutlined,
   FileTextOutlined,
   QrcodeOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
-import { errorMessage } from '@/shared/api';
+import { ApiRequestError, errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
-import { useCancelCheckout, useCheckout, usePayCheckout, type RentalPaymentIntent } from './api';
+import {
+  useAcceptCheckoutAnnex,
+  useCancelCheckout,
+  useCheckout,
+  useCheckoutAnnex,
+  usePayCheckout,
+  type RentalPaymentIntent,
+} from './api';
 
 const { Title, Text, Paragraph } = Typography;
 const { Countdown } = Statistic;
+
+function isValidHttpsUrl(url?: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export default function CheckoutDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -41,20 +61,79 @@ export default function CheckoutDetailPage() {
 
   const [paymentIntent, setPaymentIntent] = useState<RentalPaymentIntent | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [annexAgreed, setAnnexAgreed] = useState(false);
 
-  // Poll mỗi 2s khi phiên chưa PAID và chưa CANCELLED
+  // Poll mỗi 2s khi phiên chưa PAID, chưa CANCELLED, chưa hết hạn hold và unmount tự hủy
   const {
     data: checkout,
     isLoading,
     error,
     refetch,
-  } = useCheckout(id, paymentIntent ? 2000 : false);
+  } = useCheckout(id, (query) => {
+    if (!paymentIntent) return false;
+    const data = query?.state?.data as { stage?: string; holdExpiresAt?: string } | undefined;
+    if (!data) return 2000;
+    if (data.stage === 'PAID' || data.stage === 'CANCELLED') return false;
+    if (Date.now() >= new Date(data.holdExpiresAt || '').getTime()) return false;
+    return 2000;
+  });
+
+  const isPaid = checkout?.stage === 'PAID';
+  const isCancelled = checkout?.stage === 'CANCELLED';
+
+  // Hết hạn giữ chỗ (holdExpiresAt) so với đồng hồ client: đóng modal, báo rõ và dừng polling
+  useEffect(() => {
+    if (!checkout?.holdExpiresAt || isPaid || isCancelled) return;
+
+    const msUntilExpiry = new Date(checkout.holdExpiresAt).getTime() - Date.now();
+    const timer = setTimeout(
+      () => {
+        if (showPaymentModal) {
+          setShowPaymentModal(false);
+          message.warning(t('ui.checkoutExpiredNotice'));
+        }
+        void refetch();
+      },
+      Math.max(0, msUntilExpiry),
+    );
+
+    return () => clearTimeout(timer);
+  }, [checkout?.holdExpiresAt, isPaid, isCancelled, showPaymentModal, refetch, t]);
+
+  const {
+    data: annex,
+    isLoading: isAnnexLoading,
+    error: annexError,
+    refetch: refetchAnnex,
+  } = useCheckoutAnnex(id);
 
   const payCheckout = usePayCheckout();
   const cancelCheckout = useCancelCheckout();
+  const acceptAnnex = useAcceptCheckoutAnnex();
+
+  const isLegacyCheckout = annexError instanceof ApiRequestError && annexError.status === 404;
+  const isAnnexAccepted = Boolean(annex?.acceptance) || isLegacyCheckout;
+
+  const handleAcceptAnnex = async () => {
+    if (!id || !annex) return;
+    try {
+      await acceptAnnex.mutateAsync({
+        checkoutId: id,
+        contentHash: annex.contentHash,
+      });
+      message.success(t('ui.checkoutAnnexAcceptedSuccess'));
+      void refetchAnnex();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
 
   const handlePay = async () => {
     if (!id) return;
+    if (!isAnnexAccepted) {
+      message.warning(t('slt.annexNotAccepted'));
+      return;
+    }
     try {
       const intent = await payCheckout.mutateAsync(id);
       setPaymentIntent(intent);
@@ -114,8 +193,6 @@ export default function CheckoutDetailPage() {
     );
   }
 
-  const isPaid = checkout.stage === 'PAID';
-  const isCancelled = checkout.stage === 'CANCELLED';
   const holdDeadline = new Date(checkout.holdExpiresAt).getTime();
 
   return (
@@ -241,6 +318,82 @@ export default function CheckoutDetailPage() {
                   )}
                 />
               </Card>
+
+              {/* Phụ lục hợp đồng thuê slot (FR-SLT-50) */}
+              <Card
+                title={
+                  <span>
+                    <FileProtectOutlined style={{ marginRight: 8, color: '#1677ff' }} />
+                    {t('ui.checkoutAnnexTitle')}
+                  </span>
+                }
+                style={{ marginTop: 24 }}
+              >
+                <Paragraph type="secondary">{t('ui.checkoutAnnexDesc')}</Paragraph>
+                {isAnnexLoading ? (
+                  <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                    <Spin />
+                  </div>
+                ) : isLegacyCheckout ? (
+                  <Alert type="info" message={t('ui.checkoutAnnexLegacy')} showIcon />
+                ) : annexError ? (
+                  <Alert type="error" message={errorMessage(annexError, t)} showIcon />
+                ) : annex ? (
+                  <div>
+                    <div style={{ marginBottom: 12 }}>
+                      <Text type="secondary">{t('ui.contentHashLabel')}: </Text>
+                      <Text code copyable>
+                        {annex.contentHash}
+                      </Text>
+                    </div>
+
+                    <div
+                      style={{
+                        maxHeight: 280,
+                        overflowY: 'auto',
+                        padding: '12px 16px',
+                        background: '#fafafa',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: 6,
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        marginBottom: 16,
+                      }}
+                    >
+                      {annex.content}
+                    </div>
+
+                    {annex.acceptance ? (
+                      <Alert
+                        type="success"
+                        message={t('ui.checkoutAnnexAccepted')}
+                        description={`Đồng ý lúc: ${new Date(annex.acceptance.acceptedAt).toLocaleString('vi-VN')}`}
+                        showIcon
+                      />
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        <Checkbox
+                          checked={annexAgreed}
+                          onChange={(e) => setAnnexAgreed(e.target.checked)}
+                        >
+                          {t('ui.checkoutAnnexAgreed')}
+                        </Checkbox>
+                        <div>
+                          <Button
+                            type="primary"
+                            disabled={!annexAgreed}
+                            loading={acceptAnnex.isPending}
+                            onClick={handleAcceptAnnex}
+                          >
+                            {t('ui.checkoutAnnexAcceptBtn')}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+              </Card>
             </Col>
 
             <Col xs={24} lg={8}>
@@ -284,6 +437,7 @@ export default function CheckoutDetailPage() {
                     block
                     icon={<QrcodeOutlined />}
                     loading={payCheckout.isPending}
+                    disabled={!isAnnexAccepted || isAnnexLoading}
                     onClick={handlePay}
                   >
                     {t('ui.payNow')}
@@ -365,6 +519,20 @@ export default function CheckoutDetailPage() {
                 </Paragraph>
               );
             })()}
+
+            {isValidHttpsUrl(paymentIntent?.checkoutUrl) && (
+              <div style={{ marginTop: 12, marginBottom: 12 }}>
+                <Button
+                  type="primary"
+                  icon={<ExportOutlined />}
+                  onClick={() => {
+                    window.open(paymentIntent!.checkoutUrl!, '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  {t('ui.openPayosCheckout')}
+                </Button>
+              </div>
+            )}
 
             <Paragraph type="secondary">{t('ui.scanQrInstructions')}</Paragraph>
 

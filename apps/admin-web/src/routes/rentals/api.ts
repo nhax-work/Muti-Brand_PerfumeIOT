@@ -11,6 +11,9 @@ export type RentalInvoice = components['schemas']['RentalInvoice'];
 export type RentalPaymentIntent = components['schemas']['RentalPaymentIntent'];
 export type RentalInvoiceStage = components['schemas']['RentalInvoiceStage'];
 export type Product = components['schemas']['Product'];
+export type RentalCheckoutAnnex = components['schemas']['RentalCheckoutAnnex'];
+export type AgreementAcceptance = components['schemas']['AgreementAcceptance'];
+export type BottleReturnMethod = components['schemas']['BottleReturnMethod'];
 
 export interface AvailableSlotsParams {
   readonly page?: number;
@@ -74,7 +77,10 @@ export function useCreateCheckout() {
 }
 
 /** Chi tiết phiên thanh toán (FR-SLT-37). */
-export function useCheckout(id: string | undefined, refetchInterval?: number | false) {
+export function useCheckout(
+  id: string | undefined,
+  refetchInterval?: number | false | ((query: any) => number | false | undefined),
+) {
   return useQuery({
     queryKey: ['rental-checkout', id],
     queryFn: () =>
@@ -253,5 +259,115 @@ export function useAcceptAgreement() {
 export function useResendVerification() {
   return useMutation({
     mutationFn: () => unwrap(api.POST('/auth/verify-email/resend')),
+  });
+}
+
+/** Lấy thông tin một hóa đơn/hợp đồng thuê slot (FR-SLT-15). */
+export function useSlotRental(id: string | undefined) {
+  return useQuery({
+    queryKey: ['slot-rental', id],
+    queryFn: () =>
+      unwrap(
+        api.GET('/slot-rentals/{id}', {
+          params: { path: { id: id! } },
+        }),
+      ),
+    enabled: Boolean(id),
+  });
+}
+
+/** Lấy phụ lục của phiên thanh toán (FR-SLT-50, ADR-0013). */
+export function useCheckoutAnnex(checkoutId: string | undefined) {
+  return useQuery({
+    queryKey: ['rental-checkout-annex', checkoutId],
+    queryFn: () =>
+      unwrap(
+        api.GET('/rental-checkouts/{id}/annex', {
+          params: { path: { id: checkoutId! } },
+        }),
+      ),
+    enabled: Boolean(checkoutId),
+    retry: false,
+  });
+}
+
+/** Đồng ý phụ lục của phiên thanh toán (FR-SLT-50, ADR-0013). */
+export function useAcceptCheckoutAnnex() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ checkoutId, contentHash }: { checkoutId: string; contentHash: string }) =>
+      unwrap(
+        api.POST('/rental-checkouts/{id}/annex/accept', {
+          params: { path: { id: checkoutId } },
+          body: { contentHash },
+        }),
+      ),
+    onSuccess: (_, { checkoutId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-checkout-annex', checkoutId] });
+      void queryClient.invalidateQueries({ queryKey: ['rental-checkout', checkoutId] });
+    },
+  });
+}
+
+/** Đổi slot cho hóa đơn khi mua nhầm (FR-SLT-55, ADR-0014). */
+export function useSwapSlot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rentalId, targetSlotId }: { rentalId: string; targetSlotId: string }) =>
+      unwrap(
+        api.POST('/slot-rentals/{id}/swap-slot', {
+          params: { path: { id: rentalId } },
+          body: { targetSlotId },
+        }),
+      ),
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+      void queryClient.invalidateQueries({ queryKey: ['available-slots'] });
+    },
+  });
+}
+
+/** Báo không gia hạn, lấy hàng về (FR-EXP-23, ADR-0014). */
+export function useRequestNonRenewal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      rentalId,
+      returnMethod,
+    }: {
+      rentalId: string;
+      returnMethod: BottleReturnMethod;
+    }) =>
+      unwrap(
+        api.POST('/slot-rentals/{id}/non-renewal', {
+          params: { path: { id: rentalId } },
+          body: { returnMethod },
+        }),
+      ),
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}
+
+/** Rút lại việc báo không gia hạn (FR-EXP-24, ADR-0014). */
+export function useWithdrawNonRenewal() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rentalId: string) =>
+      unwrap(
+        api.DELETE('/slot-rentals/{id}/non-renewal', {
+          params: { path: { id: rentalId } },
+        }),
+      ),
+    onSuccess: (_, rentalId) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
   });
 }

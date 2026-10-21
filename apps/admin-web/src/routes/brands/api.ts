@@ -1,6 +1,7 @@
 import type { components } from '@scentstation/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
+import { useReauth } from '@/shared/auth';
 
 export type Brand = components['schemas']['Brand'];
 export type BrandCreate = components['schemas']['BrandCreate'];
@@ -37,6 +38,23 @@ export function useSetBrandStatus() {
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: BrandStatus }) =>
       unwrap(api.PUT('/brands/{id}/status', { params: { path: { id } }, body: { status } })),
+    onSuccess: invalidate,
+  });
+}
+
+/** Platform Super Admin ghi nhận đã xác minh pháp nhân (FR-BND-10) — yêu cầu xác thực lại (x-reauth-token). */
+export function useVerifyBrandLegal() {
+  const requestReauth = useReauth();
+  const invalidate = useInvalidateBrands();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/brands/{id}/legal-verification', {
+          params: { path: { id }, header: { 'X-Reauth-Token': reauthToken } },
+        }),
+      );
+    },
     onSuccess: invalidate,
   });
 }

@@ -1005,7 +1005,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 * **Acceptance criteria:**
   * **AC1 (Đổi slot hợp lệ):** Given hóa đơn `H` đã thanh toán của thương hiệu `B` trên slot `S1` của máy `M`, trong vòng `SLOT_SWAP_WINDOW_HOURS` giờ kể từ `paid_at`, chưa từng đổi slot (`swap_count = 0`), chưa lắp chai đầu tiên,  
     When Brand Admin chọn đổi sang slot trống `S2` trên cùng máy `M` có cùng giá niêm yết tháng,  
-    Then hệ thống chuyển `H` sang `S2`, giải phóng `S1` sang `AVAILABLE`, tăng `swap_count = 1`, giữ nguyên số hóa đơn, gói thuê, gói bảo quản và ghi AuditLog.
+    Then hệ thống chuyển `H` sang `S2`, giải phóng `S1` để cho thuê lại (không đổi trạng thái vận hành `machine_slots.status`, FR-MCH-16), tăng `swap_count = 1`, giữ nguyên số hóa đơn, gói thuê, gói bảo quản và ghi AuditLog.
   * **AC2 (Khác giá thuê hoặc quá thời hạn):** Given slot `S2` có giá thuê khác `S1`, hoặc đã quá `SLOT_SWAP_WINDOW_HOURS` giờ, hoặc đã lắp chai đầu tiên,  
     When gửi yêu cầu đổi slot,  
     Then hệ thống từ chối với HTTP 400 `SLOT_SWAP_NOT_ALLOWED`.

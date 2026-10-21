@@ -12,6 +12,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -82,6 +83,21 @@ const PriceUpdateBody = z.object({
   pricePerSpray: z.string().min(1),
 });
 
+const SlotSwapBody = z.object({
+  targetSlotId: z.string().uuid(),
+});
+
+const NonRenewalBody = z.object({
+  returnMethod: z.enum(['WAREHOUSE_PICKUP', 'SHIP_TO_BRAND'] as const),
+});
+
+/** openapi.yaml: AgreementAccept. */
+const AgreementAcceptBody = z.object({ contentHash: z.string().regex(/^[0-9a-f]{64}$/) });
+
+interface StatusReply {
+  status(code: number): unknown;
+}
+
 @Controller('slot-rentals')
 export class SltController {
   constructor(@Inject(SltService) private readonly service: SltService) {}
@@ -136,6 +152,46 @@ export class SltController {
     const { pricePerSpray } = parseBody(PriceUpdateBody, body);
     return this.service.setPricePerSpray(actor, scope, id, pricePerSpray);
   }
+
+  /** FR-SLT-55 (ADR-0014): Đổi hóa đơn sang slot khác cùng máy khi mua nhầm. */
+  @Post(':id/swap-slot')
+  @HttpCode(200)
+  swapSlot(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { targetSlotId } = parseBody(SlotSwapBody, body);
+    return this.service.swapSlot(actor, scope, id, targetSlotId);
+  }
+
+  /** FR-EXP-23, FR-EXP-25 (ADR-0014): Báo không gia hạn, lấy hàng về trước endsAt. */
+  @Post(':id/non-renewal')
+  @HttpCode(200)
+  requestNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { returnMethod } = parseBody(NonRenewalBody, body);
+    return this.service.requestNonRenewal(actor, scope, id, returnMethod);
+  }
+
+  /** FR-EXP-24 (ADR-0014): Rút lại việc báo không gia hạn trước endsAt. */
+  @Delete(':id/non-renewal')
+  @HttpCode(200)
+  withdrawNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.withdrawNonRenewal(actor, scope, id);
+  }
 }
 
 @Controller('rental-checkouts')
@@ -184,6 +240,43 @@ export class RentalCheckoutsController {
     const { id } = parseBody(IdParam, params);
     return this.service.cancelCheckout(actor, scope, id);
   }
+
+  /** FR-SLT-50 (ADR-0013): Lấy phụ lục của phiên thanh toán. */
+  @Get(':id/annex')
+  getCheckoutAnnex(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getCheckoutAnnex(actor, scope, id);
+  }
+
+  /**
+   * FR-SLT-50 (ADR-0013): Brand Admin đồng ý phụ lục trước khi thanh toán.
+   * 201 khi ghi nhận mới, 200 khi đã đồng ý từ trước.
+   */
+  @Post(':id/annex/accept')
+  async acceptCheckoutAnnex(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+    @Res({ passthrough: true }) reply: StatusReply,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { contentHash } = parseBody(AgreementAcceptBody, body);
+    const { created, body: acceptance } = await this.service.acceptCheckoutAnnex(
+      actor,
+      scope,
+      id,
+      { contentHash },
+      originOf(request),
+    );
+    reply.status(created ? 201 : 200);
+    return acceptance;
+  }
 }
 
 @Controller('slots')
@@ -198,13 +291,6 @@ export class SlotRentalQuoteController {
 }
 
 const AgreementVersionParam = z.object({ version: z.string().min(1).max(20) });
-
-/** openapi.yaml: AgreementAccept. */
-const AgreementAcceptBody = z.object({ contentHash: z.string().regex(/^[0-9a-f]{64}$/) });
-
-interface StatusReply {
-  status(code: number): unknown;
-}
 
 @Controller('agreements')
 export class AgreementsController {

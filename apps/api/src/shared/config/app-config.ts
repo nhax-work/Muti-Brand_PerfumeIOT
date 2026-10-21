@@ -60,6 +60,15 @@ export interface AppConfig {
    * quy tắc với khóa trên: thiếu ở dev thì tính năng tắt, production bắt buộc có.
    */
   readonly refundClaimTokenSecret: string | null;
+  /**
+   * Địa chỉ URL cơ sở của ứng dụng web quản trị (ADMIN_WEB_BASE_URL). Mặc định http://localhost:5173.
+   */
+  readonly adminWebBaseUrl: string;
+  /**
+   * Cờ dev in link xác minh email ra console (DEV_LOG_EMAIL_VERIFICATION_TOKEN). Mặc định TẮT.
+   * Cấm bật ở production.
+   */
+  readonly devLogEmailVerificationToken: boolean;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -157,6 +166,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
+  const adminWebBaseUrl = env['ADMIN_WEB_BASE_URL'] || 'http://localhost:5173';
+  const rawDevLogToken = env['DEV_LOG_EMAIL_VERIFICATION_TOKEN'];
+  if (
+    rawDevLogToken !== undefined &&
+    rawDevLogToken !== '' &&
+    !['true', 'false'].includes(rawDevLogToken)
+  ) {
+    throw new Error(
+      `DEV_LOG_EMAIL_VERIFICATION_TOKEN phải là true hoặc false, nhận được: ${rawDevLogToken}`,
+    );
+  }
+  const devLogEmailVerificationToken = rawDevLogToken === 'true';
+  if (appEnv === 'production' && devLogEmailVerificationToken) {
+    throw new Error(
+      'DEV_LOG_EMAIL_VERIFICATION_TOKEN không được bật ở production (nguy cơ lộ token xác minh email).',
+    );
+  }
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -182,6 +209,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     swaggerEnabled,
     refundAccountEncKey,
     refundClaimTokenSecret,
+    adminWebBaseUrl,
+    devLogEmailVerificationToken,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },

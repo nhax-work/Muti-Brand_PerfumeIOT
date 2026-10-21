@@ -409,6 +409,24 @@ export const ui = {
   brandSaved: 'Đã lưu thương hiệu',
   brandProfile: 'Hồ sơ thương hiệu',
   brandProfileEdit: 'Thông tin hiển thị',
+  brandLegalProfile: 'Hồ sơ pháp nhân & Nhận doanh thu',
+  brandTaxCode: 'Mã số thuế',
+  brandTaxCodeHint: 'Từ 10 đến 20 ký tự, bắt buộc trước khi xác minh pháp nhân',
+  brandBusinessLicense: 'Số giấy phép kinh doanh',
+  brandPayoutAccount: 'Tài khoản ngân hàng nhận doanh thu',
+  brandBankCode: 'Mã ngân hàng',
+  brandBankCodePlaceholder: 'Ví dụ: VCB, TCB, MB...',
+  brandAccountNumber: 'Số tài khoản',
+  brandAccountHolder: 'Tên chủ tài khoản',
+  brandAccountHolderHint: 'Tên doanh nghiệp hoặc người đại diện',
+  brandLegalNotice:
+    'Lưu ý: Chỉnh sửa hồ sơ sau khi đã xác minh sẽ đưa trạng thái về Chưa xác minh để Quản trị nền tảng đối soát lại.',
+  brandVerifyLegal: 'Xác minh pháp nhân',
+  brandVerifyLegalTitle: 'Xác minh pháp nhân thương hiệu',
+  brandVerifyLegalConfirm:
+    'Xác nhận thương hiệu đã đủ điều kiện pháp lý để nhận doanh thu chi trả?',
+  brandVerifyLegalTaxCodeMissing: 'Thương hiệu chưa khai mã số thuế nên chưa thể xác minh.',
+  brandPayoutAccountMasked: 'Tài khoản nhận tiền (4 số cuối)',
   brandSuspendedNotice:
     'Thương hiệu đang bị đình chỉ: slot không nhận đơn. Liên hệ nền tảng để được hỗ trợ.',
   users: 'Tài khoản',
@@ -501,4 +519,48 @@ export const ui = {
   passwordMustDiffer: 'Mật khẩu mới phải khác mật khẩu hiện tại',
   passwordMismatch: 'Hai mật khẩu không khớp',
   passwordChanged: 'Đã đổi mật khẩu — đăng nhập lại bằng mật khẩu mới',
+  // Phụ lục hợp đồng thuê slot & Đổi slot (Task 5, FR-SLT-50, FR-SLT-55)
+  checkoutAnnexTitle: 'Phụ lục hợp đồng thuê slot',
+  checkoutAnnexDesc: 'Phụ lục tự sinh từ ảnh chụp giá và các gói dịch vụ của phiên thanh toán.',
+  checkoutAnnexAgreed: 'Tôi đã đọc và đồng ý với toàn bộ nội dung phụ lục hợp đồng',
+  checkoutAnnexAcceptBtn: 'Xác nhận đồng ý phụ lục',
+  checkoutAnnexAccepted: 'Đã đồng ý phụ lục',
+  checkoutAnnexAcceptedSuccess: 'Đã ghi nhận đồng ý phụ lục hợp đồng',
+  checkoutAnnexLegacy:
+    'Phiên thanh toán này không có phụ lục đính kèm (phiên tạo trước khi áp dụng tính năng phụ lục).',
+  contentHashLabel: 'Mã băm nội dung',
+  swapSlot: 'Đổi slot',
+  swapSlotTitle: 'Đổi sang slot trống khác',
+  swapSlotDesc:
+    'Bạn có thể đổi sang slot trống khác trên cùng máy có cùng giá thuê niêm yết trong vòng 48 giờ sau khi thanh toán và chưa lắp chai.',
+  swapSlotSuccess: 'Đã đổi slot thành công',
+  swapSlotConfirm: 'Xác nhận đổi slot',
+  selectCandidateSlot: 'Chọn slot trống để đổi',
+  noCandidateSlots: 'Không có slot trống nào cùng máy và cùng giá thuê niêm yết.',
+  currentSlotInfo: 'Slot hiện tại',
+  swappedFromNotice: 'Hóa đơn đã được đổi slot vào lúc {time}.',
+  openPayosCheckout: 'Mở trang thanh toán PayOS',
+  checkoutExpiredNotice: 'Phiên thanh toán đã hết thời gian giữ chỗ',
+  // Không gia hạn (Task 8, FR-EXP-23, FR-EXP-24, FR-EXP-25)
+  nonRenewal: 'Không gia hạn',
+  requestNonRenewal: 'Báo không gia hạn',
+  withdrawNonRenewal: 'Rút lại yêu cầu',
+  nonRenewingTag: 'Không gia hạn',
+  nonRenewalModalTitle: 'Báo không gia hạn & nhận lại hàng',
+  nonRenewalModalDesc:
+    'Hóa đơn sẽ không vào thời gian ân hạn (GRACE) và không bị tính phí ân hạn khi hết hạn. Slot tiếp tục bán tới khi nhân viên tháo chai, và doanh thu vẫn thuộc thương hiệu của bạn.',
+  selectReturnMethod: 'Chọn hình thức nhận lại chai nước hoa',
+  warehousePickup: 'Tự đến kho lấy chai',
+  shipToBrand: 'Nền tảng gửi về địa chỉ thương hiệu (thương hiệu chịu phí ship)',
+  returnAddress: 'Địa chỉ nhận hàng',
+  noAddressConfigured:
+    'Chưa có địa chỉ trong hồ sơ thương hiệu (vui lòng cập nhật trong Hồ sơ thương hiệu)',
+  nonRenewalSuccess: 'Đã ghi nhận yêu cầu không gia hạn',
+  withdrawNonRenewalConfirmTitle: 'Xác nhận rút lại yêu cầu không gia hạn?',
+  withdrawNonRenewalConfirmDesc:
+    'Sau khi rút lại, hóa đơn có thể gia hạn bình thường trước khi hết hạn.',
+  withdrawNonRenewalSuccess: 'Đã rút lại yêu cầu không gia hạn thành công',
+  nonRenewalActiveTitle: 'Hóa đơn đã báo không gia hạn',
+  nonRenewalActiveDesc:
+    'Yêu cầu báo ngày {date}. Hình thức nhận hàng: {method}. Hóa đơn sẽ không vào ân hạn khi hết hạn.',
 } as const;

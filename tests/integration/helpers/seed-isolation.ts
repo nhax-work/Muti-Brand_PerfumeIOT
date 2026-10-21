@@ -85,6 +85,7 @@ export interface IsolationFixture {
   readonly orders: readonly SeededOrder[];
   /** Số đo trên slot 1 nhưng TRƯỚC kỳ hạn hợp đồng của A (FR-AUTH-07 AC3). */
   readonly readingBeforeRentalId: string;
+  readonly seededRoles?: readonly string[];
 }
 
 function days(n: number): number {
@@ -428,6 +429,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
       liquidatedAt,
       orders,
       readingBeforeRentalId,
+      seededRoles: [roleSuperAdmin, roleBrandAdmin],
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -480,7 +482,9 @@ export async function cleanupIsolationFixture(
     `SELECT DISTINCT role_id FROM user_roles WHERE user_id = ANY($1::uuid[])`,
     [users],
   );
-  const roles = roleRows.rows.map((r) => r.role_id);
+  const roles = Array.from(
+    new Set([...roleRows.rows.map((r) => r.role_id), ...(fx.seededRoles ?? [])]),
+  );
 
   const statements: readonly (readonly [string, unknown[]])[] = [
     [`UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1`, [fx.machineId]],
@@ -499,7 +503,10 @@ export async function cleanupIsolationFixture(
     [`DELETE FROM machines WHERE id = $1`, [fx.machineId]],
     [`DELETE FROM locations WHERE id = $1`, [fx.locationId]],
     [`DELETE FROM refresh_sessions WHERE user_id = ANY($1::uuid[])`, [users]],
-    [`DELETE FROM user_roles WHERE user_id = ANY($1::uuid[])`, [users]],
+    [
+      `DELETE FROM user_roles WHERE user_id = ANY($1::uuid[]) OR role_id = ANY($2::uuid[])`,
+      [users, roles],
+    ],
     [`DELETE FROM role_permissions WHERE role_id = ANY($1::uuid[])`, [roles]],
     // Người đã đồng ý hoặc soạn hợp đồng khung bị khóa lại như `brands` (xem chú thích hàm).
     [

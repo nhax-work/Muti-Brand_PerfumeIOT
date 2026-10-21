@@ -107,14 +107,28 @@ async function deleteCheckouts(checkoutIds: readonly string[]): Promise<void> {
   if (checkoutIds.length === 0) return;
   const ids = [...checkoutIds];
   await inTransaction(async () => {
+    await raw.query("SET session_replication_role = 'replica'");
     await raw.query(
       `DELETE FROM payment_events WHERE payment_id IN
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
+    await raw.query(
+      `DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`,
+      [ids],
+    );
     await raw.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
+    await raw.query("SET session_replication_role = 'origin'");
+  });
+}
+
+async function acceptAnnex(checkoutId: string, user = brandA) {
+  const annexRes = await user('GET', `/rental-checkouts/${checkoutId}/annex`);
+  const { contentHash } = annexRes.json<{ contentHash: string }>();
+  await user('POST', `/rental-checkouts/${checkoutId}/annex/accept`, {
+    payload: { contentHash },
   });
 }
 
@@ -159,6 +173,13 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     // AC7: Brand B không thể bấm thanh toán cho phiên của Brand A → 403 FORBIDDEN_SCOPE
     const forbiddenRes = await brandB('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(forbiddenRes.statusCode).toBe(403);
+
+    // FR-SLT-50 AC2: Chưa đồng ý phụ lục mà gọi thanh toán -> 403 AGREEMENT_NOT_ACCEPTED
+    const unacceptedRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
+    expect(unacceptedRes.statusCode).toBe(403);
+
+    // Đồng ý phụ lục
+    await acceptAnnex(checkout.id);
 
     // AC1: Brand A bấm thanh toán → trả RentalPaymentIntent PENDING
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
@@ -223,6 +244,8 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
 
+    await acceptAnnex(checkout.id);
+
     // Bấm thanh toán đồng thời
     const [res1, res2] = await Promise.all([
       brandA('POST', `/rental-checkouts/${checkout.id}/payments`),
@@ -260,6 +283,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string; totalAmount: string }>();
+
+    await acceptAnnex(checkout.id);
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
@@ -318,6 +343,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
 
+    await acceptAnnex(checkout.id);
+
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
     const payment = payRes.json<{ paymentId: string }>();
@@ -372,6 +399,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
+
+    await acceptAnnex(checkout.id);
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
@@ -434,6 +463,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
+
+    await acceptAnnex(checkout.id);
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     const payment = payRes.json<{ paymentId: string }>();

@@ -767,5 +767,55 @@ describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
       }
       await expectAppError(auth.resendVerification(actorOf('usr-spam'), origin), 'RATE_LIMITED');
     });
+
+    it('test_FR_USR_07_dev_flag_disabled_by_default_and_no_token_leaked', async () => {
+      const capturedTokens: string[] = [];
+      const testSender = {
+        sendVerificationEmail: async (_email: string, rawToken: string) => {
+          capturedTokens.push(rawToken);
+        },
+      };
+
+      const customAuth = new AuthService(queries, audit, loader, tokens, config, clock, testSender);
+      const res = await customAuth.registerBrand(
+        { ...registration('NoLeak'), email: 'noleak@test.local' },
+        origin,
+      );
+
+      // Token KHÔNG bao giờ trả về trong response API
+      expect((res as Record<string, unknown>).token).toBeUndefined();
+      expect((res as Record<string, unknown>).rawToken).toBeUndefined();
+
+      // Token KHÔNG bao giờ nằm trong audit log
+      const auditEntries = audit.entries.filter((e) => e.action === 'auth.brand.registered');
+      expect(auditEntries.length).toBeGreaterThan(0);
+      const latestAudit = auditEntries[auditEntries.length - 1]!;
+      expect(JSON.stringify(latestAudit.metadata)).not.toContain(capturedTokens[0]);
+
+      // Cờ devLogEmailVerificationToken mặc định là false
+      expect(config.devLogEmailVerificationToken).toBe(false);
+    });
+
+    it('test_FR_USR_07_dev_flag_in_production_fails_to_start', () => {
+      const valid32ByteBase64 = Buffer.alloc(32, 1).toString('base64');
+      expect(() => {
+        loadConfig({
+          APP_ENV: 'production',
+          DATABASE_URL: 'postgresql://scent:scent_dev@localhost:5432/scentstation',
+          JWT_SECRET: 'production-jwt-secret-minimum-32-characters-long',
+          PAYMENT_PROVIDER: 'payos',
+          PAYOS_CLIENT_ID: 'client_id',
+          PAYOS_API_KEY: 'api_key',
+          PAYOS_CHECKSUM_KEY: 'checksum_key',
+          PAYOS_RETURN_URL: 'https://example.com/return',
+          PAYOS_CANCEL_URL: 'https://example.com/cancel',
+          DISPENSE_SIGNING_KEY:
+            '-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQC...\n-----END PRIVATE KEY-----',
+          REFUND_ACCOUNT_ENC_KEY: valid32ByteBase64,
+          REFUND_CLAIM_TOKEN_SECRET: 'refund-claim-secret-minimum-32-chars-length',
+          DEV_LOG_EMAIL_VERIFICATION_TOKEN: 'true',
+        });
+      }).toThrow(/DEV_LOG_EMAIL_VERIFICATION_TOKEN không được bật ở production/);
+    });
   });
 });

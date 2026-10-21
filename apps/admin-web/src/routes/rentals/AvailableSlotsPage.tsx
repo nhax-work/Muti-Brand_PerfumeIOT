@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Alert,
@@ -56,6 +56,23 @@ function SlotQuoteSelector({
 }) {
   const { t } = useI18n();
   const { data: quote, isLoading } = useRentalQuote(slot.slotId);
+
+  useEffect(() => {
+    if (quote && (!config.rentalPackageId || !config.storagePlanId)) {
+      const defaultPkg = config.rentalPackageId ?? quote.packages[0]?.rentalPackageId;
+      const defaultPlan = config.storagePlanId ?? quote.storagePlans[0]?.id;
+      const pkg = quote.packages.find((p) => p.rentalPackageId === defaultPkg);
+      const plan = quote.storagePlans.find((p) => p.id === defaultPlan);
+      const rent = pkg ? Number(pkg.rentAmount) : 0;
+      const storage = plan && pkg ? Number(plan.monthlyPrice) * pkg.durationMonths : 0;
+      onChange({
+        ...config,
+        rentalPackageId: defaultPkg,
+        storagePlanId: defaultPlan,
+        estimatedTotal: rent + storage,
+      });
+    }
+  }, [quote, config.rentalPackageId, config.storagePlanId]);
 
   if (isLoading) {
     return <Spin size="small" />;
@@ -169,6 +186,7 @@ export default function AvailableSlotsPage() {
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
   const [agreementChecked, setAgreementChecked] = useState(false);
   const [unverifiedEmailAlert, setUnverifiedEmailAlert] = useState(false);
+  const [holdLimitAlert, setHoldLimitAlert] = useState(false);
 
   const slots = data?.items ?? [];
 
@@ -189,7 +207,10 @@ export default function AvailableSlotsPage() {
   };
 
   const handleConfirmAgreement = async () => {
-    if (!currentAgreement) return;
+    if (!currentAgreement) {
+      message.error(t('slt.agreementNotAccepted'));
+      return;
+    }
     try {
       await acceptAgreement.mutateAsync({
         version: currentAgreement.version,
@@ -197,6 +218,8 @@ export default function AvailableSlotsPage() {
       });
       message.success(t('ui.agreementAcceptedSuccess'));
       setIsAgreementModalOpen(false);
+      // Tự động gọi tiếp tạo phiên sau khi Brand Admin đã đồng ý hợp đồng khung
+      await handleCheckout();
     } catch (acceptErr) {
       message.error(errorMessage(acceptErr, t));
     }
@@ -245,6 +268,11 @@ export default function AvailableSlotsPage() {
         if (err.code === 'AGREEMENT_NOT_ACCEPTED') {
           setIsAgreementModalOpen(true);
           message.warning(t('ui.agreementRequiredNotice'));
+          return;
+        }
+        if (err.code === 'HOLD_LIMIT_REACHED') {
+          setHoldLimitAlert(true);
+          message.error(t('slt.holdLimitReached') || errorMessage(err, t));
           return;
         }
       }
@@ -308,6 +336,17 @@ export default function AvailableSlotsPage() {
             style={{ marginBottom: 16 }}
             closable
             onClose={() => setUnverifiedEmailAlert(false)}
+          />
+        )}
+
+        {holdLimitAlert && (
+          <Alert
+            type="error"
+            message={t('slt.holdLimitReached')}
+            showIcon
+            closable
+            onClose={() => setHoldLimitAlert(false)}
+            style={{ marginBottom: 16 }}
           />
         )}
 
@@ -442,8 +481,8 @@ export default function AvailableSlotsPage() {
             <Button
               key="accept"
               type="primary"
-              disabled={!agreementChecked}
-              loading={acceptAgreement.isPending}
+              disabled={!agreementChecked || !currentAgreement}
+              loading={acceptAgreement.isPending || createCheckout.isPending}
               onClick={handleConfirmAgreement}
             >
               {t('ui.agreementAcceptBtn')}
@@ -455,6 +494,7 @@ export default function AvailableSlotsPage() {
           <div
             style={{
               maxHeight: 350,
+              minHeight: 120,
               overflowY: 'auto',
               padding: '16px',
               background: '#f9f9f9',
@@ -466,10 +506,17 @@ export default function AvailableSlotsPage() {
               fontSize: 13,
             }}
           >
-            {currentAgreement?.content}
+            {currentAgreement ? (
+              currentAgreement.content
+            ) : (
+              <div style={{ textAlign: 'center', padding: '30px 0' }}>
+                <Spin tip="Đang tải hợp đồng khung hiện hành..." />
+              </div>
+            )}
           </div>
           <Checkbox
             checked={agreementChecked}
+            disabled={!currentAgreement}
             onChange={(e) => setAgreementChecked(e.target.checked)}
           >
             {t('ui.agreementCheckbox')}

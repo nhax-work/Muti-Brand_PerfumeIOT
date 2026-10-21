@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { message } from 'antd';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
@@ -44,9 +45,16 @@ vi.mock('./api', async () => ({
   useDiscontinueProduct: () => ({ mutateAsync: mockDiscontinue, isPending: false }),
 }));
 
-beforeAll(installDomStubs);
+beforeAll(() => {
+  installDomStubs();
+  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as any;
+  vi.spyOn(message, 'success').mockReturnValue(dummyMessage);
+  vi.spyOn(message, 'error').mockReturnValue(dummyMessage);
+});
+
 afterEach(() => {
   cleanup();
+  message.destroy();
   mockSave.mockClear();
   mockUser = { id: 'u-1', brandId: 'b-1', roles: ['BRAND_ADMIN'] };
 });

@@ -39,6 +39,8 @@ export interface CreatePendingPaymentInput {
   /** Hạn đơn (ORDER_PAYMENT_TTL_SEC) hoặc hạn giữ chỗ của phiên (RENTAL_CHECKOUT_HOLD_MIN). */
   readonly expiresAt: Date;
   readonly description: string;
+  readonly returnUrl?: string;
+  readonly cancelUrl?: string;
 }
 
 @Injectable()
@@ -63,6 +65,8 @@ export class PaymentService {
       currency: input.currency,
       expiresAt: input.expiresAt,
       description: input.description,
+      returnUrl: input.returnUrl,
+      cancelUrl: input.cancelUrl,
     });
     const record = await this.queries.insertPending(
       {

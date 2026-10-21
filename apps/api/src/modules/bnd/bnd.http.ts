@@ -17,7 +17,12 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
-import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
+import {
+  CurrentUser,
+  RequirePermissions,
+  RequireReauth,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { BndService } from './bnd.service.js';
 
 const BRAND_MANAGE = 'brand.manage';
@@ -51,6 +56,19 @@ const SelfUpdateBody = z.object({
   logoUrl: z.string().optional(),
   description: z.string().optional(),
   contactInfo: z.record(z.string(), z.unknown()).optional(),
+});
+
+const PayoutAccountBody = z.object({
+  bankCode: z.string().min(1).max(20),
+  accountNumber: z.string().min(1).max(30),
+  accountHolder: z.string().min(1).max(200),
+});
+
+/** openapi.yaml: BrandLegalProfileUpdate. */
+const LegalProfileBody = z.object({
+  taxCode: z.string().min(10).max(20),
+  businessLicenseNumber: z.string().max(100).optional(),
+  payoutAccount: PayoutAccountBody.optional(),
 });
 
 const SetStatusBody = z.object({
@@ -92,6 +110,12 @@ export class BndController {
     return this.brands.updateMyBrand(actor, parseBody(SelfUpdateBody, body));
   }
 
+  /** FR-BND-09: Brand Admin khai hồ sơ pháp nhân và tài khoản nhận doanh thu. */
+  @Put('me/legal-profile')
+  updateMyBrandLegalProfile(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.brands.updateMyBrandLegalProfile(actor, parseBody(LegalProfileBody, body));
+  }
+
   /** FR-BND-07: Platform Super Admin xem chi tiết thương hiệu. */
   @Get(':id')
   @RequirePermissions(BRAND_MANAGE)
@@ -116,5 +140,13 @@ export class BndController {
   ) {
     const { status } = parseBody(SetStatusBody, body);
     return this.brands.setStatus(actor, parseBody(IdParam, id), status);
+  }
+
+  /** FR-BND-10: Platform Super Admin ghi nhận đã xác minh pháp nhân. */
+  @Post(':id/legal-verification')
+  @RequirePermissions(BRAND_MANAGE)
+  @RequireReauth()
+  verifyBrandLegal(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+    return this.brands.verifyBrandLegal(actor, parseBody(IdParam, id));
   }
 }

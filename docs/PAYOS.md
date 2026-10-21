@@ -40,10 +40,17 @@ PAYOS_CLIENT_ID=<Client ID>
 PAYOS_API_KEY=<API Key>
 PAYOS_CHECKSUM_KEY=<Checksum Key>
 # PayOS bắt buộc hai đường dẫn này khi tạo link; khách quét QR ở kiosk không dùng tới.
+# Với phiên thanh toán thuê slot trên web quản trị, hệ thống tự động gán returnUrl và cancelUrl
+# trỏ về `${ADMIN_WEB_BASE_URL}/rentals/checkouts/{id}` (FR-SLT-37, ADR-0016).
 PAYOS_RETURN_URL=http://localhost:5173/rentals
 PAYOS_CANCEL_URL=http://localhost:5173/rentals
 # Để trống = API thật.
 PAYOS_BASE_URL=
+
+# Địa chỉ gốc của web quản trị (dùng để sinh link quay lại cho PayOS checkout và link xác minh email)
+ADMIN_WEB_BASE_URL=http://localhost:5173
+# Cờ in token xác minh email ra log ở dev (mặc định tắt; cấm bật trên production)
+DEV_LOG_EMAIL_VERIFICATION_TOKEN=false
 ```
 
 `PAYMENT_PROVIDER=payos` mà thiếu biến nào thì API báo lỗi ngay lúc khởi động. Muốn quay về cổng giả thì
@@ -75,7 +82,7 @@ thử thấp tương ứng. PayOS chỉ nhận **số tiền nguyên VND**.
 | 2 | Quét QR bằng app ngân hàng | Nội dung chuyển khoản là mô tả ngắn 9 ký tự, ví dụ `ORDABC123`; số tiền điền sẵn |
 | 3 | Chuyển khoản | Trong vài giây kiosk chuyển sang "Mời bấm nút số N"; đơn `PAID` |
 | 4 | Chờ quá hạn đơn rồi mới quét một QR khác | App ngân hàng báo link hết hạn — PayOS từ chối nhận tiền sau `expiredAt` |
-| 5 | Brand Admin: chọn slot, thanh toán phiên thuê bằng QR hoặc trang `checkoutUrl` | Phiên `paidAt`, mỗi hóa đơn có số `HD-…` |
+| 5 | Brand Admin: Tự đăng ký -> Xác minh email -> Đăng nhập -> Đồng ý Hợp đồng khung dịch vụ (`/agreements/current`) -> Chọn slot (`/rentals/available`) -> Tạo phiên -> Đọc & đồng ý Phụ lục hợp đồng (`/rentals/checkouts/{id}`) -> Bấm "Thanh toán ngay" -> Quét QR VietQR hoặc bấm "Mở trang thanh toán PayOS" (`checkoutUrl`) | Phiên `PAID`, mỗi hóa đơn được cấp số `HD-…` (ADR-0006), bảng `notifications` ghi nhận đúng 1 thông báo `RENTAL_CHECKOUT_PAID` |
 | 6 | Tạo đơn mới trên kiosk, bấm "Hủy thanh toán" → "Vẫn hủy", rồi quét lại chính QR đó | Đơn `EXPIRED` (lý do `CUSTOMER_CANCELLED`), payment `CANCELLED`; trang `checkoutUrl` của link báo đã hủy. Nếu app ngân hàng vẫn chuyển được tiền vào QR cũ thì webhook phải đưa đơn sang `REFUND_PENDING` (lý do `PAID_AFTER_CANCEL`), không xịt (FR-ORD-33) — ghi lại kết quả thực tế vào đây |
 | 7 | Quét QR và chuyển khoản, rồi bấm hủy ngay khi tiền đang về | Kiosk báo đã nhận tiền và ở lại màn QR, sau đó sang "Mời bấm nút"; đơn không bị hủy |
 | 8 | Mở màn QR trên kiosk, rồi ở tab trình duyệt thứ hai cùng máy chọn một mùi khác | Tab thứ hai báo máy đang phục vụ khách khác (`MACHINE_BUSY`, FR-ORD-35); hủy ở tab đầu thì tab thứ hai tạo được đơn |

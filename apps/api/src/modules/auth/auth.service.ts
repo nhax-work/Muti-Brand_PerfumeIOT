@@ -6,7 +6,7 @@
  * Nhờ vậy unit test khởi tạo service trực tiếp với các phụ thuộc giả, không cần dựng server.
  */
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type {
   BrandRegistered,
   BrandRegistration,
@@ -39,6 +39,10 @@ import {
   toAuthenticatedUser,
   type AuthenticatedUser,
 } from './principal.loader.js';
+import {
+  EMAIL_VERIFICATION_SENDER,
+  type EmailVerificationSender,
+} from './email-verification-sender.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
 import {
   hashRefreshToken,
@@ -91,10 +95,17 @@ export class AuthService {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Optional()
+    @Inject(EMAIL_VERIFICATION_SENDER)
+    private emailSender?: EmailVerificationSender,
   ) {
     const limit = () => config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN');
     this.registerLimiter = new PerMinuteRateLimiter(clock, limit);
     this.resendLimiter = new PerMinuteRateLimiter(clock, limit);
+  }
+
+  setEmailSender(sender?: EmailVerificationSender): void {
+    this.emailSender = sender;
   }
 
   /**
@@ -385,6 +396,8 @@ export class AuthService {
       metadata: { brandCode, email: result.email, userId: result.userId },
     });
 
+    await this.emailSender?.sendVerificationEmail(input.email, rawToken);
+
     return result;
   }
 
@@ -447,6 +460,8 @@ export class AuthService {
       userAgent: origin.userAgent,
       metadata: { email: record.email },
     });
+
+    await this.emailSender?.sendVerificationEmail(record.email, rawToken);
   }
 
   private verificationExpiry(): Date {

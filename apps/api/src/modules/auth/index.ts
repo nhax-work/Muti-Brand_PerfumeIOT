@@ -12,3 +12,8 @@ export {
   CurrentBrandScope,
 } from './decorators.js';
 export { hashPassword, generateTemporaryPassword } from './password.js';
+export {
+  EMAIL_VERIFICATION_SENDER,
+  LoggingEmailVerificationSender,
+  type EmailVerificationSender,
+} from './email-verification-sender.js';
