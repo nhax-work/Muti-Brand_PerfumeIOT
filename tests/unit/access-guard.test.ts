@@ -140,4 +140,49 @@ describe('AccessGuard', () => {
     const target = endpoint(RequirePermissions('user.manage'));
     await rejectsWith(guardFor(user()).canActivate(context(target)), 'UNAUTHENTICATED');
   });
+
+  it('Task 2: Ops Staff có machine.view truy cập được endpoint đọc nhưng bị chặn ở endpoint machine.manage', async () => {
+    // Giả lập Controller Machines: class gác machine.manage, method list gác machine.view
+    const listHandler = function list() {};
+    const createHandler = function create() {};
+    class MachinesControllerMock {}
+    RequirePermissions('machine.manage')(MachinesControllerMock);
+    RequirePermissions('machine.view')(listHandler);
+
+    const opsUser = user({
+      roles: ['OPERATIONS_STAFF'],
+      permissions: new Set(['machine.view', 'machine.operate', 'order.view']),
+    });
+
+    const opsGuard = guardFor(opsUser);
+
+    // 1. Ops Staff gọi list (GET /machines) -> Thành công
+    const listCtx = {
+      getHandler: () => listHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: opsUser }) }),
+    } as unknown as ExecutionContext;
+    await expect(opsGuard.canActivate(listCtx)).resolves.toBe(true);
+
+    // 2. Ops Staff gọi create (POST /machines kế thừa class machine.manage) -> Bị chặn 403
+    const createCtx = {
+      getHandler: () => createHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: opsUser }) }),
+    } as unknown as ExecutionContext;
+    await rejectsWith(opsGuard.canActivate(createCtx), 'FORBIDDEN_SCOPE');
+
+    // 3. Brand Admin (không có machine.view) gọi list -> Bị chặn 403
+    const brandUser = user({
+      roles: ['BRAND_ADMIN'],
+      permissions: new Set(['product.manage', 'rental.request', 'order.view']),
+    });
+    const brandGuard = guardFor(brandUser);
+    const brandListCtx = {
+      getHandler: () => listHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: brandUser }) }),
+    } as unknown as ExecutionContext;
+    await rejectsWith(brandGuard.canActivate(brandListCtx), 'FORBIDDEN_SCOPE');
+  });
 });

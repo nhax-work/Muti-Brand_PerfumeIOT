@@ -23,6 +23,7 @@ const ALL_PERMISSIONS = [
   'brand.manage',
   'user.manage',
   'machine.manage',
+  'machine.view',
   'machine.operate',
   'rental.manage',
   'rental.request',

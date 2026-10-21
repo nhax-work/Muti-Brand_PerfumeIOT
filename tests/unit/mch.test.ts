@@ -17,6 +17,7 @@ import {
 } from '../../apps/api/src/modules/auth/decorators.js';
 import {
   AvailableSlotsController,
+  LocationsController,
   MachinesController,
   SlotsController,
 } from '../../apps/api/src/modules/mch/mch.http.js';
@@ -695,6 +696,44 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(
         Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.forceMaintenance),
       ).toEqual(['machine.operate']);
+    });
+
+    it('tách quyền đọc máy (machine.view) cho Operations Staff, giữ machine.manage cho quản trị và khóa MQTT (Task 2)', () => {
+      // 1. Class-level vẫn gác bằng machine.manage cho các thao tác quản lý (đăng ký máy, xoay khóa MQTT, cập nhật máy)
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController)).toEqual([
+        'machine.manage',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.create)).toBeUndefined();
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.issueCredential)).toBeUndefined();
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.revokeCredential)).toBeUndefined();
+
+      // 2. Các endpoint đọc danh sách và chi tiết máy được tách cho machine.view để Ops xem được
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.list)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listSlots)).toEqual([
+        'machine.view',
+      ]);
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listStatusHistory),
+      ).toEqual(['machine.view']);
+
+      // 3. Đọc địa điểm và slot cũng cho phép machine.view để Ops tải trang máy không bị 403
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController)).toEqual([
+        'machine.manage',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.list)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, SlotsController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
     });
   });
 

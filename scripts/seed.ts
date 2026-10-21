@@ -106,6 +106,7 @@ const PERMISSIONS = [
   ['brand.manage', 'Tạo và cập nhật thương hiệu (FR-BND-01/02/03)'],
   ['user.manage', 'Tạo, khóa và đặt lại mật khẩu tài khoản (FR-USR-01..05)'],
   ['machine.manage', 'Đăng ký và cấu hình máy, slot (FR-MCH-01..06)'],
+  ['machine.view', 'Xem danh sách và chi tiết máy, slot (FR-MCH-08..10)'],
   ['machine.operate', 'Bật/tắt máy và slot từ xa (FR-MCH-11/12)'],
   ['rental.manage', 'Tạo, gia hạn, chấm dứt, thanh lý hợp đồng (FR-SLT-01..14)'],
   ['rental.request', 'Gửi yêu cầu thuê slot trống (FR-SLT-20)'],
@@ -134,6 +135,7 @@ const PERMISSIONS = [
 const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   [ID.roleSuperAdmin]: PERMISSIONS.map(([code]) => code),
   [ID.roleOpsStaff]: [
+    'machine.view',
     'machine.operate',
     'alert.handle',
     'maintenance.handle',

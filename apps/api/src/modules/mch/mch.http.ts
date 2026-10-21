@@ -26,6 +26,7 @@ import {
 import { MchService } from './mch.service.js';
 
 const MACHINE_MANAGE = 'machine.manage';
+const MACHINE_VIEW = 'machine.view';
 const MACHINE_OPERATE = 'machine.operate';
 const RENTAL_REQUEST = 'rental.request';
 
@@ -65,6 +66,7 @@ export class LocationsController {
 
   /** FR-MCH-03: Danh sách địa điểm */
   @Get()
+  @RequirePermissions(MACHINE_VIEW)
   async list(@Query() query: unknown) {
     const filter = parseBody(LocationListQuery, query);
     const { items, total } = await this.mch.listLocations(filter);
@@ -81,6 +83,7 @@ export class LocationsController {
 
   /** Chi tiết địa điểm */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getLocation(parseBody(IdParam, id));
   }
@@ -140,6 +143,7 @@ export class MachinesController {
 
   /** FR-MCH-08..10: Danh sách máy */
   @Get()
+  @RequirePermissions(MACHINE_VIEW)
   async list(@Query() query: unknown) {
     const filter = parseBody(MachineListQuery, query);
     const { items, total } = await this.mch.listMachines(filter);
@@ -156,6 +160,7 @@ export class MachinesController {
 
   /** FR-MCH-08..10: Chi tiết máy */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getMachine(parseBody(IdParam, id));
   }
@@ -205,12 +210,14 @@ export class MachinesController {
 
   /** FR-MCH-15..17: Danh sách slots của máy */
   @Get(':id/slots')
+  @RequirePermissions(MACHINE_VIEW)
   listSlots(@Param('id') id: string) {
     return this.mch.listSlotsByMachine(parseBody(IdParam, id));
   }
 
   /** FR-MCH-13: Lịch sử chuyển trạng thái kết nối và chế độ hoạt động của máy. */
   @Get(':id/status-history')
+  @RequirePermissions(MACHINE_VIEW)
   async listStatusHistory(@Param('id') id: string, @Query() query: unknown) {
     const validatedId = parseBody(IdParam, id);
     const filter = parseBody(PageQuery, query);
@@ -288,6 +295,7 @@ export class SlotsController {
 
   /** Chi tiết một slot */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getSlot(parseBody(IdParam, id));
   }
