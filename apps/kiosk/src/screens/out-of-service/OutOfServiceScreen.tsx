@@ -1,5 +1,6 @@
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
+import { Icon } from '@/shared/ui/Icon';
 import styles from './OutOfServiceScreen.module.css';
 
 /**
@@ -14,9 +15,7 @@ export default function OutOfServiceScreen() {
         <span className={styles.brandTag}>ScentStation PARIS • KIOSK SALON</span>
 
         <div className={styles.iconWrapper}>
-          <span className="material-symbols-outlined" style={{ fontSize: 32 }}>
-            build_circle
-          </span>
+          <Icon name="tool" size={32} />
         </div>
 
         <h1 className={styles.title}>{t('kiosk.outOfServiceTitle')}</h1>

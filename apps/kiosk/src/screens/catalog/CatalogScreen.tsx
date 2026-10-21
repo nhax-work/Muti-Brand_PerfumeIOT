@@ -17,8 +17,10 @@ import {
 } from '@/shared/api';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { config } from '@/shared/config';
+import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
+import { Icon } from '@/shared/ui/Icon';
 import { phaseOf, secondsUntil } from '../checkout/checkout-phase';
 import DispenseSuccessGuide from '../checkout/DispenseSuccessGuide';
 import styles from './CatalogScreen.module.css';
@@ -39,13 +41,6 @@ const FAMILIES: Record<number, string> = {
   4: 'ORIENTAL WOOD',
   5: 'FLORAL NOBLE',
 };
-
-function formatPrice(amount: string | null | undefined, currency: string): string {
-  if (!amount) return '';
-  const num = Number(amount);
-  if (Number.isNaN(num)) return `${amount} ${currency}`;
-  return `${new Intl.NumberFormat('vi-VN').format(num)} ${currency}`;
-}
 
 function parseNoteValues(val: unknown): string[] {
   if (!val) return [];
@@ -80,7 +75,7 @@ function formatCountdown(seconds: number): string {
  *   trên nền HomeScreen. Hiện chỉ có thanh toán QR (ADR-0016) nên không có bước chọn phương thức.
  */
 export default function CatalogScreen() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const navigate = useNavigate();
   const params = useParams<{ slotNumber?: string }>();
   const catalog = useKioskCatalog();
@@ -284,7 +279,7 @@ export default function CatalogScreen() {
   }, [items]);
 
   // Đóng modal khi nhấn ESC — đi qua cùng đường đóng để bỏ đơn đang hiện, không mang sang sản phẩm khác.
-  const escCloseRef = useRef<() => void>(() => { });
+  const escCloseRef = useRef<() => void>(() => {});
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') escCloseRef.current();
@@ -487,12 +482,12 @@ export default function CatalogScreen() {
     created !== undefined && ['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase);
 
   // Luôn trỏ tới bản đóng mới nhất để hẹn giờ/phím ESC không gọi closure cũ.
-  const closeRef = useRef<() => void>(() => { });
+  const closeRef = useRef<() => void>(() => {});
   useEffect(() => {
     closeRef.current = handleCloseDetailModal;
     // Màn hướng dẫn sau thanh toán không đóng bằng phím ESC — khách đang chờ lượt xịt đã trả tiền.
     escCloseRef.current = isPostPayment
-      ? () => { }
+      ? () => {}
       : paymentOpen
         ? confirmingCancel
           ? () => setConfirmingCancel(false)
@@ -536,6 +531,7 @@ export default function CatalogScreen() {
   const detailPriceFormatted = formatPrice(
     detailItem?.pricePerSpray,
     detailItem?.currency ?? 'VND',
+    locale,
   );
 
   // Mô tả giữ nguyên như thương hiệu nhập (NFR-USA-07) — không có thì không bịa mô tả thay.
@@ -572,14 +568,14 @@ export default function CatalogScreen() {
             }}
             aria-label={t('kiosk.scrollLeft')}
           >
-            <span className="material-symbols-outlined">west</span>
+            <Icon name="arrowLeft" />
           </button>
 
           {/* Dải băng chuyền sản phẩm chuyển động chu kỳ liên tục từ trái sang phải */}
           <div ref={trackRef} className={styles.carouselTrack} id="parfumCarousel">
             {loopItems.map((item) => {
               const isAvailable = item.available;
-              const priceText = formatPrice(item.pricePerSpray, item.currency);
+              const priceText = formatPrice(item.pricePerSpray, item.currency, locale);
               const bottleImg =
                 item.product?.imageUrl || FALLBACK_BOTTLES[item.slotNumber] || FALLBACK_BOTTLES[1];
               const familyName = FAMILIES[item.slotNumber] || 'HAUTE SILLAGE';
@@ -649,16 +645,12 @@ export default function CatalogScreen() {
                             <span className={styles.actionDot} />
                             {t('kiosk.tapToExplore')}
                           </span>
-                          <span className={`material-symbols-outlined ${styles.actionArrow}`}>
-                            east
-                          </span>
+                          <Icon name="arrowRight" size={18} className={styles.actionArrow} />
                         </>
                       ) : (
                         <>
                           <span>{t('kiosk.outOfStockInfo')}</span>
-                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                            info
-                          </span>
+                          <Icon name="info" size={16} />
                         </>
                       )}
                     </div>
@@ -678,7 +670,7 @@ export default function CatalogScreen() {
             }}
             aria-label={t('kiosk.scrollRight')}
           >
-            <span className="material-symbols-outlined">east</span>
+            <Icon name="arrowRight" />
           </button>
         </div>
       )}
@@ -701,9 +693,7 @@ export default function CatalogScreen() {
               onClick={handleCloseDetailModal}
               aria-label={t('kiosk.close')}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                close
-              </span>
+              <Icon name="close" size={20} />
             </button>
 
             {/* Cột trái: Flacon Grasse */}
@@ -747,24 +737,14 @@ export default function CatalogScreen() {
                   {/* Chỉ hiện thông tin thương hiệu đã nhập — không gán nhà chế tác/xuất xứ thay (NFR-USA-07). */}
                   {detailItem.brandName && (
                     <div className={styles.modalDetailRow}>
-                      <span className={styles.modalDetailLabel}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                          science
-                        </span>
-                        {t('kiosk.brandLabel')}
-                      </span>
+                      <span className={styles.modalDetailLabel}>{t('kiosk.brandLabel')}</span>
                       <span className={styles.modalDetailValue}>{detailItem.brandName}</span>
                     </div>
                   )}
 
                   {notes && (
                     <div className={styles.modalDetailRow}>
-                      <span className={styles.modalDetailLabel}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-                          spa
-                        </span>
-                        {t('kiosk.fragranceNotes')}
-                      </span>
+                      <span className={styles.modalDetailLabel}>{t('kiosk.fragranceNotes')}</span>
                       <div className={styles.modalDetailValue}>
                         <div
                           style={{
@@ -848,13 +828,7 @@ export default function CatalogScreen() {
                   onClick={handleOpenPayment}
                 >
                   <span>{t('kiosk.agreeAndPay')}</span>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 18 }}
-                    aria-hidden="true"
-                  >
-                    arrow_forward
-                  </span>
+                  <Icon name="arrowRight" size={18} />
                 </button>
               </div>
             </div>
@@ -895,9 +869,7 @@ export default function CatalogScreen() {
               onClick={handleRequestCancel}
               aria-label={t('kiosk.close')}
             >
-              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                close
-              </span>
+              <Icon name="close" size={20} />
             </button>
 
             {/* Hiện chỉ có thanh toán QR (ADR-0016) nên vào thẳng mã QR, không có bước chọn phương thức. */}
@@ -941,7 +913,7 @@ export default function CatalogScreen() {
                     }}
                   >
                     {created
-                      ? formatPrice(created.order.amount, created.order.currency)
+                      ? formatPrice(created.order.amount, created.order.currency, locale)
                       : detailPriceFormatted}
                   </div>
                 </div>
@@ -951,12 +923,11 @@ export default function CatalogScreen() {
             <div className={styles.qrDisplayBox}>
               {qrExpired && created ? (
                 <div role="status" style={{ padding: '24px 8px', textAlign: 'center' }}>
-                  <span
-                    className="material-symbols-outlined"
-                    style={{ fontSize: 40, color: 'var(--color-text-secondary)' }}
-                  >
-                    timer_off
-                  </span>
+                  <Icon
+                    name="timerOff"
+                    size={40}
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  />
                   <h3 style={{ fontFamily: 'var(--font-serif)', margin: '8px 0' }}>
                     {t('kiosk.paymentExpiredTitle')}
                   </h3>
@@ -1003,9 +974,7 @@ export default function CatalogScreen() {
                     {/* Đếm theo hạn của chính đơn này (máy chủ trả) — đổi sản phẩm là đơn mới, hạn mới. */}
                     {qrSecondsLeft !== null && (
                       <div className={styles.timerPill}>
-                        <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                          schedule
-                        </span>
+                        <Icon name="clock" size={16} />
                         <span>
                           {t('kiosk.paymentValidFor', { time: formatCountdown(qrSecondsLeft) })}
                         </span>
@@ -1136,9 +1105,7 @@ export default function CatalogScreen() {
             aria-describedby="cancel-payment-desc"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className={`material-symbols-outlined ${styles.confirmIcon}`} aria-hidden="true">
-              warning
-            </span>
+            <Icon name="warning" size={32} className={styles.confirmIcon} />
             <h3 id="cancel-payment-title" className={styles.confirmTitle}>
               {t('kiosk.cancelPaymentConfirmTitle')}
             </h3>

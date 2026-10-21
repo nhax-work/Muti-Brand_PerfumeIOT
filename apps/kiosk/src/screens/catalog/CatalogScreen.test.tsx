@@ -452,7 +452,7 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(within(dialog).getByText('Chanel')).toBeTruthy();
     expect(within(dialog).getByRole('heading', { name: 'Chanel No 5' })).toBeTruthy();
     expect(within(dialog).getByText('Hương thơm quyến rũ vượt thời gian')).toBeTruthy();
-    expect(within(dialog).getByText(/35\.000 VND \/ lượt xịt/)).toBeTruthy();
+    expect(within(dialog).getByText(/35\.000\s₫ \/ lượt xịt/)).toBeTruthy();
     expect(within(dialog).getByText('Aldehydes')).toBeTruthy();
     expect(within(dialog).getByText('Rose')).toBeTruthy();
     expect(within(dialog).getByText('Vanilla')).toBeTruthy();

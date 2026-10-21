@@ -1,11 +1,76 @@
 /*
- * ScentStation Paris — Haute Parfumerie Kiosk Design System Tokens
- * Minimalist Black & White Luxury Aesthetic
+ * Design token của kiosk ScentStation — mọi màn chỉ dùng biến ở đây, không viết màu, cỡ chữ hay
+ * khoảng cách rời rạc trong CSS module.
+ *
+ * Thiết kế cho màn ngang 1280×800 (hiển thị tốt tới 1920×1200), chạm bằng tay, đọc ở 60cm.
  */
 :root {
-  --font-serif: 'Playfair Display', Georgia, serif;
-  --font-sans: 'Inter', 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* --- Màu: nền tối là mặc định. Đổi sang nền sáng: đặt data-theme="light" ở <html> (index.html). */
+  --bg: #0f0e0d;
+  --surface: #1a1816;
+  --surface-2: #24211e;
+  --text: #f3eee7;
+  --text-muted: #a39b90;
+  --line: rgba(243, 238, 231, 0.12);
+  /* CHỈ dùng cho thứ gắn với đèn nút trên máy và hành động chính. */
+  --accent: #c9a46a;
+  --on-accent: #0f0e0d;
+  --danger: #c2655a;
+  /* QR luôn đen trên trắng để app ngân hàng quét được, bất kể nền màn hình. */
+  --qr-bg: #ffffff;
+  --qr-fg: #000000;
 
+  /* --- Chữ: serif cho tên sản phẩm và tiêu đề, sans cho phần còn lại (cả hai đủ dấu tiếng Việt). */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
+
+  --fs-display: 56px;
+  --fs-h1: 40px;
+  --fs-h2: 28px;
+  --fs-body: 22px;
+  /* NFR-USA-04: hai cỡ nhỏ nhất bám đúng KIOSK_MIN_FONT_PX — main.tsx đặt --kiosk-min-font. */
+  --fs-small: var(--kiosk-min-font);
+  --fs-caps: var(--kiosk-min-font);
+  --tracking-caps: 0.12em;
+  --lh-tight: 1.15;
+  --lh-body: 1.5;
+
+  /* --- Lưới 8px. */
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+  --sp-5: 40px;
+  --sp-6: 48px;
+  --sp-8: 64px;
+  --sp-10: 80px;
+  --gutter: var(--sp-6);
+
+  --radius: 4px;
+  --touch-min: 56px;
+
+  /* --- Chuyển động: chỉ fade + dịch 8px, không nảy. */
+  --dur: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --shift: 8px;
+}
+
+:root[data-theme='light'] {
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-2: #ece7df;
+  --text: #141312;
+  --text-muted: #5f574d;
+  --line: rgba(20, 19, 18, 0.12);
+  --on-accent: #141312;
+}
+
+/*
+ * TẠM THỜI: tên biến cũ mà các màn chưa làm lại còn dùng, giữ nguyên giá trị cũ để giao diện không
+ * nửa sáng nửa tối giữa chừng. Màn nào chuyển sang token mới thì bỏ dùng các biến này; khối này
+ * xóa khi danh mục, chi tiết, thanh toán, nhấn nút và ngừng phục vụ đã làm lại xong.
+ */
+:root {
   --font-body: 15px;
   --font-title: 22px;
   --font-hero: 28px;
@@ -16,19 +81,15 @@
   --color-surface: #ffffff;
   --color-surface-container: #fafafa;
   --color-surface-dim: #f0f0f0;
-
   --color-text: #000000;
   --color-text-secondary: rgba(0, 0, 0, 0.72);
   --color-text-muted: rgba(0, 0, 0, 0.52);
-
   --color-border: rgba(0, 0, 0, 0.12);
   --color-border-strong: rgba(0, 0, 0, 0.25);
   --color-border-dark: #000000;
-
   --color-primary: #000000;
   --color-primary-hover: #1f1f1f;
   --color-on-primary: #ffffff;
-
   --color-gold: #c5a880;
   --color-gold-dark: #725b38;
 
@@ -69,7 +130,7 @@ body {
   color: var(--color-text);
   font-family: var(--font-sans);
   font-size: var(--font-body);
-  line-height: 1.5;
+  line-height: var(--lh-body);
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -104,18 +165,30 @@ button {
   outline: none;
 }
 
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
+/* Nhãn chữ hoa — tối đa một nhãn mỗi khối nội dung. */
+.caps {
+  font-family: var(--font-sans);
+  font-size: var(--fs-caps);
+  font-weight: 500;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+/* Lối vào chung của mọi màn và lớp phủ: hiện dần và nhích lên 8px. */
+@keyframes kiosk-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+    --shift: 0px;
+  }
 }
