@@ -5,17 +5,22 @@
  * Thiết kế cho màn ngang 1280×800 (hiển thị tốt tới 1920×1200), chạm bằng tay, đọc ở 60cm.
  */
 :root {
-  /* --- Màu: nền tối là mặc định. Đổi sang nền sáng: đặt data-theme="light" ở <html> (index.html). */
-  --bg: #0f0e0d;
-  --surface: #1a1816;
-  --surface-2: #24211e;
-  --text: #f3eee7;
-  --text-muted: #a39b90;
-  --line: rgba(243, 238, 231, 0.12);
-  /* CHỈ dùng cho thứ gắn với đèn nút trên máy và hành động chính. */
+  /* --- Màu: nền sáng là mặc định. Đổi sang nền tối: đặt data-theme="dark" ở <html> (index.html). */
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-2: #ece7df;
+  --text: #141312;
+  --text-muted: #5f574d;
+  --line: rgba(20, 19, 18, 0.12);
+  /* Nút hành động chính (thanh toán, bắt đầu): đen trên nền sáng. */
+  --action: #141312;
+  --on-action: #ffffff;
+  /* CHỈ dùng cho thứ gắn với đèn nút vật lý trên máy: số nút, vòng sáng, đếm ngược. */
   --accent: #c9a46a;
-  --on-accent: #0f0e0d;
-  --danger: #c2655a;
+  --on-accent: #141312;
+  /* Chữ/nét màu accent đặt trên nền — đậm hơn để đủ tương phản. */
+  --accent-ink: #7a5a28;
+  --danger: #a5463c;
   /* QR luôn đen trên trắng để app ngân hàng quét được, bất kể nền màn hình. */
   --qr-bg: #ffffff;
   --qr-fg: #000000;
@@ -55,19 +60,23 @@
   --shift: 8px;
 }
 
-:root[data-theme='light'] {
-  --bg: #f6f3ee;
-  --surface: #ffffff;
-  --surface-2: #ece7df;
-  --text: #141312;
-  --text-muted: #5f574d;
-  --line: rgba(20, 19, 18, 0.12);
-  --on-accent: #141312;
+:root[data-theme='dark'] {
+  --bg: #0f0e0d;
+  --surface: #1a1816;
+  --surface-2: #24211e;
+  --text: #f3eee7;
+  --text-muted: #a39b90;
+  --line: rgba(243, 238, 231, 0.12);
+  --action: #f3eee7;
+  --on-action: #0f0e0d;
+  --on-accent: #0f0e0d;
+  --accent-ink: #c9a46a;
+  --danger: #c2655a;
 }
 
 /*
- * TẠM THỜI: tên biến cũ mà các màn chưa làm lại còn dùng, giữ nguyên giá trị cũ để giao diện không
- * nửa sáng nửa tối giữa chừng. Màn nào chuyển sang token mới thì bỏ dùng các biến này; khối này
+ * TẠM THỜI: tên biến cũ mà các màn chưa làm lại còn dùng, giữ nguyên giá trị cũ để các màn đó trông
+ * như trước. Màn nào chuyển sang token mới thì bỏ dùng các biến này; khối này
  * xóa khi danh mục, chi tiết, thanh toán, nhấn nút và ngừng phục vụ đã làm lại xong.
  */
 :root {
