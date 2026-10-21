@@ -5,7 +5,12 @@ import pg from 'pg';
 import { loadEnvFile } from '../apps/api/src/shared/config/env-file.js';
 
 loadEnvFile();
-const { values } = parseArgs({ options: { serial: { type: 'string', default: 'M001' } } });
+// PowerShell nuốt dấu `--` của `npm run … -- --serial M001`, npm chỉ chuyển xuống `M001` — nhận cả hai.
+const { values, positionals } = parseArgs({
+  options: { serial: { type: 'string' } },
+  allowPositionals: true,
+});
+const serial = values.serial ?? positionals[0] ?? 'M001';
 const url = process.env['DATABASE_URL'];
 if (!url) throw new Error('Thiếu DATABASE_URL');
 const privatePem = process.env['DISPENSE_SIGNING_KEY'];
@@ -23,10 +28,10 @@ try {
   const machine = (
     await client.query<{ id: string; serial_number: string }>(
       'SELECT id, serial_number FROM machines WHERE serial_number = $1 FOR UPDATE',
-      [values.serial],
+      [serial],
     )
   ).rows[0];
-  if (!machine) throw new Error(`Máy ${values.serial} chưa được đăng ký trong database`);
+  if (!machine) throw new Error(`Máy ${serial} chưa được đăng ký trong database`);
   const slots = await client.query(
     'SELECT slot_number FROM machine_slots WHERE machine_id = $1 ORDER BY slot_number',
     [machine.id],

@@ -27,10 +27,13 @@ export const router = createBrowserRouter([
         lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
+        // Cố ý dùng HomeScreen (= CatalogScreen), không dùng CheckoutScreen: mã QR và hướng dẫn bấm
+        // nút là modal của CatalogScreen. Cùng component ở cả bốn route nên đổi URL
+        // /products/:slot → /checkout/:slot không dựng lại màn, modal giữ nguyên đơn đang thanh toán.
+        // Trỏ sang CheckoutScreen là khách bấm "Đồng ý và thanh toán" xong lại gặp màn điều khoản.
         path: 'checkout/:slotNumber',
         handle: { keepAwake: true } satisfies KioskRouteHandle,
-        lazy: () =>
-          import('@/screens/checkout/CheckoutScreen').then((m) => ({ Component: m.default })),
+        lazy: () => import('@/screens/home/HomeScreen').then((m) => ({ Component: m.default })),
       },
       {
         path: '*',
