@@ -986,6 +986,7 @@ export const en: SameKeysAs<typeof vi> = {
       'If you have scanned the code and paid, please stay on this screen. Do you still want to go back?',
     stayHere: 'Stay',
     leaveAnyway: 'Go back anyway',
+    retryCreateOrder: 'Try again',
     creatingOrder: 'Creating your order…',
     scanToPay: 'Scan to pay',
     paymentReference: 'Payment code',
@@ -1006,6 +1007,9 @@ export const en: SameKeysAs<typeof vi> = {
     paymentExpiredLatePayment:
       "If you already paid, don't worry: the payment is still recorded for a refund. Please keep code {reference}.",
     orderProblemTitle: 'Something went wrong with your spray',
+    latePaymentTitle: 'Your payment arrived after the code expired',
+    latePaymentHint:
+      'The machine will not spray for this payment. You will be refunded — scan the code below to send your refund details.',
     checkingResult: 'Confirming the result with the machine…',
     supportHint: 'Please keep code {reference} and contact {contact} for help.',
     claimQrTitle: 'Scan to request a refund',

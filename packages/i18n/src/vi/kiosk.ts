@@ -48,6 +48,7 @@ export const kiosk = {
   stayHere: 'Ở lại',
   leaveAnyway: 'Vẫn quay lại',
   creatingOrder: 'Đang tạo đơn…',
+  retryCreateOrder: 'Thử lại',
   scanToPay: 'Quét mã để thanh toán',
   paymentReference: 'Mã thanh toán',
   amountLabel: 'Số tiền',
@@ -67,6 +68,9 @@ export const kiosk = {
   paymentExpiredLatePayment:
     'Nếu bạn đã chuyển khoản, đừng lo: giao dịch vẫn được ghi nhận để hoàn tiền. Hãy lưu lại mã {reference}.',
   orderProblemTitle: 'Lượt xịt gặp sự cố',
+  latePaymentTitle: 'Tiền về sau khi mã đã hết hạn',
+  latePaymentHint:
+    'Máy không xịt cho giao dịch này. Bạn sẽ được hoàn lại tiền — hãy quét mã bên dưới để gửi thông tin nhận hoàn tiền.',
   checkingResult: 'Đang xác nhận kết quả với máy…',
   // Máy chạy không có nhân viên (BR-001) — chỉ dẫn khách tới kênh hỗ trợ thật nếu có cấu hình.
   supportHint: 'Vui lòng lưu lại mã {reference} và liên hệ {contact} để được hỗ trợ.',

@@ -217,6 +217,8 @@ function ResultModal({
   const { t } = useI18n();
   const done = phase === 'DISPENSED';
   const reference = view?.supportReference ?? order.paymentReference;
+  // Tiền về sau khi mã hết hạn/bị hủy: đơn REFUND_PENDING mà chưa từng có lệnh xịt (FR-ORD-16 AC3).
+  const latePayment = view?.status === 'REFUND_PENDING' && !view.dispenseStatus;
 
   // FR-ORD-28: máy chủ chỉ trả claimToken khi đơn đủ điều kiện khiếu nại và chưa có phiếu.
   const claimUrl =
@@ -247,7 +249,9 @@ function ResultModal({
           ? t('kiosk.dispensedTitle')
           : phase === 'FORFEITED'
             ? t('kiosk.pressTimeoutTitle')
-            : t('kiosk.orderProblemTitle')}
+            : latePayment
+              ? t('kiosk.latePaymentTitle')
+              : t('kiosk.orderProblemTitle')}
       </h1>
 
       {done && <p className={styles.resultText}>{t('kiosk.dispensedHint')}</p>}
@@ -260,6 +264,8 @@ function ResultModal({
 
       {phase === 'PROBLEM' && (
         <>
+          {/* Tiền về sau khi mã đã hết hạn/bị hủy: máy không xịt, khách được hoàn tiền (FR-ORD-16 AC3). */}
+          {latePayment && <p className={styles.resultText}>{t('kiosk.latePaymentHint')}</p>}
           {/* FR-ORD-21, FR-ORD-28: QR sự cố dẫn tới trang khiếu nại hoàn tiền (ADR-0012). */}
           {claimUrl && (
             <div className={styles.claimQr}>

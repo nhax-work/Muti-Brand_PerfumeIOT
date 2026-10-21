@@ -476,7 +476,8 @@ describe('CheckoutScreen (FR-ORD-08, FR-ORD-25, FR-ORD-26)', () => {
     renderScreen();
 
     expect(screen.queryByText('Thanh toán thành công')).toBeNull();
-    expect(screen.getByText('Lượt xịt gặp sự cố')).toBeTruthy();
+    // Đơn chưa từng có lệnh xịt: tiền về sau hạn — nói rõ là được hoàn tiền, không phải lỗi máy.
+    expect(screen.getByText('Tiền về sau khi mã đã hết hạn')).toBeTruthy();
   });
 
   it('khi đã xịt xong (DISPENSED), hiển thị thông điệp cảm ơn và nút quay về trang chủ', () => {

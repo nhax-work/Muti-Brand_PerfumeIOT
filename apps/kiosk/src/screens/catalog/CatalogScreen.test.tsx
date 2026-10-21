@@ -11,6 +11,11 @@ const mockReset = vi.fn();
 let mockCreated: unknown = undefined;
 type CancelCallbacks = { onSuccess?: () => void; onError?: (error: unknown) => void };
 let mockCancelError: unknown = null;
+let mockStatus: unknown = undefined;
+let mockCreateError: unknown = null;
+const mockRemember = vi.fn();
+const mockForget = vi.fn();
+const mockCancelOrphaned = vi.fn();
 /** Mặc định máy chủ hủy thành công; test đổi bằng `mockCancelError`. */
 const mockCancel = vi.fn((_orderId: string, callbacks?: CancelCallbacks) => {
   if (mockCancelError) callbacks?.onError?.(mockCancelError);
@@ -33,9 +38,13 @@ vi.mock('@/shared/api', async (importOriginal) => {
       reset: mockReset,
       data: mockCreated,
       isPending: false,
-      isError: false,
+      isError: mockCreateError !== null,
+      error: mockCreateError,
     }),
-    useOrderStatus: () => ({ data: undefined }),
+    rememberPendingOrder: (id: string) => mockRemember(id),
+    forgetPendingOrder: () => mockForget(),
+    cancelOrphanedOrder: () => mockCancelOrphaned(),
+    useOrderStatus: () => ({ data: mockStatus }),
     useCancelOrder: () => ({
       mutate: mockCancel,
       reset: vi.fn(),
@@ -115,6 +124,8 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     vi.clearAllMocks();
     mockCreated = undefined;
     mockCancelError = null;
+    mockStatus = undefined;
+    mockCreateError = null;
     vi.mocked(useKioskCatalog).mockReturnValue({
       data: mockCatalogData,
       isLoading: false,
@@ -265,6 +276,126 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(mockCancel).toHaveBeenCalledWith('order-1', expect.any(Object));
     expect(mockReset).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenLastCalledWith('/');
+  });
+
+  it('test_FR_ORD_16_expired_qr_is_hidden — hết hạn thì ẩn mã QR, tự hủy đơn, về trang chủ không hỏi lại', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261021-SAG9YC',
+        amount: '10000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() - 1_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+    // Đồng hồ đã về 0: không còn mã để quét, kiosk tự hủy đơn ở máy chủ (FR-ORD-33).
+    expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
+    expect(screen.getByText('Mã thanh toán đã hết hạn')).toBeTruthy();
+    expect(screen.getByText(/Hãy lưu lại mã ORD-20261021-SAG9YC/)).toBeTruthy();
+    expect(mockCancel).toHaveBeenCalledWith('order-1');
+
+    mockNavigate.mockClear();
+    fireEvent.click(screen.getByRole('button', { name: 'Trang chủ' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(mockNavigate).toHaveBeenLastCalledWith('/');
+  });
+
+  it('test_FR_ORD_16_server_expired_hides_qr — máy chủ báo EXPIRED thì ẩn mã dù đồng hồ kiosk còn giờ', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261021-SAG9YC',
+        amount: '10000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 30_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    mockStatus = { orderId: 'order-1', status: 'EXPIRED', revenueOwner: 'BRAND' };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+    expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
+    expect(screen.getByText('Mã thanh toán đã hết hạn')).toBeTruthy();
+  });
+
+  it('test_FR_ORD_16_late_payment_shows_refund_screen — tiền về sau hạn thì sang màn hoàn tiền, không xịt', () => {
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261021-SAG9YC',
+        amount: '10000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() - 60_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    mockStatus = {
+      orderId: 'order-1',
+      status: 'REFUND_PENDING',
+      revenueOwner: 'BRAND',
+      claimToken: null,
+    };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+    expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
+    expect(screen.getByText('Tiền về sau khi mã đã hết hạn')).toBeTruthy();
+    expect(screen.getByText(/Máy không xịt cho giao dịch này/)).toBeTruthy();
+  });
+
+  it('test_FR_ORD_35_create_error_does_not_retry_in_loop — MACHINE_BUSY thì dừng, hiện lỗi và nút thử lại', () => {
+    mockCreateError = new ApiRequestError(409, {
+      code: 'MACHINE_BUSY',
+      message: 'Máy đang phục vụ khách khác. Vui lòng chờ trong giây lát.',
+      details: { messageKey: 'ord.machineBusy' },
+    });
+    const view = renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+    view.rerender(
+      <I18nProvider>
+        <KioskSessionProvider>
+          <CatalogScreen />
+        </KioskSessionProvider>
+      </I18nProvider>,
+    );
+
+    // Không gọi tạo đơn lại sau lỗi — trước đây mỗi lần render là một lần 409 nữa.
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert').textContent).toMatch(/đang phục vụ khách khác/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    expect(mockReset).toHaveBeenCalled();
+  });
+
+  it('test_FR_ORD_33_orphaned_order_cancelled_after_reload — khởi động lại thì hủy đơn của phiên trước', () => {
+    renderCatalog();
+    expect(mockCancelOrphaned).toHaveBeenCalledTimes(1);
+  });
+
+  it('test_FR_ORD_33_remember_order_while_paying — ghi nhớ đơn khi đang hiện mã QR', () => {
+    mockCreated = {
+      order: {
+        id: 'order-9',
+        paymentReference: 'ORD-20261021-9897TZ',
+        amount: '10000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 90_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    renderCatalog();
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+    expect(mockRemember).toHaveBeenCalledWith('order-9');
   });
 
   it('test_FR_ORD_33_stay_on_qr_when_payment_already_received — tiền đã về thì ở lại màn QR', () => {

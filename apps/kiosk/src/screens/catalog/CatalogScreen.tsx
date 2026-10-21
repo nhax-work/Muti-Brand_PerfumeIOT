@@ -3,10 +3,13 @@ import { useNavigate, useParams } from 'react-router';
 import { QRCodeSVG } from 'qrcode.react';
 import type { components } from '@scentstation/contracts';
 import {
+  cancelOrphanedOrder,
   errorMessage,
+  forgetPendingOrder,
   isMachineInMaintenance,
   isNotCancellable,
   recordKioskInteraction,
+  rememberPendingOrder,
   useCancelOrder,
   useCreateOrder,
   useKioskCatalog,
@@ -108,7 +111,8 @@ export default function CatalogScreen() {
   const createOrder = useCreateOrder();
   const cancelOrder = useCancelOrder();
   const created = createOrder.data;
-  const statusQuery = useOrderStatus(created?.order.id ?? null);
+  // Theo dõi cả sau khi mã hết hạn, chừng nào modal còn mở (xem useOrderStatus).
+  const statusQuery = useOrderStatus(created?.order.id ?? null, { followLatePayment: paying });
   const orderStatusView = statusQuery.data;
 
   const [now, setNow] = useState(() => Date.now());
@@ -143,10 +147,28 @@ export default function CatalogScreen() {
 
   // Đếm theo hạn của chính đơn đang hiện (máy chủ trả), không đếm cục bộ — đơn mới thì hạn mới.
   const qrSecondsLeft = secondsUntil(created?.order.expiresAt, now);
+  // Hết hạn: máy chủ đã báo EXPIRED, hoặc đồng hồ về 0 mà lần poll kế chưa tới. Từ lúc này không bao
+  // giờ hiện mã QR nữa — khách không được quét một mã đã (hoặc sắp) bị hủy ở cổng (FR-ORD-16, 33).
+  const qrExpired =
+    created !== undefined &&
+    (phase === 'EXPIRED' || (phase === 'PAYING' && qrSecondsLeft !== null && qrSecondsLeft <= 0));
 
-  // Tự động gọi API tạo đơn khi khách đã đồng ý điều khoản
+  // Phiên trước bị cắt ngang (tải lại trang) khi còn mã QR → hủy đơn đó trước (ADR-0015 mục 3).
   useEffect(() => {
-    if (detailItem && paymentOpen && !created && !createOrder.isPending) {
+    void cancelOrphanedOrder();
+  }, []);
+
+  // Ghi nhớ đơn chỉ trong lúc nó còn chờ thanh toán — đã trả tiền hay đã kết thúc thì không hủy nữa.
+  const pendingOrderId = created && phase === 'PAYING' ? created.order.id : null;
+  useEffect(() => {
+    if (pendingOrderId) rememberPendingOrder(pendingOrderId);
+    else forgetPendingOrder();
+  }, [pendingOrderId]);
+
+  // Tự động gọi API tạo đơn khi khách đã đồng ý điều khoản. Lỗi thì DỪNG — không tự gọi lại: lỗi như
+  // MACHINE_BUSY sẽ lặp lại ở mọi lần render sau, dội 409 liên tục vào máy chủ. Khách bấm "Thử lại".
+  useEffect(() => {
+    if (detailItem && paymentOpen && !created && !createOrder.isPending && !createOrder.isError) {
       createOrder.mutate({
         slotId: detailItem.slotId,
         kioskSessionId,
@@ -439,7 +461,8 @@ export default function CatalogScreen() {
   // Khách có thể đã chuyển khoản dù đang bấm hủy — đã có mã QR thì phải hỏi lại. Chưa có mã (đang
   // tạo đơn) thì khách chưa thể trả tiền, đóng luôn.
   const handleRequestCancel = () => {
-    if (created) setConfirmingCancel(true);
+    // Mã đã hết hạn thì đơn đã (hoặc đang) bị hủy ở máy chủ — không còn gì để hỏi lại.
+    if (created && !qrExpired) setConfirmingCancel(true);
     else handleCloseDetailModal();
   };
 
@@ -477,11 +500,13 @@ export default function CatalogScreen() {
         : handleCloseDetailModal;
   });
 
+  // Đếm lại khi đổi pha: tiền về muộn đưa màn "hết hạn" sang màn hoàn tiền — khách cần đủ thời gian
+  // quét QR khiếu nại.
   useEffect(() => {
     if (!settled) return;
     const timer = setTimeout(() => closeRef.current(), 60_000);
     return () => clearTimeout(timer);
-  }, [settled]);
+  }, [settled, phase]);
 
   // Khách bấm "Đồng ý và thanh toán" ở modal chi tiết (đã đọc điều khoản, FR-ORD-25) → vào thẳng mã QR.
   const handleOpenPayment = () => {
@@ -924,46 +949,83 @@ export default function CatalogScreen() {
             </div>
 
             <div className={styles.qrDisplayBox}>
-              <div className={styles.qrWrapper}>
-                {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08). */}
-                {created?.qrPayload ? (
-                  <QRCodeSVG
-                    value={created.qrPayload}
-                    size={160}
-                    level="M"
-                    role="img"
-                    aria-label={t('kiosk.scanToPay')}
-                  />
-                ) : (
-                  <span>{t('kiosk.creatingOrder')}</span>
-                )}
-              </div>
-
-              <div className={styles.timerRow}>
-                {/* Đếm theo hạn của chính đơn này (máy chủ trả) — đổi sản phẩm là đơn mới, hạn mới. */}
-                {qrSecondsLeft !== null && (
-                  <div className={styles.timerPill}>
-                    <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
-                      schedule
-                    </span>
-                    <span>
-                      {t('kiosk.paymentValidFor', { time: formatCountdown(qrSecondsLeft) })}
-                    </span>
-                  </div>
-                )}
-                <div className={styles.waitingPill}>
-                  <span className={styles.waitingPulse} />
-                  <span>{t('kiosk.waitingPaymentDesc')}</span>
+              {qrExpired && created ? (
+                <div role="status" style={{ padding: '24px 8px', textAlign: 'center' }}>
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: 40, color: 'var(--color-text-secondary)' }}
+                  >
+                    timer_off
+                  </span>
+                  <h3 style={{ fontFamily: 'var(--font-serif)', margin: '8px 0' }}>
+                    {t('kiosk.paymentExpiredTitle')}
+                  </h3>
+                  <p style={{ margin: '0 0 8px' }}>{t('kiosk.paymentExpiredHint')}</p>
+                  {/* Tiền về sau hạn thì đơn sang REFUND_PENDING — không hứa "chưa bị trừ tiền". */}
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--color-text-secondary)' }}>
+                    {t('kiosk.paymentExpiredLatePayment', {
+                      reference: created.order.paymentReference,
+                    })}
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <>
+                  <div className={styles.qrWrapper}>
+                    {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08). */}
+                    {created?.qrPayload ? (
+                      <QRCodeSVG
+                        value={created.qrPayload}
+                        size={160}
+                        level="M"
+                        role="img"
+                        aria-label={t('kiosk.scanToPay')}
+                      />
+                    ) : createOrder.isError ? (
+                      <div role="alert" style={{ textAlign: 'center', padding: 12 }}>
+                        <p style={{ margin: '0 0 12px' }}>{errorMessage(createOrder.error, t)}</p>
+                        <button
+                          type="button"
+                          className={styles.checkoutBtnPrimary}
+                          onClick={() => {
+                            createOrder.reset();
+                            setIdempotencyKey(newIdempotencyKey());
+                          }}
+                        >
+                          {t('kiosk.retryCreateOrder')}
+                        </button>
+                      </div>
+                    ) : (
+                      <span>{t('kiosk.creatingOrder')}</span>
+                    )}
+                  </div>
 
-              <div className={styles.tagsRow}>
-                <span className={styles.badgeTag}>VIETQR</span>
-                <span className={styles.badgeTag}>MOMO</span>
-                <span className={styles.badgeTag}>ZALOPAY</span>
-                <span className={styles.badgeTag}>VNPAY</span>
-                <span className={styles.badgeTag}>NAPAS 247</span>
-              </div>
+                  <div className={styles.timerRow}>
+                    {/* Đếm theo hạn của chính đơn này (máy chủ trả) — đổi sản phẩm là đơn mới, hạn mới. */}
+                    {qrSecondsLeft !== null && (
+                      <div className={styles.timerPill}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 15 }}>
+                          schedule
+                        </span>
+                        <span>
+                          {t('kiosk.paymentValidFor', { time: formatCountdown(qrSecondsLeft) })}
+                        </span>
+                      </div>
+                    )}
+                    <div className={styles.waitingPill}>
+                      <span className={styles.waitingPulse} />
+                      <span>{t('kiosk.waitingPaymentDesc')}</span>
+                    </div>
+                  </div>
+
+                  <div className={styles.tagsRow}>
+                    <span className={styles.badgeTag}>VIETQR</span>
+                    <span className={styles.badgeTag}>MOMO</span>
+                    <span className={styles.badgeTag}>ZALOPAY</span>
+                    <span className={styles.badgeTag}>VNPAY</span>
+                    <span className={styles.badgeTag}>NAPAS 247</span>
+                  </div>
+                </>
+              )}
 
               {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
               {config.showDevTools && created?.order.paymentReference && (
@@ -1050,7 +1112,7 @@ export default function CatalogScreen() {
                 className={styles.checkoutBtnPrimary}
                 onClick={handleRequestCancel}
               >
-                {t('kiosk.cancelOrder')}
+                {qrExpired ? t('kiosk.backToHome') : t('kiosk.cancelOrder')}
               </button>
             </div>
           </div>

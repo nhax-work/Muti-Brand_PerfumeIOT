@@ -5,7 +5,10 @@ export { ApiRequestError, errorMessage, isMachineInMaintenance, unwrap } from '.
 export { recordKioskInteraction, type RecordInteractionParams } from './interactions';
 export {
   cancelKioskOrder,
+  cancelOrphanedOrder,
+  forgetPendingOrder,
   isNotCancellable,
+  rememberPendingOrder,
   isSettled,
   useCancelOrder,
   useCreateOrder,
