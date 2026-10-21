@@ -35,7 +35,7 @@ vi.mock('@/screens/out-of-service/OutOfServiceScreen', () => ({
   default: () => <div data-testid="out-of-service">Out of service</div>,
 }));
 
-/** Giả lập CheckoutScreen đã tạo đơn cho phiên này. */
+/** Giả lập màn thanh toán đã tạo đơn cho phiên này. */
 function WithActiveOrder() {
   const { setActiveOrder } = useKioskSession();
   useEffect(() => {
@@ -119,7 +119,7 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     mockPathname = '/';
     renderShell();
 
-    expect(screen.getByText(/ScentStation/i)).toBeTruthy();
+    expect(screen.getByText('ScentStation')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Trang chủ/i })).toBeNull();
   });
 

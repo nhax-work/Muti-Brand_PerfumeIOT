@@ -25,7 +25,7 @@ function getLanguageLabel(l: string): string {
 
 /**
  * Khung bao mọi màn hình kiosk:
- * - Header tối giản cao cấp thương hiệu SCENTATION PARIS (Haute Parfumerie).
+ * - Header tối giản cao cấp thương hiệu ScentStation PARIS (Haute Parfumerie).
  * - Điều hướng linh hoạt (Trang chủ / Quay lại danh mục).
  * - Dropdown chuyển đổi ngôn ngữ tương tác mượt mà.
  * - Footer thông tin hỗ trợ sommelier và chuẩn giao diện haptic touch.
@@ -95,7 +95,7 @@ export function KioskShell() {
               ← {t('kiosk.backToHome')}
             </button>
           )}
-          {/* Đang có đơn thì CheckoutScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
+          {/* Đang thanh toán thì CatalogScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
           {isProductDetail && (
             <button
               type="button"
@@ -112,7 +112,7 @@ export function KioskShell() {
         </div>
 
         <div className={styles.brandCenter}>
-          <span className={styles.brandTitle}>SCENTATION</span>
+          <span className={styles.brandTitle}>ScentStation</span>
         </div>
 
         <div className={styles.navRight} ref={langDropdownRef}>

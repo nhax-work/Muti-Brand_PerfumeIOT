@@ -284,7 +284,7 @@ export default function CatalogScreen() {
   }, [items]);
 
   // Đóng modal khi nhấn ESC — đi qua cùng đường đóng để bỏ đơn đang hiện, không mang sang sản phẩm khác.
-  const escCloseRef = useRef<() => void>(() => {});
+  const escCloseRef = useRef<() => void>(() => { });
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') escCloseRef.current();
@@ -487,12 +487,12 @@ export default function CatalogScreen() {
     created !== undefined && ['DISPENSED', 'FORFEITED', 'EXPIRED', 'PROBLEM'].includes(phase);
 
   // Luôn trỏ tới bản đóng mới nhất để hẹn giờ/phím ESC không gọi closure cũ.
-  const closeRef = useRef<() => void>(() => {});
+  const closeRef = useRef<() => void>(() => { });
   useEffect(() => {
     closeRef.current = handleCloseDetailModal;
     // Màn hướng dẫn sau thanh toán không đóng bằng phím ESC — khách đang chờ lượt xịt đã trả tiền.
     escCloseRef.current = isPostPayment
-      ? () => {}
+      ? () => { }
       : paymentOpen
         ? confirmingCancel
           ? () => setConfirmingCancel(false)
@@ -635,7 +635,7 @@ export default function CatalogScreen() {
                     {item.brandName ? (
                       <h2 className={styles.brandHeading}>{item.brandName}</h2>
                     ) : (
-                      <span className={styles.brandHeading}>SCENTATION PARIS</span>
+                      <span className={styles.brandHeading}>ScentStation PARIS</span>
                     )}
 
                     <h3 className={styles.productName}>

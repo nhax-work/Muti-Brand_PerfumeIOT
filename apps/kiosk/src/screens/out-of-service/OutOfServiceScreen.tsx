@@ -3,7 +3,7 @@ import { useI18n } from '@/shared/i18n';
 import styles from './OutOfServiceScreen.module.css';
 
 /**
- * Màn hình bảo trì / tạm ngưng phục vụ Kiosk Scentation Paris (FR-IOT-13).
+ * Màn hình bảo trì / tạm ngưng phục vụ Kiosk ScentStation Paris (FR-IOT-13).
  */
 export default function OutOfServiceScreen() {
   const { t } = useI18n();
@@ -11,7 +11,7 @@ export default function OutOfServiceScreen() {
   return (
     <section className={styles.screen} role="alert">
       <div className={styles.card}>
-        <span className={styles.brandTag}>SCENTATION PARIS • KIOSK SALON</span>
+        <span className={styles.brandTag}>ScentStation PARIS • KIOSK SALON</span>
 
         <div className={styles.iconWrapper}>
           <span className="material-symbols-outlined" style={{ fontSize: 32 }}>

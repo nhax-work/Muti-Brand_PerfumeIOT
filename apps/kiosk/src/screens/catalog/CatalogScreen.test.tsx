@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, recordKioskInteraction, useKioskCatalog } from '@/shared/api';
 import { I18nProvider } from '@/shared/i18n';
@@ -21,6 +21,21 @@ const mockCancel = vi.fn((_orderId: string, callbacks?: CancelCallbacks) => {
   if (mockCancelError) callbacks?.onError?.(mockCancelError);
   else callbacks?.onSuccess?.();
 });
+let mockShowDevTools = true;
+
+vi.mock('@/shared/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/config')>();
+  return {
+    ...actual,
+    config: {
+      ...actual.config,
+      get showDevTools() {
+        return mockShowDevTools;
+      },
+    },
+  };
+});
+
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useParams: () => ({}),
@@ -427,6 +442,56 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
     expect(screen.getByRole('status').textContent).toMatch(/đã nhận được tiền/);
+  });
+
+  it('test_FR_ORD_02_kiosk_display_product_details — chi tiết có tên, thương hiệu, mô tả, tầng hương và giá', () => {
+    renderCatalog();
+    openDetail('Chanel No 5');
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Chanel')).toBeTruthy();
+    expect(within(dialog).getByRole('heading', { name: 'Chanel No 5' })).toBeTruthy();
+    expect(within(dialog).getByText('Hương thơm quyến rũ vượt thời gian')).toBeTruthy();
+    expect(within(dialog).getByText(/35\.000 VND \/ lượt xịt/)).toBeTruthy();
+    expect(within(dialog).getByText('Aldehydes')).toBeTruthy();
+    expect(within(dialog).getByText('Rose')).toBeTruthy();
+    expect(within(dialog).getByText('Vanilla')).toBeTruthy();
+  });
+
+  it('máy bảo trì lúc tạo đơn (MACHINE_IN_MAINTENANCE) thì hiện màn tạm ngưng (ADR-0015)', () => {
+    mockCreateError = new ApiRequestError(503, {
+      code: 'MACHINE_IN_MAINTENANCE',
+      message: 'Thiết bị đang bảo trì',
+    });
+    renderCatalog();
+
+    expect(screen.getByText('Máy đang tạm ngưng phục vụ')).toBeTruthy();
+  });
+
+  it('bản build thật: có QR quét được, không lộ lệnh thanh toán giả lập (FR-ORD-08)', () => {
+    mockShowDevTools = false;
+    mockCreated = {
+      order: {
+        id: 'order-1',
+        paymentReference: 'ORD-20261014-ABC123',
+        amount: '35000.0000',
+        currency: 'VND',
+        expiresAt: new Date(Date.now() + 90_000).toISOString(),
+      },
+      qrPayload: '00020101021238570010A000000727',
+    };
+    try {
+      const { container } = renderCatalog();
+      openDetail('Chanel No 5');
+      fireEvent.click(screen.getByRole('button', { name: 'Đồng ý và thanh toán' }));
+
+      const qr = screen.getByRole('img', { name: 'Quét mã để thanh toán' });
+      expect(qr.querySelector('path')).not.toBeNull();
+      expect(screen.queryByText(/npm run pay:mock/)).toBeNull();
+      expect(container.textContent).not.toContain('00020101021238570010A000000727');
+    } finally {
+      mockShowDevTools = true;
+    }
   });
 
   it('test_FR_ORD_08_switching_product_discards_previous_order — đổi sản phẩm/hủy là bỏ đơn cũ', () => {
