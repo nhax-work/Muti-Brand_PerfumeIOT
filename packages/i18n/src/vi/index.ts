@@ -10,6 +10,7 @@ import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
 import { common } from './common.js';
+import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
 import { ord } from './ord.js';
@@ -37,6 +38,7 @@ export const vi = {
   prd,
   slt,
   ord,
+  dsp,
   usr,
   ui,
   kiosk,

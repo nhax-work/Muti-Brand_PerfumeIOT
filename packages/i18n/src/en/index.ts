@@ -253,6 +253,16 @@ export const en: SameKeysAs<typeof vi> = {
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
   },
 
+  dsp: {
+    slotNotFound: 'This slot was not found on the machine',
+    machineOffline: 'The machine is offline, so the diagnostic command cannot be sent',
+    slotNotCalibrated:
+      'This slot has no calibrated dosage yet, so it cannot run a diagnostic spray',
+    machineBusy:
+      'The machine is serving a customer or running another command. Please try again once it is idle.',
+    commandNotFound: 'This order has no dispense command yet',
+  },
+
   usr: {
     brandAdminNeedsBrand: 'A Brand Admin must be attached to exactly one brand',
     platformRoleNoBrand: 'Platform roles must not be attached to a brand',
