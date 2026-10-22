@@ -3,8 +3,8 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { sql, type Expression, type Kysely, type SqlBool, type Transaction } from 'kysely';
-import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
+import { sql, type Kysely, type Transaction } from 'kysely';
+import { DATABASE, type DB } from '../../shared/db/index.js';
 import type { NotificationStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
 
@@ -116,7 +116,7 @@ export class AlrQueries {
     scope: BrandScope = { kind: 'UNRESTRICTED' },
     executor: Executor = this.db,
   ): Promise<NotificationRecord | null> {
-    let query = executor
+    const query = executor
       .selectFrom('notifications as n')
       .innerJoin('brands as b', 'b.id', 'n.brand_id')
       .innerJoin('users as u', 'u.id', 'n.recipient_user_id')

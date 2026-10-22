@@ -142,7 +142,12 @@ export class InvQueries {
   }
 
   async listShipmentDeclarations(
-    filter: { page: number; pageSize: number; brandId?: string; status?: ShipmentDeclarationStatus },
+    filter: {
+      page: number;
+      pageSize: number;
+      brandId?: string;
+      status?: ShipmentDeclarationStatus;
+    },
     scope: BrandScope = { kind: 'UNRESTRICTED' },
     executor: Executor = this.db,
   ): Promise<{ items: ShipmentDeclarationRecord[]; total: number }> {
@@ -508,18 +513,19 @@ export class InvQueries {
       owner: row.owner,
       initialVolumeMl: String(row.initial_volume_ml),
       currentEstimatedMl: String(row.current_estimated_ml),
-      initialMeasuredWeightG: row.initial_measured_weight_g ? String(row.initial_measured_weight_g) : null,
-      currentMeasuredWeightG: row.current_measured_weight_g ? String(row.current_measured_weight_g) : null,
+      initialMeasuredWeightG: row.initial_measured_weight_g
+        ? String(row.initial_measured_weight_g)
+        : null,
+      currentMeasuredWeightG: row.current_measured_weight_g
+        ? String(row.current_measured_weight_g)
+        : null,
       installedAt: row.installed_at ? new Date(row.installed_at) : null,
       removedAt: row.removed_at ? new Date(row.removed_at) : null,
       createdAt: new Date(row.created_at),
     };
   }
 
-  async findBottleById(
-    id: string,
-    executor: Executor = this.db,
-  ): Promise<BottleRecord | null> {
+  async findBottleById(id: string, executor: Executor = this.db): Promise<BottleRecord | null> {
     const row = await executor
       .selectFrom('bottles as b')
       .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
@@ -556,8 +562,12 @@ export class InvQueries {
       owner: row.owner,
       initialVolumeMl: String(row.initialVolumeMl),
       currentEstimatedMl: String(row.currentEstimatedMl),
-      initialMeasuredWeightG: row.initialMeasuredWeightG ? String(row.initialMeasuredWeightG) : null,
-      currentMeasuredWeightG: row.currentMeasuredWeightG ? String(row.currentMeasuredWeightG) : null,
+      initialMeasuredWeightG: row.initialMeasuredWeightG
+        ? String(row.initialMeasuredWeightG)
+        : null,
+      currentMeasuredWeightG: row.currentMeasuredWeightG
+        ? String(row.currentMeasuredWeightG)
+        : null,
       installedAt: row.installedAt ? new Date(row.installedAt) : null,
       removedAt: row.removedAt ? new Date(row.removedAt) : null,
       createdAt: new Date(row.createdAt),
@@ -579,7 +589,13 @@ export class InvQueries {
   }
 
   async listBottles(
-    filter: { page: number; pageSize: number; brandId?: string; batchId?: string; status?: BottleStatus },
+    filter: {
+      page: number;
+      pageSize: number;
+      brandId?: string;
+      batchId?: string;
+      status?: BottleStatus;
+    },
     scope: BrandScope = { kind: 'UNRESTRICTED' },
     executor: Executor = this.db,
   ): Promise<{ items: BottleRecord[]; total: number }> {

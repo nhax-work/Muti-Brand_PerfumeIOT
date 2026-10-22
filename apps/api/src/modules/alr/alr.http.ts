@@ -2,15 +2,7 @@
  * HTTP Controller cho Notifications và Bằng chứng gửi thông báo (FR-ALR-16).
  */
 
-import {
-  Controller,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import { CurrentUser, type AuthenticatedUser } from '../auth/index.js';

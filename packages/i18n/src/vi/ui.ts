@@ -623,4 +623,3 @@ export const ui = {
   checklistCompletedLabel: 'Đã hoàn tất kiểm tra an toàn theo checklist',
   initialMeasuredWeightLabel: 'Khối lượng cân ban đầu (g)',
 } as const;
-

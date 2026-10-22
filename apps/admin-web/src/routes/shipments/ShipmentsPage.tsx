@@ -17,7 +17,6 @@ import {
   Checkbox,
   Col,
   Descriptions,
-  Empty,
   Form,
   Input,
   InputNumber,
@@ -58,23 +57,48 @@ import {
   useSubmitAuthenticity,
 } from './api';
 
-const SHIPMENT_STATUS_TAGS: Record<ShipmentStatus, { color: string; label: MessageKey; icon: React.ReactNode }> = {
+const SHIPMENT_STATUS_TAGS: Record<
+  ShipmentStatus,
+  { color: string; label: MessageKey; icon: React.ReactNode }
+> = {
   DECLARED: { color: 'blue', label: 'shipmentStatus.DECLARED', icon: <ClockCircleOutlined /> },
   RECEIVED: { color: 'green', label: 'shipmentStatus.RECEIVED', icon: <CheckCircleOutlined /> },
-  DISCREPANCY: { color: 'gold', label: 'shipmentStatus.DISCREPANCY', icon: <ExclamationCircleOutlined /> },
+  DISCREPANCY: {
+    color: 'gold',
+    label: 'shipmentStatus.DISCREPANCY',
+    icon: <ExclamationCircleOutlined />,
+  },
   CANCELLED: { color: 'default', label: 'shipmentStatus.CANCELLED', icon: <CloseCircleOutlined /> },
 };
 
-const AUTH_STATUS_TAGS: Record<AuthenticityStatus, { color: string; label: MessageKey; icon: React.ReactNode }> = {
+const AUTH_STATUS_TAGS: Record<
+  AuthenticityStatus,
+  { color: string; label: MessageKey; icon: React.ReactNode }
+> = {
   PENDING: { color: 'gold', label: 'authenticityStatus.PENDING', icon: <ClockCircleOutlined /> },
-  APPROVED: { color: 'green', label: 'authenticityStatus.APPROVED', icon: <SafetyCertificateOutlined /> },
+  APPROVED: {
+    color: 'green',
+    label: 'authenticityStatus.APPROVED',
+    icon: <SafetyCertificateOutlined />,
+  },
   REJECTED: { color: 'red', label: 'authenticityStatus.REJECTED', icon: <CloseCircleOutlined /> },
 };
 
-const REFILL_STATUS_TAGS: Record<RefillStatus, { color: string; label: MessageKey; icon: React.ReactNode }> = {
+const REFILL_STATUS_TAGS: Record<
+  RefillStatus,
+  { color: string; label: MessageKey; icon: React.ReactNode }
+> = {
   STARTED: { color: 'blue', label: 'refillSessionStatus.STARTED', icon: <ToolOutlined /> },
-  COMPLETED: { color: 'green', label: 'refillSessionStatus.COMPLETED', icon: <CheckCircleOutlined /> },
-  ABORTED: { color: 'default', label: 'refillSessionStatus.ABORTED', icon: <CloseCircleOutlined /> },
+  COMPLETED: {
+    color: 'green',
+    label: 'refillSessionStatus.COMPLETED',
+    icon: <CheckCircleOutlined />,
+  },
+  ABORTED: {
+    color: 'default',
+    label: 'refillSessionStatus.ABORTED',
+    icon: <CloseCircleOutlined />,
+  },
 };
 
 export default function ShipmentsPage() {
@@ -136,7 +160,9 @@ export default function ShipmentsPage() {
   const [openRefillModalOpen, setOpenRefillModalOpen] = useState(false);
   const [openRefillForm] = Form.useForm();
 
-  const [closeRefillSessionItem, setCloseRefillSessionItem] = useState<RefillSessionItem | null>(null);
+  const [closeRefillSessionItem, setCloseRefillSessionItem] = useState<RefillSessionItem | null>(
+    null,
+  );
   const [closeRefillForm] = Form.useForm();
 
   // Handlers
@@ -263,7 +289,11 @@ export default function ShipmentsPage() {
       title: 'Mã khai báo',
       dataIndex: 'id',
       key: 'id',
-      render: (val: string) => <Typography.Text copyable ellipsis>{val}</Typography.Text>,
+      render: (val: string) => (
+        <Typography.Text copyable ellipsis>
+          {val}
+        </Typography.Text>
+      ),
     },
     {
       title: 'Sản phẩm',
@@ -436,7 +466,11 @@ export default function ShipmentsPage() {
       title: 'Mã phiếu',
       dataIndex: 'id',
       key: 'id',
-      render: (val: string) => <Typography.Text copyable ellipsis>{val}</Typography.Text>,
+      render: (val: string) => (
+        <Typography.Text copyable ellipsis>
+          {val}
+        </Typography.Text>
+      ),
     },
     {
       title: 'Máy',
@@ -501,7 +535,6 @@ export default function ShipmentsPage() {
   return (
     <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN']}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
-
         {/* Header */}
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col>
@@ -509,13 +542,18 @@ export default function ShipmentsPage() {
               {t('ui.shipments')}
             </Typography.Title>
             <Typography.Text type="secondary">
-              Quản lý khai báo gửi hàng, đối soát thực nhận tại kho, xác minh giấy tờ chính hãng và phiếu nạp máy (FR-INV-22..35).
+              Quản lý khai báo gửi hàng, đối soát thực nhận tại kho, xác minh giấy tờ chính hãng và
+              phiếu nạp máy (FR-INV-22..35).
             </Typography.Text>
           </Col>
           <Col>
             <Space>
               <Button
-                icon={<ReloadOutlined spin={isShipmentsFetching || isBatchesFetching || isRefillFetching} />}
+                icon={
+                  <ReloadOutlined
+                    spin={isShipmentsFetching || isBatchesFetching || isRefillFetching}
+                  />
+                }
                 onClick={() => {
                   void refetchShipments();
                   void refetchBatches();
@@ -710,8 +748,14 @@ export default function ShipmentsPage() {
               <Select
                 options={[
                   { label: 'Hóa đơn mua hàng (Purchase Invoice)', value: 'PURCHASE_INVOICE' },
-                  { label: 'Chứng nhận xuất xứ (Certificate of Origin)', value: 'CERTIFICATE_OF_ORIGIN' },
-                  { label: 'Ủy quyền phân phối (Distribution Authorization)', value: 'DISTRIBUTION_AUTH' },
+                  {
+                    label: 'Chứng nhận xuất xứ (Certificate of Origin)',
+                    value: 'CERTIFICATE_OF_ORIGIN',
+                  },
+                  {
+                    label: 'Ủy quyền phân phối (Distribution Authorization)',
+                    value: 'DISTRIBUTION_AUTH',
+                  },
                 ]}
               />
             </Form.Item>
@@ -748,7 +792,8 @@ export default function ShipmentsPage() {
           destroyOnClose
         >
           <Typography.Paragraph type="warning">
-            Hệ thống sẽ kiểm tra chốt chặn an toàn: Nếu máy đang có đơn chờ thanh toán hoặc lệnh xịt dở dang, thao tác sẽ bị từ chối (FR-INV-32, ADR-0015).
+            Hệ thống sẽ kiểm tra chốt chặn an toàn: Nếu máy đang có đơn chờ thanh toán hoặc lệnh xịt
+            dở dang, thao tác sẽ bị từ chối (FR-INV-32, ADR-0015).
           </Typography.Paragraph>
           <Form form={openRefillForm} layout="vertical">
             <Form.Item
@@ -807,7 +852,9 @@ export default function ShipmentsPage() {
               rules={[
                 {
                   validator: (_, value) =>
-                    value ? Promise.resolve() : Promise.reject(new Error(t('inv.checklistRequired'))),
+                    value
+                      ? Promise.resolve()
+                      : Promise.reject(new Error(t('inv.checklistRequired'))),
                 },
               ]}
             >

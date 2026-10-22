@@ -133,7 +133,9 @@ export const router = createBrowserRouter([
       {
         path: '/notifications',
         lazy: () =>
-          import('@/routes/notifications/NotificationsPage').then((m) => ({ Component: m.default })),
+          import('@/routes/notifications/NotificationsPage').then((m) => ({
+            Component: m.default,
+          })),
       },
       {
         path: '/shipments',

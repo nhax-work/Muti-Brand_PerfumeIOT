@@ -41,7 +41,10 @@ import {
   useRetryNotification,
 } from './api';
 
-const STATUS_TAGS: Record<NotificationStatus, { color: string; label: MessageKey; icon: React.ReactNode }> = {
+const STATUS_TAGS: Record<
+  NotificationStatus,
+  { color: string; label: MessageKey; icon: React.ReactNode }
+> = {
   SENT: { color: 'green', label: 'notificationStatus.SENT', icon: <CheckCircleOutlined /> },
   FAILED: { color: 'red', label: 'notificationStatus.FAILED', icon: <CloseCircleOutlined /> },
   PENDING: { color: 'gold', label: 'notificationStatus.PENDING', icon: <ClockCircleOutlined /> },
@@ -90,7 +93,8 @@ export default function NotificationsPage() {
           <div>{new Date(val).toLocaleString('vi-VN')}</div>
           {record.sentAt && record.status === 'SENT' && (
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {t('ui.notificationSentAtLabel')}: {new Date(record.sentAt).toLocaleTimeString('vi-VN')}
+              {t('ui.notificationSentAtLabel')}:{' '}
+              {new Date(record.sentAt).toLocaleTimeString('vi-VN')}
             </Typography.Text>
           )}
         </div>
@@ -122,7 +126,9 @@ export default function NotificationsPage() {
             key: 'brandName',
             width: 160,
             render: (val: string | null, record: NotificationItem) =>
-              val ?? <Typography.Text type="secondary">{record.brandId.slice(0, 8)}...</Typography.Text>,
+              val ?? (
+                <Typography.Text type="secondary">{record.brandId.slice(0, 8)}...</Typography.Text>
+              ),
           },
         ]
       : []),
@@ -132,7 +138,9 @@ export default function NotificationsPage() {
       width: 220,
       render: (_: unknown, record: NotificationItem) => (
         <div>
-          <Typography.Text strong>{record.recipientName ?? record.recipientUserId.slice(0, 8)}</Typography.Text>
+          <Typography.Text strong>
+            {record.recipientName ?? record.recipientUserId.slice(0, 8)}
+          </Typography.Text>
           {record.recipientEmail && (
             <div style={{ fontSize: 12, color: '#64748b' }}>{record.recipientEmail}</div>
           )}
@@ -239,7 +247,10 @@ export default function NotificationsPage() {
             </Card>
           </Col>
           <Col xs={24} sm={8}>
-            <Card variant="borderless" style={{ background: failedCount > 0 ? '#fef2f2' : '#f8fafc' }}>
+            <Card
+              variant="borderless"
+              style={{ background: failedCount > 0 ? '#fef2f2' : '#f8fafc' }}
+            >
               <Statistic
                 title="Gửi thất bại cần xử lý"
                 value={failedCount}
@@ -292,10 +303,7 @@ export default function NotificationsPage() {
             </Col>
 
             <Col>
-              <Button
-                icon={<ReloadOutlined spin={isFetching} />}
-                onClick={() => void refetch()}
-              >
+              <Button icon={<ReloadOutlined spin={isFetching} />} onClick={() => void refetch()}>
                 {t('ui.reset')}
               </Button>
             </Col>

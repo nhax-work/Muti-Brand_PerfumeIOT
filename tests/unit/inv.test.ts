@@ -5,13 +5,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
-import {
-  InvService,
-  type CreateShipmentInput,
-  type ReceiveShipmentInput,
-  type OpenRefillSessionInput,
-  type CloseRefillSessionInput,
-} from '../../apps/api/src/modules/inv/inv.service.js';
+import { InvService } from '../../apps/api/src/modules/inv/inv.service.js';
 import type {
   BottleRecord,
   InventoryBatchRecord,
@@ -21,7 +15,6 @@ import type {
 import { AppError } from '../../apps/api/src/shared/errors/index.js';
 
 const BRAND_A = '11111111-1111-4111-8111-000000000001';
-const BRAND_B = '22222222-2222-4222-8222-000000000002';
 const PRODUCT_A1 = 'prod-1111-1111-1111-000000000001';
 const MACHINE_1 = 'mach-1111-1111-1111-000000000001';
 const SLOT_1 = 'slot-1111-1111-1111-000000000001';
@@ -71,7 +64,10 @@ class FakeInvQueries {
   bottles = new Map<string, BottleRecord>();
   refillSessions = new Map<string, RefillSessionRecord>();
   slotBottles = new Map<string, string | null>();
-  activeRentals = new Map<string, { id: string; slotId: string; brandId: string; status: string }>();
+  activeRentals = new Map<
+    string,
+    { id: string; slotId: string; brandId: string; status: string }
+  >();
   busyMachines = new Set<string>();
 
   private seq = 0;
@@ -104,14 +100,20 @@ class FakeInvQueries {
     return rec;
   }
 
-  async findShipmentDeclarationById(id: string, scope?: any): Promise<ShipmentDeclarationRecord | null> {
+  async findShipmentDeclarationById(
+    id: string,
+    scope?: any,
+  ): Promise<ShipmentDeclarationRecord | null> {
     const item = this.shipments.get(id);
     if (!item) return null;
     if (scope && scope.kind === 'BRAND' && item.brandId !== scope.brandId) return null;
     return item;
   }
 
-  async listShipmentDeclarations(filter: any, scope?: any): Promise<{ items: ShipmentDeclarationRecord[]; total: number }> {
+  async listShipmentDeclarations(
+    filter: any,
+    scope?: any,
+  ): Promise<{ items: ShipmentDeclarationRecord[]; total: number }> {
     let list = Array.from(this.shipments.values());
     if (scope && scope.kind === 'BRAND') {
       list = list.filter((x) => x.brandId === scope.brandId);
@@ -152,7 +154,10 @@ class FakeInvQueries {
     return item;
   }
 
-  async listBatches(filter: any, scope?: any): Promise<{ items: InventoryBatchRecord[]; total: number }> {
+  async listBatches(
+    filter: any,
+    scope?: any,
+  ): Promise<{ items: InventoryBatchRecord[]; total: number }> {
     let list = Array.from(this.batches.values());
     if (scope && scope.kind === 'BRAND') {
       list = list.filter((x) => x.brandId === scope.brandId);
@@ -258,7 +263,7 @@ class FakeInvQueries {
     return this.refillSessions.get(id) ?? null;
   }
 
-  async listRefillSessions(filter: any): Promise<{ items: RefillSessionRecord[]; total: number }> {
+  async listRefillSessions(_filter: any): Promise<{ items: RefillSessionRecord[]; total: number }> {
     const list = Array.from(this.refillSessions.values());
     return { items: list, total: list.length };
   }

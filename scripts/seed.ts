@@ -719,7 +719,8 @@ async function seedNotifications(client: pg.Client): Promise<void> {
       recipientUserId: ID.userBrandAdminA,
       type: 'RENTAL_CHECKOUT_PAID',
       channel: 'EMAIL',
-      subject: '[ScentStation] Xác nhận thanh toán thuê slot thành công (HD-SEED-000001, HD-SEED-000002)',
+      subject:
+        '[ScentStation] Xác nhận thanh toán thuê slot thành công (HD-SEED-000001, HD-SEED-000002)',
       content: `Kính gửi Quý đối tác Maison Aurore,
 
 Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
@@ -737,9 +738,9 @@ Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng ch�
 Trân trọng,
 Hệ thống Quản trị ScentStation`,
       status: 'SENT',
-      sentAt: 'now() - interval \'2 days\'',
+      sentAt: "now() - interval '2 days'",
       readAt: null,
-      createdAt: 'now() - interval \'2 days\'',
+      createdAt: "now() - interval '2 days'",
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000002',
@@ -760,7 +761,7 @@ Hệ thống Vận hành ScentStation`,
       status: 'FAILED',
       sentAt: null,
       readAt: null,
-      createdAt: 'now() - interval \'1 day\'',
+      createdAt: "now() - interval '1 day'",
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000003',
@@ -771,9 +772,9 @@ Hệ thống Vận hành ScentStation`,
       subject: 'Thanh toán thuê slot đã được ghi nhận',
       content: `Phiên thanh toán thuê slot ${ID.checkoutA} đã được xác nhận thành công. Hóa đơn điện tử và chứng từ đối soát đã được lưu trữ.`,
       status: 'READ',
-      sentAt: 'now() - interval \'2 days\'',
-      readAt: 'now() - interval \'2 days\'',
-      createdAt: 'now() - interval \'2 days\'',
+      sentAt: "now() - interval '2 days'",
+      readAt: "now() - interval '2 days'",
+      createdAt: "now() - interval '2 days'",
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000004',
@@ -793,9 +794,9 @@ Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng ch�
 Trân trọng,
 Hệ thống Quản trị ScentStation`,
       status: 'SENT',
-      sentAt: 'now() - interval \'1 day\'',
+      sentAt: "now() - interval '1 day'",
       readAt: null,
-      createdAt: 'now() - interval \'1 day\'',
+      createdAt: "now() - interval '1 day'",
     },
   ];
 
@@ -840,4 +841,3 @@ Hệ thống bảo đảm dữ liệu doanh thu, lượt xịt và cấu hình s
 }
 
 await main();
-

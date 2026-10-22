@@ -76,11 +76,13 @@ export function getMachineColumns({
       render: (mode: MachineOperatingMode, record: Machine) => (
         <Space size={4} wrap>
           <Tag color={MODE_COLOR_MAP[mode]}>{t(`machineOperatingMode.${mode}`)}</Tag>
-          {mode === 'DRAINING' && record.drainingOrdersCount !== undefined && record.drainingOrdersCount > 0 && (
-            <Tag color="gold" style={{ fontWeight: 600 }}>
-              {t('ui.drainingOrdersCountBadge', { count: record.drainingOrdersCount })}
-            </Tag>
-          )}
+          {mode === 'DRAINING' &&
+            record.drainingOrdersCount !== undefined &&
+            record.drainingOrdersCount > 0 && (
+              <Tag color="gold" style={{ fontWeight: 600 }}>
+                {t('ui.drainingOrdersCountBadge', { count: record.drainingOrdersCount })}
+              </Tag>
+            )}
         </Space>
       ),
     },

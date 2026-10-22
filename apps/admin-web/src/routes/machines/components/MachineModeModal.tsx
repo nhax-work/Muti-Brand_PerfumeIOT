@@ -32,9 +32,18 @@ interface ModeCardOption {
   activeBorder: string;
 }
 
-export function MachineModeModal({ machine, open, onClose, initialForce = false }: MachineModeModalProps) {
+export function MachineModeModal({
+  machine,
+  open,
+  onClose,
+  initialForce = false,
+}: MachineModeModalProps) {
   const { t } = useI18n();
-  const [form] = Form.useForm<{ operatingMode: MachineOperatingMode; reason?: string; force?: boolean }>();
+  const [form] = Form.useForm<{
+    operatingMode: MachineOperatingMode;
+    reason?: string;
+    force?: boolean;
+  }>();
   const [submitting, setSubmitting] = useState(false);
   const setMachineMode = useSetMachineMode();
 
@@ -47,7 +56,8 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
   const isForceEffective = selectedMode === 'MAINTENANCE' && isForce;
 
   const [prevTrackKey, setPrevTrackKey] = useState<string | null>(null);
-  const trackKey = open && machine ? `${machine.id}-${machine.operatingMode}-${Boolean(initialForce)}` : null;
+  const trackKey =
+    open && machine ? `${machine.id}-${machine.operatingMode}-${Boolean(initialForce)}` : null;
 
   if (trackKey !== prevTrackKey) {
     setPrevTrackKey(trackKey);
@@ -80,8 +90,6 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
       setIsForce(startForce);
     }
   }, [open, machine, initialForce, form]);
-
-
 
   const modeOptions: ModeCardOption[] = [
     {
@@ -130,7 +138,6 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
         reason: values.reason?.trim() ? values.reason.trim() : undefined,
         force: isForceEffective ? true : undefined,
       });
-
 
       notification.open({
         message: (
@@ -186,7 +193,6 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
         },
       }}
     >
-
       {/* HEADER SANG TRỌNG VỚI ICON GRADIENT */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
         <div
@@ -207,7 +213,14 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
           <ThunderboltFilled />
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
             <Typography.Title
               level={4}
               style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 17 }}
@@ -327,7 +340,14 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
                   }}
                 >
                   {/* TOP: ICON + CHECKMARK */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
                     <div
                       style={{
                         width: 34,
@@ -365,7 +385,9 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
 
                   {/* TITLE + BADGE */}
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}
+                    >
                       <Typography.Text strong style={{ fontSize: 13.5, color: '#0f172a' }}>
                         {opt.title}
                       </Typography.Text>
@@ -388,7 +410,6 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
           </div>
         </Form.Item>
 
-
         {/* TÙY CHỌN ÉP BẢO TRÌ KHẨN CẤP KHI CHỌN MAINTENANCE (FR-MNT-17) */}
         {selectedMode === 'MAINTENANCE' && (
           <div
@@ -401,7 +422,11 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
               transition: 'all 0.2s ease',
             }}
           >
-            <Form.Item name="force" valuePropName="checked" style={{ marginBottom: isForce ? 6 : 0 }}>
+            <Form.Item
+              name="force"
+              valuePropName="checked"
+              style={{ marginBottom: isForce ? 6 : 0 }}
+            >
               <Checkbox
                 data-testid="force-maintenance-checkbox"
                 onChange={(e) => {
@@ -447,14 +472,17 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
           rules={isForceEffective ? [{ required: true, message: t('ui.forceReasonRequired') }] : []}
           label={
             <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
-              {t('ui.reasonLabel')} {isForceEffective && <span style={{ color: '#ef4444' }}>*</span>}
+              {t('ui.reasonLabel')}{' '}
+              {isForceEffective && <span style={{ color: '#ef4444' }}>*</span>}
             </span>
           }
           style={{ marginBottom: 20 }}
         >
           <Input.TextArea
             rows={2}
-            placeholder={isForceEffective ? t('ui.forceReasonRequired') : t('ui.reasonPlaceholderFull')}
+            placeholder={
+              isForceEffective ? t('ui.forceReasonRequired') : t('ui.reasonPlaceholderFull')
+            }
             maxLength={255}
             showCount
             style={{ borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
@@ -496,14 +524,13 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
               fontWeight: 700,
               height: 40,
               padding: '0 24px',
-              background:
-                isForceEffective
-                  ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
-                  : selectedMode === 'NORMAL'
-                    ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
-                    : selectedMode === 'MAINTENANCE'
-                      ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
-                      : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+              background: isForceEffective
+                ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
+                : selectedMode === 'NORMAL'
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                  : selectedMode === 'MAINTENANCE'
+                    ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                    : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
               borderColor: 'transparent',
               boxShadow: isForceEffective
                 ? '0 4px 14px rgba(239, 68, 68, 0.4)'
@@ -523,4 +550,3 @@ export function MachineModeModal({ machine, open, onClose, initialForce = false 
     </Modal>
   );
 }
-

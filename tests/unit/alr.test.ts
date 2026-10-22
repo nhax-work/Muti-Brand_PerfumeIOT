@@ -138,7 +138,11 @@ class FakeEmailProvider implements EmailProvider {
   }
 }
 
-function makeUser(role: string, brandId: string | null = null, id = 'user-test'): AuthenticatedUser {
+function makeUser(
+  role: string,
+  brandId: string | null = null,
+  id = 'user-test',
+): AuthenticatedUser {
   return {
     userId: id,
     email: `${id}@scentstation.local`,

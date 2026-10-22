@@ -39,26 +39,14 @@ const mockMachineDraining: Machine = {
 
 describe('MachineModeModal (FR-MNT-05, FR-MNT-17, FR-MCH-09)', () => {
   it('máy đang DRAINING: hiển thị thông báo còn đơn dở dang', () => {
-    renderScreen(
-      <MachineModeModal
-        machine={mockMachineDraining}
-        open={true}
-        onClose={vi.fn()}
-      />,
-    );
+    renderScreen(<MachineModeModal machine={mockMachineDraining} open={true} onClose={vi.fn()} />);
 
     expect(screen.getAllByText(/DRAINING/).length).toBeGreaterThan(0);
     expect(screen.getByText(/còn 3 đơn dở dang/)).toBeTruthy();
   });
 
   it('chọn Bảo trì: hiển thị hướng dẫn dừng bán an toàn và checkbox ép bảo trì khẩn cấp', async () => {
-    renderScreen(
-      <MachineModeModal
-        machine={mockMachineNormal}
-        open={true}
-        onClose={vi.fn()}
-      />,
-    );
+    renderScreen(<MachineModeModal machine={mockMachineNormal} open={true} onClose={vi.fn()} />);
 
     // Click chọn Bảo trì
     fireEvent.click(screen.getByText('Bảo trì'));
@@ -68,30 +56,20 @@ describe('MachineModeModal (FR-MNT-05, FR-MNT-17, FR-MCH-09)', () => {
   });
 
   it('bật ép bảo trì khẩn cấp: cảnh báo hủy đơn xuất hiện và nút đổi sang màu đỏ', async () => {
-    renderScreen(
-      <MachineModeModal
-        machine={mockMachineNormal}
-        open={true}
-        onClose={vi.fn()}
-      />,
-    );
+    renderScreen(<MachineModeModal machine={mockMachineNormal} open={true} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Bảo trì'));
     const checkbox = await screen.findByRole('checkbox');
     fireEvent.click(checkbox);
 
-    expect(await screen.findByText(/CẢNH BÁO: Ép bảo trì khẩn cấp sẽ dừng máy ngay lập tức/)).toBeTruthy();
+    expect(
+      await screen.findByText(/CẢNH BÁO: Ép bảo trì khẩn cấp sẽ dừng máy ngay lập tức/),
+    ).toBeTruthy();
     expect(screen.getByText('Ép sang Bảo trì ngay')).toBeTruthy();
   });
 
   it('gửi yêu cầu ép bảo trì kèm lý do gọi useSetMachineMode với force: true', async () => {
-    renderScreen(
-      <MachineModeModal
-        machine={mockMachineNormal}
-        open={true}
-        onClose={vi.fn()}
-      />,
-    );
+    renderScreen(<MachineModeModal machine={mockMachineNormal} open={true} onClose={vi.fn()} />);
 
     fireEvent.click(screen.getByText('Bảo trì'));
     const checkbox = await screen.findByRole('checkbox');

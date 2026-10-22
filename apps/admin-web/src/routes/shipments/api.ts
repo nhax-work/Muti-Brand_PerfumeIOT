@@ -68,7 +68,9 @@ export interface RefillSessionItem {
   readonly completedAt: string | null;
 }
 
-export function useShipmentDeclarations(params: { page?: number; pageSize?: number; status?: string } = {}) {
+export function useShipmentDeclarations(
+  params: { page?: number; pageSize?: number; status?: string } = {},
+) {
   const { page = 1, pageSize = 20, status } = params;
   return useQuery({
     queryKey: ['shipments', { page, pageSize, status }],
@@ -77,7 +79,10 @@ export function useShipmentDeclarations(params: { page?: number; pageSize?: numb
         (api as any).GET('/shipment-declarations', {
           params: { query: { page, pageSize, status: status || undefined } },
         }),
-      ) as Promise<{ items: readonly ShipmentItem[]; meta: { total: number; page: number; pageSize: number } }>,
+      ) as Promise<{
+        items: readonly ShipmentItem[];
+        meta: { total: number; page: number; pageSize: number };
+      }>,
   });
 }
 
@@ -130,7 +135,10 @@ export function useInventoryBatches(params: { page?: number; pageSize?: number }
         (api as any).GET('/inventory-batches', {
           params: { query: { page, pageSize } },
         }),
-      ) as Promise<{ items: readonly InventoryBatchItem[]; meta: { total: number; page: number; pageSize: number } }>,
+      ) as Promise<{
+        items: readonly InventoryBatchItem[];
+        meta: { total: number; page: number; pageSize: number };
+      }>,
   });
 }
 
@@ -189,7 +197,9 @@ export function useRejectAuthenticity() {
   });
 }
 
-export function useRefillSessions(params: { page?: number; pageSize?: number; machineId?: string } = {}) {
+export function useRefillSessions(
+  params: { page?: number; pageSize?: number; machineId?: string } = {},
+) {
   const { page = 1, pageSize = 20, machineId } = params;
   return useQuery({
     queryKey: ['refill-sessions', { page, pageSize, machineId }],
@@ -198,7 +208,10 @@ export function useRefillSessions(params: { page?: number; pageSize?: number; ma
         (api as any).GET('/refill-sessions', {
           params: { query: { page, pageSize, machineId: machineId || undefined } },
         }),
-      ) as Promise<{ items: readonly RefillSessionItem[]; meta: { total: number; page: number; pageSize: number } }>,
+      ) as Promise<{
+        items: readonly RefillSessionItem[];
+        meta: { total: number; page: number; pageSize: number };
+      }>,
   });
 }
 
@@ -253,6 +266,9 @@ export function useBottles(params: { page?: number; pageSize?: number; status?: 
         (api as any).GET('/bottles', {
           params: { query: { page, pageSize, status: status || undefined } },
         }),
-      ) as Promise<{ items: readonly BottleItem[]; meta: { total: number; page: number; pageSize: number } }>,
+      ) as Promise<{
+        items: readonly BottleItem[];
+        meta: { total: number; page: number; pageSize: number };
+      }>,
   });
 }

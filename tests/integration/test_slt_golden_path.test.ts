@@ -290,7 +290,7 @@ describe('Golden Path Integration Test (Task 6)', () => {
       subject: string;
     }>(
       `SELECT id, brand_id, recipient_user_id, type, subject FROM notifications
-       WHERE brand_id = $1 AND recipient_user_id = $2 AND type = 'RENTAL_CHECKOUT_PAID'`,
+       WHERE brand_id = $1 AND recipient_user_id = $2 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'IN_APP'`,
       [regData.brandId, regData.userId],
     );
     expect(notifRows.rows).toHaveLength(1);
@@ -320,7 +320,7 @@ describe('Golden Path Integration Test (Task 6)', () => {
     // Vẫn duy nhất 1 thông báo trong bảng notifications
     const notifAfterDup = await raw.query<{ count: string }>(
       `SELECT count(*)::text as count FROM notifications
-       WHERE brand_id = $1 AND recipient_user_id = $2 AND type = 'RENTAL_CHECKOUT_PAID'`,
+       WHERE brand_id = $1 AND recipient_user_id = $2 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'IN_APP'`,
       [regData.brandId, regData.userId],
     );
     expect(Number(notifAfterDup.rows[0]?.count)).toBe(1);

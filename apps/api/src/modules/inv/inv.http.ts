@@ -2,16 +2,7 @@
  * HTTP Controllers cho Module Tồn kho và nạp nước hoa (FR-INV-01..35).
  */
 
-import {
-  Body,
-  Controller,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Post,
-  Query,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import { CurrentUser, type AuthenticatedUser } from '../auth/index.js';
@@ -103,11 +94,7 @@ export class ShipmentDeclarationsController {
 
   @Post([':id/receive', ':id/confirm-receive'])
   @HttpCode(200)
-  receive(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ) {
+  receive(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(ReceiveShipmentBody, body);
     return this.inv.receiveShipment(actor, validatedId, input);
@@ -251,11 +238,7 @@ export class RefillSessionsController {
 
   @Post(':id/close')
   @HttpCode(200)
-  close(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ) {
+  close(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(CloseRefillSessionBody, body);
     return this.inv.closeRefillSession(actor, validatedId, input);

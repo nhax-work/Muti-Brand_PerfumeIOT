@@ -6,13 +6,8 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/principal.loader.js';
 import { AppError } from '../../shared/errors/index.js';
-import { hasPermission, resolveBrandScope } from '../../shared/scoping/index.js';
-import {
-  AlrQueries,
-  type BrandAdminUser,
-  type NotificationFilter,
-  type NotificationRecord,
-} from './alr.queries.js';
+import { resolveBrandScope } from '../../shared/scoping/index.js';
+import { AlrQueries, type NotificationFilter, type NotificationRecord } from './alr.queries.js';
 
 export interface EmailSendOptions {
   to: string;
@@ -52,7 +47,9 @@ export class ConsoleEmailProvider implements EmailProvider {
     }
 
     const messageId = `msg-${randomUUID()}`;
-    this.logger.log(`[EMAIL DISPATCHED] To: ${options.to} | Subject: ${options.subject} | ID: ${messageId}`);
+    this.logger.log(
+      `[EMAIL DISPATCHED] To: ${options.to} | Subject: ${options.subject} | ID: ${messageId}`,
+    );
     return {
       success: true,
       providerMessageId: messageId,
@@ -134,7 +131,9 @@ export class AlrService {
   }): Promise<NotificationRecord[]> {
     const brandAdmins = await this.queries.findActiveBrandAdmins(params.brandId);
     if (brandAdmins.length === 0) {
-      this.logger.warn(`Thương hiệu ${params.brandId} không có Brand Admin ACTIVE để gửi thông báo thanh toán.`);
+      this.logger.warn(
+        `Thương hiệu ${params.brandId} không có Brand Admin ACTIVE để gửi thông báo thanh toán.`,
+      );
       return [];
     }
 

@@ -905,7 +905,6 @@ export const en: SameKeysAs<typeof vi> = {
     initialMeasuredWeightLabel: 'Initial Measured Weight (g)',
   },
 
-
   kiosk: {
     welcome: 'Welcome to ScentStation',
     homeSubtitle: 'Discover & experience premium fragrances with a single tap',
@@ -1039,4 +1038,3 @@ export const en: SameKeysAs<typeof vi> = {
     ABORTED: 'Aborted',
   },
 };
-

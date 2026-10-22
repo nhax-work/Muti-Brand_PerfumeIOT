@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/principal.loader.js';
 import { AppError } from '../../shared/errors/index.js';
-import { hasPermission, resolveBrandScope } from '../../shared/scoping/index.js';
+import { resolveBrandScope } from '../../shared/scoping/index.js';
 import {
   InvQueries,
   type BottleRecord,
@@ -404,9 +404,12 @@ export class InvService {
   /**
    * Tra cứu danh sách phiếu nạp.
    */
-  async listRefillSessions(
-    filter: { page: number; pageSize: number; machineId?: string; status?: any },
-  ): Promise<{ items: RefillSessionRecord[]; total: number }> {
+  async listRefillSessions(filter: {
+    page: number;
+    pageSize: number;
+    machineId?: string;
+    status?: any;
+  }): Promise<{ items: RefillSessionRecord[]; total: number }> {
     return this.queries.listRefillSessions(filter);
   }
 
@@ -483,4 +486,3 @@ export class InvService {
     return (await this.queries.findRefillSessionById(id))!;
   }
 }
-

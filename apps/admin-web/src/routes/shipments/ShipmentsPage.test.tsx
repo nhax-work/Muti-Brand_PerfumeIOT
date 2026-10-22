@@ -4,7 +4,7 @@ import { installDomStubs, renderScreen } from '@/test-utils';
 import ShipmentsPage from './ShipmentsPage';
 import type { InventoryBatchItem, RefillSessionItem, ShipmentItem } from './api';
 
-let mockUser: { id: string; brandId: string | null; roles: string[] } = {
+const mockUser: { id: string; brandId: string | null; roles: string[] } = {
   id: 'u-admin',
   brandId: null,
   roles: ['PLATFORM_SUPER_ADMIN'],
@@ -97,7 +97,10 @@ vi.mock('./api', async (importOriginal) => ({
     isFetching: false,
   }),
   useRefillSessions: () => ({
-    data: { items: mockRefillSessions, meta: { total: mockRefillSessions.length, page: 1, pageSize: 20 } },
+    data: {
+      items: mockRefillSessions,
+      meta: { total: mockRefillSessions.length, page: 1, pageSize: 20 },
+    },
     isLoading: false,
     refetch: vi.fn(),
     isFetching: false,
@@ -141,7 +144,6 @@ describe('ShipmentsPage Frontend Tests', () => {
     expect(receiveButtons.length).toBeGreaterThan(0);
   });
 
-
   it('Chuyển qua tab Lô hàng & Giấy tờ và hiển thị trạng thái chính hãng', () => {
     renderScreen(<ShipmentsPage />);
 
@@ -163,4 +165,3 @@ describe('ShipmentsPage Frontend Tests', () => {
     expect(screen.getByText('Đang thao tác')).toBeTruthy();
   });
 });
-

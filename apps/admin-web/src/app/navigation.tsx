@@ -7,7 +7,6 @@ import {
   IdcardOutlined,
   InboxOutlined,
   MailOutlined,
-
   RollbackOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
@@ -112,4 +111,3 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
   },
 ];
-

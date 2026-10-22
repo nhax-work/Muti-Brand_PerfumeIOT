@@ -353,7 +353,6 @@ export default function MachineDetailPage() {
           />
         )}
 
-
         {/* CÁC THẺ THỐNG KÊ NHANH CHO MÁY NÀY */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
           <Col xs={12} sm={6}>
@@ -503,7 +502,6 @@ export default function MachineDetailPage() {
           initialForce={modeModalInitialForce}
           onClose={() => setModeModalOpen(false)}
         />
-
 
         <SlotConfigModal
           slot={selectedSlotForConfig}

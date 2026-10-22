@@ -684,9 +684,9 @@ describe('MchService (Machine, Slot, Location)', () => {
 
     it('đổi chế độ máy và hiệu chuẩn slot cần X-Reauth-Token (FR-AUTH-09)', () => {
       expect(Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.setMode)).toBe(true);
-      expect(Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.forceMaintenance)).toBe(
-        true,
-      );
+      expect(
+        Reflect.getMetadata(REQUIRES_REAUTH, MachinesController.prototype.forceMaintenance),
+      ).toBe(true);
       expect(Reflect.getMetadata(REQUIRES_REAUTH, SlotsController.prototype.updateConfig)).toBe(
         true,
       );
@@ -703,9 +703,15 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController)).toEqual([
         'machine.manage',
       ]);
-      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.create)).toBeUndefined();
-      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.issueCredential)).toBeUndefined();
-      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.revokeCredential)).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.create),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.issueCredential),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.revokeCredential),
+      ).toBeUndefined();
 
       // 2. Các endpoint đọc danh sách và chi tiết máy được tách cho machine.view để Ops xem được
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.list)).toEqual([
@@ -714,9 +720,9 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.get)).toEqual([
         'machine.view',
       ]);
-      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listSlots)).toEqual([
-        'machine.view',
-      ]);
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listSlots),
+      ).toEqual(['machine.view']);
       expect(
         Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listStatusHistory),
       ).toEqual(['machine.view']);
@@ -725,9 +731,9 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController)).toEqual([
         'machine.manage',
       ]);
-      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.list)).toEqual([
-        'machine.view',
-      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.list)).toEqual(
+        ['machine.view'],
+      );
       expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.get)).toEqual([
         'machine.view',
       ]);
