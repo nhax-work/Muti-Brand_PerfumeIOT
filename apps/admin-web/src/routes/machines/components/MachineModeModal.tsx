@@ -86,8 +86,6 @@ export function MachineModeModal({
         reason: '',
         force: startForce,
       });
-      setSelectedMode(initMode);
-      setIsForce(startForce);
     }
   }, [open, machine, initialForce, form]);
 
