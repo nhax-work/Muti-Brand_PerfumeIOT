@@ -425,6 +425,7 @@ describe('ORD — ADR-0015: MACHINE_BUSY và QUEUE_TIMEOUT', () => {
         expiresAt: new Date(Date.now() + 60_000),
       }),
       machineHasActiveCustomerCommand: async () => false,
+      machineHasActiveRefillSession: async () => false,
     };
 
     const service = new OrdService(

@@ -187,6 +187,7 @@ async function main(): Promise<void> {
     await seedRentalCatalog(client);
     await seedRentalsAndBottles(client);
     await seedAgreementVersions(client);
+    await seedNotifications(client);
 
     await client.query('COMMIT');
 
@@ -485,19 +486,79 @@ async function seedProducts(client: pg.Client): Promise<void> {
 
 async function seedInventory(client: pg.Client): Promise<void> {
   const batches = [
-    [ID.batches[0], ID.brandA, ID.products[0], 'LOT-MA-2026-01', ID.userInventoryStaff],
-    [ID.batches[1], ID.brandB, ID.products[2], 'LOT-HV-2026-01', ID.userInventoryStaff],
+    [
+      ID.batches[0],
+      ID.brandA,
+      ID.products[0],
+      'LOT-MA-2026-01',
+      ID.userInventoryStaff,
+      JSON.stringify({
+        authenticityStatus: 'PENDING',
+        documentUrl: 'https://example.com/docs/coo-ma-2026.pdf',
+        documentType: 'CERTIFICATE_OF_ORIGIN',
+      }),
+    ],
+    [
+      ID.batches[1],
+      ID.brandB,
+      ID.products[2],
+      'LOT-HV-2026-01',
+      ID.userInventoryStaff,
+      JSON.stringify({
+        authenticityStatus: 'APPROVED',
+        documentUrl: 'https://example.com/docs/coo-hv-2026.pdf',
+        documentType: 'CERTIFICATE_OF_ORIGIN',
+      }),
+    ],
   ] as const;
 
-  for (const [id, brandId, productId, batchNumber, createdBy] of batches) {
+  for (const [id, brandId, productId, batchNumber, createdBy, supplierInfo] of batches) {
     await client.query(
       `INSERT INTO inventory_batches (id, brand_id, fragrance_product_id, batch_number,
-                                      received_at, expires_at, quantity_received, created_by)
-       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5)
-       ON CONFLICT (id) DO NOTHING`,
-      [id, brandId, productId, batchNumber, createdBy],
+                                      received_at, expires_at, quantity_received, supplier_info, created_by)
+       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5::jsonb, $6)
+       ON CONFLICT (id) DO UPDATE SET supplier_info = EXCLUDED.supplier_info`,
+      [id, brandId, productId, batchNumber, supplierInfo, createdBy],
     );
   }
+
+  // Khai báo gửi hàng mẫu (FR-INV-22..25)
+  await client.query(
+    `INSERT INTO brand_shipment_declarations (id, brand_id, fragrance_product_id, declared_quantity,
+                                             declared_bottle_volume_ml, expected_ship_date, status, declared_by)
+     VALUES ('eeeeeeee-eeee-4eee-8eee-000000000001', $1, $2, 12, 50.0000, current_date + interval '3 days', 'DECLARED', $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.products[0], ID.userBrandAdminA],
+  );
+
+  await client.query(
+    `INSERT INTO brand_shipment_declarations (id, brand_id, fragrance_product_id, declared_quantity,
+                                             declared_bottle_volume_ml, expected_ship_date, status,
+                                             received_quantity, discrepancy_notes, received_at, received_by, declared_by)
+     VALUES ('eeeeeeee-eeee-4eee-8eee-000000000002', $1, $2, 10, 50.0000, current_date - interval '2 days', 'DISCREPANCY',
+             9, 'Hao hụt 1 chai do va đập trong quá trình vận chuyển', now() - interval '1 day', $3, $4)
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.products[1], ID.userInventoryStaff, ID.userBrandAdminA],
+  );
+
+  // Chai dự phòng trong kho sẵn sàng nạp máy (status = IN_STOCK)
+  await client.query(
+    `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
+                          status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                          opened_at, installed_at, expires_at)
+     VALUES ('99999999-9999-4999-8999-000000000009', $1, 'BRAND', $2, $3, 'BTL-MA-SPARE-01',
+             'IN_STOCK', 50.0000, 50.0000, 62.5000, NULL, NULL, now() + interval '18 months')
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.batches[0], ID.products[0]],
+  );
+
+  // Phiếu nạp máy đang mở (FR-INV-29..31)
+  await client.query(
+    `INSERT INTO refill_sessions (id, brand_id, machine_id, slot_id, performed_by, status, checklist_completed, notes)
+     VALUES ('ffffffff-ffff-4fff-8fff-000000000001', $1, $2, $3, $4, 'STARTED', false, 'Nạp thay thế chai slot 1 định kỳ')
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.machine, ID.slots[0], ID.userOpsStaff],
+  );
 }
 
 /** Ảnh chụp giá của một hóa đơn seed — đúng công thức SltService (FR-SLT-33, FR-SLT-36). */
@@ -650,6 +711,104 @@ async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
   }
 }
 
+async function seedNotifications(client: pg.Client): Promise<void> {
+  const notifs = [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000001',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'EMAIL',
+      subject: '[ScentStation] Xác nhận thanh toán thuê slot thành công (HD-SEED-000001, HD-SEED-000002)',
+      content: `Kính gửi Quý đối tác Maison Aurore,
+
+Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
+- Mã phiên thanh toán: ${ID.checkoutA}
+- Danh sách mã hóa đơn: HD-SEED-000001, HD-SEED-000002
+- Thời điểm thanh toán: 2026-10-20 14:30:00 (Asia/Ho_Chi_Minh)
+
+Các bước tiếp theo cần thực hiện:
+1. Khai báo lô hàng gửi kho tại cổng quản trị thương hiệu (FR-INV-22).
+2. Sau khi kho tiếp nhận và đối soát tem kiểm định, chai nước hoa sẽ được nạp vào các slot đã thuê.
+3. Cấu hình slot và cài đặt giá trải nghiệm để sẵn sàng phục vụ khách hàng tại Kiosk.
+
+Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
+
+Trân trọng,
+Hệ thống Quản trị ScentStation`,
+      status: 'SENT',
+      sentAt: 'now() - interval \'2 days\'',
+      readAt: null,
+      createdAt: 'now() - interval \'2 days\'',
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000002',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'ALERT_SLOT_LOW_VOLUME',
+      channel: 'EMAIL',
+      subject: '[ScentStation] Cảnh báo dung tích chai nước hoa BTL-1 sắp cạn',
+      content: `Kính gửi Quý đối tác Maison Aurore,
+
+Hệ thống phát hiện chai nước hoa BTL-1 tại Kiosk Crescent Mall (Slot 1) có dung tích ước tính còn dưới 10% (4.8ml).
+Vui lòng chuẩn bị chai bổ sung và tạo yêu cầu nạp hàng để tránh gián đoạn dịch vụ.
+
+Thông báo này được ghi nhận làm bằng chứng đối soát vận hành (FR-ALR-16).
+
+Trân trọng,
+Hệ thống Vận hành ScentStation`,
+      status: 'FAILED',
+      sentAt: null,
+      readAt: null,
+      createdAt: 'now() - interval \'1 day\'',
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000003',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'IN_APP',
+      subject: 'Thanh toán thuê slot đã được ghi nhận',
+      content: `Phiên thanh toán thuê slot ${ID.checkoutA} đã được xác nhận thành công. Hóa đơn điện tử và chứng từ đối soát đã được lưu trữ.`,
+      status: 'READ',
+      sentAt: 'now() - interval \'2 days\'',
+      readAt: 'now() - interval \'2 days\'',
+      createdAt: 'now() - interval \'2 days\'',
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000004',
+      brandId: ID.brandB,
+      recipientUserId: ID.userBrandAdminB,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'EMAIL',
+      subject: '[ScentStation] Xác nhận đối soát phiên thanh toán Nhà Hương Việt (HD-SEED-000003)',
+      content: `Kính gửi Quý đối tác Nhà Hương Việt,
+
+Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
+- Mã phiên thanh toán: ${ID.checkoutB}
+- Danh sách mã hóa đơn: HD-SEED-000003
+
+Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
+
+Trân trọng,
+Hệ thống Quản trị ScentStation`,
+      status: 'SENT',
+      sentAt: 'now() - interval \'1 day\'',
+      readAt: null,
+      createdAt: 'now() - interval \'1 day\'',
+    },
+  ];
+
+  for (const n of notifs) {
+    await client.query(
+      `INSERT INTO notifications (id, brand_id, recipient_user_id, type, channel, subject, content, status, sent_at, read_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, ${n.sentAt ?? 'NULL'}, ${n.readAt ?? 'NULL'}, ${n.createdAt})
+       ON CONFLICT (id) DO NOTHING`,
+      [n.id, n.brandId, n.recipientUserId, n.type, n.channel, n.subject, n.content, n.status],
+    );
+  }
+}
+
 async function seedAgreementVersions(client: pg.Client): Promise<void> {
   const content = `HỢP ĐỒNG KHUNG CUNG CẤP DỊCH VỤ THUÊ SLOT MÁY TRẢI NGHIỆM NƯỚC HOA SCENTSTATION
 
@@ -681,3 +840,4 @@ Hệ thống bảo đảm dữ liệu doanh thu, lượt xịt và cấu hình s
 }
 
 await main();
+

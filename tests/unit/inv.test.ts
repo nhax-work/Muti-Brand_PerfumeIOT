@@ -29,28 +29,40 @@ const SLOT_1 = 'slot-1111-1111-1111-000000000001';
 const BRAND_ADMIN_A: AuthenticatedUser = {
   userId: 'user-brand-a',
   email: 'admin@brand-a.com',
-  displayName: 'Brand A Admin',
+  fullName: 'Brand A Admin',
   roles: ['BRAND_ADMIN'],
   brandId: BRAND_A,
-  permissions: ['brand.manage'],
+  permissions: new Set(['brand.manage']),
+  permissionVersion: 1,
+  scope: { type: 'BRAND', brandId: BRAND_A },
+  sessionId: 'session-1',
+  mustChangePassword: false,
 };
 
 const INVENTORY_STAFF: AuthenticatedUser = {
   userId: 'user-inv-staff',
   email: 'inv@station.com',
-  displayName: 'Inventory Staff',
+  fullName: 'Inventory Staff',
   roles: ['INVENTORY_STAFF'],
   brandId: null,
-  permissions: ['inventory.manage'],
+  permissions: new Set(['inventory.manage']),
+  permissionVersion: 1,
+  scope: { type: 'PLATFORM' },
+  sessionId: 'session-2',
+  mustChangePassword: false,
 };
 
 const SUPER_ADMIN: AuthenticatedUser = {
   userId: 'user-super-admin',
   email: 'admin@station.com',
-  displayName: 'Super Admin',
+  fullName: 'Super Admin',
   roles: ['PLATFORM_SUPER_ADMIN'],
   brandId: null,
-  permissions: ['*'],
+  permissions: new Set(['*']),
+  permissionVersion: 1,
+  scope: { type: 'PLATFORM' },
+  sessionId: 'session-3',
+  mustChangePassword: false,
 };
 
 class FakeInvQueries {
@@ -87,7 +99,6 @@ class FakeInvQueries {
       receivedBy: null,
       receivedAt: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
     this.shipments.set(id, rec);
     return rec;
@@ -111,7 +122,7 @@ class FakeInvQueries {
   async updateShipmentDeclarationReceive(id: string, data: any): Promise<void> {
     const item = this.shipments.get(id);
     if (item) {
-      Object.assign(item, data, { updatedAt: new Date() });
+      Object.assign(item, data);
     }
   }
 
@@ -125,6 +136,8 @@ class FakeInvQueries {
       batchNumber: data.batchNumber,
       quantityReceived: data.quantityReceived,
       receivedAt: data.receivedAt,
+      expiresAt: null,
+      createdBy: 'user-inv-staff',
       supplierInfo: data.supplierInfo ?? {},
       createdAt: new Date(),
     };
@@ -150,7 +163,7 @@ class FakeInvQueries {
   async updateBatchSupplierInfo(id: string, supplierInfo: any): Promise<void> {
     const item = this.batches.get(id);
     if (item) {
-      item.supplierInfo = supplierInfo;
+      this.batches.set(id, { ...item, supplierInfo });
     }
   }
 
@@ -163,13 +176,14 @@ class FakeInvQueries {
       fragranceProductId: data.fragranceProductId,
       identifier: data.identifier,
       initialVolumeMl: data.initialVolumeMl,
-      emptyWeightG: data.emptyWeightG ?? null,
+      currentEstimatedMl: data.initialVolumeMl,
+      owner: 'BRAND',
       status: data.status,
       initialMeasuredWeightG: null,
-      installedSlotId: null,
+      currentMeasuredWeightG: null,
       installedAt: null,
+      removedAt: null,
       createdAt: new Date(),
-      updatedAt: new Date(),
     };
     this.bottles.set(id, rec);
     return rec;
@@ -197,9 +211,12 @@ class FakeInvQueries {
   async updateBottleInstalled(id: string, initialMeasuredWeightG: string): Promise<void> {
     const b = this.bottles.get(id);
     if (b) {
-      b.status = 'INSTALLED';
-      b.initialMeasuredWeightG = initialMeasuredWeightG;
-      b.installedAt = new Date();
+      this.bottles.set(id, {
+        ...b,
+        status: 'INSTALLED',
+        initialMeasuredWeightG,
+        installedAt: new Date(),
+      });
     }
   }
 
@@ -222,12 +239,14 @@ class FakeInvQueries {
       machineId: data.machineId,
       slotId: data.slotId,
       brandId: data.brandId,
-      status: 'STARTED',
-      performedBy: data.performedBy,
-      notes: data.notes ?? null,
+      oldBottleId: null,
       newBottleId: null,
-      afterWeightG: null,
       checklistCompleted: false,
+      status: 'STARTED',
+      notes: data.notes ?? null,
+      beforeWeightG: null,
+      afterWeightG: null,
+      performedBy: data.performedBy,
       startedAt: new Date(),
       completedAt: null,
     };
@@ -247,12 +266,15 @@ class FakeInvQueries {
   async closeRefillSession(id: string, data: any): Promise<void> {
     const s = this.refillSessions.get(id);
     if (s) {
-      s.status = 'COMPLETED';
-      s.newBottleId = data.newBottleId;
-      s.afterWeightG = data.afterWeightG;
-      s.checklistCompleted = data.checklistCompleted;
-      s.notes = data.notes ?? s.notes;
-      s.completedAt = data.completedAt;
+      this.refillSessions.set(id, {
+        ...s,
+        status: 'COMPLETED',
+        newBottleId: data.newBottleId,
+        afterWeightG: data.afterWeightG,
+        checklistCompleted: data.checklistCompleted,
+        notes: data.notes ?? s.notes,
+        completedAt: data.completedAt,
+      });
     }
   }
 }

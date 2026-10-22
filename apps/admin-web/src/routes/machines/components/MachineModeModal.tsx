@@ -18,6 +18,7 @@ interface MachineModeModalProps {
   readonly machine: Machine | null;
   readonly open: boolean;
   readonly onClose: () => void;
+  readonly initialForce?: boolean;
 }
 
 interface ModeCardOption {
@@ -31,7 +32,7 @@ interface ModeCardOption {
   activeBorder: string;
 }
 
-export function MachineModeModal({ machine, open, onClose }: MachineModeModalProps) {
+export function MachineModeModal({ machine, open, onClose, initialForce = false }: MachineModeModalProps) {
   const { t } = useI18n();
   const [form] = Form.useForm<{ operatingMode: MachineOperatingMode; reason?: string; force?: boolean }>();
   const [submitting, setSubmitting] = useState(false);
@@ -39,34 +40,48 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
 
   const currentMode = machine?.operatingMode ?? 'NORMAL';
   const [selectedMode, setSelectedMode] = useState<MachineOperatingMode>(
-    currentMode === 'DRAINING' ? 'MAINTENANCE' : currentMode,
+    initialForce ? 'MAINTENANCE' : currentMode === 'DRAINING' ? 'MAINTENANCE' : currentMode,
   );
-  const [isForce, setIsForce] = useState(false);
+  const [isForce, setIsForce] = useState(initialForce);
+
+  const isForceEffective = selectedMode === 'MAINTENANCE' && isForce;
 
   const [prevTrackKey, setPrevTrackKey] = useState<string | null>(null);
-  const trackKey = open && machine ? `${machine.id}-${machine.operatingMode}` : null;
+  const trackKey = open && machine ? `${machine.id}-${machine.operatingMode}-${Boolean(initialForce)}` : null;
 
   if (trackKey !== prevTrackKey) {
     setPrevTrackKey(trackKey);
     if (open && machine) {
-      const initMode = machine.operatingMode === 'DRAINING' ? 'MAINTENANCE' : machine.operatingMode;
-      const initForce = machine.operatingMode === 'DRAINING';
+      const initMode = initialForce
+        ? 'MAINTENANCE'
+        : machine.operatingMode === 'DRAINING'
+          ? 'MAINTENANCE'
+          : machine.operatingMode;
+      const startForce = Boolean(initialForce);
       setSelectedMode(initMode);
-      setIsForce(initForce);
+      setIsForce(startForce);
     }
   }
 
   useEffect(() => {
     if (open && machine) {
-      const initMode = machine.operatingMode === 'DRAINING' ? 'MAINTENANCE' : machine.operatingMode;
-      const initForce = machine.operatingMode === 'DRAINING';
+      const initMode = initialForce
+        ? 'MAINTENANCE'
+        : machine.operatingMode === 'DRAINING'
+          ? 'MAINTENANCE'
+          : machine.operatingMode;
+      const startForce = Boolean(initialForce);
       form.setFieldsValue({
         operatingMode: initMode,
         reason: '',
-        force: initForce,
+        force: startForce,
       });
+      setSelectedMode(initMode);
+      setIsForce(startForce);
     }
-  }, [open, machine, form]);
+  }, [open, machine, initialForce, form]);
+
+
 
   const modeOptions: ModeCardOption[] = [
     {
@@ -113,8 +128,9 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         id: machine.id,
         operatingMode: values.operatingMode,
         reason: values.reason?.trim() ? values.reason.trim() : undefined,
-        force: values.operatingMode === 'MAINTENANCE' ? values.force : undefined,
+        force: isForceEffective ? true : undefined,
       });
+
 
       notification.open({
         message: (
@@ -162,50 +178,76 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
       onCancel={onClose}
       footer={null}
       centered
-      width={580}
+      width={740}
       destroyOnHidden
       styles={{
         body: {
-          padding: '24px 28px',
+          padding: '22px 26px',
         },
       }}
     >
+
       {/* HEADER SANG TRỌNG VỚI ICON GRADIENT */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
         <div
           style={{
-            width: 48,
-            height: 48,
-            borderRadius: 14,
+            width: 44,
+            height: 44,
+            borderRadius: 12,
             background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             color: '#fff',
-            fontSize: 24,
-            boxShadow: '0 6px 16px rgba(2, 132, 199, 0.3)',
+            fontSize: 22,
+            boxShadow: '0 4px 12px rgba(2, 132, 199, 0.25)',
             flexShrink: 0,
           }}
         >
           <ThunderboltFilled />
         </div>
-        <div style={{ minWidth: 0 }}>
-          <Typography.Title
-            level={4}
-            style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 18 }}
-          >
-            {t('ui.changeModeTitle')}
-          </Typography.Title>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Typography.Title
+              level={4}
+              style={{ margin: 0, fontWeight: 800, color: '#0f172a', fontSize: 17 }}
+            >
+              {t('ui.changeModeTitle')}
+            </Typography.Title>
+            <Tag
+              color={
+                currentMode === 'NORMAL'
+                  ? 'success'
+                  : currentMode === 'DRAINING'
+                    ? 'gold'
+                    : currentMode === 'MAINTENANCE'
+                      ? 'warning'
+                      : 'error'
+              }
+              style={{
+                margin: 0,
+                fontSize: 11,
+                fontWeight: 600,
+                borderRadius: 20,
+                padding: '2px 10px',
+              }}
+            >
+              {t('ui.currentModeLabel')}:{' '}
+              {currentMode === 'DRAINING'
+                ? `${t('ui.modeDrainingTitle')} ${machine?.drainingOrdersCount !== undefined ? `(${machine.drainingOrdersCount})` : ''}`
+                : modeOptions.find((m) => m.value === currentMode)?.title}
+            </Tag>
+          </div>
           <div
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: 8,
-              marginTop: 4,
+              marginTop: 2,
               flexWrap: 'wrap',
             }}
           >
-            <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               {machine?.displayName}
             </Typography.Text>
             <span style={{ color: '#cbd5e1' }}>•</span>
@@ -233,84 +275,26 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
           }
           if (changed.operatingMode !== undefined) {
             setSelectedMode(changed.operatingMode);
+            if (changed.operatingMode !== 'MAINTENANCE') {
+              setIsForce(false);
+              form.setFieldValue('force', false);
+            }
           }
         }}
       >
-        {/* TIÊU ĐỀ & TRẠNG THÁI HIỆN TẠI VỚI KHOẢNG CÁCH RỘNG RÃI */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: 14,
-            paddingBottom: 8,
-            borderBottom: '1px solid #f1f5f9',
-          }}
-        >
-          <span
-            style={{
-              fontWeight: 700,
-              fontSize: 12,
-              color: '#475569',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {t('ui.selectNewMode')}
-          </span>
-
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 8,
-              background: '#f8fafc',
-              border: '1px solid #e2e8f0',
-              padding: '4px 12px',
-              borderRadius: 20,
-              fontSize: 12,
-            }}
-          >
-            <span style={{ color: '#64748b' }}>{t('ui.currentModeLabel')}:</span>
-            <Tag
-              color={
-                currentMode === 'NORMAL'
-                  ? 'success'
-                  : currentMode === 'DRAINING'
-                    ? 'gold'
-                    : currentMode === 'MAINTENANCE'
-                      ? 'warning'
-                      : 'error'
-              }
-              style={{
-                margin: 0,
-                fontSize: 11,
-                fontWeight: 600,
-                borderRadius: 4,
-                padding: '0 8px',
-                lineHeight: '20px',
-              }}
-            >
-              {currentMode === 'DRAINING'
-                ? `${t('ui.modeDrainingTitle')} ${machine?.drainingOrdersCount !== undefined ? `(${machine.drainingOrdersCount})` : ''}`
-                : modeOptions.find((m) => m.value === currentMode)?.title}
-            </Tag>
-          </div>
-        </div>
-
         {/* THÔNG BÁO NẾU MÁY ĐANG Ở DRAINING */}
         {machine?.operatingMode === 'DRAINING' && (
           <Alert
             type="warning"
             showIcon
-            style={{ marginBottom: 16, borderRadius: 10 }}
+            style={{ marginBottom: 12, borderRadius: 8, padding: '8px 12px', fontSize: 12.5 }}
             message={t('ui.drainingStatusBanner', { count: machine.drainingOrdersCount ?? 0 })}
           />
         )}
 
-        {/* DANH SÁCH 3 CHẾ ĐỘ THIẾT KẾ CARD THÔNG MINH */}
-        <Form.Item name="operatingMode" style={{ marginBottom: 16 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* DANH SÁCH 3 CHẾ ĐỘ THIẾT KẾ GRID 3 CỘT NGANG RỘNG RÃI */}
+        <Form.Item name="operatingMode" style={{ marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             {modeOptions.map((opt) => {
               const isSelected = selectedMode === opt.value;
               const isCurrent = currentMode === opt.value;
@@ -321,101 +305,89 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
                   onClick={() => {
                     setSelectedMode(opt.value);
                     form.setFieldValue('operatingMode', opt.value);
+                    if (opt.value !== 'MAINTENANCE') {
+                      setIsForce(false);
+                      form.setFieldValue('force', false);
+                    }
                   }}
                   style={{
                     border: `1.5px solid ${isSelected ? opt.activeBorder : '#e2e8f0'}`,
                     background: isSelected ? opt.activeBg : '#ffffff',
-                    borderRadius: 12,
-                    padding: '14px 18px',
+                    borderRadius: 10,
+                    padding: '12px 14px',
                     cursor: 'pointer',
                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                     display: 'flex',
-                    alignItems: 'center',
+                    flexDirection: 'column',
                     justifyContent: 'space-between',
-                    gap: 12,
+                    minHeight: 120,
                     boxShadow: isSelected
-                      ? `0 4px 14px ${opt.themeColor}25`
-                      : '0 1px 3px rgba(0, 0, 0, 0.02)',
+                      ? `0 4px 12px ${opt.themeColor}20`
+                      : '0 1px 2px rgba(0, 0, 0, 0.02)',
                   }}
                 >
-                  <div
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}
-                  >
+                  {/* TOP: ICON + CHECKMARK */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                     <div
                       style={{
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
+                        width: 34,
+                        height: 34,
+                        borderRadius: 8,
                         background: '#ffffff',
                         border: `1px solid ${isSelected ? opt.activeBorder : '#e2e8f0'}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.04)',
-                        flexShrink: 0,
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.03)',
                       }}
                     >
                       {opt.icon}
                     </div>
 
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Typography.Text strong style={{ fontSize: 14, color: '#0f172a' }}>
-                          {opt.title}
-                        </Typography.Text>
-                        <Tag
-                          color={
-                            isSelected
-                              ? opt.value === 'NORMAL'
-                                ? 'success'
-                                : opt.value === 'MAINTENANCE'
-                                  ? 'warning'
-                                  : 'error'
-                              : 'default'
-                          }
-                          style={{ margin: 0, fontSize: 11, fontWeight: 600, borderRadius: 4 }}
-                        >
-                          {opt.badge}
-                        </Tag>
-                        {isCurrent && (
-                          <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic' }}>
-                            {t('ui.currentModeBadge')}
-                          </span>
-                        )}
-                      </div>
-                      <Typography.Text
-                        type="secondary"
-                        style={{ fontSize: 12, display: 'block', marginTop: 2, lineHeight: 1.35 }}
-                      >
-                        {opt.description}
-                      </Typography.Text>
+                    <div
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        border: `2px solid ${isSelected ? opt.themeColor : '#cbd5e1'}`,
+                        background: isSelected ? opt.themeColor : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#ffffff',
+                        fontSize: 10,
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      {isSelected && <CheckOutlined />}
                     </div>
                   </div>
 
-                  {/* CHECKMARK INDICATOR */}
-                  <div
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: '50%',
-                      border: `2px solid ${isSelected ? opt.themeColor : '#cbd5e1'}`,
-                      background: isSelected ? opt.themeColor : 'transparent',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      fontSize: 11,
-                      flexShrink: 0,
-                      transition: 'all 0.2s ease',
-                    }}
-                  >
-                    {isSelected && <CheckOutlined />}
+                  {/* TITLE + BADGE */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <Typography.Text strong style={{ fontSize: 13.5, color: '#0f172a' }}>
+                        {opt.title}
+                      </Typography.Text>
+                      {isCurrent && (
+                        <span style={{ fontSize: 10.5, color: '#64748b', fontStyle: 'italic' }}>
+                          (Hiện tại)
+                        </span>
+                      )}
+                    </div>
+                    <Typography.Text
+                      type="secondary"
+                      style={{ fontSize: 11.5, display: 'block', marginTop: 4, lineHeight: 1.35 }}
+                    >
+                      {opt.description}
+                    </Typography.Text>
                   </div>
                 </div>
               );
             })}
           </div>
         </Form.Item>
+
 
         {/* TÙY CHỌN ÉP BẢO TRÌ KHẨN CẤP KHI CHỌN MAINTENANCE (FR-MNT-17) */}
         {selectedMode === 'MAINTENANCE' && (
@@ -472,17 +444,17 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
         {/* Ô NHẬP LÝ DO THAY ĐỔI */}
         <Form.Item
           name="reason"
-          rules={isForce ? [{ required: true, message: t('ui.forceReasonRequired') }] : []}
+          rules={isForceEffective ? [{ required: true, message: t('ui.forceReasonRequired') }] : []}
           label={
             <span style={{ fontWeight: 700, fontSize: 13, color: '#334155' }}>
-              {t('ui.reasonLabel')} {isForce && <span style={{ color: '#ef4444' }}>*</span>}
+              {t('ui.reasonLabel')} {isForceEffective && <span style={{ color: '#ef4444' }}>*</span>}
             </span>
           }
           style={{ marginBottom: 20 }}
         >
           <Input.TextArea
             rows={2}
-            placeholder={isForce ? t('ui.forceReasonRequired') : t('ui.reasonPlaceholderFull')}
+            placeholder={isForceEffective ? t('ui.forceReasonRequired') : t('ui.reasonPlaceholderFull')}
             maxLength={255}
             showCount
             style={{ borderRadius: 8, padding: '8px 12px', fontSize: 13 }}
@@ -525,7 +497,7 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
               height: 40,
               padding: '0 24px',
               background:
-                isForce
+                isForceEffective
                   ? 'linear-gradient(135deg, #ef4444 0%, #b91c1c 100%)'
                   : selectedMode === 'NORMAL'
                     ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
@@ -533,12 +505,12 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
                       ? 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
                       : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
               borderColor: 'transparent',
-              boxShadow: isForce
+              boxShadow: isForceEffective
                 ? '0 4px 14px rgba(239, 68, 68, 0.4)'
                 : `0 4px 14px ${currentOption.themeColor}35`,
             }}
           >
-            {isForce
+            {isForceEffective
               ? t('ui.btnForceMaintenance')
               : selectedMode === 'NORMAL'
                 ? t('ui.btnActivateNormal')
@@ -551,3 +523,4 @@ export function MachineModeModal({ machine, open, onClose }: MachineModeModalPro
     </Modal>
   );
 }
+

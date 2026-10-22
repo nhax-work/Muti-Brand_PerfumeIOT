@@ -65,7 +65,7 @@ const CloseRefillSessionBody = z.object({
   notes: z.string().optional().nullable(),
 });
 
-@Controller('shipment-declarations')
+@Controller(['shipment-declarations', 'shipments'])
 export class ShipmentDeclarationsController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
@@ -101,7 +101,7 @@ export class ShipmentDeclarationsController {
     return this.inv.getShipmentDeclaration(actor, validatedId);
   }
 
-  @Post(':id/receive')
+  @Post([':id/receive', ':id/confirm-receive'])
   @HttpCode(200)
   receive(
     @CurrentUser() actor: AuthenticatedUser,
@@ -114,7 +114,7 @@ export class ShipmentDeclarationsController {
   }
 }
 
-@Controller('inventory-batches')
+@Controller(['inventory-batches', 'batches'])
 export class InventoryBatchesController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
@@ -144,7 +144,7 @@ export class InventoryBatchesController {
     return this.inv.getBatch(actor, validatedId);
   }
 
-  @Post(':id/authenticity-documents')
+  @Post([':id/authenticity-documents', ':id/authenticity'])
   @HttpCode(200)
   submitAuthenticity(
     @CurrentUser() actor: AuthenticatedUser,
@@ -156,14 +156,14 @@ export class InventoryBatchesController {
     return this.inv.submitBatchAuthenticity(actor, validatedId, input);
   }
 
-  @Post(':id/approve-authenticity')
+  @Post([':id/approve-authenticity', ':id/approve'])
   @HttpCode(200)
   approveAuthenticity(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     const validatedId = parseBody(IdParam, id);
     return this.inv.approveBatchAuthenticity(actor, validatedId);
   }
 
-  @Post(':id/reject-authenticity')
+  @Post([':id/reject-authenticity', ':id/reject'])
   @HttpCode(200)
   rejectAuthenticity(
     @CurrentUser() actor: AuthenticatedUser,

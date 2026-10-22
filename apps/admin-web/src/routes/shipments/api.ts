@@ -74,7 +74,7 @@ export function useShipmentDeclarations(params: { page?: number; pageSize?: numb
     queryKey: ['shipments', { page, pageSize, status }],
     queryFn: () =>
       unwrap(
-        (api as any).GET('/shipments', {
+        (api as any).GET('/shipment-declarations', {
           params: { query: { page, pageSize, status: status || undefined } },
         }),
       ) as Promise<{ items: readonly ShipmentItem[]; meta: { total: number; page: number; pageSize: number } }>,
@@ -89,7 +89,7 @@ export function useCreateShipmentDeclaration() {
       declaredQuantity: number;
       declaredBottleVolumeMl: string;
       expectedShipDate?: string | null;
-    }) => unwrap((api as any).POST('/shipments', { body })) as Promise<ShipmentItem>,
+    }) => unwrap((api as any).POST('/shipment-declarations', { body })) as Promise<ShipmentItem>,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shipments'] });
     },
@@ -109,7 +109,7 @@ export function useReceiveShipment() {
       discrepancyNotes?: string | null;
     }) =>
       unwrap(
-        (api as any).POST('/shipments/{id}/receive', {
+        (api as any).POST('/shipment-declarations/{id}/receive', {
           params: { path: { id } },
           body: { receivedQuantity, discrepancyNotes },
         }),
@@ -127,7 +127,7 @@ export function useInventoryBatches(params: { page?: number; pageSize?: number }
     queryKey: ['batches', { page, pageSize }],
     queryFn: () =>
       unwrap(
-        (api as any).GET('/batches', {
+        (api as any).GET('/inventory-batches', {
           params: { query: { page, pageSize } },
         }),
       ) as Promise<{ items: readonly InventoryBatchItem[]; meta: { total: number; page: number; pageSize: number } }>,
@@ -147,7 +147,7 @@ export function useSubmitAuthenticity() {
       documentType?: string;
     }) =>
       unwrap(
-        (api as any).POST('/batches/{id}/authenticity', {
+        (api as any).POST('/inventory-batches/{id}/authenticity-documents', {
           params: { path: { id: batchId } },
           body: { documentUrl, documentType },
         }),
@@ -163,7 +163,7 @@ export function useApproveAuthenticity() {
   return useMutation({
     mutationFn: (batchId: string) =>
       unwrap(
-        (api as any).POST('/batches/{id}/approve', {
+        (api as any).POST('/inventory-batches/{id}/approve-authenticity', {
           params: { path: { id: batchId } },
         }),
       ) as Promise<InventoryBatchItem>,
@@ -178,7 +178,7 @@ export function useRejectAuthenticity() {
   return useMutation({
     mutationFn: ({ batchId, reason }: { batchId: string; reason: string }) =>
       unwrap(
-        (api as any).POST('/batches/{id}/reject', {
+        (api as any).POST('/inventory-batches/{id}/reject-authenticity', {
           params: { path: { id: batchId } },
           body: { reason },
         }),

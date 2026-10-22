@@ -140,14 +140,16 @@ class FakeEmailProvider implements EmailProvider {
 
 function makeUser(role: string, brandId: string | null = null, id = 'user-test'): AuthenticatedUser {
   return {
-    id,
+    userId: id,
     email: `${id}@scentstation.local`,
     fullName: 'Test User',
-    role,
+    roles: [role as any],
     brandId,
-    status: 'ACTIVE',
+    permissionVersion: 1,
+    scope: brandId ? { type: 'BRAND', brandId } : { type: 'PLATFORM' },
+    sessionId: 'session-test',
     mustChangePassword: false,
-    permissions: [],
+    permissions: new Set<string>(),
   };
 }
 
@@ -185,8 +187,8 @@ describe('Module ALR — Hạ tầng Email & Bằng chứng gửi (FR-ALR-16, FR
       expect(result.status).toBe('SENT');
       expect(result.sentAt).toBeInstanceOf(Date);
       expect(emailProvider.sentEmails).toHaveLength(1);
-      expect(emailProvider.sentEmails[0].to).toBe('admin1@brand-a.vn');
-      expect(emailProvider.sentEmails[0].subject).toBe('Xác nhận thanh toán');
+      expect(emailProvider.sentEmails[0]!.to).toBe('admin1@brand-a.vn');
+      expect(emailProvider.sentEmails[0]!.subject).toBe('Xác nhận thanh toán');
 
       // Kiểm tra lưu vết trong bảng notifications
       const saved = queries.notifications.get(result.id);
@@ -317,7 +319,7 @@ describe('Module ALR — Hạ tầng Email & Bằng chứng gửi (FR-ALR-16, FR
       // Brand Admin A chỉ thấy thông báo của Brand A
       const listA = await service.listNotifications(brandAdminA, { page: 1, pageSize: 10 });
       expect(listA.items).toHaveLength(1);
-      expect(listA.items[0].id).toBe(notifA.id);
+      expect(listA.items[0]!.id).toBe(notifA.id);
 
       // Xem chi tiết của Brand A -> thành công
       const detailA = await service.getNotification(brandAdminA, notifA.id);
