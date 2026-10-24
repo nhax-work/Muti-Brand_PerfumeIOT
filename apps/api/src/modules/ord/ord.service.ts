@@ -19,7 +19,6 @@ import type { AuthenticatedUser } from '../auth/index.js';
 import { canCreateDispenseCommand, canTransition } from './order-status.js';
 import {
   OrdQueries,
-  type KioskMachineRecord,
   type OrderRecord,
   type OrderSearchFilter,
   type OrderStateColumns,
@@ -30,6 +29,7 @@ import { newPaymentReference } from './payment/payment-reference.js';
 import { PaymentQueries } from './payment/payment.queries.js';
 import { PaymentService } from './payment/payment.service.js';
 import { revenueOwnerFor } from './revenue-owner.js';
+import { assertMachineAcceptsOrders } from './sales-stop.js';
 
 type Order = Schema<'Order'>;
 type OrderCreated = Schema<'OrderCreated'>;
@@ -323,13 +323,51 @@ export class OrdService {
   // Hết hạn thanh toán (FR-ORD-16)
   // -----------------------------------------------------------------------------------
 
-  /** Chuyển một đơn quá hạn sang EXPIRED; không làm gì nếu đơn đã rời PENDING_PAYMENT. */
+  /**
+   * Chuyển một đơn quá hạn sang EXPIRED; không làm gì nếu đơn đã rời PENDING_PAYMENT.
+   *
+   * Hủy link ở cổng TRƯỚC (ngoài transaction, như `cancelKioskOrder`), không chỉ trông vào `expiredAt`
+   * đã gửi lúc tạo link: khách có thể đã mở màn chuyển khoản lúc mã còn hạn và bấm xác nhận sau hạn —
+   * hủy chủ động đóng tài khoản ảo của đơn ngay mốc hết hạn thay vì chờ cổng tự áp hạn (ADR-0016).
+   *
+   * Cổng báo đã nhận tiền → KHÔNG chuyển EXPIRED: webhook sẽ tới và tự quyết theo thời điểm giao dịch
+   * (trả trước hạn → PAID, sau hạn → REFUND_PENDING — `settleOrderPayment`). Chuyển EXPIRED ở đây sẽ
+   * biến khách trả đúng hạn thành khách phải hoàn tiền.
+   */
   async expireOrder(orderId: string): Promise<boolean> {
-    return this.queries.transaction((tx) => this.expireIfOverdue(tx, orderId));
+    const order = await this.queries.findKioskOrder(orderId);
+    if (!order || order.status !== 'PENDING_PAYMENT' || order.expiresAt > this.clock.now()) {
+      return false;
+    }
+    let gatewayCancelled = false;
+    try {
+      const result = await this.payments.cancelPendingAtGateway(
+        { orderId },
+        'Order payment expired',
+      );
+      if (result?.kind === 'ALREADY_PAID') return false;
+      gatewayCancelled = result !== null;
+    } catch (error) {
+      // Không hỏi được cổng: vẫn hết hạn phía hệ thống — link còn `expiredAt` của cổng, và tiền nếu
+      // vẫn tới thì webhook đưa đơn vào REFUND_PENDING.
+      this.logger.warn(
+        `Không hủy được link thanh toán của đơn quá hạn ${orderId} ở cổng: ${String(error)}`,
+      );
+    }
+    return this.queries.transaction((tx) =>
+      this.expireIfOverdue(tx, orderId, { gatewayCancelled }),
+    );
   }
 
-  /** Thân của `expireOrder`, chạy trong `tx` của người gọi — khóa đơn rồi mới xét hạn. */
-  private async expireIfOverdue(tx: Executor, orderId: string): Promise<boolean> {
+  /**
+   * Thân của `expireOrder`, chạy trong `tx` của người gọi — khóa đơn rồi mới xét hạn. Gọi trực tiếp
+   * (trong transaction tạo đơn) thì không hủy được link ở cổng; link đó còn `expiredAt` của cổng.
+   */
+  private async expireIfOverdue(
+    tx: Executor,
+    orderId: string,
+    metadata?: { readonly gatewayCancelled: boolean },
+  ): Promise<boolean> {
     const order = await this.queries.lockOrder(orderId, tx);
     const now = this.clock.now();
     if (!order || order.status !== 'PENDING_PAYMENT' || order.expiresAt > now) return false;
@@ -342,6 +380,7 @@ export class OrdService {
         to: 'EXPIRED',
         reason: 'ORDER_PAYMENT_TTL',
         actorType: 'SYSTEM',
+        ...(metadata ? { metadata } : {}),
         at: now,
       },
       {},
@@ -698,7 +737,7 @@ export class OrdService {
     return this.queries.transaction(async (tx) => {
       const machine = await this.queries.findMachineBySerial(input.machineSerial, tx);
       if (!machine) throw new AppError('NOT_FOUND', 'ord.machineNotFound');
-      assertMachineServing(machine);
+      assertMachineAcceptsOrders(machine);
 
       // FR-INV-30 AC3 (ADR-0015): Cả máy dừng nhận đơn mới khi có phiếu nạp đang mở
       if (await this.queries.machineHasActiveRefillSession(machine.id, tx)) {
@@ -817,14 +856,6 @@ export function isSellable(offer: SlotOfferRecord): boolean {
     // Chưa hiệu chuẩn thì lệnh xịt không có liều để gửi (FR-MCH-06, mqtt.md §5 `dosage_ml`).
     offer.calibratedDosageMl !== null
   );
-}
-
-/** FR-ORD-04 AC2, AC3. */
-function assertMachineServing(machine: KioskMachineRecord): void {
-  if (machine.status !== 'ONLINE') throw new AppError('MACHINE_OFFLINE', 'ord.machineOffline');
-  if (machine.operatingMode !== 'NORMAL') {
-    throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
-  }
 }
 
 /** Ảnh chụp đơn từ slot bán được (FR-ORD-05) — gọi sau `isSellable`. */

@@ -86,6 +86,22 @@ export const router = createBrowserRouter([
           import('@/routes/rentals/CheckoutDetailPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/dispense-commands',
+        lazy: () =>
+          import('@/routes/dispense-commands/DispenseCommandsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/brand-payouts',
+        lazy: () =>
+          import('@/routes/brand-payouts/BrandPayoutsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/revenue',
+        lazy: () => import('@/routes/revenue/RevenuePage').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/refund-claims',
         lazy: () =>
           import('@/routes/refund-claims/RefundClaimsPage').then((m) => ({ Component: m.default })),

@@ -1,0 +1,199 @@
+.rail {
+  /* Phần cao không dành cho ảnh: header, hàng giới thiệu, lề, chữ trong thẻ (thương hiệu, tên hai
+     dòng, giá, padding). Ảnh 4:5 lấy phần còn lại nên thẻ luôn vừa màn. */
+  --rail-reserve: calc(var(--header-h) + var(--rail-top) + 300px);
+  /* Khoảng cách dưới đường viền header: rộng hơn trên màn cao để cụm thẻ không dồn lên trên. */
+  --rail-top: clamp(var(--sp-3), 6dvh, var(--sp-6));
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: var(--sp-2);
+  padding-top: var(--rail-top);
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding: 0 var(--gutter);
+}
+
+/* "Chọn hương · Quét mã · Nhấn nút trên máy" */
+.intro {
+  display: flex;
+  flex-wrap: wrap;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
+}
+
+.intro li + li::before {
+  content: '·';
+  padding: 0 var(--sp-2);
+}
+
+.arrows {
+  display: flex;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.arrow {
+  display: grid;
+  place-items: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  transition: opacity var(--dur) var(--ease);
+}
+
+.arrow:active {
+  background: var(--surface-2);
+}
+
+/* Khung nhìn của băng chuyền: kéo ngang do JS xử lý, kéo dọc để trình duyệt lo. Hai mép mờ dần
+   để thẻ đang trôi vào/ra không lộ thành mảnh cắt. */
+.viewport {
+  /* Cụm thẻ nằm giữa phần cao còn lại thay vì dồn sát hàng giới thiệu, chừa khoảng trống ở đáy. */
+  margin-block: auto;
+  overflow: hidden;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--gutter),
+    #000 calc(100% - var(--gutter)),
+    transparent
+  );
+  padding-bottom: var(--sp-3);
+  touch-action: pan-y;
+  cursor: grab;
+}
+
+/* Không trôi (chế độ giảm chuyển động, test): cuộn ngang thường. */
+.viewportStatic {
+  margin-block: auto;
+  overflow-x: auto;
+  padding-bottom: var(--sp-3);
+}
+
+/*
+ * Bốn thẻ vừa một màn ngang; chiều cao thẻ cũng phải vừa màn thấp (1024×600) nên bề rộng thẻ lấy
+ * số nhỏ hơn giữa "chia đều bề ngang" và "ảnh 4:5 vừa phần cao còn lại".
+ */
+.track {
+  --card-w: min(
+    clamp(240px, calc((100vw - 2 * var(--gutter) - 3 * var(--sp-3)) / 4), 360px),
+    calc((100dvh - var(--rail-reserve)) * 0.8 + 2 * var(--sp-2))
+  );
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: var(--card-w);
+  column-gap: var(--sp-3);
+  width: max-content;
+  margin: 0;
+  padding: 0 var(--gutter);
+  list-style: none;
+  will-change: transform;
+}
+
+/* Chạm mũi tên: trượt một thẻ có chuyển động ngắn thay vì nhảy. */
+.stepping {
+  transition: transform var(--dur) var(--ease);
+}
+
+.slot {
+  display: flex;
+  min-width: 0;
+}
+
+/* Thẻ cùng chiều cao: ảnh, thương hiệu, tên, giá của mọi thẻ thẳng hàng. */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  width: 100%;
+  padding: var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.card:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.media {
+  position: relative;
+  margin-bottom: var(--sp-1);
+}
+
+.buttonNo {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  display: grid;
+  place-items: center;
+  width: var(--sp-5);
+  height: var(--sp-5);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-small);
+  font-weight: 600;
+}
+
+.brand {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.name {
+  margin: 0;
+  /* Luôn chiếm đúng hai dòng để giá của mọi thẻ cùng một hàng; tên dài không bị cắt "…". */
+  min-height: calc(2em * var(--lh-tight));
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+.price {
+  margin: auto 0 0;
+  font-size: var(--fs-body);
+  font-weight: 400;
+}
+
+.perSpray {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* Màn thấp (1024×600): bớt lề, tên cỡ thân để ảnh 4:5 vẫn đủ lớn mà thẻ không tràn. */
+@media (max-height: 680px) {
+  .rail {
+    --rail-top: var(--sp-1);
+    --rail-reserve: calc(var(--header-h) + var(--rail-top) + 264px);
+    gap: var(--sp-2);
+  }
+
+  .viewport,
+  .viewportStatic {
+    padding-bottom: var(--sp-2);
+  }
+
+  .name {
+    font-size: var(--fs-body);
+  }
+}

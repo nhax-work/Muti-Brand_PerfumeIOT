@@ -9,6 +9,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely, type Selectable, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
+import { openRefillSessionOn } from './sales-stop.js';
 import type {
   BrandStatus,
   CommandStatus,
@@ -58,6 +59,8 @@ export interface KioskMachineRecord {
   readonly status: MachineConnectionStatus;
   readonly operatingMode: MachineOperatingMode;
   readonly timeZone: string;
+  /** Có phiếu nạp STARTED — cả máy dừng nhận đơn (FR-INV-30, ADR-0015 mục 6). */
+  readonly hasOpenRefillSession: boolean;
 }
 
 /** Một slot của máy kèm hóa đơn đang chiếm dụng (nếu có) — đủ để quyết định bán được hay không. */
@@ -183,6 +186,7 @@ export class OrdQueries {
       .selectFrom('machines as m')
       .innerJoin('locations as l', 'l.id', 'm.location_id')
       .select(['m.id', 'm.serial_number', 'm.status', 'm.operating_mode', 'l.timezone'])
+      .select(openRefillSessionOn('m.id').as('has_open_refill_session'))
       .where('m.serial_number', '=', serialNumber)
       .executeTakeFirst();
     if (!row) return null;
@@ -192,6 +196,7 @@ export class OrdQueries {
       status: row.status,
       operatingMode: row.operating_mode,
       timeZone: row.timezone,
+      hasOpenRefillSession: Boolean(row.has_open_refill_session),
     };
     return record;
   }

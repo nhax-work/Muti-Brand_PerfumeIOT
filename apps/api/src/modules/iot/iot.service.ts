@@ -4,7 +4,11 @@ import { sql } from 'kysely';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
-import type { DB, MachineConnectionStatus } from '../../shared/db/types.generated.js';
+import type {
+  DB,
+  MachineConnectionStatus,
+  MachineOperatingMode,
+} from '../../shared/db/types.generated.js';
 import type { Transaction } from 'kysely';
 import type { DeviceEvent, Heartbeat, Telemetry } from './iot.messages.js';
 
@@ -64,7 +68,7 @@ export class IotService {
       }
       if (
         message.configuration_version !== machine.configuration_version ||
-        message.operating_mode !== machine.operating_mode
+        message.operating_mode !== deviceOperatingMode(machine.operating_mode)
       ) {
         this.published.delete(machine.id);
       }
@@ -233,7 +237,7 @@ export class IotService {
       const content = {
         heartbeat_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC'),
         telemetry_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC') * 2,
-        operating_mode: machine.operating_mode,
+        operating_mode: deviceOperatingMode(machine.operating_mode),
         press_window_sec: this.config.constraint('DISPENSE_PRESS_WINDOW_SEC'),
         slots: slots.map((s) => ({
           slot_number: s.slot_number,
@@ -286,4 +290,16 @@ export class IotService {
       })
       .execute();
   }
+}
+
+/**
+ * Chế độ gửi xuống thiết bị (mqtt.md §7). DRAINING chỉ tồn tại ở backend (ADR-0015 mục 7): thiết bị
+ * phải tiếp tục xử lý lệnh của đơn đã trả tiền nên vẫn nhận NORMAL, tới khi máy thật sự MAINTENANCE.
+ * Heartbeat cũng so theo giá trị này — so với DRAINING thô thì mọi heartbeat đều "lệch" và cấu hình bị
+ * publish lại liên tục.
+ */
+export function deviceOperatingMode(
+  mode: MachineOperatingMode,
+): Exclude<MachineOperatingMode, 'DRAINING'> {
+  return mode === 'DRAINING' ? 'NORMAL' : mode;
 }

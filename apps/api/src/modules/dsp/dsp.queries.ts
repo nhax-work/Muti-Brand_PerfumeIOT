@@ -7,14 +7,21 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { sql, type Kysely, type Transaction } from 'kysely';
+import { sql, type Kysely, type SqlBool, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
+import {
+  brandScopedByColumn,
+  brandScopedOrders,
+  HOLDING_RENTAL_STATUSES,
+  type BrandScope,
+} from '../../shared/scoping/index.js';
 import type {
   CommandStatus,
   DispenseType,
   Json,
   SlotStatus,
 } from '../../shared/db/types.generated.js';
+import { MODES_SERVING_PAID_QUEUE, openRefillSessionOn } from '../ord/index.js';
 import { ACTIVE_COMMAND_STATUSES } from './dispense-outcome.js';
 
 type Executor = Kysely<DB>;
@@ -29,8 +36,11 @@ export interface ArmableOrder {
 }
 
 export interface NewCommand {
-  readonly brandId: string;
-  readonly orderId: string;
+  /** NULL với lệnh DIAGNOSTIC trên slot không có hóa đơn đang khai thác. */
+  readonly brandId: string | null;
+  /** NULL với lệnh DIAGNOSTIC (FR-DSP-20). */
+  readonly orderId: string | null;
+  readonly commandType: DispenseType;
   readonly machineId: string;
   readonly slotId: string;
   readonly commandToken: string;
@@ -75,6 +85,53 @@ export interface NewResult {
   readonly deviceEventId: string | null;
 }
 
+/** Slot đích của lượt xịt chẩn đoán, kèm máy (đã khóa) và thương hiệu đang khai thác slot. */
+export interface DiagnosticTarget {
+  readonly machineId: string;
+  readonly machineSerial: string;
+  readonly machineStatus: string;
+  readonly slotId: string;
+  readonly slotNumber: number;
+  readonly dosageMl: string | null;
+  readonly brandId: string | null;
+}
+
+/** Hàng `dispense_commands` kèm kết quả (nếu có) — dữ liệu cho schema `DispenseCommand`. */
+export interface CommandRecord {
+  readonly id: string;
+  readonly orderId: string | null;
+  readonly brandId: string | null;
+  readonly machineId: string;
+  readonly slotId: string;
+  readonly commandType: DispenseType;
+  readonly commandToken: string;
+  readonly status: CommandStatus;
+  readonly expiresAt: Date;
+  readonly sentAt: Date | null;
+  readonly acknowledgedAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly retryCount: number;
+  readonly createdAt: Date;
+  readonly result: {
+    readonly success: boolean;
+    readonly resultCode: string | null;
+    readonly failureCode: string | null;
+    readonly executedAt: Date | null;
+    readonly measuredQuantityMl: string | null;
+    readonly receivedAt: Date;
+  } | null;
+}
+
+export interface CommandSearchFilter {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly from?: Date | undefined;
+  readonly to?: Date | undefined;
+  readonly machineId?: string | undefined;
+  readonly commandType?: DispenseType | undefined;
+  readonly status?: CommandStatus | undefined;
+}
+
 /** Lệnh quá hạn chờ phản hồi — xem `DspService.sweepTimeouts`. */
 export interface StaleCommand {
   readonly id: string;
@@ -103,8 +160,10 @@ export class DspQueries {
   }
 
   /**
-   * Mỗi máy ONLINE/NORMAL chưa có lệnh CUSTOMER hiệu lực: đơn PAID trả tiền sớm nhất (FR-DSP-26 —
-   * đơn trả sau "chờ lượt"). Máy mất kết nối hay bảo trì thì đơn giữ PAID, không ghi lệnh vô ích.
+   * Mỗi máy ONLINE chưa có lệnh CUSTOMER hiệu lực: đơn PAID trả tiền sớm nhất (FR-DSP-26 — đơn trả sau
+   * "chờ lượt"). Máy NORMAL hoặc DRAINING (phục vụ nốt, ADR-0015 mục 7) và không có phiếu nạp mở (cửa
+   * đang mở, mục 6). Máy mất kết nối, bảo trì hay đang nạp thì đơn giữ PAID — job chờ lượt lo phần
+   * còn lại (FR-ORD-34).
    */
   async listArmableOrders(): Promise<ArmableOrder[]> {
     const rows = await this.db
@@ -115,7 +174,8 @@ export class DspQueries {
       .distinctOn('o.machine_id')
       .where('o.status', '=', 'PAID')
       .where('m.status', '=', 'ONLINE')
-      .where('m.operating_mode', '=', 'NORMAL')
+      .where('m.operating_mode', 'in', [...MODES_SERVING_PAID_QUEUE])
+      .where(({ not }) => not(openRefillSessionOn('m.id')))
       .where(({ not, exists, selectFrom }) =>
         not(
           exists(
@@ -147,7 +207,7 @@ export class DspQueries {
         order_id: command.orderId,
         machine_id: command.machineId,
         slot_id: command.slotId,
-        command_type: 'CUSTOMER',
+        command_type: command.commandType,
         command_token: command.commandToken,
         signature: command.signature,
         status: 'CREATED',
@@ -452,4 +512,339 @@ export class DspQueries {
               ${alert.description}, ${alert.at}, ${alert.at})
       ON CONFLICT DO NOTHING`.execute(executor);
   }
+
+  // -----------------------------------------------------------------------------------
+  // DRAINING tự sang MAINTENANCE (FR-MNT-05, ADR-0015 mục 7)
+  // -----------------------------------------------------------------------------------
+
+  /** Máy DRAINING đã hết việc — ứng viên tự sang MAINTENANCE. */
+  async listDrainedMachineIds(): Promise<string[]> {
+    const rows = await this.db
+      .selectFrom('machines as m')
+      .select('m.id')
+      .where('m.operating_mode', '=', 'DRAINING')
+      .where(drained('m.id'))
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Khóa máy và kiểm lại điều kiện dưới khóa; `null` khi máy đã rời DRAINING hoặc vừa có việc mới
+   * (lệnh được ghi giữa lúc liệt kê và lúc khóa).
+   */
+  async lockDrainedMachine(
+    machineId: string,
+    executor: Executor,
+  ): Promise<{ readonly id: string; readonly displayName: string } | null> {
+    const row = await executor
+      .selectFrom('machines as m')
+      .select(['m.id', 'm.display_name'])
+      .where('m.id', '=', machineId)
+      .where('m.operating_mode', '=', 'DRAINING')
+      .where(drained('m.id'))
+      .forUpdate()
+      .executeTakeFirst();
+    return row ? { id: row.id, displayName: row.display_name } : null;
+  }
+
+  /** Đổi chế độ kèm lịch sử nguồn SYSTEM (FR-MCH-13) — cùng cách ghi với MchQueries.updateMachineMode. */
+  async enterMaintenance(machineId: string, reason: string, at: Date, executor: Executor) {
+    await executor
+      .updateTable('machines')
+      .set({ operating_mode: 'MAINTENANCE', updated_at: at })
+      .where('id', '=', machineId)
+      .execute();
+    await executor
+      .insertInto('machine_status_histories')
+      .values({
+        machine_id: machineId,
+        from_operating_mode: 'DRAINING',
+        to_operating_mode: 'MAINTENANCE',
+        reason,
+        source: 'SYSTEM',
+        changed_by: null,
+        occurred_at: at,
+      })
+      .execute();
+  }
+
+  /**
+   * FR-MNT-07: Brand Admin đang hoạt động của các thương hiệu còn KHAI THÁC slot trên máy
+   * (`HOLDING_RENTAL_STATUSES` — thương hiệu đã bị thanh lý không còn hàng của mình trên máy).
+   */
+  async listAffectedBrandAdmins(
+    machineId: string,
+    executor: Executor,
+  ): Promise<{ readonly userId: string; readonly brandId: string }[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .innerJoin('user_roles as ur', 'ur.user_id', 'u.id')
+      .innerJoin('roles as r', 'r.id', 'ur.role_id')
+      .select(['u.id', 'u.brand_id'])
+      .distinct()
+      .where('r.code', '=', 'BRAND_ADMIN')
+      .where('u.status', '=', 'ACTIVE')
+      .where(({ exists, selectFrom }) =>
+        exists(
+          selectFrom('slot_rentals as sr')
+            .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+            .select('sr.id')
+            .whereRef('sr.brand_id', '=', 'u.brand_id')
+            .where('ms.machine_id', '=', machineId)
+            .where('sr.status', 'in', [...HOLDING_RENTAL_STATUSES]),
+        ),
+      )
+      .execute();
+    return rows.flatMap((r) => (r.brand_id ? [{ userId: r.id, brandId: r.brand_id }] : []));
+  }
+
+  async insertNotification(
+    notification: {
+      readonly brandId: string;
+      readonly recipientUserId: string;
+      readonly type: string;
+      readonly subject: string;
+      readonly content: string;
+      readonly at: Date;
+    },
+    executor: Executor,
+  ): Promise<void> {
+    await executor
+      .insertInto('notifications')
+      .values({
+        brand_id: notification.brandId,
+        recipient_user_id: notification.recipientUserId,
+        type: notification.type,
+        channel: 'IN_APP',
+        subject: notification.subject,
+        content: notification.content,
+        status: 'PENDING',
+        created_at: notification.at,
+      })
+      .execute();
+  }
+  // -----------------------------------------------------------------------------------
+  // Lượt xịt chẩn đoán và tra cứu lệnh (FR-MNT-09, FR-DSP-20)
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Khóa hàng máy rồi đọc slot đích. Khóa máy để hai lượt chẩn đoán gửi cùng lúc trên một máy không
+   * cùng lọt qua bước kiểm "máy rảnh" — CSDL không có index nào chặn lệnh DIAGNOSTIC.
+   *
+   * `brandId` là thương hiệu đang KHAI THÁC slot (`HOLDING_RENTAL_STATUSES`, không gồm LIQUIDATED):
+   * lệnh trên slot đã thanh lý không được hiện cho thương hiệu cũ (FR-EXP-20).
+   */
+  async lockDiagnosticTarget(
+    machineId: string,
+    slotId: string,
+    executor: Executor,
+  ): Promise<DiagnosticTarget | null> {
+    const machine = await executor
+      .selectFrom('machines')
+      .select(['id', 'serial_number', 'status'])
+      .where('id', '=', machineId)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!machine) return null;
+    const slot = await executor
+      .selectFrom('machine_slots as ms')
+      .leftJoin('slot_rentals as sr', (join) =>
+        join.onRef('sr.slot_id', '=', 'ms.id').on('sr.status', 'in', [...HOLDING_RENTAL_STATUSES]),
+      )
+      .select(['ms.id', 'ms.slot_number', 'ms.calibrated_dosage_ml', 'sr.brand_id'])
+      .where('ms.id', '=', slotId)
+      .where('ms.machine_id', '=', machineId)
+      .executeTakeFirst();
+    if (!slot) return null;
+    return {
+      machineId: machine.id,
+      machineSerial: machine.serial_number,
+      machineStatus: machine.status,
+      slotId: slot.id,
+      slotNumber: slot.slot_number,
+      dosageMl: slot.calibrated_dosage_ml,
+      brandId: slot.brand_id,
+    };
+  }
+
+  /**
+   * Máy đang bận phục vụ: còn lệnh hiệu lực (mọi loại) hoặc đơn đã trả tiền chờ lượt. Thiết bị chỉ
+   * xử lý một lệnh mỗi lúc và lặng lẽ bỏ qua lệnh tới khi đang bận, nên lệnh chẩn đoán gửi lúc này sẽ
+   * thành UNKNOWN; còn đơn chờ lượt thì được ưu tiên vì khách đã trả tiền.
+   */
+  async machineIsBusy(machineId: string, executor: Executor): Promise<boolean> {
+    const command = await executor
+      .selectFrom('dispense_commands')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', [...ACTIVE_COMMAND_STATUSES])
+      .limit(1)
+      .executeTakeFirst();
+    if (command) return true;
+    const queued = await executor
+      .selectFrom('orders')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', '=', 'PAID')
+      .limit(1)
+      .executeTakeFirst();
+    return queued !== undefined;
+  }
+
+  /**
+   * FR-DSP-20: tra cứu lệnh. Phạm vi thương hiệu đi theo hai nhánh: lệnh CUSTOMER lọc qua đơn của nó
+   * (`brandScopedOrders` — loại đơn doanh thu PLATFORM sau thanh lý, FR-REV-06); lệnh DIAGNOSTIC không
+   * có đơn nên lọc theo `brand_id` chụp lúc tạo.
+   */
+  async searchCommands(
+    scope: BrandScope,
+    filter: CommandSearchFilter,
+  ): Promise<{ items: CommandRecord[]; total: number }> {
+    let base = this.db
+      .selectFrom('dispense_commands as dc')
+      .leftJoin('orders as o', 'o.id', 'dc.order_id')
+      .leftJoin('dispense_results as r', 'r.command_id', 'dc.id')
+      .where((eb) =>
+        eb.or([
+          eb.and([eb('dc.order_id', 'is', null), brandScopedByColumn(scope, 'dc.brand_id')]),
+          eb.and([eb('dc.order_id', 'is not', null), brandScopedOrders(scope, 'o')]),
+        ]),
+      );
+    if (filter.from) base = base.where('dc.created_at', '>=', filter.from);
+    if (filter.to) base = base.where('dc.created_at', '<', filter.to);
+    if (filter.machineId) base = base.where('dc.machine_id', '=', filter.machineId);
+    if (filter.commandType) base = base.where('dc.command_type', '=', filter.commandType);
+    if (filter.status) base = base.where('dc.status', '=', filter.status);
+
+    const [count, rows] = await Promise.all([
+      base.select((eb) => eb.fn.countAll<string>().as('total')).executeTakeFirstOrThrow(),
+      base
+        .select(COMMAND_COLUMNS)
+        .orderBy('dc.created_at', 'desc')
+        .limit(filter.pageSize)
+        .offset((filter.page - 1) * filter.pageSize)
+        .execute(),
+    ]);
+    return { items: rows.map(toCommandRecord), total: Number(count.total) };
+  }
+
+  /** Lệnh mới nhất của đơn. Người gọi đã kiểm phạm vi trên chính đơn. */
+  async findLatestCommandForOrder(orderId: string): Promise<CommandRecord | null> {
+    const row = await this.db
+      .selectFrom('dispense_commands as dc')
+      .leftJoin('dispense_results as r', 'r.command_id', 'dc.id')
+      .select(COMMAND_COLUMNS)
+      .where('dc.order_id', '=', orderId)
+      .orderBy('dc.created_at', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return row ? toCommandRecord(row) : null;
+  }
+
+  async findCommandById(commandId: string, executor: Executor): Promise<CommandRecord | null> {
+    const row = await executor
+      .selectFrom('dispense_commands as dc')
+      .leftJoin('dispense_results as r', 'r.command_id', 'dc.id')
+      .select(COMMAND_COLUMNS)
+      .where('dc.id', '=', commandId)
+      .executeTakeFirst();
+    return row ? toCommandRecord(row) : null;
+  }
+}
+
+/** Cột của `dispense_commands as dc` nối trái `dispense_results as r` — một lệnh có tối đa một kết quả. */
+const COMMAND_COLUMNS = [
+  'dc.id',
+  'dc.order_id',
+  'dc.brand_id',
+  'dc.machine_id',
+  'dc.slot_id',
+  'dc.command_type',
+  'dc.command_token',
+  'dc.status',
+  'dc.expires_at',
+  'dc.sent_at',
+  'dc.acknowledged_at',
+  'dc.completed_at',
+  'dc.retry_count',
+  'dc.created_at',
+  'r.success as result_success',
+  'r.result_code as result_code',
+  'r.failure_code as result_failure_code',
+  'r.executed_at as result_executed_at',
+  'r.measured_quantity_ml as result_measured_quantity_ml',
+  'r.received_at as result_received_at',
+] as const;
+
+interface CommandRow {
+  readonly id: string;
+  readonly order_id: string | null;
+  readonly brand_id: string | null;
+  readonly machine_id: string;
+  readonly slot_id: string;
+  readonly command_type: DispenseType;
+  readonly command_token: string;
+  readonly status: CommandStatus;
+  readonly expires_at: Date;
+  readonly sent_at: Date | null;
+  readonly acknowledged_at: Date | null;
+  readonly completed_at: Date | null;
+  readonly retry_count: number;
+  readonly created_at: Date;
+  readonly result_success: boolean | null;
+  readonly result_code: string | null;
+  readonly result_failure_code: string | null;
+  readonly result_executed_at: Date | null;
+  readonly result_measured_quantity_ml: string | null;
+  readonly result_received_at: Date | null;
+}
+
+function toCommandRecord(r: CommandRow): CommandRecord {
+  return {
+    id: r.id,
+    orderId: r.order_id,
+    brandId: r.brand_id,
+    machineId: r.machine_id,
+    slotId: r.slot_id,
+    commandType: r.command_type,
+    commandToken: r.command_token,
+    status: r.status,
+    expiresAt: r.expires_at,
+    sentAt: r.sent_at,
+    acknowledgedAt: r.acknowledged_at,
+    completedAt: r.completed_at,
+    retryCount: r.retry_count,
+    createdAt: r.created_at,
+    // received_at NOT NULL trong bảng — NULL ở đây nghĩa là chưa có hàng kết quả.
+    result:
+      r.result_received_at === null
+        ? null
+        : {
+            success: r.result_success === true,
+            resultCode: r.result_code,
+            failureCode: r.result_failure_code,
+            executedAt: r.result_executed_at,
+            measuredQuantityMl: r.result_measured_quantity_ml,
+            receivedAt: r.result_received_at,
+          },
+  };
+}
+
+/**
+ * Máy hết việc của khách (FR-MNT-05 AC2): không còn lệnh CUSTOMER hiệu lực, không đơn chờ thanh toán,
+ * không đơn đã trả tiền chờ lượt. Lệnh UNKNOWN không tính — nó không còn hiệu lực và đơn của nó đã
+ * vào kiểm tra thủ công.
+ */
+function drained(machineIdColumn: string) {
+  return sql<SqlBool>`not exists (
+      select 1 from dispense_commands dc_drain
+       where dc_drain.machine_id = ${sql.ref(machineIdColumn)}
+         and dc_drain.command_type = 'CUSTOMER'
+         and dc_drain.status in ('CREATED', 'SENT', 'ACKNOWLEDGED')
+    )
+    and not exists (
+      select 1 from orders o_drain
+       where o_drain.machine_id = ${sql.ref(machineIdColumn)}
+         and o_drain.status in ('CREATED', 'PENDING_PAYMENT', 'PAID')
+    )`;
 }

@@ -8,6 +8,7 @@
 import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { DspJobs } from '../modules/dsp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
+import { RevService } from '../modules/rev/index.js';
 import { SltJobs } from '../modules/slt/index.js';
 import { IotMqttGateway } from '../modules/iot/iot.mqtt.js';
 
@@ -22,6 +23,11 @@ const RENTAL_CHECKOUT_EXPIRY_TICK_MS = 60_000;
  * bằng giờ và ngày nên năm phút một lần là đủ.
  */
 const REFUND_CLAIM_TICK_MS = 5 * 60_000;
+/**
+ * Kỳ chi trả doanh thu: cộng dồn DRAFT, chốt CONFIRMED khi hết tháng (FR-SLT-52). Số DRAFT là số tạm
+ * nên trễ vài phút không sao; mốc chốt kỳ tính theo dữ liệu nên chạy trễ vẫn đúng.
+ */
+const PAYOUT_TICK_MS = 5 * 60_000;
 
 export interface SchedulerOptions {
   /** Chạy vòng điều phối lệnh xịt — chỉ bật khi đã kết nối MQTT. */
@@ -103,8 +109,22 @@ export function startScheduler(
     }, REFUND_CLAIM_TICK_MS),
   );
 
+  const rev = app.get(RevService);
+  let refreshingPayouts = false;
+  const refreshPayouts = () => {
+    if (refreshingPayouts) return;
+    refreshingPayouts = true;
+    rev
+      .refreshPayouts()
+      .catch((e: unknown) => logger.error(`Cập nhật kỳ chi trả lỗi: ${String(e)}`))
+      .finally(() => (refreshingPayouts = false));
+  };
+  // Chạy ngay khi khởi động để bù kỳ lỡ chốt trong lúc dịch vụ tắt.
+  refreshPayouts();
+  timers.push(setInterval(refreshPayouts, PAYOUT_TICK_MS));
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại, kỳ chi trả${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
@@ -9,6 +9,7 @@ import { KioskShell } from './KioskShell';
 const mockNavigate = vi.fn();
 let mockPathname = '/';
 let mockOutOfService = false;
+let mockMatches: { handle?: unknown }[] = [];
 
 const mockCancelKioskOrder = vi.fn().mockResolvedValue({});
 
@@ -23,7 +24,7 @@ vi.mock('@/shared/api', async (importOriginal) => {
 vi.mock('react-router', () => ({
   useNavigate: () => mockNavigate,
   useLocation: () => ({ pathname: mockPathname }),
-  useMatches: () => [],
+  useMatches: () => mockMatches,
   Outlet: () => <div data-testid="outlet-content">Outlet Content</div>,
 }));
 
@@ -35,7 +36,7 @@ vi.mock('@/screens/out-of-service/OutOfServiceScreen', () => ({
   default: () => <div data-testid="out-of-service">Out of service</div>,
 }));
 
-/** Giả lập CheckoutScreen đã tạo đơn cho phiên này. */
+/** Giả lập màn thanh toán đã tạo đơn cho phiên này. */
 function WithActiveOrder() {
   const { setActiveOrder } = useKioskSession();
   useEffect(() => {
@@ -54,6 +55,8 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     mockCancelKioskOrder.mockReset().mockResolvedValue({});
     mockPathname = '/';
     mockOutOfService = false;
+    mockMatches = [];
+    vi.mocked(useIdleReset).mockReset();
   });
 
   afterEach(() => {
@@ -119,7 +122,7 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     mockPathname = '/';
     renderShell();
 
-    expect(screen.getByText(/ScentStation/i)).toBeTruthy();
+    expect(screen.getByText('ScentStation')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Trang chủ/i })).toBeNull();
   });
 
@@ -134,35 +137,40 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/');
   });
 
-  it('ở màn hình chi tiết sản phẩm (/products/1) hiển thị nút Quay lại danh mục và điều hướng sang /catalog', () => {
+  it('ở trang chi tiết (/products/1) header không có nút quay lại — trang tự có, đi qua đường đóng bỏ đơn', () => {
     mockPathname = '/products/1';
     renderShell();
 
-    const backBtn = screen.getByRole('button', { name: /Quay lại danh mục/i });
-    expect(backBtn).toBeTruthy();
-
-    fireEvent.click(backBtn);
-    expect(mockNavigate).toHaveBeenCalledWith('/catalog');
+    expect(screen.queryByRole('button', { name: /Quay lại danh mục/i })).toBeNull();
   });
 
-  it('dropdown ngôn ngữ: bấm mở menu dropdown và chuyển đổi sang English', () => {
+  it('nút gạt VI | EN: chạm một lần là đổi ngôn ngữ, không qua dropdown (NFR-USA-07)', () => {
+    mockPathname = '/catalog';
     renderShell();
 
-    const trigger = screen.getByRole('button', { name: /Chọn ngôn ngữ/i });
-    expect(trigger).toBeTruthy();
-    expect(screen.getByText('Tiếng Việt')).toBeTruthy();
+    const group = screen.getByRole('group', { name: 'Ngôn ngữ' });
+    const vi = within(group).getByRole('button', { name: 'Tiếng Việt' });
+    const en = within(group).getByRole('button', { name: 'English' });
+    expect(vi.getAttribute('aria-pressed')).toBe('true');
+    expect(en.getAttribute('aria-pressed')).toBe('false');
 
-    // Mở dropdown
-    fireEvent.click(trigger);
+    fireEvent.click(en);
 
-    // Tìm và chọn English trong dropdown
-    const englishOption = screen.getByRole('option', { name: /English/i });
-    expect(englishOption).toBeTruthy();
-    fireEvent.click(englishOption);
+    expect(en.getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('group', { name: 'Language' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Home/ })).toBeTruthy();
+  });
 
-    // Dropdown đóng lại và ngôn ngữ đổi sang English
-    expect(screen.queryByRole('listbox')).toBeNull();
-    expect(screen.getByText('English')).toBeTruthy();
+  it('route thanh toán chỉ tắt tự về màn chờ khi đã có đơn — tạo đơn lỗi thì kiosk vẫn tự về (NFR-USA-02)', () => {
+    mockPathname = '/checkout/2';
+    mockMatches = [{ handle: { keepAwake: true } }];
+
+    renderShell();
+    expect(vi.mocked(useIdleReset).mock.lastCall?.[2]).toBe(true);
+    cleanup();
+
+    renderShell(true);
+    expect(vi.mocked(useIdleReset).mock.lastCall?.[2]).toBe(false);
   });
 
   it('giữ màn giao dịch khi máy mất kết nối và không cho rời checkout bằng header', () => {

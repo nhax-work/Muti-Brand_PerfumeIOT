@@ -4,6 +4,9 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   plugins: [react()],
+  // Biến VITE_* (trang khiếu nại, serial máy, kênh hỗ trợ) khai ở `.env` gốc theo `.env.example`.
+  // Vite chỉ đưa biến có tiền tố VITE_ vào bundle — bí mật của backend trong cùng file không lộ.
+  envDir: fileURLToPath(new URL('../..', import.meta.url)),
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },

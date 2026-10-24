@@ -9,13 +9,24 @@
 import { alr, notificationChannel, notificationStatus } from './alr.js';
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
-import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
+import {
+  actorType,
+  brandPayoutStatus,
+  commandStatus,
+  credentialStatus,
+  dispenseType,
+  orderCode,
+  revenueOwner,
+  statusSource,
+} from './codes.js';
 import { common } from './common.js';
 import { authenticityStatus, inv, refillSessionStatus, shipmentStatus } from './inv.js';
+import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
+import { rev } from './rev.js';
 import { slt } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
@@ -38,10 +49,15 @@ export const vi = {
   revenueOwner,
   credentialStatus,
   statusSource,
+  commandStatus,
+  dispenseType,
+  brandPayoutStatus,
   bnd,
   prd,
   slt,
   ord,
+  dsp,
+  rev,
   usr,
   ui,
   kiosk,

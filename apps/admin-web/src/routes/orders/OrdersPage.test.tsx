@@ -47,6 +47,26 @@ vi.mock('./api', async () => ({
       isLoading: false,
     };
   },
+  useOrderDispenseCommand: () => ({
+    data: {
+      id: 'c-1',
+      orderId: 'o-1',
+      brandId: 'b-1',
+      machineId: 'm-1',
+      slotId: 's-1',
+      commandType: 'CUSTOMER',
+      commandToken: 'cmd_test_unknown',
+      status: 'UNKNOWN',
+      expiresAt: '2026-10-16T08:02:00Z',
+      sentAt: '2026-10-16T08:01:01Z',
+      acknowledgedAt: null,
+      completedAt: null,
+      retryCount: 0,
+      createdAt: '2026-10-16T08:01:00Z',
+      result: null,
+    },
+    isLoading: false,
+  }),
   useOrderHistory: () => ({
     data: [
       {
@@ -84,6 +104,9 @@ describe('OrdersPage (FR-ORD-18, 19, 22)', () => {
     fireEvent.click(screen.getAllByText('Chi tiết')[0]!);
     expect(await screen.findByText(/đã trả tiền nhưng không nhận được lượt xịt/)).toBeTruthy();
     expect(screen.getByText(/Hệ thống · Chờ lượt quá lâu/)).toBeTruthy();
+    // FR-DSP-20: ngăn chi tiết hiện lệnh xịt của đơn và trạng thái của lệnh.
+    expect(screen.getByText('cmd_test_unknown')).toBeTruthy();
+    expect(screen.getByText('Không rõ kết quả')).toBeTruthy();
   });
 
   it('Brand Admin không có tab kiểm tra thủ công, không thấy cột chủ sở hữu doanh thu', () => {

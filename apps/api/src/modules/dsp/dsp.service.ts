@@ -12,6 +12,7 @@
  *   handleDeviceResult ─tx─▶ ACKNOWLEDGED | SUCCEEDED/FAILED/REJECTED + đơn DISPENSED/FAILED/FORFEITED
  *   sweepTimeouts ─tx─▶ UNKNOWN (FR-DSP-18) | EXPIRED
  *   failQueueTimeouts ─tx─▶ đơn PAID chờ lượt quá PAID_QUEUE_MAX_SEC → FAILED QUEUE_TIMEOUT (FR-ORD-34)
+ *   completeDraining ─tx─▶ máy DRAINING hết việc → MAINTENANCE + thông báo Brand Admin (FR-MNT-05, 07)
  *
  * Mỗi lần lệnh CUSTOMER kết thúc bằng lỗi máy, cùng transaction đó đếm chuỗi lỗi liên tiếp trên slot;
  * đủ CONSECUTIVE_FAIL_ALERT thì cảnh báo và tự tắt slot (FR-ALR-04, FR-MCH-18, ADR-0015 mục 5).
@@ -19,6 +20,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { createCommandSigner, type CommandSigner } from '../../adapters/mqtt/command-signature.js';
 import { AuditService } from '../../shared/audit/index.js';
@@ -26,6 +29,9 @@ import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type { CommandStatus, Json } from '../../shared/db/types.generated.js';
+import { AppError } from '../../shared/errors/index.js';
+import type { BrandScope } from '../../shared/scoping/index.js';
+import type { AuthenticatedUser } from '../auth/index.js';
 import { OrdService } from '../ord/index.js';
 import {
   ACKNOWLEDGEABLE_STATUSES,
@@ -34,7 +40,19 @@ import {
   PRESS_TIMEOUT,
   type DeviceStage,
 } from './dispense-outcome.js';
-import { DspQueries, type OutgoingCommand } from './dsp.queries.js';
+import {
+  DspQueries,
+  type CommandRecord,
+  type CommandSearchFilter,
+  type OutgoingCommand,
+} from './dsp.queries.js';
+
+type DispenseCommand = Schema<'DispenseCommand'>;
+
+export interface DiagnosticDispenseInput {
+  readonly slotId: string;
+  readonly note?: string | undefined;
+}
 
 /** Bản tin `command` đã ký, sẵn sàng publish (spec/contracts/mqtt.md §5). */
 export interface CommandMessage {
@@ -77,6 +95,9 @@ const UNIQUE_VIOLATION = '23505';
 
 /** Hành động AuditLog khi slot tự tắt — cũng là mốc đếm lại chuỗi lỗi (DspQueries.lastAutoMaintenanceAt). */
 export const SLOT_AUTO_MAINTENANCE_ACTION = 'dsp.slot.auto_maintenance';
+
+/** Lý do ghi vào lịch sử trạng thái và AuditLog khi máy tự hết DRAINING (FR-MNT-05 AC2). */
+const DRAINING_COMPLETED = 'DRAINING_COMPLETED';
 
 /** Số đơn tối đa xử lý mỗi nhịp của job chờ lượt — nhịp sau làm tiếp phần còn lại. */
 const QUEUE_TIMEOUT_BATCH = 200;
@@ -143,6 +164,7 @@ export class DspService {
             {
               brandId: order.brandId,
               orderId: order.id,
+              commandType: 'CUSTOMER',
               machineId: order.machineId,
               slotId: order.slotId,
               commandToken: draft.commandToken,
@@ -165,6 +187,100 @@ export class DspService {
       }
     }
     return armed;
+  }
+
+  /**
+   * FR-MNT-09, FR-DSP-20, FR-DSP-27: lượt xịt chẩn đoán. Lệnh DIAGNOSTIC được ký và có TTL như lệnh
+   * khách (FR-DSP-02..06) nhưng không gắn đơn nên không bao giờ vào doanh thu; thiết bị xịt ngay, không
+   * chờ bấm nút (ADR-0007). Lệnh chỉ được ghi ở đây — vòng publish của `DspJobs` gửi đi như mọi lệnh
+   * CREATED, kể cả khi máy đang MAINTENANCE (checklist sau bảo trì, FR-MNT-11).
+   *
+   * Trừ lượng còn lại sau lượt thành công (FR-INV-10) thuộc INV, chưa hiện thực.
+   */
+  async createDiagnostic(
+    actor: AuthenticatedUser,
+    machineId: string,
+    input: DiagnosticDispenseInput,
+  ): Promise<DispenseCommand> {
+    const record = await this.queries.transaction(async (tx) => {
+      const target = await this.queries.lockDiagnosticTarget(machineId, input.slotId, tx);
+      if (!target) throw new AppError('NOT_FOUND', 'dsp.slotNotFound');
+      if (target.machineStatus !== 'ONLINE') {
+        throw new AppError('MACHINE_OFFLINE', 'dsp.machineOffline');
+      }
+      // Lệnh không có liều để gửi (mqtt.md §5) — cùng lý do armQueuedOrders đánh FAILED đơn khách.
+      if (target.dosageMl === null) throw new AppError('SLOT_UNAVAILABLE', 'dsp.slotNotCalibrated');
+      if (await this.queries.machineIsBusy(target.machineId, tx)) {
+        throw new AppError('MACHINE_BUSY', 'dsp.machineBusy');
+      }
+
+      const now = this.clock.now();
+      const draft: OutgoingCommand = {
+        id: '',
+        commandToken: `cmd_${randomUUID()}`,
+        commandType: 'DIAGNOSTIC',
+        machineSerial: target.machineSerial,
+        slotNumber: target.slotNumber,
+        dosageMl: target.dosageMl,
+        expiresAt: new Date(now.getTime() + this.config.constraint('DISPENSE_CMD_TTL_SEC') * 1000),
+        createdAt: now,
+      };
+      const commandId = await this.queries.insertCommand(
+        {
+          brandId: target.brandId,
+          orderId: null,
+          commandType: 'DIAGNOSTIC',
+          machineId: target.machineId,
+          slotId: target.slotId,
+          commandToken: draft.commandToken,
+          signature: this.buildPayload(draft).signature,
+          expiresAt: draft.expiresAt,
+          createdAt: now,
+        },
+        tx,
+      );
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          action: 'dsp.diagnostic.created',
+          targetType: 'dispense_command',
+          targetId: commandId,
+          severity: 'WARNING',
+          after: { machineId: target.machineId, slotId: target.slotId, commandType: 'DIAGNOSTIC' },
+          metadata: { commandToken: draft.commandToken, note: input.note ?? null },
+        },
+        tx,
+      );
+      const created = await this.queries.findCommandById(commandId, tx);
+      if (!created) throw new Error(`Lệnh chẩn đoán ${commandId} vừa ghi đã không còn`);
+      return created;
+    });
+    this.logger.log(
+      `Ghi lệnh chẩn đoán ${record.commandToken} (máy ${machineId}, slot ${input.slotId})`,
+    );
+    return toCommandDto(record);
+  }
+
+  /** FR-DSP-20: danh sách lệnh trong phạm vi người gọi. */
+  async searchCommands(
+    scope: BrandScope,
+    filter: CommandSearchFilter,
+  ): Promise<{ items: DispenseCommand[]; total: number }> {
+    const { items, total } = await this.queries.searchCommands(scope, filter);
+    return { items: items.map(toCommandDto), total };
+  }
+
+  /** FR-DSP-16, FR-IOT-07: lệnh hiện tại của đơn — kiểm phạm vi trên chính đơn trước. */
+  async getOrderCommand(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    orderId: string,
+  ): Promise<DispenseCommand> {
+    await this.orders.get(actor, scope, orderId);
+    const command = await this.queries.findLatestCommandForOrder(orderId);
+    if (!command) throw new AppError('NOT_FOUND', 'dsp.commandNotFound');
+    return toCommandDto(command);
   }
 
   /** Lệnh CREATED còn hạn, đã ký, chờ publish. */
@@ -326,6 +442,59 @@ export class DspService {
   }
 
   /**
+   * FR-MNT-05 AC2, AC3 (ADR-0015 mục 7): máy DRAINING không còn lệnh CUSTOMER hiệu lực, đơn chờ thanh
+   * toán hay đơn chờ lượt → tự sang MAINTENANCE, ghi lịch sử nguồn SYSTEM, thông báo Brand Admin có
+   * slot trên máy (FR-MNT-07) và AuditLog. Quét theo trạng thái trong CSDL nên bù được sau downtime;
+   * máy vừa vào DRAINING mà đã rảnh thì chuyển ngay ở nhịp kế tiếp.
+   *
+   * @returns số máy đã chuyển
+   */
+  async completeDraining(): Promise<number> {
+    let completed = 0;
+    for (const machineId of await this.queries.listDrainedMachineIds()) {
+      const done = await this.queries.transaction(async (tx) => {
+        const machine = await this.queries.lockDrainedMachine(machineId, tx);
+        if (!machine) return false;
+        const now = this.clock.now();
+        await this.queries.enterMaintenance(machine.id, DRAINING_COMPLETED, now, tx);
+        const params = { machine: machine.displayName };
+        for (const admin of await this.queries.listAffectedBrandAdmins(machine.id, tx)) {
+          await this.queries.insertNotification(
+            {
+              brandId: admin.brandId,
+              recipientUserId: admin.userId,
+              type: 'MACHINE_MAINTENANCE',
+              subject: translate(DEFAULT_LOCALE, 'dsp.maintenanceSubject', params),
+              content: translate(DEFAULT_LOCALE, 'dsp.maintenanceContent', params),
+              at: now,
+            },
+            tx,
+          );
+        }
+        await this.audit.log(
+          {
+            actorType: 'SYSTEM',
+            action: 'dsp.machine.draining_completed',
+            targetType: 'machine',
+            targetId: machine.id,
+            severity: 'WARNING',
+            before: { operatingMode: 'DRAINING' },
+            after: { operatingMode: 'MAINTENANCE' },
+            metadata: { reason: DRAINING_COMPLETED },
+          },
+          tx,
+        );
+        return true;
+      });
+      if (done) {
+        completed++;
+        this.logger.log(`Máy ${machineId} hết đơn → DRAINING sang MAINTENANCE`);
+      }
+    }
+    return completed;
+  }
+
+  /**
    * FR-ALR-04, FR-MCH-18: gọi trong transaction đã khép lệnh. Lệnh CUSTOMER kết thúc bằng lỗi máy
    * có thể là lỗi thứ CONSECUTIVE_FAIL_ALERT liên tiếp của slot → cảnh báo + slot MAINTENANCE +
    * AuditLog. Lệnh thành công hoặc khách không bấm (PRESS_TIMEOUT) cắt chuỗi.
@@ -399,6 +568,35 @@ export class DspService {
     };
     return { ...unsigned, signature: this.signer.sign(unsigned) };
   }
+}
+
+function toCommandDto(c: CommandRecord): DispenseCommand {
+  return {
+    id: c.id,
+    orderId: c.orderId,
+    brandId: c.brandId,
+    machineId: c.machineId,
+    slotId: c.slotId,
+    commandType: c.commandType,
+    commandToken: c.commandToken,
+    status: c.status,
+    expiresAt: c.expiresAt.toISOString(),
+    sentAt: c.sentAt?.toISOString() ?? null,
+    acknowledgedAt: c.acknowledgedAt?.toISOString() ?? null,
+    completedAt: c.completedAt?.toISOString() ?? null,
+    retryCount: c.retryCount,
+    createdAt: c.createdAt.toISOString(),
+    result: c.result && {
+      commandId: c.id,
+      success: c.result.success,
+      resultCode: c.result.resultCode,
+      failureCode: c.result.failureCode,
+      executedAt: c.result.executedAt?.toISOString() ?? null,
+      measuredQuantityMl:
+        c.result.measuredQuantityMl === null ? null : Number(c.result.measuredQuantityMl),
+      receivedAt: c.result.receivedAt.toISOString(),
+    },
+  };
 }
 
 /**

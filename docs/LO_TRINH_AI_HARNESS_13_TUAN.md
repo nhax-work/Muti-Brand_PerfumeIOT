@@ -249,10 +249,10 @@ test cạnh file.
 | TV | Việc |
 |---|---|
 | Nhóm | Chạy luồng vàng trên máy vật lý với **PayOS thật, số tiền nhỏ** **[ADR-0016]** |
-| TV1 | Xử lý timeout, kết quả không xác định · **chốt chặn "máy dừng nhận đơn" dùng chung trong ORD/DSP**: máy `DRAINING`/`MAINTENANCE` hoặc có phiếu nạp mở → `MACHINE_IN_MAINTENANCE`, không ghi lệnh cho đơn chờ lượt; điều kiện `DRAINING` tự sang `MAINTENANCE` (hết lệnh `CUSTOMER`, đơn chờ thanh toán, đơn chờ lượt) **[ADR-0015]** |
-| TV1 | **Kỳ chi trả doanh thu hằng tháng** `DRAFT → CONFIRMED → PAID`: tính đơn `BRAND` ở `DISPENSED` + `FORFEITED`, loại `FAILED`/`REFUND_PENDING`/`REFUNDED`; chuyển `PAID` kèm mã giao dịch sau xác thực lại, chặn khi chưa xác minh pháp nhân (`BRAND_NOT_VERIFIED`); khiếu nại số liệu trên kỳ `CONFIRMED` (FR-SLT-17, 18, 52 ÷ 54) · tách doanh thu BRAND/PLATFORM (FR-REV) **[ADR-0006, ADR-0013]** *(dời từ T8 cũ)* |
-| TV1 | Test trọng yếu `revenue_owner` (`test_revenue_attribution`, chưa có): gồm UPDATE `revenue_owner` bị trigger chặn **[ADR-0009, ADR-0010]** *(dời từ T8 cũ)* |
-| TV1 | **Lượt xịt chẩn đoán** `POST /machines/{id}/diagnostic-dispense` + danh sách lệnh xịt `GET /dispense-commands`, `GET /orders/{id}/dispense-command`; lượt chẩn đoán ghi riêng, không tính doanh thu (FR-MNT-09, FR-DSP-20) · màn hình: nút xịt chẩn đoán trên từng slot ở chi tiết máy (xác thực lại), bảng lệnh xịt — **làm trước để checklist sau bảo trì của TV4 (FR-MNT-11, T8) dùng được** · màn hình kỳ chi trả và tách doanh thu (`/brand-payouts`, `/revenue/split`, FR-REV-04) đi cùng việc kỳ chi trả ở trên **[UI-16/10]** |
+| TV1 | ✓ Xử lý timeout, kết quả không xác định · **chốt chặn "máy dừng nhận đơn" dùng chung trong ORD/DSP**: máy `DRAINING`/`MAINTENANCE` hoặc có phiếu nạp mở → `MACHINE_IN_MAINTENANCE`, không ghi lệnh cho đơn chờ lượt; điều kiện `DRAINING` tự sang `MAINTENANCE` (hết lệnh `CUSTOMER`, đơn chờ thanh toán, đơn chờ lượt) **[ADR-0015]** |
+| TV1 | ✓ **Kỳ chi trả doanh thu hằng tháng** `DRAFT → CONFIRMED → PAID`: tính đơn `BRAND` ở `DISPENSED` + `FORFEITED`, loại `FAILED`/`REFUND_PENDING`/`REFUNDED`; chuyển `PAID` kèm mã giao dịch sau xác thực lại, chặn khi chưa xác minh pháp nhân (`BRAND_NOT_VERIFIED`); khiếu nại số liệu trên kỳ `CONFIRMED` (FR-SLT-17, 18, 52 ÷ 54) · tách doanh thu BRAND/PLATFORM (FR-REV) **[ADR-0006, ADR-0013]** *(dời từ T8 cũ)* |
+| TV1 | ✓ Test trọng yếu `revenue_owner` (`test_revenue_attribution`): gồm UPDATE `revenue_owner` bị trigger chặn **[ADR-0009, ADR-0010]** *(dời từ T8 cũ)* |
+| TV1 | ✓ **Lượt xịt chẩn đoán** `POST /machines/{id}/diagnostic-dispense` + danh sách lệnh xịt `GET /dispense-commands`, `GET /orders/{id}/dispense-command`; lượt chẩn đoán ghi riêng, không tính doanh thu (FR-MNT-09, FR-DSP-20) · màn hình: nút xịt chẩn đoán trên từng slot ở chi tiết máy (xác thực lại), bảng lệnh xịt — **làm trước để checklist sau bảo trì của TV4 (FR-MNT-11, T8) dùng được** · màn hình kỳ chi trả và tách doanh thu (`/brand-payouts`, `/revenue/split`, FR-REV-04) đi cùng việc kỳ chi trả ở trên **[UI-16/10]** |
 | TV3 | Phụ lục tự sinh cho mỗi phiên từ ảnh chụp giá, đồng ý trước khi thanh toán (FR-SLT-50) · giới hạn `BRAND_MAX_HELD_SLOTS` (FR-SLT-56) · đổi slot cùng giá trong `SLOT_SWAP_WINDOW_HOURS` (FR-SLT-55) **[ADR-0013, ADR-0014]** |
 | TV3 | Mua gói bằng **PayOS thật** trên web quản trị, chạy song song luồng vàng — thương hiệu tự đăng ký → hợp đồng khung → phụ lục → trả tiền **[ADR-0006, ADR-0013, ADR-0016]** |
 | TV3 | Thương hiệu khai mã số thuế, giấy phép, tài khoản nhận doanh thu (mã hóa) · Super Admin ghi nhận xác minh pháp nhân (FR-BND-09, 10) — làm đầu tuần để kỳ chi trả của TV1 chặn được `BRAND_NOT_VERIFIED` **[ADR-0013]** *(dời từ T8 cũ)* |
@@ -419,7 +419,7 @@ Rút từ 13 xuống 12 tuần mà phạm vi lại tăng (ADR-0012 ÷ 0015 thêm
 
 > ADR-0010 (2026-10-07): bỏ quy định "tự viết, không giao AI". Agent được viết test cho các chỗ này;
 > PR có test trọng yếu cần người review riêng phần test, đối chiếu từng assert với yêu cầu ở bảng dưới.
-> Trạng thái file test theo dõi ở `spec/testing.md`. Còn thiếu tới 15/10: `revenue_owner` (T7), phần tự
+> Trạng thái file test theo dõi ở `spec/testing.md`. Còn thiếu tới 15/10: phần tự
 > kích hoạt / ân hạn / quá hạn nhận hàng của job chuyển trạng thái (T8), hard timeout firmware (phần cứng).
 
 | Chỗ | Test bắt buộc |
