@@ -54,7 +54,9 @@ export class SmtpEmailProvider implements EmailProvider {
         html: options.html,
       });
 
-      this.logger.log(`[SMTP THÀNH CÔNG] Đã gửi email tới: ${options.to} | MessageId: ${info.messageId}`);
+      this.logger.log(
+        `[SMTP THÀNH CÔNG] Đã gửi email tới: ${options.to} | MessageId: ${info.messageId}`,
+      );
       return {
         success: true,
         providerMessageId: info.messageId,

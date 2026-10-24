@@ -86,7 +86,9 @@ describe('DefaultEmailVerificationSender (W7-23)', () => {
     const sent = provider.sentOptions[0]!;
     expect(sent.to).toBe(email);
     expect(sent.subject).toContain('ScentStation');
-    expect(sent.text).toContain('https://admin.scentstation.vn/verify-email?token=secret-token-xyz-123');
+    expect(sent.text).toContain(
+      'https://admin.scentstation.vn/verify-email?token=secret-token-xyz-123',
+    );
     expect(sent.text).toContain('24 giờ');
   });
 
@@ -128,7 +130,10 @@ describe('DefaultEmailVerificationSender (W7-23)', () => {
     const sender = new DefaultEmailVerificationSender(config, provider);
 
     // Spy vào Logger
-    const logSpy = vi.spyOn((sender as unknown as { logger: { log: (msg: string) => void } }).logger, 'log');
+    const logSpy = vi.spyOn(
+      (sender as unknown as { logger: { log: (msg: string) => void } }).logger,
+      'log',
+    );
 
     await sender.sendVerificationEmail('brand@example.com', 'token-dev-456');
 
