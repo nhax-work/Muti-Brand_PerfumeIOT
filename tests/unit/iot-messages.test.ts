@@ -4,6 +4,7 @@ import {
   HeartbeatMessage,
   TelemetryMessage,
 } from '../../apps/api/src/modules/iot/iot.messages.js';
+import { deviceOperatingMode } from '../../apps/api/src/modules/iot/iot.service.js';
 
 const common = { schema_version: 1, machine_serial: 'M001', ts: '2026-10-09T10:00:00Z' };
 describe('MQTT device payload validation', () => {
@@ -43,5 +44,14 @@ describe('MQTT device payload validation', () => {
       EventMessage.safeParse({ ...common, device_event_id: 'M001-1-1', event_type: 'BUTTON_WRONG' })
         .success,
     ).toBe(false);
+  });
+});
+
+describe('Cấu hình gửi xuống thiết bị (mqtt.md §7)', () => {
+  it('test_FR_MCH_09_draining_published_as_normal — DRAINING chỉ tồn tại ở backend', () => {
+    expect(deviceOperatingMode('DRAINING')).toBe('NORMAL');
+    expect(deviceOperatingMode('NORMAL')).toBe('NORMAL');
+    expect(deviceOperatingMode('MAINTENANCE')).toBe('MAINTENANCE');
+    expect(deviceOperatingMode('DISABLED')).toBe('DISABLED');
   });
 });

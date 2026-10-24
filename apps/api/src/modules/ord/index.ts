@@ -6,6 +6,11 @@ export { OrdService, type DispenseOrderOutcome, type OrderPaymentOutcome } from 
 export type { OrderRecord } from './ord.queries.js';
 export { canCreateDispenseCommand, canTransition, isTerminal } from './order-status.js';
 export { revenueOwnerFor } from './revenue-owner.js';
+export {
+  assertMachineAcceptsOrders,
+  MODES_SERVING_PAID_QUEUE,
+  openRefillSessionOn,
+} from './sales-stop.js';
 export { RefundClaimsService } from './refund-claims/refund-claims.service.js';
 
 // Thanh toán dùng chung (ADR-0008) — SLT dùng để tạo thanh toán phiên và nhận kết quả webhook.

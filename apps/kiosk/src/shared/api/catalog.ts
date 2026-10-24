@@ -9,7 +9,7 @@ export type CatalogItem = components['schemas']['KioskCatalog']['items'][number]
 export const catalogQueryKey = ['kiosk', 'catalog', config.machineSerial] as const;
 
 export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
-  machineSerial: config.machineSerial || 'SCENTATION-PARIS-01',
+  machineSerial: config.machineSerial || 'ScentStation-PARIS-01',
   machineStatus: 'ONLINE',
   operatingMode: 'NORMAL',
   items: [
@@ -17,7 +17,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       slotId: 'slot-1',
       slotNumber: 1,
       available: true,
-      brandName: 'SCENTATION PARIS',
+      brandName: 'ScentStation PARIS',
       product: {
         id: 'prod-1',
         name: 'Nuit d’Or',
@@ -38,7 +38,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       slotId: 'slot-2',
       slotNumber: 2,
       available: false,
-      brandName: 'SCENTATION PARIS',
+      brandName: 'ScentStation PARIS',
       product: {
         id: 'prod-2',
         name: 'Ambre Impérial',
@@ -59,7 +59,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       slotId: 'slot-3',
       slotNumber: 3,
       available: true,
-      brandName: 'SCENTATION PARIS',
+      brandName: 'ScentStation PARIS',
       product: {
         id: 'prod-3',
         name: 'Fleur Blanche',
@@ -80,7 +80,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       slotId: 'slot-4',
       slotNumber: 4,
       available: true,
-      brandName: 'SCENTATION PARIS',
+      brandName: 'ScentStation PARIS',
       product: {
         id: 'prod-4',
         name: 'Bois Mystique',
@@ -101,7 +101,7 @@ export const DEMO_CATALOG: components['schemas']['KioskCatalog'] = {
       slotId: 'slot-5',
       slotNumber: 5,
       available: true,
-      brandName: 'SCENTATION PARIS',
+      brandName: 'ScentStation PARIS',
       product: {
         id: 'prod-5',
         name: 'Rose Éternelle',

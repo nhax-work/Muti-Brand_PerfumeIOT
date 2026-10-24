@@ -1,58 +1,82 @@
 /*
- * Scentation Paris — Haute Parfumerie Kiosk Design System Tokens
- * Minimalist Black & White Luxury Aesthetic
+ * Design token của kiosk ScentStation — mọi màn chỉ dùng biến ở đây, không viết màu, cỡ chữ hay
+ * khoảng cách rời rạc trong CSS module.
+ *
+ * Thiết kế cho màn ngang 1280×800 (hiển thị tốt tới 1920×1200), chạm bằng tay, đọc ở 60cm.
  */
 :root {
+  /* --- Màu: nền sáng là mặc định. Đổi sang nền tối: đặt data-theme="dark" ở <html> (index.html). */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f3f3f3;
+  --text: #111111;
+  --text-muted: #5c5c5c;
+  --line: rgba(0, 0, 0, 0.12);
+  /* Nút hành động chính (thanh toán, bắt đầu): đen trên nền trắng. */
+  --action: #111111;
+  --on-action: #ffffff;
+  /* Màu duy nhất ngoài trắng đen, CHỈ cho thứ gắn với đèn nút vật lý: số nút, vòng sáng. */
+  --accent: #c9a46a;
+  --on-accent: #111111;
+  /* Chữ/nét màu accent đặt trên nền trắng — đậm hơn để đủ tương phản. */
+  --accent-ink: #7a5a28;
+  --danger: #a5463c;
+  /* QR luôn đen trên trắng để app ngân hàng quét được, bất kể nền màn hình. */
+  --qr-bg: #ffffff;
+  --qr-fg: #000000;
+  /* Lớp mờ sau hộp xác nhận. */
+  --scrim: rgba(0, 0, 0, 0.4);
+
+  /* --- Chữ: serif cho tên sản phẩm và tiêu đề, sans cho phần còn lại (cả hai đủ dấu tiếng Việt). */
   --font-serif: 'Playfair Display', Georgia, serif;
-  --font-sans: 'Inter', 'Lato', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
 
-  --font-body: 15px;
-  --font-title: 22px;
-  --font-hero: 28px;
+  --fs-display: 56px;
+  --fs-h1: 40px;
+  --fs-h2: 28px;
+  --fs-body: 22px;
+  /* NFR-USA-04: hai cỡ nhỏ nhất bám đúng KIOSK_MIN_FONT_PX — main.tsx đặt --kiosk-min-font. */
+  --fs-small: var(--kiosk-min-font);
+  --fs-caps: var(--kiosk-min-font);
+  --tracking-caps: 0.12em;
+  --lh-tight: 1.15;
+  --lh-body: 1.5;
 
-  --color-bg: #ffffff;
-  --color-bg-alt: #fbf9f5;
-  --color-card-bg: #ffffff;
-  --color-surface: #ffffff;
-  --color-surface-container: #fafafa;
-  --color-surface-dim: #f0f0f0;
+  /* --- Lưới 8px. */
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-4: 32px;
+  --sp-5: 40px;
+  --sp-6: 48px;
+  --sp-8: 64px;
+  --sp-10: 80px;
+  --gutter: var(--sp-6);
 
-  --color-text: #000000;
-  --color-text-secondary: rgba(0, 0, 0, 0.72);
-  --color-text-muted: rgba(0, 0, 0, 0.52);
+  --radius: 4px;
+  --touch-min: 56px;
+  /* Header cao theo màn (80px ở 1280×800, 64px ở màn thấp); mọi màn tính chiều cao còn lại theo
+     100dvh trừ header — không màn nào cuộn. */
+  --header-h: clamp(64px, 10dvh, 80px);
 
-  --color-border: rgba(0, 0, 0, 0.12);
-  --color-border-strong: rgba(0, 0, 0, 0.25);
-  --color-border-dark: #000000;
+  /* --- Chuyển động: chỉ fade + dịch 8px, không nảy. */
+  --dur: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --shift: 8px;
+}
 
-  --color-primary: #000000;
-  --color-primary-hover: #1f1f1f;
-  --color-on-primary: #ffffff;
-
-  --color-gold: #c5a880;
-  --color-gold-dark: #725b38;
-
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.04);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.07);
-  --shadow-lg: 0 16px 36px rgba(0, 0, 0, 0.12);
-  --shadow-bottle: 0 12px 20px rgba(0, 0, 0, 0.12);
-
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 28px;
-  --space-7: 36px;
-
-  --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
-
-  --touch-target: 48px;
+:root[data-theme='dark'] {
+  --bg: #0f0e0d;
+  --surface: #1a1816;
+  --surface-2: #24211e;
+  --text: #f3eee7;
+  --text-muted: #a39b90;
+  --line: rgba(243, 238, 231, 0.12);
+  --action: #f3eee7;
+  --on-action: #0f0e0d;
+  --on-accent: #0f0e0d;
+  --accent-ink: #c9a46a;
+  --danger: #c2655a;
 }
 
 * {
@@ -65,11 +89,13 @@ body {
   padding: 0;
   width: 100%;
   height: 100%;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--bg);
+  color: var(--text);
   font-family: var(--font-sans);
-  font-size: var(--font-body);
-  line-height: 1.5;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  /* Playfair mặc định dùng số kiểu cổ (chân số lơ lửng) — số nút, giá, đồng hồ phải đứng đúng tâm. */
+  font-variant-numeric: lining-nums;
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
@@ -104,18 +130,30 @@ button {
   outline: none;
 }
 
-.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 24px;
-  line-height: 1;
-  letter-spacing: normal;
-  text-transform: none;
-  display: inline-block;
-  white-space: nowrap;
-  word-wrap: normal;
-  direction: ltr;
-  -webkit-font-feature-settings: 'liga';
-  -webkit-font-smoothing: antialiased;
+/* Nhãn chữ hoa — tối đa một nhãn mỗi khối nội dung. */
+.caps {
+  font-family: var(--font-sans);
+  font-size: var(--fs-caps);
+  font-weight: 500;
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+/* Lối vào chung của mọi màn và lớp phủ: hiện dần và nhích lên 8px. */
+@keyframes kiosk-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--shift));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur: 0ms;
+    --shift: 0px;
+  }
 }

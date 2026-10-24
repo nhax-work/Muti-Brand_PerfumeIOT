@@ -381,3 +381,143 @@ describe('FR-ALR-04, FR-MCH-18 — lỗi liên tiếp trên một slot', () => {
     expect(await failAlertsOf(1)).toHaveLength(0);
   });
 });
+
+// -------------------------------------------------------------------------------------
+// Chốt chặn "máy dừng nhận đơn" và DRAINING (ADR-0015 mục 6, 7 — tuần 7)
+// Chế độ DRAINING và phiếu nạp đặt thẳng vào CSDL: API đổi chế độ (TV4) và phiếu nạp (INV) chưa có.
+// -------------------------------------------------------------------------------------
+
+describe('FR-MNT-05, FR-MNT-06, FR-INV-30 — máy dừng nhận đơn', () => {
+  afterEach(async () => {
+    await client.query(`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]);
+    await client.query(`UPDATE machines SET operating_mode = 'NORMAL' WHERE id = $1`, [
+      fx.machineId,
+    ]);
+    await client.query(
+      `DELETE FROM notifications WHERE type = 'MACHINE_MAINTENANCE'
+                         AND brand_id = ANY($1::uuid[])`,
+      [[fx.brandA, fx.brandB]],
+    );
+  });
+
+  async function setMode(mode: 'NORMAL' | 'DRAINING' | 'MAINTENANCE') {
+    await client.query(`UPDATE machines SET operating_mode = $2 WHERE id = $1`, [
+      fx.machineId,
+      mode,
+    ]);
+  }
+
+  async function machineMode(): Promise<string> {
+    const res = await client.query<{ operating_mode: string }>(
+      `SELECT operating_mode FROM machines WHERE id = $1`,
+      [fx.machineId],
+    );
+    return res.rows[0]!.operating_mode;
+  }
+
+  async function openRefillSession(): Promise<void> {
+    await client.query(
+      `INSERT INTO refill_sessions (brand_id, machine_id, slot_id, performed_by, status)
+       VALUES ($1, $2, $3, $4, 'STARTED')`,
+      [fx.brandA, fx.machineId, fx.slots[0], fx.superAdminId],
+    );
+  }
+
+  it('test_FR_MNT_06_block_order_during_maintenance — DRAINING và MAINTENANCE đều từ chối đơn mới', async () => {
+    for (const mode of ['DRAINING', 'MAINTENANCE'] as const) {
+      await setMode(mode);
+      const res = await createOrderRequest(0);
+      expect(res.statusCode, mode).toBe(409);
+      expect(res.json<{ code: string }>().code, mode).toBe('MACHINE_IN_MAINTENANCE');
+    }
+    await setMode('NORMAL');
+    expect((await createOrderRequest(0)).statusCode).toBe(201);
+  });
+
+  it('test_FR_INV_30_open_refill_session_blocks_orders_and_arming — cả máy dừng, đóng phiếu thì bán lại', async () => {
+    const queued = await flow.paidOrder(1);
+    await openRefillSession();
+
+    const res = await createOrderRequest(2);
+    expect(res.statusCode).toBe(409);
+    expect(res.json<{ code: string }>().code).toBe('MACHINE_IN_MAINTENANCE');
+
+    // Đơn đã trả tiền không được sáng đèn khi cửa đang mở.
+    await dsp.armQueuedOrders();
+    expect(await flow.commandsOf(queued.id)).toHaveLength(0);
+    expect((await flow.orderRow(queued.id))?.status).toBe('PAID');
+
+    await client.query(
+      `UPDATE refill_sessions SET status = 'COMPLETED', completed_at = now() WHERE machine_id = $1`,
+      [fx.machineId],
+    );
+    await dsp.armQueuedOrders();
+    expect(await flow.commandsOf(queued.id)).toHaveLength(1);
+  });
+
+  it('test_FR_MNT_05_draining_serves_paid_queue_then_enters_maintenance', async () => {
+    const order = await flow.paidOrder(0);
+    await setMode('DRAINING');
+
+    // DRAINING vẫn ghi lệnh cho đơn đã trả tiền (ADR-0015 mục 7) — không để đơn chết vì QUEUE_TIMEOUT.
+    await dsp.armQueuedOrders();
+    const { command_token: token } = await flow.commandOf(order.id);
+    expect(await dsp.completeDraining()).toBe(0);
+    expect(await machineMode()).toBe('DRAINING');
+
+    const message = (await dsp.listOutgoing()).find((m) => m.payload.command_token === token);
+    await dsp.markSent(message!);
+    await deliver(report(token, 'ACK'));
+    await deliver(report(token, 'RESULT', { success: true }));
+    expect((await flow.orderRow(order.id))?.status).toBe('DISPENSED');
+
+    expect(await dsp.completeDraining()).toBe(1);
+    expect(await machineMode()).toBe('MAINTENANCE');
+
+    const history = await client.query<{ source: string; reason: string }>(
+      `SELECT source, reason FROM machine_status_histories
+        WHERE machine_id = $1 AND from_operating_mode = 'DRAINING'
+          AND to_operating_mode = 'MAINTENANCE'`,
+      [fx.machineId],
+    );
+    expect(history.rows).toEqual([{ source: 'SYSTEM', reason: 'DRAINING_COMPLETED' }]);
+
+    // FR-MNT-07: Brand Admin của cả hai thương hiệu có slot trên máy được báo.
+    const notified = await client.query<{ brand_id: string }>(
+      `SELECT DISTINCT brand_id FROM notifications
+        WHERE type = 'MACHINE_MAINTENANCE' AND brand_id = ANY($1::uuid[])`,
+      [[fx.brandA, fx.brandB]],
+    );
+    expect(notified.rows.map((r) => r.brand_id).sort()).toEqual([fx.brandA, fx.brandB].sort());
+
+    const audit = await client.query(
+      `SELECT 1 FROM audit_logs WHERE action = 'dsp.machine.draining_completed' AND target_id = $1`,
+      [fx.machineId],
+    );
+    expect(audit.rowCount).toBeGreaterThanOrEqual(1);
+    await client.query(
+      `DELETE FROM machine_status_histories WHERE machine_id = $1 AND source = 'SYSTEM'`,
+      [fx.machineId],
+    );
+  });
+
+  it('test_FR_MNT_05_pending_payment_order_keeps_machine_draining — khách còn ở màn QR', async () => {
+    const pending = await createOrderRequest(0);
+    expect(pending.statusCode).toBe(201);
+    await setMode('DRAINING');
+    expect(await dsp.completeDraining()).toBe(0);
+    expect(await machineMode()).toBe('DRAINING');
+  });
+
+  it('test_FR_MNT_05_draining_idle_machine_enters_maintenance_immediately — kể cả nhịp đầu sau downtime', async () => {
+    await setMode('DRAINING');
+    expect(await dsp.completeDraining()).toBe(1);
+    expect(await machineMode()).toBe('MAINTENANCE');
+    // Chạy lại không đổi gì thêm.
+    expect(await dsp.completeDraining()).toBe(0);
+    await client.query(
+      `DELETE FROM machine_status_histories WHERE machine_id = $1 AND source = 'SYSTEM'`,
+      [fx.machineId],
+    );
+  });
+});

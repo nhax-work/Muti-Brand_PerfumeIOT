@@ -38,6 +38,7 @@ const ALL_PERMISSIONS = [
   'maintenance.handle',
   'report.brand',
   'report.platform',
+  'revenue.manage',
   'audit.read',
 ] as const;
 
@@ -493,6 +494,12 @@ export async function cleanupIsolationFixture(
     // Cảnh báo do test sinh ra (vd FR-ALR-04 tự tắt slot) trỏ tới máy và slot của fixture.
     [`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM orders WHERE machine_id = $1`, [fx.machineId]],
+    // Kỳ chi trả và thông báo do job/thao tác trong test sinh ra — khóa ngoại tới brands và users.
+    [`DELETE FROM brand_payouts WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [
+      `DELETE FROM notifications WHERE brand_id = ANY($1::uuid[]) OR recipient_user_id = ANY($2::uuid[])`,
+      [brands, users],
+    ],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],

@@ -1,35 +1,29 @@
 import { DEFAULT_LOCALE, LOCALES } from '@scentstation/i18n';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 import OutOfServiceScreen from '@/screens/out-of-service/OutOfServiceScreen';
 import { cancelKioskOrder } from '@/shared/api';
+import { unlockAudio } from '@/shared/audio/chime';
 import { config } from '@/shared/config';
 import { useIdleReset } from '@/shared/hooks/useIdleReset';
 import { useOutOfService } from '@/shared/hooks/useOutOfService';
 import { useI18n } from '@/shared/i18n';
 import { useKioskSession } from '@/shared/session';
-import { LanguageFlag } from './LanguageFlag';
+import { ShellChromeContext } from '@/shared/shell/chrome';
+import { Icon } from '@/shared/ui/Icon';
 import type { KioskRouteHandle } from './route-handle';
 import styles from './KioskShell.module.css';
 
 // Tên ngôn ngữ viết bằng chính ngôn ngữ đó (endonym) để khách nhận ra dù đang ở ngôn ngữ nào —
-// cố ý không đi qua i18n.
+// cố ý không đi qua i18n. Nút gạt hiện mã ngôn ngữ, tên đầy đủ dành cho trình đọc màn hình.
 const LANGUAGE_LABELS: Record<string, string> = {
   vi: 'Tiếng Việt',
   en: 'English',
 };
 
-function getLanguageLabel(l: string): string {
-  return LANGUAGE_LABELS[l] ?? l;
-}
-
 /**
- * Khung bao mọi màn hình kiosk:
- * - Header tối giản cao cấp thương hiệu SCENTATION PARIS (Haute Parfumerie).
- * - Điều hướng linh hoạt (Trang chủ / Quay lại danh mục).
- * - Dropdown chuyển đổi ngôn ngữ tương tác mượt mà.
- * - Footer thông tin hỗ trợ sommelier và chuẩn giao diện haptic touch.
- * - Cơ chế tự động reset phiên khi rảnh (NFR-USA-02) và màn hình bảo trì (FR-IOT-13).
+ * Khung bao mọi màn hình kiosk: header (nút quay lại, wordmark, nút gạt ngôn ngữ), tự về trang chủ
+ * khi không thao tác (NFR-USA-02) và màn tạm ngưng phục vụ (FR-IOT-13).
  */
 export function KioskShell() {
   const { locale, setLocale, t } = useI18n();
@@ -38,11 +32,14 @@ export function KioskShell() {
   const matches = useMatches();
   const outOfService = useOutOfService();
   const { startNewSession, activeOrder } = useKioskSession();
+  // Màn nhấn nút bật header tối (useDarkShell) — cả màn một nền, không còn dải trắng phía trên.
+  const [darkHeader, setDarkHeader] = useState(false);
 
-  const [isLangOpen, setIsLangOpen] = useState(false);
-  const langDropdownRef = useRef<HTMLDivElement>(null);
-
-  const keepAwake = matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
+  // Chỉ giữ màn khi thật sự có đơn (khách đang quét mã, chờ lượt, chờ bấm, xem kết quả). Tạo đơn lỗi
+  // ở màn thanh toán thì vẫn tự về màn chờ — khách bỏ đi không để kiosk đứng mãi ở màn lỗi.
+  const keepAwake =
+    activeOrder !== null &&
+    matches.some((m) => (m.handle as KioskRouteHandle | undefined)?.keepAwake);
 
   const resetSession = useCallback(() => {
     if (activeOrder?.id) {
@@ -50,104 +47,55 @@ export function KioskShell() {
     }
     setLocale(DEFAULT_LOCALE);
     startNewSession();
-    setIsLangOpen(false);
     void navigate('/', { replace: true });
   }, [navigate, setLocale, startNewSession, activeOrder]);
 
   useIdleReset(resetSession, config.idleTimeoutMs, !keepAwake);
 
-  // Đóng dropdown khi click ra ngoài
+  // Trình duyệt chỉ cho phát âm thanh sau khi người dùng chạm: mở khóa ngay từ lần chạm đầu của
+  // phiên để âm báo "đèn đã sáng" kêu được (DispenseFlow).
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (langDropdownRef.current && !langDropdownRef.current.contains(e.target as Node)) {
-        setIsLangOpen(false);
-      }
-    }
-    if (isLangOpen) {
-      document.addEventListener('pointerdown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('pointerdown', handleClickOutside);
-    };
-  }, [isLangOpen]);
+    window.addEventListener('pointerdown', unlockAudio, { passive: true });
+    return () => window.removeEventListener('pointerdown', unlockAudio);
+  }, []);
+
+  const isCatalog = location.pathname === '/catalog';
+  const isCheckout = location.pathname.startsWith('/checkout/');
 
   // Khách đang có đơn chưa kết thúc (có thể đã trả tiền, đèn đang sáng) thì không thay cả màn hình:
   // giữ màn thanh toán để khách còn thấy mã và đếm ngược, chỉ báo mất kết nối (FR-IOT-13, FR-ORD-21).
-
-  const isCatalog = location.pathname === '/catalog';
-  const isProductDetail = location.pathname.startsWith('/products/');
-  const isCheckout = location.pathname.startsWith('/checkout/');
-
-  // Giữ nguyên màn giao dịch để khách còn thấy mã và trạng thái khi máy/mạng gặp sự cố.
   if (outOfService && !isCheckout && !activeOrder) return <OutOfServiceScreen />;
 
   return (
     <div className={styles.shell}>
-      <header className={styles.header}>
+      <header className={`${styles.header} ${darkHeader ? styles.headerDark : ''}`}>
         <div className={styles.navLeft}>
           {isCatalog && (
-            <button
-              type="button"
-              className={styles.backButton}
-              onClick={() => void navigate('/')}
-              aria-label={t('kiosk.backToHome')}
-            >
-              ← {t('kiosk.backToHome')}
+            <button type="button" className={styles.backButton} onClick={() => void navigate('/')}>
+              <Icon name="arrowLeft" size={20} />
+              <span>{t('kiosk.backToHome')}</span>
             </button>
           )}
-          {/* Đang có đơn thì CheckoutScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
-          {isProductDetail && (
-            <button
-              type="button"
-              className={styles.backButton}
-              onClick={() => void navigate('/catalog')}
-              aria-label={t('kiosk.backToCatalog')}
-            >
-              ← {t('kiosk.backToCatalog')}
-            </button>
-          )}
-          {!isCatalog && !isProductDetail && !isCheckout && (
-            <span className={styles.srOnly}>ScentStation Kiosk</span>
-          )}
+          {/* Trang chi tiết tự có nút quay lại (bỏ đơn đúng đường đóng); đang thanh toán thì
+              CatalogScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
         </div>
 
-        <div className={styles.brandCenter}>
-          <span className={styles.brandTitle}>SCENTATION</span>
-        </div>
+        <span className={styles.wordmark}>ScentStation</span>
 
-        <div className={styles.navRight} ref={langDropdownRef}>
-          <button
-            type="button"
-            className={`${styles.langDropdownTrigger} ${isLangOpen ? styles.langDropdownTriggerOpen : ''}`}
-            onClick={() => setIsLangOpen((prev) => !prev)}
-            aria-expanded={isLangOpen}
-            aria-haspopup="listbox"
-            aria-label="Chọn ngôn ngữ"
-          >
-            <LanguageFlag locale={locale} />
-            <span>{getLanguageLabel(locale)}</span>
-            <span className={styles.langChevron}>{isLangOpen ? '▲' : '▼'}</span>
-          </button>
-
-          {isLangOpen && (
-            <div className={styles.langMenu} role="listbox">
+        <div className={styles.navRight}>
+          {/* Màn nhấn nút: khách chỉ cần nhìn nút số N — ẩn đổi ngôn ngữ để không chạm nhầm. */}
+          {!darkHeader && (
+            <div className={styles.langToggle} role="group" aria-label={t('kiosk.language')}>
               {LOCALES.map((l) => (
                 <button
                   key={l}
                   type="button"
-                  className={`${styles.langOption} ${l === locale ? styles.langOptionActive : ''}`}
-                  onClick={() => {
-                    setLocale(l);
-                    setIsLangOpen(false);
-                  }}
-                  role="option"
-                  aria-selected={l === locale}
+                  className={styles.langOption}
+                  aria-pressed={l === locale}
+                  aria-label={LANGUAGE_LABELS[l] ?? l}
+                  onClick={() => setLocale(l)}
                 >
-                  <span className={styles.langOptionLabel}>
-                    <LanguageFlag locale={l} />
-                    <span>{getLanguageLabel(l)}</span>
-                  </span>
-                  {l === locale && <span className={styles.checkIcon}>✓</span>}
+                  {l.toUpperCase()}
                 </button>
               ))}
             </div>
@@ -162,7 +110,9 @@ export function KioskShell() {
       )}
 
       <main className={styles.content}>
-        <Outlet />
+        <ShellChromeContext.Provider value={setDarkHeader}>
+          <Outlet />
+        </ShellChromeContext.Provider>
       </main>
     </div>
   );

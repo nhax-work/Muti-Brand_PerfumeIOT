@@ -1,11 +1,20 @@
 export { useKioskCatalog, catalogQueryKey, type CatalogItem } from './catalog';
 
 export { api } from './client';
-export { ApiRequestError, errorMessage, isMachineInMaintenance, unwrap } from './errors';
+export {
+  ApiRequestError,
+  errorMessage,
+  isMachineBusy,
+  isMachineInMaintenance,
+  unwrap,
+} from './errors';
 export { recordKioskInteraction, type RecordInteractionParams } from './interactions';
 export {
   cancelKioskOrder,
+  cancelOrphanedOrder,
+  forgetPendingOrder,
   isNotCancellable,
+  rememberPendingOrder,
   isSettled,
   useCancelOrder,
   useCreateOrder,

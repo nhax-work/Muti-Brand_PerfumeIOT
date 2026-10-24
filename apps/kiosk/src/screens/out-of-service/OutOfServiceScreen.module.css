@@ -1,73 +1,41 @@
 .screen {
-  min-height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 24px;
-  background-color: #ffffff;
+  gap: var(--sp-3);
+  padding: var(--sp-6) var(--gutter);
+  background: var(--bg);
+  color: var(--text);
   text-align: center;
+  animation: kiosk-enter var(--dur) var(--ease) both;
 }
 
-.card {
-  max-width: 520px;
-  width: 100%;
-  padding: 42px 36px;
-  border-radius: var(--radius-xl);
-  border: 1px solid #000000;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.08);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-
-.brandTag {
-  font-size: 10.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.32em;
-  color: var(--color-text-secondary);
-}
-
-.iconWrapper {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  border: 1px solid #000000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #000000;
-  margin: 6px 0;
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  letter-spacing: 0.04em;
 }
 
 .title {
+  margin: var(--sp-4) 0 0;
   font-family: var(--font-serif);
-  font-size: 24px;
-  font-weight: 500;
-  color: #000000;
-  margin: 0;
+  font-size: var(--fs-display);
+  font-weight: 400;
+  line-height: var(--lh-tight);
 }
 
 .hint {
-  font-size: 13.5px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
   margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-muted);
 }
 
-.divider {
-  width: 48px;
-  height: 1px;
-  background: rgba(0, 0, 0, 0.16);
-  margin: 4px 0;
-}
-
-.supportNote {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.16em;
-  color: var(--color-text-secondary);
+.contact {
+  margin: var(--sp-2) 0 0;
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
 }

@@ -8,7 +8,10 @@ type CodeNamespace =
   | 'credentialStatus'
   | 'statusSource'
   | 'machineStatus'
-  | 'machineOperatingMode';
+  | 'machineOperatingMode'
+  | 'commandStatus'
+  | 'dispenseType'
+  | 'brandPayoutStatus';
 
 /**
  * Nhãn dễ hiểu cho một mã máy chủ trả về (mã lỗi, lý do, trạng thái…). Mã chưa có trong catalog —

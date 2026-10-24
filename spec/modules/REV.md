@@ -53,13 +53,20 @@
 ## FR-REV-04 — Báo cáo doanh thu tách theo hai nguồn
 * **Statement:** Hệ thống phải cho phép Platform Super Admin xem doanh thu tách theo hai nguồn: doanh thu thuộc thương hiệu và doanh thu thuộc nền tảng.
 * **Traces:** BR-009, BR-013 · **Priority:** M
+* **API:** `GET /revenue/split`
 * **Acceptance criteria:**
   * **AC1:** Given Platform Super Admin xem dashboard doanh thu trong khoảng thời gian `T`,  
     When tải báo cáo tổng hợp,  
     Then hệ thống hiển thị rõ ràng hai chỉ số phân tách: Tổng doanh thu BRAND và Tổng doanh thu PLATFORM.
-  * **AC2:** Given Platform Super Admin lọc theo máy `M` hoặc địa điểm `L`,  
+  * **AC2:** Given Platform Super Admin lọc theo máy `M` (`machineId`; contract chưa có lọc theo địa điểm),  
     When dữ liệu trả về,  
     Then các số liệu vẫn được chia rẽ nhánh rõ ràng theo hai nguồn `BRAND` và `PLATFORM`.
+  * **AC3 (Đơn được tính):** Given đơn trong khoảng `from`–`to` theo `paid_at`,  
+    When tính tổng,  
+    Then chỉ tính đơn `DISPENSED` hoặc `FORFEITED` (cùng tập với kỳ chi trả, FR-SLT-52); lượt xịt chẩn đoán không có đơn nên không bao giờ vào tổng (FR-DSP-20).
+  * **AC4 (Chỉ Super Admin):** Given Brand Admin hoặc Operations Staff,  
+    When gọi `GET /revenue/split`,  
+    Then hệ thống từ chối `FORBIDDEN_SCOPE`.
 * **Test:** `test_FR_REV_04_split_revenue_dashboard`
 
 ---

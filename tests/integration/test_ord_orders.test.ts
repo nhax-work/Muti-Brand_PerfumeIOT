@@ -4,7 +4,7 @@
  *
  * KHÔNG có ở đây — thuộc nhóm test trọng yếu (spec/testing.md), file riêng:
  *   - Idempotency webhook (FR-ORD-15) — test_webhook_idempotency.test.ts
- *   - Quy kết revenue_owner (FR-REV-01..03) — test_revenue_attribution.test.ts, chưa có
+ *   - Quy kết revenue_owner (FR-REV-01..03) — test_revenue_attribution.test.ts
  *   - Cô lập mức slot của tìm kiếm đơn (FR-ORD-22 AC3) — test_slot_isolation.test.ts
  */
 

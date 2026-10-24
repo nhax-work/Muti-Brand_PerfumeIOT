@@ -38,7 +38,7 @@ chỗ slot đồng thời (lộ trình 13 tuần, ADR-0006). Agent **được** 
 |---|---|---|
 | Idempotency webhook | `tests/integration/test_webhook_idempotency.test.ts` | có |
 | Cô lập mức slot | `tests/integration/test_slot_isolation.test.ts` | có |
-| `revenue_owner` | `tests/integration/test_revenue_attribution.test.ts` | chưa có |
+| `revenue_owner` | `tests/integration/test_revenue_attribution.test.ts` | có — chụp lúc tạo đơn, đơn sau thanh lý thuộc PLATFORM mà đơn cũ giữ BRAND, UPDATE `revenue_owner`/`brand_id`/`slot_rental_id` bị trigger chặn (FR-REV-01..03, ADR-0009) |
 | Unique constraint slot | `tests/integration/test_slot_constraint.test.ts` | có |
 | TTL lệnh xịt | `tests/e2e/test_command_ttl.test.ts` | có |
 | Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report | — |

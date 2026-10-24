@@ -84,6 +84,11 @@ export function errorMessage(error: unknown, t: Translate): string {
   return t('common.internalError');
 }
 
+/** FR-ORD-24, FR-ORD-35: máy đang có đơn chờ thanh toán hoặc chờ bấm của khách khác — chưa tạo đơn. */
+export function isMachineBusy(error: unknown): boolean {
+  return error instanceof ApiRequestError && error.code === 'MACHINE_BUSY';
+}
+
 export function isMachineInMaintenance(error: unknown): boolean {
   return error instanceof ApiRequestError && error.code === 'MACHINE_IN_MAINTENANCE';
 }

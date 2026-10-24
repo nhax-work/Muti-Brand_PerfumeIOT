@@ -24,6 +24,7 @@ import {
   type Product,
   type SlotRental,
 } from './api';
+import { DiagnosticDispenseModal } from './components/DiagnosticDispenseModal';
 import { MachineCredentialsCard } from './components/MachineCredentialsCard';
 import { MachineModeModal } from './components/MachineModeModal';
 import { SlotCard } from './components/SlotCard';
@@ -62,6 +63,10 @@ export default function MachineDetailPage() {
   // Khóa MQTT cần quyền machine.manage + xác thực lại — chỉ Super Admin (FR-MCH-02).
   const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
   const [selectedSlotForConfig, setSelectedSlotForConfig] = useState<MachineSlot | null>(null);
+  // Màn này chỉ Super Admin và Operations Staff vào được — cả hai có quyền xịt chẩn đoán (FR-MNT-09).
+  const [selectedSlotForDiagnostic, setSelectedSlotForDiagnostic] = useState<MachineSlot | null>(
+    null,
+  );
 
   const { data: machine, isLoading: loadingMachine, error: machineError } = useMachine(machineId);
   const { data: slots, isLoading: loadingSlots } = useMachineSlots(machineId);
@@ -422,6 +427,12 @@ export default function MachineDetailPage() {
               {t('ui.slotsSubtitle')}
             </Typography.Text>
           </div>
+          <Button
+            icon={<ThunderboltOutlined />}
+            onClick={() => void navigate(`/dispense-commands?machineId=${machine.id}`)}
+          >
+            {t('ui.viewDispenseCommands')}
+          </Button>
         </div>
 
         {loadingSlots ? (
@@ -442,6 +453,7 @@ export default function MachineDetailPage() {
                 brand={brand}
                 product={product}
                 onOpenConfig={(targetSlot) => setSelectedSlotForConfig(targetSlot)}
+                onDiagnosticDispense={(targetSlot) => setSelectedSlotForDiagnostic(targetSlot)}
               />
             ))}
           </div>
@@ -455,6 +467,12 @@ export default function MachineDetailPage() {
           machine={machine}
           open={modeModalOpen}
           onClose={() => setModeModalOpen(false)}
+        />
+
+        <DiagnosticDispenseModal
+          machineId={machine.id}
+          slot={selectedSlotForDiagnostic}
+          onClose={() => setSelectedSlotForDiagnostic(null)}
         />
 
         <SlotConfigModal
