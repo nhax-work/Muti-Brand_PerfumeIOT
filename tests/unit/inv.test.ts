@@ -91,7 +91,9 @@ class FakeInvQueries {
 
   private seq = 0;
 
-  async findFragranceProductById(id: string): Promise<{ id: string; brandId: string; name: string } | null> {
+  async findFragranceProductById(
+    id: string,
+  ): Promise<{ id: string; brandId: string; name: string } | null> {
     return this.products.get(id) ?? null;
   }
 
@@ -133,7 +135,9 @@ class FakeInvQueries {
     return item;
   }
 
-  async findShipmentDeclarationByIdForUpdate(id: string): Promise<ShipmentDeclarationRecord | null> {
+  async findShipmentDeclarationByIdForUpdate(
+    id: string,
+  ): Promise<ShipmentDeclarationRecord | null> {
     return this.findShipmentDeclarationById(id);
   }
 
@@ -349,7 +353,10 @@ class FakeInvQueries {
     return this.findRefillSessionById(id);
   }
 
-  async listRefillSessions(_filter: any, scope?: any): Promise<{ items: RefillSessionRecord[]; total: number }> {
+  async listRefillSessions(
+    _filter: any,
+    scope?: any,
+  ): Promise<{ items: RefillSessionRecord[]; total: number }> {
     let list = Array.from(this.refillSessions.values());
     if (scope && scope.kind === 'BRAND') {
       list = list.filter((x) => x.brandId === scope.brandId);
