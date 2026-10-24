@@ -533,7 +533,7 @@ export default function ShipmentsPage() {
   ];
 
   return (
-    <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN']}>
+    <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF']}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         {/* Header */}
         <Row justify="space-between" align="middle" gutter={[16, 16]}>

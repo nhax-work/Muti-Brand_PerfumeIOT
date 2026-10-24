@@ -217,7 +217,7 @@ export default function NotificationsPage() {
   const failedCount = data?.items.filter((i) => i.status === 'FAILED').length ?? 0;
 
   return (
-    <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN']}>
+    <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF']}>
       <Space vertical size="large" style={{ width: '100%' }}>
         {/* Header */}
         <div>

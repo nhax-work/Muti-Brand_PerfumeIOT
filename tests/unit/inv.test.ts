@@ -64,13 +64,36 @@ class FakeInvQueries {
   bottles = new Map<string, BottleRecord>();
   refillSessions = new Map<string, RefillSessionRecord>();
   slotBottles = new Map<string, string | null>();
+  products = new Map<string, { id: string; brandId: string; name: string }>();
+  slots = new Map<
+    string,
+    {
+      id: string;
+      machineId: string;
+      slotNumber: number;
+      activeBottleId: string | null;
+      status: string;
+    }
+  >();
   activeRentals = new Map<
     string,
-    { id: string; slotId: string; brandId: string; status: string }
+    {
+      id: string;
+      slotId: string;
+      brandId: string;
+      status: string;
+      paidAt?: Date | null;
+      cancelledAt?: Date | null;
+      fragranceProductId?: string | null;
+    }
   >();
   busyMachines = new Set<string>();
 
   private seq = 0;
+
+  async findFragranceProductById(id: string): Promise<{ id: string; brandId: string; name: string } | null> {
+    return this.products.get(id) ?? null;
+  }
 
   async createShipmentDeclaration(data: {
     brandId: string;
@@ -110,6 +133,10 @@ class FakeInvQueries {
     return item;
   }
 
+  async findShipmentDeclarationByIdForUpdate(id: string): Promise<ShipmentDeclarationRecord | null> {
+    return this.findShipmentDeclarationById(id);
+  }
+
   async listShipmentDeclarations(
     filter: any,
     scope?: any,
@@ -138,7 +165,7 @@ class FakeInvQueries {
       batchNumber: data.batchNumber,
       quantityReceived: data.quantityReceived,
       receivedAt: data.receivedAt,
-      expiresAt: null,
+      expiresAt: data.expiresAt ?? null,
       createdBy: 'user-inv-staff',
       supplierInfo: data.supplierInfo ?? {},
       createdAt: new Date(),
@@ -225,8 +252,45 @@ class FakeInvQueries {
     }
   }
 
+  async updateBottleRemoved(id: string, data: any): Promise<void> {
+    const b = this.bottles.get(id);
+    if (b) {
+      this.bottles.set(id, {
+        ...b,
+        status: data.status,
+        removedAt: data.removedAt,
+      });
+    }
+  }
+
+  async findSlotById(slotId: string): Promise<any> {
+    const sl = this.slots.get(slotId);
+    const activeBottleId = this.slotBottles.get(slotId) ?? sl?.activeBottleId ?? null;
+    if (sl) {
+      return {
+        ...sl,
+        activeBottleId,
+      };
+    }
+    return {
+      id: slotId,
+      machineId: MACHINE_1,
+      slotNumber: 1,
+      activeBottleId,
+      status: 'AVAILABLE',
+    };
+  }
+
+  async lockMachine(_machineId: string): Promise<void> {
+    return;
+  }
+
   async updateSlotBottle(slotId: string, bottleId: string): Promise<void> {
     this.slotBottles.set(slotId, bottleId);
+    const sl = this.slots.get(slotId);
+    if (sl) {
+      sl.activeBottleId = bottleId;
+    }
   }
 
   async hasPendingOrdersOrDispenseOnMachine(machineId: string): Promise<boolean> {
@@ -234,7 +298,25 @@ class FakeInvQueries {
   }
 
   async findActiveSlotRental(slotId: string): Promise<any> {
-    return this.activeRentals.get(slotId) ?? null;
+    const r = this.activeRentals.get(slotId);
+    if (!r) return null;
+    if (r.status === 'DRAFT') {
+      if (!r.paidAt || r.cancelledAt) return null;
+    } else if (!['ACTIVE', 'EXPIRING', 'GRACE'].includes(r.status)) {
+      return null;
+    }
+    return {
+      rentalId: r.id,
+      brandId: r.brandId,
+      fragranceProductId: r.fragranceProductId ?? null,
+    };
+  }
+
+  async findActiveRefillSessionOnSlot(slotId: string): Promise<RefillSessionRecord | null> {
+    for (const rs of this.refillSessions.values()) {
+      if (rs.slotId === slotId && rs.status === 'STARTED') return rs;
+    }
+    return null;
   }
 
   async createRefillSession(data: any): Promise<RefillSessionRecord> {
@@ -244,12 +326,12 @@ class FakeInvQueries {
       machineId: data.machineId,
       slotId: data.slotId,
       brandId: data.brandId,
-      oldBottleId: null,
+      oldBottleId: data.oldBottleId ?? null,
       newBottleId: null,
       checklistCompleted: false,
       status: 'STARTED',
       notes: data.notes ?? null,
-      beforeWeightG: null,
+      beforeWeightG: data.beforeWeightG ? String(data.beforeWeightG) : null,
       afterWeightG: null,
       performedBy: data.performedBy,
       startedAt: new Date(),
@@ -263,8 +345,15 @@ class FakeInvQueries {
     return this.refillSessions.get(id) ?? null;
   }
 
-  async listRefillSessions(_filter: any): Promise<{ items: RefillSessionRecord[]; total: number }> {
-    const list = Array.from(this.refillSessions.values());
+  async findRefillSessionByIdForUpdate(id: string): Promise<RefillSessionRecord | null> {
+    return this.findRefillSessionById(id);
+  }
+
+  async listRefillSessions(_filter: any, scope?: any): Promise<{ items: RefillSessionRecord[]; total: number }> {
+    let list = Array.from(this.refillSessions.values());
+    if (scope && scope.kind === 'BRAND') {
+      list = list.filter((x) => x.brandId === scope.brandId);
+    }
     return { items: list, total: list.length };
   }
 
@@ -292,12 +381,29 @@ describe('Module INV Unit Tests', () => {
     fakeQueries = new FakeInvQueries();
     service = new InvService(fakeQueries as any);
 
+    // Chuẩn bị sản phẩm thuộc Brand A
+    fakeQueries.products.set(PRODUCT_A1, {
+      id: PRODUCT_A1,
+      brandId: BRAND_A,
+      name: 'Product A1',
+    });
+
     // Chuẩn bị 1 hợp đồng thuê slot đang active của BRAND_A
     fakeQueries.activeRentals.set(SLOT_1, {
       id: 'rental-1',
       slotId: SLOT_1,
       brandId: BRAND_A,
       status: 'ACTIVE',
+      fragranceProductId: PRODUCT_A1,
+    });
+
+    // Chuẩn bị slot
+    fakeQueries.slots.set(SLOT_1, {
+      id: SLOT_1,
+      machineId: MACHINE_1,
+      slotNumber: 1,
+      activeBottleId: null,
+      status: 'AVAILABLE',
     });
   });
 
@@ -319,6 +425,23 @@ describe('Module INV Unit Tests', () => {
       await expect(
         service.declareShipment(INVENTORY_STAFF, {
           fragranceProductId: PRODUCT_A1,
+          declaredQuantity: 10,
+          declaredBottleVolumeMl: '50',
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-06: Khai báo gửi hàng với sản phẩm của thương hiệu khác -> ném PRODUCT_NOT_OWNED', async () => {
+      const prodB = 'prod-brand-b-1';
+      fakeQueries.products.set(prodB, {
+        id: prodB,
+        brandId: 'brand-b-different',
+        name: 'Brand B Perfume',
+      });
+
+      await expect(
+        service.declareShipment(BRAND_ADMIN_A, {
+          fragranceProductId: prodB,
           declaredQuantity: 10,
           declaredBottleVolumeMl: '50',
         }),
@@ -539,6 +662,242 @@ describe('Module INV Unit Tests', () => {
       const bottle = await fakeQueries.findBottleById(validBottleId);
       expect(bottle?.status).toBe('INSTALLED');
       expect(fakeQueries.slotBottles.get(SLOT_1)).toBe(validBottleId);
+    });
+
+    it('W7-02: Chặn mở phiếu nạp trên hóa đơn DRAFT chưa thanh toán (paid_at is null)', async () => {
+      fakeQueries.activeRentals.set(SLOT_1, {
+        id: 'rental-draft-unpaid',
+        slotId: SLOT_1,
+        brandId: BRAND_A,
+        status: 'DRAFT',
+        paidAt: null,
+      });
+
+      await expect(
+        service.openRefillSession(INVENTORY_STAFF, {
+          machineId: MACHINE_1,
+          slotId: SLOT_1,
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-02: Mở được phiếu nạp trên hóa đơn DRAFT đã thanh toán (paid_at is not null)', async () => {
+      fakeQueries.activeRentals.set(SLOT_1, {
+        id: 'rental-draft-paid',
+        slotId: SLOT_1,
+        brandId: BRAND_A,
+        status: 'DRAFT',
+        paidAt: new Date(),
+        cancelledAt: null,
+      });
+
+      const session = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+      expect(session.id).toBeDefined();
+      expect(session.status).toBe('STARTED');
+    });
+
+    it('W7-06: Chặn mở hai phiếu nạp STARTED trên cùng một slot', async () => {
+      // Đã có 1 phiếu mở
+      await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+
+      // Mở tiếp lần 2 trên cùng slot -> ném lỗi CONFLICT
+      await expect(
+        service.openRefillSession(INVENTORY_STAFF, {
+          machineId: MACHINE_1,
+          slotId: SLOT_1,
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-06: Brand Admin B không thấy phiếu nạp của Brand A (cô lập dữ liệu BR-012)', async () => {
+      // Mở phiếu cho Brand A trên SLOT_1
+      await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+
+      const BRAND_ADMIN_B: AuthenticatedUser = {
+        userId: 'user-brand-b',
+        email: 'admin@brand-b.com',
+        fullName: 'Brand B Admin',
+        roles: ['BRAND_ADMIN'],
+        brandId: '22222222-2222-4222-8222-000000000002',
+        permissions: new Set(['brand.manage']),
+        permissionVersion: 1,
+        scope: { type: 'BRAND', brandId: '22222222-2222-4222-8222-000000000002' },
+        sessionId: 'session-brand-b',
+        mustChangePassword: false,
+      };
+
+      const res = await service.listRefillSessions(BRAND_ADMIN_B, { page: 1, pageSize: 10 });
+      expect(res.items.length).toBe(0);
+    });
+
+    it('W7-04: Chặn đóng phiếu khi chai không ở trạng thái IN_STOCK (ví dụ INSTALLED)', async () => {
+      const session = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+
+      // Tạo chai đang ở trạng thái INSTALLED ở máy khác
+      const installedBottle = await fakeQueries.createBottle({
+        batchId: approvedBatchId,
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        identifier: 'BTL-ALREADY-INSTALLED',
+        initialVolumeMl: '50',
+        status: 'INSTALLED',
+      });
+
+      await expect(
+        service.closeRefillSession(INVENTORY_STAFF, session.id, {
+          newBottleId: installedBottle.id,
+          checklistCompleted: true,
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-04: Chặn đóng phiếu khi sản phẩm của chai lệch cấu hình slot (PRODUCT_MISMATCH)', async () => {
+      const session = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+
+      const mismatchProdId = 'prod-mismatch-1111';
+      fakeQueries.products.set(mismatchProdId, {
+        id: mismatchProdId,
+        brandId: BRAND_A,
+        name: 'Another Perfume',
+      });
+
+      const mismatchBottle = await fakeQueries.createBottle({
+        batchId: approvedBatchId,
+        brandId: BRAND_A,
+        fragranceProductId: mismatchProdId,
+        identifier: 'BTL-MISMATCH',
+        initialVolumeMl: '50',
+        status: 'IN_STOCK',
+      });
+
+      await expect(
+        service.closeRefillSession(INVENTORY_STAFF, session.id, {
+          newBottleId: mismatchBottle.id,
+          checklistCompleted: true,
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-04: Chặn đóng phiếu khi chai đã quá hạn sử dụng (BOTTLE_EXPIRED)', async () => {
+      const session = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+
+      const expiredBatch = await fakeQueries.createBatch({
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        batchNumber: 'BATCH-EXPIRED',
+        quantityReceived: 10,
+        receivedAt: new Date(Date.now() - 365 * 24 * 3600 * 1000),
+        expiresAt: new Date(Date.now() - 24 * 3600 * 1000), // Hôm qua đã hết hạn
+        supplierInfo: { authenticityStatus: 'APPROVED' },
+      });
+
+      const expiredBottle = await fakeQueries.createBottle({
+        batchId: expiredBatch.id,
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        identifier: 'BTL-EXPIRED-1',
+        initialVolumeMl: '50',
+        status: 'IN_STOCK',
+      });
+
+      await expect(
+        service.closeRefillSession(INVENTORY_STAFF, session.id, {
+          newBottleId: expiredBottle.id,
+          checklistCompleted: true,
+        }),
+      ).rejects.toThrow(AppError);
+    });
+
+    it('W7-04: Đóng phiếu nạp thu hồi chai cũ: còn nước hoa về IN_STOCK, hết nước hoa về EMPTY', async () => {
+      // Gán 1 chai cũ vào slot có remaining > 0
+      const oldBottle1 = await fakeQueries.createBottle({
+        batchId: approvedBatchId,
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        identifier: 'BTL-OLD-PARTIAL',
+        initialVolumeMl: '50',
+        status: 'INSTALLED',
+      });
+      // Sửa còn 15ml
+      fakeQueries.bottles.set(oldBottle1.id, {
+        ...oldBottle1,
+        currentEstimatedMl: '15',
+      });
+      fakeQueries.slotBottles.set(SLOT_1, oldBottle1.id);
+
+      const session1 = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+      expect(session1.oldBottleId).toBe(oldBottle1.id);
+
+      // Đóng phiếu
+      await service.closeRefillSession(INVENTORY_STAFF, session1.id, {
+        newBottleId: validBottleId,
+        checklistCompleted: true,
+      });
+
+      // Chai cũ còn 15ml -> chuyển về IN_STOCK và có removed_at
+      const updatedOld1 = await fakeQueries.findBottleById(oldBottle1.id);
+      expect(updatedOld1?.status).toBe('IN_STOCK');
+      expect(updatedOld1?.removedAt).toBeDefined();
+
+      // Giờ thử với chai cũ đã cạn (= 0ml)
+      const oldBottle2 = await fakeQueries.createBottle({
+        batchId: approvedBatchId,
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        identifier: 'BTL-OLD-EMPTY',
+        initialVolumeMl: '50',
+        status: 'INSTALLED',
+      });
+      fakeQueries.bottles.set(oldBottle2.id, {
+        ...oldBottle2,
+        currentEstimatedMl: '0',
+      });
+      fakeQueries.slotBottles.set(SLOT_1, oldBottle2.id);
+
+      // Reset slot session
+      const newValidBottle = await fakeQueries.createBottle({
+        batchId: approvedBatchId,
+        brandId: BRAND_A,
+        fragranceProductId: PRODUCT_A1,
+        identifier: 'BTL-NEW-VALID-2',
+        initialVolumeMl: '50',
+        status: 'IN_STOCK',
+      });
+
+      const session2 = await service.openRefillSession(INVENTORY_STAFF, {
+        machineId: MACHINE_1,
+        slotId: SLOT_1,
+      });
+      await service.closeRefillSession(INVENTORY_STAFF, session2.id, {
+        newBottleId: newValidBottle.id,
+        checklistCompleted: true,
+      });
+
+      // Chai cũ 0ml -> chuyển về EMPTY
+      const updatedOld2 = await fakeQueries.findBottleById(oldBottle2.id);
+      expect(updatedOld2?.status).toBe('EMPTY');
+      expect(updatedOld2?.removedAt).toBeDefined();
     });
   });
 });

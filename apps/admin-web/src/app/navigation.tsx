@@ -123,12 +123,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/notifications',
     label: 'ui.notifications',
     icon: <MailOutlined />,
-    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
   },
   {
     path: '/shipments',
     label: 'ui.shipments',
     icon: <InboxOutlined />,
-    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
   },
 ];

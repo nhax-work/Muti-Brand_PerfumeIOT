@@ -222,23 +222,6 @@ export class MchService {
       items.map(async (m) => {
         if (m.operatingMode === 'DRAINING') {
           const pendingCount = await this.queries.countPendingOrdersAndCommands(m.id);
-          if (pendingCount === 0) {
-            const autoUpdated = await this.queries.transitionDrainingToMaintenance(m.id);
-            if (autoUpdated) {
-              await this.audit.log({
-                actorType: 'SYSTEM',
-                actorId: 'system',
-                action: 'mch.machine.mode_changed',
-                targetType: 'machine',
-                targetId: m.id,
-                severity: 'WARNING',
-                before: { operatingMode: 'DRAINING' },
-                after: { operatingMode: 'MAINTENANCE' },
-                metadata: { reason: 'Tự động chuyển sang MAINTENANCE khi cạn đơn dở dang' },
-              });
-              return toMachineDto(autoUpdated);
-            }
-          }
           return toMachineDto({ ...m, drainingOrdersCount: pendingCount });
         }
         return toMachineDto(m);
@@ -248,32 +231,14 @@ export class MchService {
   }
 
   async getMachine(id: string): Promise<MachineDto> {
-    let record = await this.queries.findMachineById(id);
+    const record = await this.queries.findMachineById(id);
     if (!record) {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
 
     if (record.operatingMode === 'DRAINING') {
       const pendingCount = await this.queries.countPendingOrdersAndCommands(id);
-      if (pendingCount === 0) {
-        const autoUpdated = await this.queries.transitionDrainingToMaintenance(id);
-        if (autoUpdated) {
-          record = autoUpdated;
-          await this.audit.log({
-            actorType: 'SYSTEM',
-            actorId: 'system',
-            action: 'mch.machine.mode_changed',
-            targetType: 'machine',
-            targetId: id,
-            severity: 'WARNING',
-            before: { operatingMode: 'DRAINING' },
-            after: { operatingMode: 'MAINTENANCE' },
-            metadata: { reason: 'Tự động chuyển sang MAINTENANCE khi cạn đơn dở dang' },
-          });
-        }
-      } else {
-        record = { ...record, drainingOrdersCount: pendingCount };
-      }
+      return toMachineDto({ ...record, drainingOrdersCount: pendingCount });
     }
 
     return toMachineDto(record);

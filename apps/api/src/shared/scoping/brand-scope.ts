@@ -99,6 +99,9 @@ export function brandScopedOrders(scope: BrandScope, alias = 'orders'): Expressi
       and ${sql.ref(`${alias}.revenue_owner`)} = 'BRAND'`;
 }
 
+/** Trạng thái hợp đồng đang có hiệu lực (spec/glossary.md). */
+export const ACTIVE_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE'] as const;
+
 /** Trạng thái hợp đồng được coi là đang chiếm dụng slot (spec/glossary.md). */
 export const OCCUPYING_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
 

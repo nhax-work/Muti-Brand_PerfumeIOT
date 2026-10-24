@@ -5,7 +5,7 @@
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
-import { CurrentUser, type AuthenticatedUser } from '../auth/index.js';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
 import { InvService } from './inv.service.js';
 
 const IdParam = z.string().uuid();
@@ -24,6 +24,8 @@ const DeclareShipmentBody = z.object({
 
 const ReceiveShipmentBody = z.object({
   receivedQuantity: z.number().int().min(0),
+  batchNumber: z.string().min(1).max(100).optional(),
+  expiresAt: z.string().optional().nullable(),
   discrepancyNotes: z.string().optional().nullable(),
 });
 
@@ -44,19 +46,22 @@ const RegisterBottleBody = z.object({
 });
 
 const OpenRefillSessionBody = z.object({
-  machineId: z.string().uuid(),
+  machineId: z.string().uuid().optional(),
   slotId: z.string().uuid(),
+  beforeWeightG: z.number().min(0).optional().nullable(),
+  refillRequestId: z.string().uuid().optional().nullable(),
   notes: z.string().optional().nullable(),
 });
 
 const CloseRefillSessionBody = z.object({
   newBottleId: z.string().uuid(),
-  initialMeasuredWeightG: z.number().positive(),
+  initialMeasuredWeightG: z.number().positive().optional(),
+  afterWeightG: z.number().positive().optional(),
   checklistCompleted: z.boolean(),
   notes: z.string().optional().nullable(),
 });
 
-@Controller(['shipment-declarations', 'shipments'])
+@Controller('shipment-declarations')
 export class ShipmentDeclarationsController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
@@ -92,8 +97,9 @@ export class ShipmentDeclarationsController {
     return this.inv.getShipmentDeclaration(actor, validatedId);
   }
 
-  @Post([':id/receive', ':id/confirm-receive'])
+  @Post(':id/receive')
   @HttpCode(200)
+  @RequirePermissions('inventory.manage')
   receive(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(ReceiveShipmentBody, body);
@@ -101,7 +107,7 @@ export class ShipmentDeclarationsController {
   }
 }
 
-@Controller(['inventory-batches', 'batches'])
+@Controller('inventory-batches')
 export class InventoryBatchesController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
@@ -131,7 +137,7 @@ export class InventoryBatchesController {
     return this.inv.getBatch(actor, validatedId);
   }
 
-  @Post([':id/authenticity-documents', ':id/authenticity'])
+  @Post(':id/authenticity-documents')
   @HttpCode(200)
   submitAuthenticity(
     @CurrentUser() actor: AuthenticatedUser,
@@ -143,14 +149,14 @@ export class InventoryBatchesController {
     return this.inv.submitBatchAuthenticity(actor, validatedId, input);
   }
 
-  @Post([':id/approve-authenticity', ':id/approve'])
+  @Post(':id/approve-authenticity')
   @HttpCode(200)
   approveAuthenticity(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     const validatedId = parseBody(IdParam, id);
     return this.inv.approveBatchAuthenticity(actor, validatedId);
   }
 
-  @Post([':id/reject-authenticity', ':id/reject'])
+  @Post(':id/reject-authenticity')
   @HttpCode(200)
   rejectAuthenticity(
     @CurrentUser() actor: AuthenticatedUser,
@@ -168,6 +174,7 @@ export class BottlesController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
   @Post()
+  @RequirePermissions('inventory.manage')
   register(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     const input = parseBody(RegisterBottleBody, body);
     return this.inv.registerBottle(actor, input);
@@ -211,13 +218,14 @@ export class RefillSessionsController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
   @Post()
+  @RequirePermissions('inventory.manage')
   open(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     const input = parseBody(OpenRefillSessionBody, body);
     return this.inv.openRefillSession(actor, input);
   }
 
   @Get()
-  async list(@Query() query: unknown) {
+  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: unknown) {
     const pq = parseBody(
       PageQuery.extend({
         machineId: z.string().uuid().optional(),
@@ -225,7 +233,7 @@ export class RefillSessionsController {
       }),
       query,
     );
-    const { items, total } = await this.inv.listRefillSessions(pq);
+    const { items, total } = await this.inv.listRefillSessions(actor, pq);
     return {
       items,
       meta: {
@@ -238,6 +246,7 @@ export class RefillSessionsController {
 
   @Post(':id/close')
   @HttpCode(200)
+  @RequirePermissions('inventory.manage')
   close(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(CloseRefillSessionBody, body);
