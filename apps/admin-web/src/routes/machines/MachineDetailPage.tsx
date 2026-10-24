@@ -59,7 +59,9 @@ export default function MachineDetailPage() {
   const { id: machineId } = useParams<{ id: string }>();
 
   const [modeModalOpen, setModeModalOpen] = useState(false);
+  const [modeModalInitialForce, setModeModalInitialForce] = useState(false);
   const { user } = useAuth();
+
   // Khóa MQTT cần quyền machine.manage + xác thực lại — chỉ Super Admin (FR-MCH-02).
   const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
   const [selectedSlotForConfig, setSelectedSlotForConfig] = useState<MachineSlot | null>(null);
@@ -287,6 +289,11 @@ export default function MachineDetailPage() {
                 >
                   {t(`machineOperatingMode.${machine.operatingMode}`)}
                 </Tag>
+                {machine.operatingMode === 'DRAINING' && (
+                  <Tag color="gold" style={{ margin: 0, fontWeight: 700 }}>
+                    {t('ui.drainingOrdersCountBadge', { count: machine.drainingOrdersCount ?? 0 })}
+                  </Tag>
+                )}
                 {location && (
                   <Space size={4} style={{ color: '#475569', fontSize: 13 }}>
                     <EnvironmentOutlined style={{ color: '#0284c7' }} />
@@ -302,7 +309,10 @@ export default function MachineDetailPage() {
               type="primary"
               size="large"
               icon={<EditOutlined />}
-              onClick={() => setModeModalOpen(true)}
+              onClick={() => {
+                setModeModalInitialForce(false);
+                setModeModalOpen(true);
+              }}
               style={{
                 borderRadius: 8,
                 boxShadow: '0 4px 12px rgba(2, 132, 199, 0.3)',
@@ -312,6 +322,41 @@ export default function MachineDetailPage() {
             </Button>
           </div>
         </div>
+
+        {/* CẢNH BÁO MÁY ĐANG DRAINING */}
+        {machine.operatingMode === 'DRAINING' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 20, borderRadius: 10, border: '1px solid #fde047' }}
+            message={
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 12,
+                }}
+              >
+                <span style={{ fontWeight: 600 }}>
+                  {t('ui.drainingStatusBanner', { count: machine.drainingOrdersCount ?? 0 })}
+                </span>
+                <Button
+                  danger
+                  type="primary"
+                  size="small"
+                  onClick={() => {
+                    setModeModalInitialForce(true);
+                    setModeModalOpen(true);
+                  }}
+                >
+                  {t('ui.forceMaintenanceNow')}
+                </Button>
+              </div>
+            }
+          />
+        )}
 
         {/* CÁC THẺ THỐNG KÊ NHANH CHO MÁY NÀY */}
         <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
@@ -466,6 +511,7 @@ export default function MachineDetailPage() {
         <MachineModeModal
           machine={machine}
           open={modeModalOpen}
+          initialForce={modeModalInitialForce}
           onClose={() => setModeModalOpen(false)}
         />
 

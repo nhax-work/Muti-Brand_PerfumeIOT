@@ -2,10 +2,12 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
+import { AlrModule } from './modules/alr/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { DspModule } from './modules/dsp/index.js';
 import { MchModule } from './modules/mch/index.js';
+import { InvModule } from './modules/inv/index.js';
 import { IotModule } from './modules/iot/iot.module.js';
 import { OrdModule, PaymentModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
@@ -19,10 +21,12 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
   imports: [
     CoreModule,
     AuthModule,
+    AlrModule,
     BndModule,
     PrdModule,
     UsrModule,
     MchModule,
+    InvModule,
     RptModule,
     RevModule,
     SltModule,

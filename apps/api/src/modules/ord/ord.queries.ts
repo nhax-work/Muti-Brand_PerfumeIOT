@@ -608,6 +608,22 @@ export class OrdQueries {
       occurredAt: r.occurred_at,
     }));
   }
+
+  /**
+   * FR-INV-30 AC3, ADR-0015: Kiểm tra máy có phiếu nạp nào đang mở (STARTED) không.
+   */
+  async machineHasActiveRefillSession(
+    machineId: string,
+    executor: Executor = this.db,
+  ): Promise<boolean> {
+    const row = await executor
+      .selectFrom('refill_sessions')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', '=', 'STARTED')
+      .executeTakeFirst();
+    return Boolean(row);
+  }
 }
 
 function toOrderRecord(row: Selectable<Orders>): OrderRecord {

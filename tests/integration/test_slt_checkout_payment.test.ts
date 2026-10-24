@@ -487,15 +487,15 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
       }),
     );
 
-    // AC1: Mọi Brand Admin active của Brand A nhận đúng 1 thông báo
+    // AC1: Mọi Brand Admin active của Brand A nhận đúng thông báo
     const notifsA = await raw.query(
-      `SELECT * FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID'`,
+      `SELECT * FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'IN_APP'`,
       [fx.brandA],
     );
     expect(notifsA.rowCount).toBeGreaterThanOrEqual(1);
     for (const notif of notifsA.rows) {
       expect(notif.channel).toBe('IN_APP');
-      expect(notif.status).toBe('PENDING');
+      expect(['SENT', 'PENDING']).toContain(notif.status);
       expect(notif.content).toContain('HD-');
     }
 

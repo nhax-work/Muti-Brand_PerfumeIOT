@@ -8,6 +8,7 @@ import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router';
 import { vi } from 'vitest';
+import { message, notification } from 'antd';
 import { I18nProvider } from '@/shared/i18n';
 
 export function installDomStubs(): void {
@@ -28,6 +29,18 @@ export function installDomStubs(): void {
       dispatchEvent: vi.fn(),
     })),
   });
+
+  message.success = vi.fn().mockReturnValue(() => {});
+  message.error = vi.fn().mockReturnValue(() => {});
+  message.warning = vi.fn().mockReturnValue(() => {});
+  message.info = vi.fn().mockReturnValue(() => {});
+  message.open = vi.fn().mockReturnValue(() => {});
+
+  notification.success = vi.fn();
+  notification.error = vi.fn();
+  notification.warning = vi.fn();
+  notification.info = vi.fn();
+  notification.open = vi.fn();
 }
 
 export function renderScreen(ui: ReactElement) {

@@ -18,6 +18,9 @@ export const mch = {
   machineDisabledCannotEnableSlot: 'Máy chứa slot đã bị vô hiệu hóa, không bật slot được',
   slotOccupied: 'Slot đang có hóa đơn thuê, không xóa được',
   slotChangedConcurrently: 'Slot vừa được thay đổi bởi thao tác khác, vui lòng tải lại và thử lại',
+  drainingDirectSetForbidden:
+    'Không được đặt trực tiếp chế độ DRAINING. Hãy chọn chế độ Bảo trì để hệ thống tự chuyển',
+  reasonRequired: 'Lý do là bắt buộc khi ép bảo trì khẩn cấp',
 } as const;
 
 /** Nhãn hiển thị của `slot_status`. Khóa trùng đúng giá trị enum trong CSDL. */

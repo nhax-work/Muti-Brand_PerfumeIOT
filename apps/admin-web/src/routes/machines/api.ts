@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
 import { useReauth } from '@/shared/auth';
 
-export type Machine = components['schemas']['Machine'];
+export type Machine = components['schemas']['Machine'] & { drainingOrdersCount?: number };
 export type MachineSlot = components['schemas']['MachineSlot'];
 export type Location = components['schemas']['Location'];
 export type SlotRental = components['schemas']['SlotRental'];
@@ -27,8 +27,8 @@ export function useMachines(params: MachineFilterParams = {}) {
   const { page = 1, pageSize = 20, locationId, status, operatingMode } = params;
   return useQuery({
     queryKey: ['machines', { page, pageSize, locationId, status, operatingMode }],
-    queryFn: () =>
-      unwrap(
+    queryFn: async () => {
+      const res = await unwrap(
         api.GET('/machines', {
           params: {
             query: {
@@ -40,7 +40,12 @@ export function useMachines(params: MachineFilterParams = {}) {
             },
           },
         }),
-      ),
+      );
+      return res as unknown as {
+        items: Machine[];
+        meta: { page: number; pageSize: number; total: number };
+      };
+    },
   });
 }
 
@@ -62,12 +67,14 @@ export function useLocations() {
 export function useMachine(id: string | undefined) {
   return useQuery({
     queryKey: ['machine', id],
-    queryFn: () =>
-      unwrap(
+    queryFn: async () => {
+      const res = await unwrap(
         api.GET('/machines/{id}', {
           params: { path: { id: id! } },
         }),
-      ),
+      );
+      return res as Machine;
+    },
     enabled: Boolean(id),
   });
 }
@@ -160,10 +167,12 @@ export function useSetMachineMode() {
       id,
       operatingMode,
       reason,
+      force,
     }: {
       id: string;
       operatingMode: MachineOperatingMode;
       reason?: string;
+      force?: boolean;
     }) => {
       const reauthToken = await requestReauth();
       return unwrap(
@@ -172,7 +181,7 @@ export function useSetMachineMode() {
             path: { id },
             header: { 'X-Reauth-Token': reauthToken },
           },
-          body: { operatingMode, reason },
+          body: { operatingMode, reason, force },
         }),
       );
     },

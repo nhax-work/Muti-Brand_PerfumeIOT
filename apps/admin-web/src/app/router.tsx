@@ -146,8 +146,21 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/rentals/RentalDetailPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/notifications',
+        lazy: () =>
+          import('@/routes/notifications/NotificationsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/shipments',
+        lazy: () =>
+          import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
+
   {
     path: '*',
     lazy: () => import('@/routes/not-found/NotFoundPage').then((m) => ({ Component: m.default })),

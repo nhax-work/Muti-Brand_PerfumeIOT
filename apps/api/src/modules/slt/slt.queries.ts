@@ -794,7 +794,31 @@ export class SltQueries {
     return rows.map((r) => r.id);
   }
 
-  /** Chèn thông báo (FR-SLT-43). */
+  /** Tìm các Brand Admin đang hoạt động (ACTIVE) của thương hiệu kèm email. */
+  async findActiveBrandAdmins(
+    brandId: string,
+    executor: Executor = this.db,
+  ): Promise<{ id: string; email: string }[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .select(['u.id', 'u.email'])
+      .where('u.brand_id', '=', brandId)
+      .where('u.status', '=', 'ACTIVE')
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('user_roles as ur')
+            .innerJoin('roles as r', 'r.id', 'ur.role_id')
+            .select('ur.id')
+            .whereRef('ur.user_id', '=', 'u.id')
+            .where('r.code', '=', 'BRAND_ADMIN'),
+        ),
+      )
+      .execute();
+    return rows.map((r) => ({ id: r.id, email: r.email }));
+  }
+
+  /** Chèn thông báo (FR-SLT-43, FR-ALR-16). */
   async insertNotification(
     notification: {
       readonly brandId: string;
@@ -803,7 +827,8 @@ export class SltQueries {
       readonly channel: string;
       readonly subject: string;
       readonly content: string;
-      readonly status: 'PENDING';
+      readonly status: 'PENDING' | 'SENT' | 'FAILED' | 'READ';
+      readonly sentAt?: Date | null;
       readonly createdAt: Date;
     },
     executor: Executor = this.db,
@@ -818,6 +843,7 @@ export class SltQueries {
         subject: notification.subject,
         content: notification.content,
         status: notification.status,
+        sent_at: notification.sentAt ?? null,
         created_at: notification.createdAt,
       })
       .execute();

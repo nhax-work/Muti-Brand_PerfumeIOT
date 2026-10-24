@@ -56,22 +56,52 @@ export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
       await this.queries.markRentalPaid(r.id, event.paidAt, invoiceNumber, tx);
     }
 
-    // 6. Thông báo FR-SLT-43 AC1: một bản ghi cho mỗi Brand Admin đang hoạt động của thương hiệu.
-    const brandAdminIds = await this.queries.findActiveBrandAdminIds(event.brandId, tx);
+    // 6. Thông báo FR-SLT-43 AC1 & FR-ALR-16: Một bản ghi IN_APP và EMAIL cho mỗi Brand Admin đang hoạt động.
+    const brandAdmins = await this.queries.findActiveBrandAdmins(event.brandId, tx);
     const invoiceListText = invoiceNumbers.join(', ');
-    const notificationContent = `Thanh toán thành công cho phiên thuê slot. Mã hóa đơn: ${invoiceListText}. Vui lòng gửi hàng và cấu hình slot cho các chai nước hoa.`;
-    const notificationSubject = `Xác nhận thanh toán thuê slot (${invoiceListText})`;
+    const notificationContent = `Kính gửi Quý đối tác,
 
-    for (const adminId of brandAdminIds) {
+Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
+- Mã phiên thanh toán: ${event.checkoutId}
+- Danh sách mã hóa đơn: ${invoiceListText}
+- Thời điểm thanh toán: ${event.paidAt.toISOString()}
+
+Vui lòng gửi hàng và cấu hình slot cho các chai nước hoa theo quy định.
+
+Thông báo này được lưu trữ trong hệ thống làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
+
+Trân trọng,
+Hệ thống ScentStation`;
+    const notificationSubject = `[ScentStation] Xác nhận thanh toán thuê slot thành công (${invoiceListText})`;
+
+    for (const admin of brandAdmins) {
+      // Kênh IN_APP (FR-SLT-43)
       await this.queries.insertNotification(
         {
           brandId: event.brandId,
-          recipientUserId: adminId,
+          recipientUserId: admin.id,
           type: 'RENTAL_CHECKOUT_PAID',
           channel: 'IN_APP',
           subject: notificationSubject,
           content: notificationContent,
-          status: 'PENDING',
+          status: 'SENT',
+          sentAt: event.receivedAt,
+          createdAt: event.receivedAt,
+        },
+        tx,
+      );
+
+      // Kênh EMAIL làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013)
+      await this.queries.insertNotification(
+        {
+          brandId: event.brandId,
+          recipientUserId: admin.id,
+          type: 'RENTAL_CHECKOUT_PAID',
+          channel: 'EMAIL',
+          subject: notificationSubject,
+          content: notificationContent,
+          status: 'SENT',
+          sentAt: event.receivedAt,
           createdAt: event.receivedAt,
         },
         tx,

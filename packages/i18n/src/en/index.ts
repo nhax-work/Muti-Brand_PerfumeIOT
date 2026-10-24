@@ -87,6 +87,27 @@ export const en: SameKeysAs<typeof vi> = {
     slotOccupied: 'The slot has an active rental and cannot be removed',
     slotChangedConcurrently:
       'The slot was changed by another operation, please reload and try again',
+    drainingDirectSetForbidden:
+      'Cannot set DRAINING mode directly. Choose Maintenance mode for safe draining',
+    reasonRequired: 'A reason is required when forcing emergency maintenance',
+  },
+
+  alr: {
+    notificationNotFound: 'Notification or sending evidence not found.',
+    retryOnlyFailed: 'Can only retry sending for notifications with FAILED status.',
+    emailChannelRequired: 'Can only retry for email notifications with a recipient address.',
+  },
+
+  notificationStatus: {
+    PENDING: 'Pending',
+    SENT: 'Sent',
+    FAILED: 'Failed',
+    READ: 'Read',
+  },
+
+  notificationChannel: {
+    EMAIL: 'Email',
+    IN_APP: 'In-app',
   },
 
   slotStatus: {
@@ -451,6 +472,21 @@ export const en: SameKeysAs<typeof vi> = {
     modeMaintBadge: 'Suspended',
     modeMaintDesc:
       'Kiosk displays maintenance screen, safely suspending dispensing for technicians.',
+    modeMaintDescSoft:
+      'Kiosk stops accepting new orders. If there are pending orders, the machine will drain first then switch to Maintenance.',
+    modeDrainingTitle: 'Draining before maintenance',
+    modeDrainingBadge: 'Serving remaining orders',
+    modeDrainingDesc:
+      'Kiosk stops accepting new orders, finishes remaining paid orders, then enters Maintenance.',
+    forceMaintenanceCheckbox: 'Force emergency maintenance (Immediate)',
+    forceMaintenanceWarning:
+      'WARNING: Emergency maintenance will halt the machine immediately. All pending orders will be marked FAILED and flagged for manual refund review.',
+    forceReasonRequired: 'A reason is required when forcing emergency maintenance',
+    btnForceMaintenance: 'Force Maintenance Now',
+    drainingOrdersCountBadge: '{count} remaining orders',
+    drainingStatusBanner:
+      'The machine is DRAINING ({count} pending orders). It will automatically switch to Maintenance once done.',
+    forceMaintenanceNow: 'Force Maintenance Now (Emergency)',
     modeDisabledTitle: 'Disabled',
     modeDisabledBadge: 'System Offline',
     modeDisabledDesc:
@@ -882,6 +918,49 @@ export const en: SameKeysAs<typeof vi> = {
     nonRenewalActiveTitle: 'Non-renewal requested',
     nonRenewalActiveDesc:
       'Requested on {date}. Return method: {method}. Will not enter grace period upon expiry.',
+    // Notifications & Email sending evidence (Task 3, FR-ALR-16, ADR-0013)
+    notifications: 'Notifications',
+    notificationListTitle: 'Notification History & Dispatch Evidence',
+    notificationListSubtitle:
+      'Store all email dispatch evidence and transaction notifications as legal audit records.',
+    notificationChannelLabel: 'Channel',
+    notificationRecipientLabel: 'Recipient',
+    notificationTypeLabel: 'Event Type',
+    notificationSubjectLabel: 'Subject',
+    notificationSentAtLabel: 'Sent At',
+    notificationCreatedAtLabel: 'Created At',
+    viewNotificationEvidence: 'View Dispatch Evidence',
+    retryNotificationSend: 'Retry Email',
+    retryNotificationSuccess: 'Retried sending email successfully',
+    retryNotificationFailed: 'Failed to resend email',
+    notificationEvidenceModalTitle: 'Notification Audit Evidence',
+    notificationContentLabel: 'Notification / Email Content',
+    noNotificationsFound: 'No notifications recorded yet.',
+    filterAllChannels: 'All Channels',
+    filterAllStatuses: 'All Statuses',
+    shipments: 'Shipments & Inventory',
+    shipmentDeclarations: 'Shipment Declarations',
+    inventoryBatches: 'Batches & Authenticity',
+    refillSessions: 'Refill Sessions',
+    declareShipment: 'Declare New Shipment',
+    receiveShipment: 'Receive & Audit',
+    submitAuthenticity: 'Submit Authenticity Docs',
+    approveAuthenticity: 'Approve Authenticity',
+    rejectAuthenticity: 'Reject Authenticity',
+    openRefillSession: 'Open Refill Session',
+    closeRefillSession: 'Close Refill Session',
+    declaredQuantity: 'Declared Qty',
+    receivedQuantity: 'Received Qty',
+    bottleVolume: 'Bottle Volume (ml)',
+    expectedShipDate: 'Expected Ship Date',
+    discrepancyNotes: 'Discrepancy Notes',
+    authenticityStatusLabel: 'Authenticity Status',
+    batchNumberLabel: 'Batch Number',
+    documentUrlLabel: 'Document URL',
+    documentTypeLabel: 'Document Type',
+    rejectionReasonLabel: 'Rejection Reason',
+    checklistCompletedLabel: 'Checklist completed and safety verified',
+    initialMeasuredWeightLabel: 'Initial Measured Weight (g)',
     diagnosticDispense: 'Diagnostic spray',
     diagnosticTitle: 'Diagnostic spray on slot {slotNumber}',
     diagnosticHint:
@@ -1041,5 +1120,39 @@ export const en: SameKeysAs<typeof vi> = {
     pressButtonN: 'Press button {slot}',
     guideStepApproach: 'Wrist 10–15 cm from the nozzle',
     guideStepPress: 'Press the lit button {slot}',
+  },
+
+  inv: {
+    shipmentDeclared: 'Shipment declaration created',
+    shipmentReceived: 'Shipment receipt confirmed',
+    shipmentDiscrepancy: 'Quantity discrepancy recorded',
+    batchCreated: 'New inventory batch created',
+    batchNotApproved: 'Inventory batch authenticity has not been approved',
+    batchApproved: 'Batch authenticity approved',
+    batchRejected: 'Batch authenticity rejected',
+    authenticitySubmitted: 'Authenticity documents submitted',
+    bottleRegistered: 'Perfume bottle registered',
+    refillSessionOpened: 'Refill session opened',
+    refillSessionClosed: 'Refill session closed with checklist verified',
+    checklistRequired: 'Checklist completion is required before closing session',
+  },
+
+  shipmentStatus: {
+    DECLARED: 'Declared',
+    RECEIVED: 'Received',
+    DISCREPANCY: 'Discrepancy',
+    CANCELLED: 'Cancelled',
+  },
+
+  authenticityStatus: {
+    PENDING: 'Pending review',
+    APPROVED: 'Approved authentic',
+    REJECTED: 'Rejected',
+  },
+
+  refillSessionStatus: {
+    STARTED: 'In progress',
+    COMPLETED: 'Completed',
+    ABORTED: 'Aborted',
   },
 };

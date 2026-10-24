@@ -331,6 +331,13 @@ export default function MachinesPage() {
                         <Tag color={MODE_COLOR_MAP[m.operatingMode]} style={{ margin: 0 }}>
                           {t(`machineOperatingMode.${m.operatingMode}`)}
                         </Tag>
+                        {m.operatingMode === 'DRAINING' &&
+                          m.drainingOrdersCount !== undefined &&
+                          m.drainingOrdersCount > 0 && (
+                            <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>
+                              {t('ui.drainingOrdersCountBadge', { count: m.drainingOrdersCount })}
+                            </Tag>
+                          )}
                       </Space>
                     </div>
 

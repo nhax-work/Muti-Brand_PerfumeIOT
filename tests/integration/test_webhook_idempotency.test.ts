@@ -300,7 +300,7 @@ describe('Idempotency webhook — phiên thuê slot', () => {
     expect(await acceptedEvents(webhook.eventId)).toBe(1);
     // Một thông báo thanh toán cho mỗi Brand Admin, không nhân theo số lần gửi (FR-SLT-43).
     const notifications = await client.query(
-      `SELECT 1 FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID'`,
+      `SELECT 1 FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'IN_APP'`,
       [fx.brandA],
     );
     expect(notifications.rowCount).toBe(1);
