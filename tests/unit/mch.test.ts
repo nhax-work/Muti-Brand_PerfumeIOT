@@ -793,22 +793,20 @@ describe('MchService (Machine, Slot, Location)', () => {
       ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
     });
 
-    it('test_FR_MNT_05_auto_transition_draining — tự động chuyển MAINTENANCE khi cạn đơn (AC2, FR-MCH-09 AC2)', async () => {
-      queries.pendingOrdersByMachine.set(machineId, 1);
+    it('test_FR_MNT_05_read_only_draining — getMachine chỉ đọc và trả về drainingOrdersCount (W7-08)', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 2);
       await service.setMachineMode(SUPER_ADMIN, machineId, {
         operatingMode: 'MAINTENANCE',
       });
-      expect((await service.getMachine(machineId)).operatingMode).toBe('DRAINING');
+      const draining = await service.getMachine(machineId);
+      expect(draining.operatingMode).toBe('DRAINING');
+      expect(draining.drainingOrdersCount).toBe(2);
 
-      // Đơn dở dang hoàn tất -> số đơn về 0
+      // Đơn dở dang giảm -> getMachine chỉ đọc số đơn còn lại, việc tự chuyển MAINTENANCE do DSP đảm nhận
       queries.pendingOrdersByMachine.set(machineId, 0);
-
       const refreshed = await service.getMachine(machineId);
-      expect(refreshed.operatingMode).toBe('MAINTENANCE');
-      expect(queries.statusHistories.at(-1)).toMatchObject({
-        machineId,
-        mode: 'MAINTENANCE',
-      });
+      expect(refreshed.operatingMode).toBe('DRAINING');
+      expect(refreshed.drainingOrdersCount).toBe(0);
     });
 
     it('test_FR_MNT_17_force_emergency_maintenance — ép bảo trì khẩn cấp thành công kèm lý do', async () => {

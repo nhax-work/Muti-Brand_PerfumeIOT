@@ -3,13 +3,17 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/principal.loader.js';
 import { AppError } from '../../shared/errors/index.js';
 import { resolveBrandScope } from '../../shared/scoping/index.js';
+import { DATABASE, type Database } from '../../shared/db/index.js';
+import type { BottleStatus } from '../../shared/db/types.generated.js';
+import { AuditService } from '../../shared/audit/index.js';
 import {
   InvQueries,
   type BottleRecord,
+  type Executor,
   type InventoryBatchRecord,
   type RefillSessionRecord,
   type ShipmentDeclarationRecord,
@@ -24,6 +28,8 @@ export interface CreateShipmentInput {
 
 export interface ReceiveShipmentInput {
   receivedQuantity: number;
+  batchNumber?: string;
+  expiresAt?: string | Date | null;
   discrepancyNotes?: string | null;
 }
 
@@ -33,23 +39,39 @@ export interface SubmitAuthenticityInput {
 }
 
 export interface OpenRefillSessionInput {
-  machineId: string;
+  machineId?: string;
   slotId: string;
+  beforeWeightG?: number | null;
+  refillRequestId?: string | null;
   notes?: string | null;
 }
 
 export interface CloseRefillSessionInput {
   newBottleId: string;
-  initialMeasuredWeightG: number;
   checklistCompleted: boolean;
+  initialMeasuredWeightG?: number;
+  afterWeightG?: number;
   notes?: string | null;
 }
+
+type Audit = Pick<AuditService, 'log'>;
 
 @Injectable()
 export class InvService {
   private readonly logger = new Logger(InvService.name);
 
-  constructor(@Inject(InvQueries) private readonly queries: InvQueries) {}
+  constructor(
+    @Inject(InvQueries) private readonly queries: InvQueries,
+    @Optional() @Inject(DATABASE) private readonly db?: Database,
+    @Optional() @Inject(AuditService) private readonly audit?: Audit,
+  ) {}
+
+  private async runInTx<T>(fn: (tx: Executor) => Promise<T>): Promise<T> {
+    if (this.db) {
+      return this.db.transaction().execute((tx) => fn(tx));
+    }
+    return fn(this.queries as any);
+  }
 
   // ==========================================
   // 1. KHAI BÁO GỬI HÀNG (FR-INV-22 ÷ 28)
@@ -69,6 +91,15 @@ export class InvService {
 
     if (!input.declaredQuantity || input.declaredQuantity <= 0) {
       throw new AppError('VALIDATION_ERROR', 'validation.tooSmall');
+    }
+
+    // FR-INV-22 AC2: Sản phẩm phải thuộc thương hiệu khai báo
+    const product = await this.queries.findFragranceProductById(input.fragranceProductId);
+    if (!product) {
+      throw new AppError('NOT_FOUND', 'common.notFound');
+    }
+    if (product.brandId !== scope.brandId) {
+      throw new AppError('PRODUCT_NOT_OWNED', 'common.outOfScope');
     }
 
     return this.queries.createShipmentDeclaration({
@@ -124,62 +155,100 @@ export class InvService {
       throw new AppError('FORBIDDEN_SCOPE', 'common.forbidden');
     }
 
-    const decl = await this.queries.findShipmentDeclarationById(id);
-    if (!decl) {
-      throw new AppError('NOT_FOUND', 'common.notFound');
-    }
+    return this.runInTx(async (tx) => {
+      // 1. Khóa bản ghi khai báo FOR UPDATE để tránh race condition
+      const decl = await this.queries.findShipmentDeclarationByIdForUpdate(id, tx);
+      if (!decl) {
+        throw new AppError('NOT_FOUND', 'common.notFound');
+      }
 
-    if (decl.status !== 'DECLARED') {
-      throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
-    }
+      if (decl.status !== 'DECLARED') {
+        throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
+      }
 
-    const receivedQty = Number(input.receivedQuantity);
-    if (isNaN(receivedQty) || receivedQty < 0) {
-      throw new AppError('VALIDATION_ERROR', 'validation.tooSmall');
-    }
+      const receivedQty = Number(input.receivedQuantity);
+      if (isNaN(receivedQty) || receivedQty < 0) {
+        throw new AppError('VALIDATION_ERROR', 'validation.tooSmall');
+      }
 
-    const isDiscrepancy = receivedQty !== decl.declaredQuantity;
+      const isDiscrepancy = receivedQty !== decl.declaredQuantity;
 
-    // FR-INV-25 AC2: bắt buộc có ghi chú khi số lượng lệch
-    if (isDiscrepancy && (!input.discrepancyNotes || !input.discrepancyNotes.trim())) {
-      throw new AppError('VALIDATION_ERROR', 'validation.required');
-    }
+      // FR-INV-25 AC2: bắt buộc có ghi chú khi số lượng lệch
+      if (isDiscrepancy && (!input.discrepancyNotes || !input.discrepancyNotes.trim())) {
+        throw new AppError('VALIDATION_ERROR', 'validation.required');
+      }
 
-    const newStatus = isDiscrepancy ? 'DISCREPANCY' : 'RECEIVED';
-    const now = new Date();
+      const newStatus = isDiscrepancy ? 'DISCREPANCY' : 'RECEIVED';
+      const now = new Date();
 
-    // 1. Cập nhật khai báo
-    await this.queries.updateShipmentDeclarationReceive(id, {
-      status: newStatus,
-      receivedQuantity: receivedQty,
-      discrepancyNotes: isDiscrepancy ? input.discrepancyNotes : null,
-      receivedBy: actor.userId,
-      receivedAt: now,
-    });
-
-    let createdBatch: InventoryBatchRecord | undefined = undefined;
-
-    // 2. FR-INV-26: Tự động tạo lô nước hoa nếu số thực nhận > 0
-    if (receivedQty > 0) {
-      const batchNumber = `BATCH-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${decl.brandId.slice(0, 4).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
-
-      createdBatch = await this.queries.createBatch({
-        brandId: decl.brandId,
-        fragranceProductId: decl.fragranceProductId,
-        sourceDeclarationId: decl.id,
-        batchNumber,
-        quantityReceived: receivedQty,
-        receivedAt: now,
-        supplierInfo: {
-          authenticityStatus: 'PENDING',
-          initialDeclaredQuantity: decl.declaredQuantity,
+      // 2. Cập nhật khai báo trong cùng transaction
+      await this.queries.updateShipmentDeclarationReceive(
+        id,
+        {
+          status: newStatus,
+          receivedQuantity: receivedQty,
+          discrepancyNotes: isDiscrepancy ? input.discrepancyNotes : null,
+          receivedBy: actor.userId,
+          receivedAt: now,
         },
-        createdBy: actor.userId,
-      });
-    }
+        tx,
+      );
 
-    const updatedDecl = (await this.queries.findShipmentDeclarationById(id))!;
-    return { declaration: updatedDecl, batch: createdBatch };
+      let createdBatch: InventoryBatchRecord | undefined = undefined;
+
+      // 3. FR-INV-26: Tự động tạo lô nước hoa nếu số thực nhận > 0
+      if (receivedQty > 0) {
+        const batchNumber =
+          input.batchNumber && input.batchNumber.trim()
+            ? input.batchNumber.trim()
+            : `BATCH-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}-${decl.brandId.slice(0, 4).toUpperCase()}-${randomUUID().slice(0, 6).toUpperCase()}`;
+
+        createdBatch = await this.queries.createBatch(
+          {
+            brandId: decl.brandId,
+            fragranceProductId: decl.fragranceProductId,
+            sourceDeclarationId: decl.id,
+            batchNumber,
+            quantityReceived: receivedQty,
+            receivedAt: now,
+            expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
+            supplierInfo: {
+              authenticityStatus: 'PENDING',
+              initialDeclaredQuantity: decl.declaredQuantity,
+            },
+            createdBy: actor.userId,
+          },
+          tx,
+        );
+      }
+
+      // 4. Ghi AuditLog (FR-AUD-07)
+      if (this.audit) {
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: decl.brandId,
+            action: 'inv.shipment.received',
+            targetType: 'shipment_declaration',
+            targetId: id,
+            after: {
+              status: newStatus,
+              receivedQuantity: receivedQty,
+              batchId: createdBatch?.id,
+            },
+          },
+          tx as any,
+        );
+      }
+
+      const updatedDecl = (await this.queries.findShipmentDeclarationById(
+        id,
+        { kind: 'UNRESTRICTED' },
+        tx,
+      ))!;
+      return { declaration: updatedDecl, batch: createdBatch };
+    });
   }
 
   // ==========================================
@@ -379,38 +448,89 @@ export class InvService {
       throw new AppError('FORBIDDEN_SCOPE', 'common.forbidden');
     }
 
-    // 1. Chốt chặn FR-INV-32: kiểm tra máy bận
-    const isBusy = await this.queries.hasPendingOrdersOrDispenseOnMachine(input.machineId);
-    if (isBusy) {
-      throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
-    }
+    return this.runInTx(async (tx) => {
+      // 1. Kiểm tra slot tồn tại và suy ra máy đích (RefillSessionOpen contract)
+      const slot = await this.queries.findSlotById(input.slotId, tx);
+      if (!slot) {
+        throw new AppError('NOT_FOUND', 'common.notFound');
+      }
 
-    // 2. Kiểm tra slot có hợp đồng thuê hợp lệ (ADR-0006)
-    const activeRental = await this.queries.findActiveSlotRental(input.slotId);
-    if (!activeRental) {
-      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
-    }
+      const machineId = input.machineId ?? slot.machineId;
+      if (input.machineId && input.machineId !== slot.machineId) {
+        throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
+      }
 
-    // 3. Mở phiếu nạp
-    return this.queries.createRefillSession({
-      machineId: input.machineId,
-      slotId: input.slotId,
-      brandId: activeRental.brandId,
-      performedBy: actor.userId,
-      notes: input.notes,
+      // 2. Khóa dòng máy trong CSDL để tránh kiosk tạo đơn chen ngang
+      await this.queries.lockMachine(machineId, tx);
+
+      // 3. Chốt chặn FR-INV-32: kiểm tra máy bận
+      const isBusy = await this.queries.hasPendingOrdersOrDispenseOnMachine(machineId, tx);
+      if (isBusy) {
+        throw new AppError('MACHINE_BUSY', 'ord.machineBusy');
+      }
+
+      // 4. Chặn hai phiếu STARTED trên cùng slot
+      const existingSession = await this.queries.findActiveRefillSessionOnSlot(input.slotId, tx);
+      if (existingSession) {
+        throw new AppError('SLOT_OCCUPIED', 'validation.invalidPayload');
+      }
+
+      // 5. Kiểm tra slot có hợp đồng thuê hợp lệ (ADR-0006)
+      const activeRental = await this.queries.findActiveSlotRental(input.slotId, tx);
+      if (!activeRental) {
+        throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+      }
+
+      // 6. Mở phiếu nạp
+      const session = await this.queries.createRefillSession(
+        {
+          machineId,
+          slotId: input.slotId,
+          brandId: activeRental.brandId,
+          oldBottleId: slot.activeBottleId,
+          performedBy: actor.userId,
+          notes: input.notes,
+        },
+        tx,
+      );
+
+      if (this.audit) {
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: activeRental.brandId,
+            action: 'inv.refill.opened',
+            targetType: 'refill_session',
+            targetId: session.id,
+            after: {
+              machineId,
+              slotId: input.slotId,
+              oldBottleId: slot.activeBottleId,
+            },
+          },
+          tx as any,
+        );
+      }
+
+      return session;
     });
   }
 
   /**
-   * Tra cứu danh sách phiếu nạp.
+   * Tra cứu danh sách phiếu nạp (lọc theo thương hiệu theo BR-012).
    */
-  async listRefillSessions(filter: {
-    page: number;
-    pageSize: number;
-    machineId?: string;
-    status?: any;
-  }): Promise<{ items: RefillSessionRecord[]; total: number }> {
-    return this.queries.listRefillSessions(filter);
+  async listRefillSessions(
+    actor: AuthenticatedUser,
+    filter: {
+      page: number;
+      pageSize: number;
+      machineId?: string;
+      status?: any;
+    },
+  ): Promise<{ items: RefillSessionRecord[]; total: number }> {
+    const scope = resolveBrandScope(actor);
+    return this.queries.listRefillSessions(filter, scope);
   }
 
   /**
@@ -430,59 +550,123 @@ export class InvService {
       throw new AppError('FORBIDDEN_SCOPE', 'common.forbidden');
     }
 
-    const session = await this.queries.findRefillSessionById(id);
-    if (!session) {
-      throw new AppError('NOT_FOUND', 'common.notFound');
-    }
+    return this.runInTx(async (tx) => {
+      // 1. Khóa phiếu FOR UPDATE
+      const session = await this.queries.findRefillSessionByIdForUpdate(id, tx);
+      if (!session) {
+        throw new AppError('NOT_FOUND', 'common.notFound');
+      }
 
-    if (session.status !== 'STARTED') {
-      throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
-    }
+      if (session.status !== 'STARTED') {
+        throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
+      }
 
-    // 1. Kiểm tra checklist an toàn (FR-INV-14)
-    if (!input.checklistCompleted) {
-      throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
-    }
+      // 2. Kiểm tra checklist an toàn (FR-INV-14)
+      if (!input.checklistCompleted) {
+        throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
+      }
 
-    // 2. Kiểm tra khối lượng ban đầu (FR-INV-05)
-    if (!input.initialMeasuredWeightG || input.initialMeasuredWeightG <= 0) {
-      throw new AppError('VALIDATION_ERROR', 'validation.tooSmall');
-    }
+      // 3. Kiểm tra khối lượng đo được (nếu cung cấp)
+      const measuredWeight = input.afterWeightG ?? input.initialMeasuredWeightG;
+      if (measuredWeight != null && measuredWeight <= 0) {
+        throw new AppError('VALIDATION_ERROR', 'validation.tooSmall');
+      }
 
-    // 3. Kiểm tra chai mới
-    const bottle = await this.queries.findBottleById(input.newBottleId);
-    if (!bottle) {
-      throw new AppError('NOT_FOUND', 'common.notFound');
-    }
+      // 4. Kiểm tra chai mới
+      const bottle = await this.queries.findBottleById(input.newBottleId, tx);
+      if (!bottle) {
+        throw new AppError('NOT_FOUND', 'common.notFound');
+      }
 
-    // FR-INV-06: chai phải cùng thương hiệu với phiên nạp/hợp đồng thuê
-    if (bottle.brandId !== session.brandId) {
-      throw new AppError('BOTTLE_NOT_OWNED', 'common.outOfScope');
-    }
+      if (bottle.status !== 'IN_STOCK') {
+        throw new AppError('VALIDATION_ERROR', 'validation.invalidPayload');
+      }
 
-    // 4. FR-INV-35: Kiểm tra giấy tờ chính hãng của lô hàng
-    const batch = await this.queries.findBatchById(bottle.batchId);
-    const authStatus = batch?.supplierInfo?.authenticityStatus;
-    if (authStatus !== 'APPROVED') {
-      throw new AppError('VALIDATION_ERROR', 'inv.batchNotApproved');
-    }
+      // FR-INV-06: chai phải cùng thương hiệu với phiên nạp/hợp đồng thuê (BOTTLE_NOT_OWNED)
+      if (bottle.brandId !== session.brandId) {
+        throw new AppError('BOTTLE_NOT_OWNED', 'common.outOfScope');
+      }
 
-    const now = new Date();
-    const weightStr = String(input.initialMeasuredWeightG);
+      const now = new Date();
 
-    // 5. Cập nhật chai sang INSTALLED & gán vào slot
-    await this.queries.updateBottleInstalled(input.newBottleId, weightStr);
-    await this.queries.updateSlotBottle(session.slotId, input.newBottleId);
+      // 5. FR-INV-35: Kiểm tra giấy tờ chính hãng của lô hàng (BATCH_NOT_APPROVED)
+      const batch = await this.queries.findBatchById(bottle.batchId, { kind: 'UNRESTRICTED' }, tx);
+      const authStatus = batch?.supplierInfo?.authenticityStatus;
+      if (authStatus !== 'APPROVED') {
+        throw new AppError('VALIDATION_ERROR', 'inv.batchNotApproved');
+      }
 
-    // 6. Đóng phiếu nạp
-    await this.queries.closeRefillSession(id, {
-      newBottleId: input.newBottleId,
-      afterWeightG: weightStr,
-      checklistCompleted: true,
-      notes: input.notes,
-      completedAt: now,
+      // FR-INV-08: Chai quá hạn sử dụng (BOTTLE_EXPIRED)
+      const isExpired = batch?.expiresAt && new Date(batch.expiresAt) < now;
+      if (isExpired) {
+        throw new AppError('BOTTLE_EXPIRED', 'validation.invalidPayload');
+      }
+
+      // FR-INV-07: Chai lệch sản phẩm cấu hình cho slot (PRODUCT_MISMATCH)
+      const rental = await this.queries.findActiveSlotRental(session.slotId, tx);
+      if (rental?.fragranceProductId && rental.fragranceProductId !== bottle.fragranceProductId) {
+        throw new AppError('PRODUCT_MISMATCH', 'validation.invalidPayload');
+      }
+
+      // 6. Xử lý chai cũ trong slot (nếu có)
+      if (session.oldBottleId) {
+        const oldBottle = await this.queries.findBottleById(session.oldBottleId, tx);
+        if (oldBottle) {
+          const remainingMl = Number(oldBottle.currentEstimatedMl ?? 0);
+          const oldStatus: BottleStatus = remainingMl > 0 ? 'IN_STOCK' : 'EMPTY';
+          await this.queries.updateBottleRemoved(
+            session.oldBottleId,
+            {
+              status: oldStatus,
+              removedAt: now,
+            },
+            tx,
+          );
+        }
+      }
+
+      const weightStr = measuredWeight != null ? String(measuredWeight) : '0';
+
+      // 7. Cập nhật chai sang INSTALLED & gán vào slot
+      await this.queries.updateBottleInstalled(input.newBottleId, weightStr, tx);
+      await this.queries.updateSlotBottle(session.slotId, input.newBottleId, tx);
+
+      // 8. Đóng phiếu nạp
+      await this.queries.closeRefillSession(
+        id,
+        {
+          newBottleId: input.newBottleId,
+          afterWeightG: weightStr,
+          checklistCompleted: true,
+          notes: input.notes,
+          completedAt: now,
+        },
+        tx,
+      );
+
+      // 9. Ghi AuditLog (FR-AUD-07)
+      if (this.audit) {
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: session.brandId,
+            action: 'mch.refill.closed',
+            targetType: 'refill_session',
+            targetId: id,
+            after: {
+              machineId: session.machineId,
+              slotId: session.slotId,
+              newBottleId: input.newBottleId,
+              oldBottleId: session.oldBottleId,
+              completedAt: now,
+            },
+          },
+          tx as any,
+        );
+      }
+
+      return (await this.queries.findRefillSessionById(id, tx))!;
     });
-
-    return (await this.queries.findRefillSessionById(id))!;
   }
 }
