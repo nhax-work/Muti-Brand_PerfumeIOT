@@ -130,17 +130,17 @@ kiến trúc thanh toán trong báo cáo. Không ghi số tài khoản, tên ch�
 
 | Ca (mục 4) | Kết quả mong đợi | Kết quả thực tế | Đạt? | Ghi chú (`orderCode`, thời gian webhook về) |
 |---|---|---|---|---|
-| Đăng ký URL webhook | PayOS lưu URL, API trả 200 `UNKNOWN_REFERENCE` | | | |
-| 1 — QR kiosk | Mã `ORD-…`, VietQR hiện đúng số tiền | | | |
-| 2 — Nội dung chuyển khoản | 9 ký tự, số tiền điền sẵn | | | |
-| 3 — Chuyển khoản đơn kiosk | Đơn `PAID` → "Mời bấm nút" → `DISPENSED` | | | |
-| 4 — QR quá hạn | App ngân hàng báo link hết hạn | | | |
-| 5 — Phiên thuê slot | Phiên `paidAt`, mỗi hóa đơn một số `HD-…` | | | |
-| 6 — Hủy rồi vẫn chuyển | `EXPIRED`/`CUSTOMER_CANCELLED`; nếu tiền vẫn vào: `REFUND_PENDING`/`PAID_AFTER_CANCEL`, không xịt | | | |
-| 7 — Hủy khi tiền đang về | `ORDER_NOT_CANCELLABLE`, đơn vẫn xịt | | | |
-| 8 — Hai đơn cùng máy | `MACHINE_BUSY` | | | |
-| SQL 1 — `provider_reference` | Số nguyên `orderCode` | | | |
-| SQL 2 — `counterAccount` | `0` | | | |
+| Đăng ký URL webhook | PayOS lưu URL, API trả 200 `UNKNOWN_REFERENCE` || | |
+| 1 — QR kiosk | Mã `ORD-…`, VietQR hiện đúng số tiền | |Đạt | |
+| 2 — Nội dung chuyển khoản | 9 ký tự, số tiền điền sẵn | |Đạt | |
+| 3 — Chuyển khoản đơn kiosk | Đơn `PAID` → "Mời bấm nút" → `DISPENSED` | |Đạt | |
+| 4 — QR quá hạn | App ngân hàng báo link hết hạn | |Không đạt |Thực tế không thể  |
+| 5 — Phiên thuê slot | Phiên `paidAt`, mỗi hóa đơn một số `HD-…` | |Đạt | |
+| 6 — Hủy rồi vẫn chuyển | `EXPIRED`/`CUSTOMER_CANCELLED`; nếu tiền vẫn vào: `REFUND_PENDING`/`PAID_AFTER_CANCEL`, không xịt | |Đạt | |
+| 7 — Hủy khi tiền đang về | `ORDER_NOT_CANCELLABLE`, đơn vẫn xịt | |Đạt | |
+| 8 — Hai đơn cùng máy | `MACHINE_BUSY` | |Đạt | |
+| SQL 1 — `provider_reference` | Số nguyên `orderCode` | |Đạt | |
+| SQL 2 — `counterAccount` | `0` | |Đạt | |
 
 **Thời gian webhook** (từ lúc bấm chuyển tới lúc kiosk đổi màn): lần nhanh nhất … giây, chậm nhất … giây —
 so với `WEBHOOK_TO_ARMED_MAX_SEC` (NFR-PER-03).
