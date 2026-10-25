@@ -1,8 +1,6 @@
 export const alr = {
   notificationNotFound: 'Không tìm thấy thông báo hoặc bằng chứng gửi này.',
-  retryOnlyFailed: 'Chỉ có thể thử gửi lại cho các thông báo có trạng thái gửi thất bại (FAILED).',
-  emailChannelRequired:
-    'Chỉ có thể gửi lại đối với thông báo qua kênh Email và có địa chỉ người nhận.',
+  retryOnlyFailed: 'Chỉ gửi lại được email ở trạng thái gửi thất bại (FAILED).',
 } as const;
 
 export const notificationStatus = {

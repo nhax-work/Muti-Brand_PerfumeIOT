@@ -62,9 +62,7 @@ describe('MachineModeModal (FR-MNT-05, FR-MNT-17, FR-MCH-09)', () => {
     const checkbox = await screen.findByRole('checkbox');
     fireEvent.click(checkbox);
 
-    expect(
-      await screen.findByText(/CẢNH BÁO: Ép bảo trì khẩn cấp sẽ dừng máy ngay lập tức/),
-    ).toBeTruthy();
+    expect(await screen.findByText(/CẢNH BÁO: máy dừng ngay/)).toBeTruthy();
     expect(screen.getByText('Ép sang Bảo trì ngay')).toBeTruthy();
   });
 

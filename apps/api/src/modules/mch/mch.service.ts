@@ -30,7 +30,7 @@ export type LocationDto = Schema<'Location'>;
 export type LocationCreateInput = Omit<Schema<'LocationCreate'>, 'timezone'> & {
   timezone?: string | undefined;
 };
-export type MachineDto = Schema<'Machine'> & { drainingOrdersCount?: number };
+export type MachineDto = Schema<'Machine'>;
 export type MachineCreateInput = Schema<'MachineCreate'>;
 export type MachineSlotDto = Schema<'MachineSlot'>;
 export type AvailableSlotDto = Schema<'AvailableSlot'>;
@@ -296,99 +296,6 @@ export class MchService {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
     return toMachineDto(updated);
-  }
-
-  /**
-   * Đổi chế độ hoạt động của máy (FR-MCH-11, FR-MNT-05, FR-MNT-12, FR-MNT-17).
-   */
-  async setMachineMode(
-    actor: AuthenticatedUser,
-    id: string,
-    input: MachineModeUpdateInput,
-  ): Promise<MachineDto> {
-    const machine = await this.queries.findMachineById(id);
-    if (!machine) {
-      throw new AppError('NOT_FOUND', 'mch.machineNotFound');
-    }
-
-    if ((input.operatingMode as string) === 'DRAINING') {
-      throw new AppError('VALIDATION_ERROR', 'mch.drainingDirectSetForbidden');
-    }
-
-    let targetMode: MachineRecord['operatingMode'] = input.operatingMode;
-    let pendingCount = 0;
-
-    if (input.operatingMode === 'MAINTENANCE') {
-      if (input.force) {
-        if (!input.reason || !input.reason.trim()) {
-          throw new AppError('VALIDATION_ERROR', 'mch.reasonRequired');
-        }
-        // Ép sang MAINTENANCE ngay lập tức (FR-MNT-17)
-        targetMode = 'MAINTENANCE';
-        await this.queries.failAffectedOrdersOnForceMaintenance(
-          id,
-          input.reason.trim(),
-          actor.userId,
-        );
-      } else {
-        // Yêu cầu bảo trì thường (FR-MNT-05)
-        pendingCount = await this.queries.countPendingOrdersAndCommands(id);
-        if (pendingCount > 0) {
-          // Còn đơn/lệnh dở dang -> vào DRAINING (AC1)
-          targetMode = 'DRAINING';
-        } else {
-          // Máy rảnh không có đơn dở dang -> chuyển thẳng MAINTENANCE (AC3)
-          targetMode = 'MAINTENANCE';
-        }
-      }
-    }
-
-    const updated = await this.queries.updateMachineMode(
-      id,
-      targetMode,
-      input.reason,
-      actor.userId,
-    );
-    if (!updated) {
-      throw new AppError('NOT_FOUND', 'mch.machineNotFound');
-    }
-
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      action: 'mch.machine.mode_changed',
-      targetType: 'machine',
-      targetId: id,
-      // Tắt máy hoặc đưa vào bảo trì ảnh hưởng mọi thương hiệu có slot trên máy.
-      severity: targetMode === 'NORMAL' ? 'INFO' : 'WARNING',
-      before: { operatingMode: machine.operatingMode },
-      after: { operatingMode: updated.operatingMode },
-      metadata: {
-        reason: input.reason ?? null,
-        force: Boolean(input.force),
-        pendingOrdersCount: pendingCount,
-      },
-    });
-
-    const result = {
-      ...updated,
-      drainingOrdersCount: targetMode === 'DRAINING' ? pendingCount : undefined,
-    };
-    return toMachineDto(result);
-  }
-
-  /**
-   * Xóa mềm máy: chuyển operating_mode sang DISABLED.
-   */
-  async softDeleteMachine(
-    actor: AuthenticatedUser,
-    id: string,
-    reason?: string,
-  ): Promise<MachineDto> {
-    return this.setMachineMode(actor, id, {
-      operatingMode: 'DISABLED',
-      reason: reason ?? 'Xóa mềm máy',
-    });
   }
 
   // =========================================================================

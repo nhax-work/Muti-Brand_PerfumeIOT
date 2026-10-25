@@ -6,6 +6,7 @@
  */
 
 import { Logger, type INestApplicationContext } from '@nestjs/common';
+import { AlrService } from '../modules/alr/index.js';
 import { DspJobs } from '../modules/dsp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { RevService } from '../modules/rev/index.js';
@@ -28,6 +29,11 @@ const REFUND_CLAIM_TICK_MS = 5 * 60_000;
  * nên trễ vài phút không sao; mốc chốt kỳ tính theo dữ liệu nên chạy trễ vẫn đúng.
  */
 const PAYOUT_TICK_MS = 5 * 60_000;
+/**
+ * Gửi email thông báo tiền/hàng đã xếp hàng (FR-ALR-16, ADR-0017). Khoảng thử lại do
+ * EMAIL_RETRY_INTERVAL_MIN quyết định ở truy vấn; nhịp này chỉ cần đủ nhanh cho email mới.
+ */
+const EMAIL_TICK_MS = 30_000;
 
 export interface SchedulerOptions {
   /** Chạy vòng điều phối lệnh xịt — chỉ bật khi đã kết nối MQTT. */
@@ -123,8 +129,25 @@ export function startScheduler(
   refreshPayouts();
   timers.push(setInterval(refreshPayouts, PAYOUT_TICK_MS));
 
+  const alr = app.get(AlrService);
+  let dispatchingEmails = false;
+  const dispatchEmails = () => {
+    if (dispatchingEmails) return;
+    dispatchingEmails = true;
+    alr
+      .dispatchDueEmails()
+      .then(({ sent, failed }) => {
+        if (sent + failed > 0) logger.log(`Email thông báo: ${sent} đã gửi, ${failed} lỗi`);
+      })
+      .catch((e: unknown) => logger.error(`Gửi email thông báo lỗi: ${String(e)}`))
+      .finally(() => (dispatchingEmails = false));
+  };
+  // Chạy ngay khi khởi động để gửi bù email xếp hàng trong lúc dịch vụ tắt.
+  dispatchEmails();
+  timers.push(setInterval(dispatchEmails, EMAIL_TICK_MS));
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại, kỳ chi trả${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại, kỳ chi trả, gửi email${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }

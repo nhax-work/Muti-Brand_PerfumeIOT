@@ -93,12 +93,12 @@ export const en: SameKeysAs<typeof vi> = {
     drainingDirectSetForbidden:
       'Cannot set DRAINING mode directly. Choose Maintenance mode for safe draining',
     reasonRequired: 'A reason is required when forcing emergency maintenance',
+    forcedMaintenanceAlertTitle: 'Machine {machine} was forced into emergency maintenance',
   },
 
   alr: {
     notificationNotFound: 'Notification or sending evidence not found.',
-    retryOnlyFailed: 'Can only retry sending for notifications with FAILED status.',
-    emailChannelRequired: 'Can only retry for email notifications with a recipient address.',
+    retryOnlyFailed: 'Only emails in FAILED status can be resent.',
   },
 
   notificationStatus: {
@@ -273,6 +273,11 @@ export const en: SameKeysAs<typeof vi> = {
     slotSwapBottleInstalled: 'A bottle has already been installed on this slot. Cannot swap slot',
     slotSwapNotDraft: 'Rental invoice is not in awaiting stock (DRAFT) status. Cannot swap slot',
     slotSwapUnpaid: 'Rental invoice is unpaid. Cannot swap slot',
+    checkoutPaidSubject: '[ScentStation] Slot rental payment confirmed ({invoices})',
+    checkoutPaidContent:
+      'Slot rental checkout {checkout} was confirmed at {paidAt}. Invoice numbers: {invoices}. ' +
+      'Next steps: declare the shipment to the warehouse, submit authenticity documents and configure the slot product. ' +
+      'This notice is kept as reconciliation evidence.',
   },
 
   ord: {
@@ -486,7 +491,7 @@ export const en: SameKeysAs<typeof vi> = {
       'Kiosk stops accepting new orders, finishes remaining paid orders, then enters Maintenance.',
     forceMaintenanceCheckbox: 'Force emergency maintenance (Immediate)',
     forceMaintenanceWarning:
-      'WARNING: Emergency maintenance will halt the machine immediately. All pending orders will be marked FAILED and flagged for manual refund review.',
+      'WARNING: the machine stops immediately. Paid orders waiting their turn fail and are flagged for manual refund review; orders awaiting payment are cancelled; a spray already in progress is finished by the machine.',
     forceReasonRequired: 'A reason is required when forcing emergency maintenance',
     btnForceMaintenance: 'Force Maintenance Now',
     drainingOrdersCountBadge: '{count} remaining orders',
@@ -937,8 +942,18 @@ export const en: SameKeysAs<typeof vi> = {
     notificationCreatedAtLabel: 'Created At',
     viewNotificationEvidence: 'View Dispatch Evidence',
     retryNotificationSend: 'Retry Email',
-    retryNotificationSuccess: 'Retried sending email successfully',
+    retryNotificationSuccess: 'Email queued for resending',
     retryNotificationFailed: 'Failed to resend email',
+    retryNotificationConfirm: 'Resend this email to the recipient?',
+    notificationIdLabel: 'Notification ID',
+    notificationAddressLabel: 'Recipient address',
+    notificationReferenceLabel: 'Event reference',
+    notificationProviderIdLabel: 'Email service message ID',
+    notificationAttemptsLabel: 'Delivery attempts',
+    notificationLastAttemptLabel: 'Last attempt',
+    notificationLastErrorLabel: 'Error response',
+    notificationNotSentYet: 'Not sent yet',
+    notificationNoSubject: '(No subject)',
     notificationEvidenceModalTitle: 'Notification Audit Evidence',
     notificationContentLabel: 'Notification / Email Content',
     noNotificationsFound: 'No notifications recorded yet.',
@@ -967,6 +982,32 @@ export const en: SameKeysAs<typeof vi> = {
     rejectionReasonLabel: 'Rejection Reason',
     checklistCompletedLabel: 'Checklist completed and safety verified',
     initialMeasuredWeightLabel: 'Initial Measured Weight (g)',
+    shipmentsSubtitle:
+      'Shipment declarations, warehouse reconciliation, batch authenticity documents and machine refill sessions.',
+    invProduct: 'Product',
+    invStatus: 'Status',
+    invDocument: 'Documents',
+    viewDocument: 'View document',
+    invMachine: 'Machine',
+    invSlot: 'Slot',
+    invStartedAt: 'Opened at',
+    invNewBottle: 'New bottle',
+    invAfterWeight: 'Weight after refill (g)',
+    invBeforeWeight: 'Weight before refill (g)',
+    invNotes: 'Notes',
+    batchExpiresAtLabel: 'Batch expiry date',
+    discrepancyNotesHelp: 'Required when the received quantity differs from the declaration.',
+    approveAuthenticityConfirm: 'Approve the authenticity documents of batch {batch}?',
+    documentTypePurchaseInvoice: 'Purchase invoice',
+    documentTypeCertificateOfOrigin: 'Certificate of origin',
+    documentTypeDistributionAuth: 'Distribution authorization',
+    refillOpenWarning:
+      'While the session is open the whole machine stops taking orders. It cannot be opened while the machine has an order awaiting payment or a spray awaiting the customer.',
+    selectMachine: 'Select machine',
+    selectSlot: 'Select slot',
+    selectBottle: 'Select a bottle in stock',
+    noBottleInStock: 'No bottle of this brand is in stock',
+    shipmentReceivedNoBatch: 'Recorded that no bottles arrived — no batch created',
     diagnosticDispense: 'Diagnostic spray',
     diagnosticTitle: 'Diagnostic spray on slot {slotNumber}',
     diagnosticHint:
@@ -1133,7 +1174,8 @@ export const en: SameKeysAs<typeof vi> = {
     shipmentReceived: 'Shipment receipt confirmed',
     shipmentDiscrepancy: 'Quantity discrepancy recorded',
     batchCreated: 'New inventory batch created',
-    batchNotApproved: 'Inventory batch authenticity has not been approved',
+    batchNotApproved:
+      "This bottle's batch has no approved authenticity documents — it cannot be installed yet",
     batchApproved: 'Batch authenticity approved',
     batchRejected: 'Batch authenticity rejected',
     authenticitySubmitted: 'Authenticity documents submitted',
@@ -1141,6 +1183,43 @@ export const en: SameKeysAs<typeof vi> = {
     refillSessionOpened: 'Refill session opened',
     refillSessionClosed: 'Refill session closed with checklist verified',
     checklistRequired: 'Checklist completion is required before closing session',
+
+    brandAccountOnly: 'Only brand accounts can perform this action',
+    productNotOwned: 'The product does not belong to your brand',
+    shipmentNotFound: 'Shipment declaration not found',
+    shipmentAlreadyProcessed: 'This declaration has already been received or cancelled',
+    discrepancyNotesRequired:
+      'Received quantity differs from the declaration — a discrepancy note is required',
+    batchNumberTaken: "This batch number already exists for the brand's product",
+    batchNotFound: 'Batch not found',
+    authenticityAlreadyApproved: 'The batch is already approved and cannot be resubmitted',
+    authenticityNotPending: 'The batch is not awaiting authenticity review',
+    documentSubmissionExpired:
+      'The authenticity document deadline has passed ({days} days after the invoice was paid)',
+    reasonRequired: 'A reason is required',
+    bottleIdentifierTaken: 'This bottle identifier already exists for the brand',
+    bottleNotFound: 'Bottle not found',
+    bottleNotOwned: 'The bottle does not belong to the brand renting the slot',
+    bottleNotInStock: 'The bottle is no longer in stock (installed, damaged, empty or returned)',
+    bottleExpired: 'The bottle has expired',
+    productMismatch: "The bottle's product differs from the product configured for the slot",
+    slotNotFound: 'Slot not found',
+    machineBusy:
+      'The machine still has an order awaiting payment or a spray awaiting the customer — try again later',
+    rentalNotStockable: 'The slot has no paid rental invoice, so it cannot take a bottle',
+    refillSessionOpen: 'The slot already has an open refill session',
+    refillSessionNotOpen: 'The refill session is already closed or cancelled',
+    refillSessionNotFound: 'Refill session not found',
+
+    newShipmentSubject: 'New shipment declaration: {product}',
+    newShipmentContent:
+      'A brand has declared {quantity} bottles of {product} on the way to the warehouse.',
+    authenticityApprovedSubject: 'Batch {batch} authenticity approved',
+    authenticityApprovedContent:
+      'The authenticity documents of batch {batch} ({product}) were approved. Its bottles can now be installed.',
+    authenticityRejectedSubject: 'Batch {batch} authenticity rejected',
+    authenticityRejectedContent:
+      'The authenticity documents of batch {batch} ({product}) were rejected. Reason: {reason}. Please resubmit.',
   },
 
   shipmentStatus: {
@@ -1151,6 +1230,7 @@ export const en: SameKeysAs<typeof vi> = {
   },
 
   authenticityStatus: {
+    NOT_SUBMITTED: 'Not submitted',
     PENDING: 'Pending review',
     APPROVED: 'Approved authentic',
     REJECTED: 'Rejected',
@@ -1159,6 +1239,6 @@ export const en: SameKeysAs<typeof vi> = {
   refillSessionStatus: {
     STARTED: 'In progress',
     COMPLETED: 'Completed',
-    ABORTED: 'Aborted',
+    CANCELLED: 'Cancelled',
   },
 };

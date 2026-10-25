@@ -495,8 +495,26 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(notifsA.rowCount).toBeGreaterThanOrEqual(1);
     for (const notif of notifsA.rows) {
       expect(notif.channel).toBe('IN_APP');
-      expect(['SENT', 'PENDING']).toContain(notif.status);
+      expect(notif.status).toBe('SENT');
       expect(notif.content).toContain('HD-');
+    }
+
+    // FR-ALR-16 (ADR-0017): webhook chỉ XẾP HÀNG email, job ALR gửi sau khi commit — không còn bản
+    // ghi EMAIL ở SENT mà chưa từng gửi. Địa chỉ và mã sự kiện chụp ngay lúc xếp hàng làm bằng chứng.
+    const emailsA = await raw.query(
+      `SELECT status, sent_at, recipient_address, reference_id, delivery_attempts
+         FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'EMAIL'`,
+      [fx.brandA],
+    );
+    expect(emailsA.rowCount).toBe(notifsA.rowCount);
+    for (const email of emailsA.rows) {
+      expect(email).toMatchObject({
+        status: 'PENDING',
+        sent_at: null,
+        recipient_address: fx.brandAdminAEmail,
+        reference_id: checkout.id,
+        delivery_attempts: 0,
+      });
     }
 
     // AC3: Brand Admin của Brand B không nhận thông báo nào

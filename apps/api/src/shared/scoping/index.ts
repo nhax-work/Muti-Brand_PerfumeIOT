@@ -13,5 +13,4 @@ export {
   brandHoldsSlotNow,
   OCCUPYING_RENTAL_STATUSES,
   HOLDING_RENTAL_STATUSES,
-  ACTIVE_RENTAL_STATUSES,
 } from './brand-scope.js';

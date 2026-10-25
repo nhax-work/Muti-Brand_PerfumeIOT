@@ -5,7 +5,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import nodemailer from 'nodemailer';
 import type { AppConfig, SmtpConfig } from '../../apps/api/src/shared/config/index.js';
-import { SmtpEmailProvider } from '../../apps/api/src/modules/alr/smtp-email.provider.js';
+import { SmtpEmailProvider } from '../../apps/api/src/adapters/email/index.js';
 
 function fakeConfig(smtp: SmtpConfig | null = null): AppConfig {
   return {

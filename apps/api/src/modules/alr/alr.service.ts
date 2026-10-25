@@ -1,61 +1,45 @@
 /**
- * Nghiệp vụ thông báo và hạ tầng email (FR-ALR-16, FR-SLT-43; ADR-0013).
+ * Thông báo và email tiền/hàng cho Brand Admin (FR-ALR-16, FR-SLT-43; ADR-0013, ADR-0017).
+ *
+ *   nghiệp vụ ─tx─▶ notifyBrandAdmins: IN_APP (SENT) + EMAIL (PENDING), cùng số phận với nghiệp vụ
+ *   job ALR  ────▶ dispatchDueEmails: khóa từng email → gửi qua EMAIL_PROVIDER → ghi SENT/FAILED
+ *
+ * Email KHÔNG gửi trong transaction nghiệp vụ: gửi chậm thì khóa nghiệp vụ bị giữ, gửi lỗi thì không
+ * được làm hỏng nghiệp vụ (FR-ALR-15 AC2). Job tự thử lại `EMAIL_MAX_ATTEMPTS` lần, cách nhau
+ * `EMAIL_RETRY_INTERVAL_MIN` phút (FR-ALR-16 AC3).
  */
 
-import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import type { AuthenticatedUser } from '../auth/principal.loader.js';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Schema } from '@scentstation/contracts';
+import type { Kysely } from 'kysely';
+import { EMAIL_PROVIDER, type EmailProvider } from '../../adapters/email/index.js';
+import { AuditService } from '../../shared/audit/index.js';
+import { CLOCK, type Clock } from '../../shared/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import type { DB } from '../../shared/db/index.js';
 import { AppError } from '../../shared/errors/index.js';
-import { resolveBrandScope } from '../../shared/scoping/index.js';
-import { AlrQueries, type NotificationFilter, type NotificationRecord } from './alr.queries.js';
+import { hasPermission } from '../../shared/scoping/index.js';
+import type { AuthenticatedUser } from '../auth/index.js';
+import {
+  AlrQueries,
+  type NotificationChannel,
+  type NotificationFilter,
+  type NotificationRecord,
+  type NotificationViewer,
+  type QueuedNotification,
+} from './alr.queries.js';
 
-export interface EmailSendOptions {
-  to: string;
-  subject: string;
-  text: string;
-  html?: string;
-  referenceId?: string;
-}
+export type Notification = Schema<'Notification'>;
 
-export interface EmailSendResult {
-  success: boolean;
-  providerMessageId?: string;
-  error?: string;
-}
+/** Quyền xem bằng chứng gửi của mọi thương hiệu và gửi lại email lỗi (ADR-0017 mục 5). */
+export const NOTIFICATION_MANAGE = 'notification.manage';
 
-export interface EmailProvider {
-  send(options: EmailSendOptions): Promise<EmailSendResult>;
-}
+/** Số email mỗi nhịp job — đủ cho một đợt chốt kỳ chi trả mà không giữ nhịp quá lâu. */
+const DISPATCH_BATCH = 50;
+/** Cắt phản hồi lỗi của dịch vụ email trước khi lưu — đủ để đối soát, không phình bảng. */
+const MAX_ERROR_LENGTH = 1000;
 
-export const EMAIL_PROVIDER = Symbol('EMAIL_PROVIDER');
-
-/**
- * Provider email mặc định ghi nhận log an toàn và thành công cho dev/test.
- * Giả lập gửi thất bại nếu hòm thư chứa từ khóa "fail@" để phục vụ test resilience.
- */
-@Injectable()
-export class ConsoleEmailProvider implements EmailProvider {
-  private readonly logger = new Logger('EmailProvider');
-
-  async send(options: EmailSendOptions): Promise<EmailSendResult> {
-    if (options.to.includes('fail@') || options.to.includes('error@')) {
-      this.logger.warn(`Giả lập gửi email thất bại tới: ${options.to} (${options.subject})`);
-      return {
-        success: false,
-        error: 'SMTP_CONNECTION_REFUSED: Không thể kết nối tới máy chủ gửi thư',
-      };
-    }
-
-    const messageId = `msg-${randomUUID()}`;
-    this.logger.log(
-      `[EMAIL DISPATCHED] To: ${options.to} | Subject: ${options.subject} | ID: ${messageId}`,
-    );
-    return {
-      success: true,
-      providerMessageId: messageId,
-    };
-  }
-}
+type Executor = Kysely<DB>;
 
 @Injectable()
 export class AlrService {
@@ -63,194 +47,160 @@ export class AlrService {
 
   constructor(
     @Inject(AlrQueries) private readonly queries: AlrQueries,
-    @Optional()
-    @Inject(EMAIL_PROVIDER)
-    private readonly emailProvider: EmailProvider = new ConsoleEmailProvider(),
+    @Inject(EMAIL_PROVIDER) private readonly provider: EmailProvider,
+    @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   /**
-   * FR-ALR-16 AC1 & AC2: Gửi email thông báo tiền/hàng và lưu vết bằng chứng đối soát pháp lý.
-   * Chống gián đoạn luồng nghiệp vụ chính nếu email lỗi (FR-ALR-15 AC2).
+   * Gửi thông báo cho mọi Brand Admin ACTIVE của thương hiệu, trong `tx` của người gọi. Mặc định cả
+   * trong ứng dụng lẫn email — dùng cho tám sự kiện tiền/hàng của FR-ALR-16 AC1.
+   *
+   * @returns số Brand Admin nhận
    */
-  async sendBrandEmailNotification(input: {
-    brandId: string;
-    recipientUserId: string;
-    recipientEmail: string;
-    type: string;
-    subject: string;
-    content: string;
-    referenceId?: string;
-  }): Promise<NotificationRecord> {
-    // 1. Tạo bản ghi ban đầu với trạng thái PENDING
-    const created = await this.queries.createNotification({
-      brandId: input.brandId,
-      recipientUserId: input.recipientUserId,
-      type: input.type,
-      channel: 'EMAIL',
-      subject: input.subject,
-      content: input.content,
-      status: 'PENDING',
-      createdAt: new Date(),
-    });
-
-    try {
-      // 2. Gửi email qua nhà cung cấp
-      const result = await this.emailProvider.send({
-        to: input.recipientEmail,
-        subject: input.subject,
-        text: input.content,
-        referenceId: input.referenceId,
-      });
-
-      if (result.success) {
-        const sentAt = new Date();
-        await this.queries.updateNotificationStatus(created.id, 'SENT', sentAt);
-        return { ...created, status: 'SENT', sentAt };
-      } else {
-        this.logger.error(`Gửi email thất bại cho ${input.recipientEmail}: ${result.error}`);
-        await this.queries.updateNotificationStatus(created.id, 'FAILED', null);
-        return { ...created, status: 'FAILED' };
-      }
-    } catch (err: unknown) {
-      // Bắt mọi ngoại lệ mạng để không làm hỏng transaction chính (FR-ALR-15 AC2, FR-ALR-16 AC3)
-      this.logger.error(`Ngoại lệ khi gọi emailProvider.send cho ${input.recipientEmail}`, err);
-      await this.queries.updateNotificationStatus(created.id, 'FAILED', null);
-      return { ...created, status: 'FAILED' };
-    }
+  notifyBrandAdmins(
+    tx: Executor,
+    notification: QueuedNotification,
+    channels: readonly NotificationChannel[] = ['IN_APP', 'EMAIL'],
+  ): Promise<number> {
+    return this.queries.queueForBrandAdmins(notification, channels, tx);
   }
 
   /**
-   * FR-SLT-43 AC1 & FR-ALR-16: Thông báo thanh toán phiên thuê slot thành công cho Brand Admin.
-   * Gửi cả IN_APP lẫn EMAIL và lưu bằng chứng gửi.
+   * Gửi các email đến lượt — cho scheduler. Mỗi email một transaction ngắn: khóa, gửi, ghi kết quả.
+   *
+   * @returns số email đã gửi được và số lần gửi lỗi trong nhịp này
    */
-  async notifyRentalCheckoutPaid(params: {
-    brandId: string;
-    checkoutId: string;
-    invoiceNumbers: string[];
-    paidAt: Date;
-  }): Promise<NotificationRecord[]> {
-    const brandAdmins = await this.queries.findActiveBrandAdmins(params.brandId);
-    if (brandAdmins.length === 0) {
-      this.logger.warn(
-        `Thương hiệu ${params.brandId} không có Brand Admin ACTIVE để gửi thông báo thanh toán.`,
-      );
-      return [];
-    }
-
-    const invoiceListText = params.invoiceNumbers.join(', ');
-    const subject = `[ScentStation] Xác nhận thanh toán thuê slot thành công (${invoiceListText})`;
-    const content = `Kính gửi Quý đối tác,
-
-Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
-
-Chi tiết thanh toán:
-- Mã phiên thanh toán: ${params.checkoutId}
-- Danh sách mã hóa đơn: ${invoiceListText}
-- Thời điểm thanh toán: ${params.paidAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
-
-Các bước tiếp theo cần thực hiện:
-1. Khai báo lô hàng gửi kho tại cổng quản trị thương hiệu (FR-INV-22).
-2. Sau khi kho tiếp nhận và đối soát tem kiểm định, chai nước hoa sẽ được nạp vào các slot đã thuê.
-3. Cấu hình slot và cài đặt giá trải nghiệm để sẵn sàng phục vụ khách hàng tại Kiosk.
-
-Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
-
-Trân trọng,
-Hệ thống Quản trị ScentStation`;
-
-    const records: NotificationRecord[] = [];
-
-    for (const admin of brandAdmins) {
-      // 1. Tạo thông báo IN_APP (FR-SLT-43)
-      await this.queries.createNotification({
-        brandId: params.brandId,
-        recipientUserId: admin.id,
-        type: 'RENTAL_CHECKOUT_PAID',
-        channel: 'IN_APP',
-        subject,
-        content,
-        status: 'SENT',
-        sentAt: params.paidAt,
-        createdAt: params.paidAt,
+  async dispatchDueEmails(): Promise<{ sent: number; failed: number }> {
+    const maxAttempts = this.config.constraint('EMAIL_MAX_ATTEMPTS');
+    const ids = await this.queries.listDueEmailIds(
+      this.clock.now(),
+      maxAttempts,
+      this.config.constraint('EMAIL_RETRY_INTERVAL_MIN'),
+      DISPATCH_BATCH,
+    );
+    let sent = 0;
+    let failed = 0;
+    for (const id of ids) {
+      const outcome = await this.queries.transaction(async (tx) => {
+        const email = await this.queries.lockEmailForDispatch(id, maxAttempts, tx);
+        if (!email) return null;
+        let error: string;
+        try {
+          const result = await this.provider.send({
+            to: email.address,
+            subject: email.subject,
+            text: email.content,
+            ...(email.referenceId ? { referenceId: email.referenceId } : {}),
+          });
+          if (result.success) {
+            await this.queries.recordDelivery(
+              email.id,
+              {
+                ok: true,
+                address: email.address,
+                messageId: result.providerMessageId ?? null,
+                at: this.clock.now(),
+              },
+              tx,
+            );
+            return 'sent' as const;
+          }
+          error = result.error ?? 'UNKNOWN_EMAIL_ERROR';
+        } catch (thrown) {
+          error = thrown instanceof Error ? thrown.message : String(thrown);
+        }
+        await this.queries.recordDelivery(
+          email.id,
+          {
+            ok: false,
+            address: email.address,
+            error: error.slice(0, MAX_ERROR_LENGTH),
+            at: this.clock.now(),
+          },
+          tx,
+        );
+        this.logger.warn(
+          `Gửi email ${email.id} tới ${email.address} lỗi (lần ${email.deliveryAttempts + 1}): ${error}`,
+        );
+        return 'failed' as const;
       });
-
-      // 2. Gửi email và lưu bằng chứng đối soát (FR-ALR-16)
-      const emailRecord = await this.sendBrandEmailNotification({
-        brandId: params.brandId,
-        recipientUserId: admin.id,
-        recipientEmail: admin.email,
-        type: 'RENTAL_CHECKOUT_PAID',
-        subject,
-        content,
-        referenceId: params.checkoutId,
-      });
-
-      records.push(emailRecord);
+      if (outcome === 'sent') sent++;
+      if (outcome === 'failed') failed++;
     }
-
-    return records;
+    return { sent, failed };
   }
 
-  /**
-   * Tra cứu danh sách thông báo và bằng chứng gửi.
-   * Áp dụng cô lập dữ liệu: Brand Admin chỉ thấy của thương hiệu mình (BR-012, FR-AUTH-07).
-   */
-  async listNotifications(
+  async list(
     actor: AuthenticatedUser,
     filter: NotificationFilter,
-  ): Promise<{ items: NotificationRecord[]; total: number }> {
-    const scope = resolveBrandScope(actor);
-    return this.queries.listNotifications(filter, scope);
+  ): Promise<{ items: Notification[]; total: number }> {
+    const { items, total } = await this.queries.list(viewerOf(actor), filter);
+    return { items: items.map(toDto), total };
   }
 
-  /**
-   * Chi tiết một thông báo và bằng chứng gửi làm bằng chứng đối soát pháp lý.
-   */
-  async getNotification(actor: AuthenticatedUser, id: string): Promise<NotificationRecord> {
-    const scope = resolveBrandScope(actor);
-    const notification = await this.queries.findNotificationById(id, scope);
-    if (!notification) {
-      throw new AppError('NOT_FOUND', 'alr.notificationNotFound');
-    }
-    return notification;
+  async get(actor: AuthenticatedUser, id: string): Promise<Notification> {
+    const record = await this.queries.find(id, viewerOf(actor));
+    if (!record) throw new AppError('NOT_FOUND', 'alr.notificationNotFound');
+    return toDto(record);
   }
 
-  /**
-   * FR-ALR-16 AC3: Thử gửi lại thông báo email bị thất bại (FAILED).
-   */
-  async retryNotification(actor: AuthenticatedUser, id: string): Promise<NotificationRecord> {
-    const scope = resolveBrandScope(actor);
-    const notification = await this.queries.findNotificationById(id, scope);
-    if (!notification) {
-      throw new AppError('NOT_FOUND', 'alr.notificationNotFound');
-    }
-
-    if (notification.status !== 'FAILED') {
-      throw new AppError('VALIDATION_ERROR', 'alr.retryOnlyFailed');
-    }
-
-    if (notification.channel !== 'EMAIL' || !notification.recipientEmail) {
-      throw new AppError('VALIDATION_ERROR', 'alr.emailChannelRequired');
-    }
-
-    try {
-      const result = await this.emailProvider.send({
-        to: notification.recipientEmail,
-        subject: notification.subject ?? 'Thông báo ScentStation',
-        text: notification.content,
-        referenceId: notification.id,
-      });
-
-      if (result.success) {
-        const sentAt = new Date();
-        await this.queries.updateNotificationStatus(id, 'SENT', sentAt);
-        return { ...notification, status: 'SENT', sentAt };
-      } else {
-        return notification;
+  /** FR-ALR-16 AC3: gửi lại email FAILED theo yêu cầu, kể cả khi đã hết lượt tự thử. */
+  async retry(actor: AuthenticatedUser, id: string): Promise<Notification> {
+    await this.queries.transaction(async (tx) => {
+      const record = await this.queries.lock(id, tx);
+      if (!record) throw new AppError('NOT_FOUND', 'alr.notificationNotFound');
+      if (record.channel !== 'EMAIL' || record.status !== 'FAILED') {
+        throw new AppError('NOTIFICATION_NOT_RETRYABLE', 'alr.retryOnlyFailed');
       }
-    } catch (err: unknown) {
-      this.logger.error(`Thử gửi lại email thất bại cho ${notification.recipientEmail}`, err);
-      return notification;
-    }
+      await this.queries.requeue(record.id, tx);
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: record.brandId,
+          action: 'alr.notification.retry_requested',
+          targetType: 'Notification',
+          targetId: record.id,
+          before: { status: 'FAILED', deliveryAttempts: record.deliveryAttempts },
+          after: { status: 'PENDING' },
+        },
+        tx,
+      );
+    });
+    return this.get(actor, id);
   }
+}
+
+function viewerOf(actor: AuthenticatedUser): NotificationViewer {
+  return hasPermission(actor, NOTIFICATION_MANAGE)
+    ? { kind: 'AUDITOR' }
+    : { kind: 'RECIPIENT', userId: actor.userId };
+}
+
+function iso(date: Date | null): string | null {
+  return date === null ? null : date.toISOString();
+}
+
+export function toDto(r: NotificationRecord): Notification {
+  return {
+    id: r.id,
+    brandId: r.brandId,
+    recipientUserId: r.recipientUserId,
+    type: r.type,
+    channel: r.channel,
+    subject: r.subject,
+    content: r.content,
+    status: r.status,
+    sentAt: iso(r.sentAt),
+    readAt: iso(r.readAt),
+    createdAt: r.createdAt.toISOString(),
+    recipientAddress: r.recipientAddress,
+    referenceId: r.referenceId,
+    providerMessageId: r.providerMessageId,
+    deliveryAttempts: r.deliveryAttempts,
+    lastAttemptAt: iso(r.lastAttemptAt),
+    lastError: r.lastError,
+  };
 }

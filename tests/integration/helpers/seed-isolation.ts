@@ -474,6 +474,58 @@ export async function releaseOpenOrders(client: pg.Client, machineId: string): P
   );
 }
 
+export interface PlatformStaff {
+  readonly userId: string;
+  readonly email: string;
+  /** Xóa tài khoản, vai trò và phiên — gọi TRƯỚC `cleanupIsolationFixture`. */
+  cleanup(): Promise<void>;
+}
+
+/**
+ * Tài khoản nền tảng (Inventory Staff, Operations Staff…) cho test cần vai trò mà fixture không có.
+ * Mật khẩu là `TEST_PASSWORD`, dùng lại băm của Super Admin fixture.
+ */
+export async function seedPlatformStaff(
+  client: pg.Client,
+  fx: IsolationFixture,
+  roleCode: 'INVENTORY_STAFF' | 'OPERATIONS_STAFF',
+  permissions: readonly string[],
+): Promise<PlatformStaff> {
+  const roleId = randomUUID();
+  const userId = randomUUID();
+  const email = `${roleCode.toLowerCase()}.${randomUUID().slice(0, 8)}.${fx.runId}@test.local`;
+  await client.query(
+    `INSERT INTO roles (id, brand_id, code, name, is_system) VALUES ($1, NULL, $2, $3, true)`,
+    [roleId, roleCode, `${roleCode} ${fx.runId}`],
+  );
+  await client.query(
+    `INSERT INTO role_permissions (role_id, permission_id)
+     SELECT $1, p.id FROM permissions p WHERE p.code = ANY($2::varchar[])`,
+    [roleId, [...permissions]],
+  );
+  await client.query(
+    `INSERT INTO users (id, brand_id, email, password_hash, full_name, status)
+     SELECT $1, NULL, $2, password_hash, $3, 'ACTIVE' FROM users WHERE id = $4`,
+    [userId, email, `Nhan su ${roleCode}`, fx.superAdminId],
+  );
+  await client.query(
+    `INSERT INTO user_roles (id, user_id, role_id, scope_type) VALUES ($1, $2, $3, 'PLATFORM')`,
+    [randomUUID(), userId, roleId],
+  );
+  return {
+    userId,
+    email,
+    async cleanup() {
+      await client.query(`DELETE FROM notifications WHERE recipient_user_id = $1`, [userId]);
+      await client.query(`DELETE FROM refresh_sessions WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query(`DELETE FROM role_permissions WHERE role_id = $1`, [roleId]);
+      await client.query(`DELETE FROM roles WHERE id = $1`, [roleId]);
+    },
+  };
+}
+
 export async function cleanupIsolationFixture(
   client: pg.Client,
   fx: IsolationFixture,
@@ -505,9 +557,12 @@ export async function cleanupIsolationFixture(
       `DELETE FROM notifications WHERE brand_id = ANY($1::uuid[]) OR recipient_user_id = ANY($2::uuid[])`,
       [brands, users],
     ],
+    // Phiếu nạp và khai báo gửi hàng do test INV sinh ra (ADR-0017) — trỏ tới chai, lô, slot.
+    [`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM brand_shipment_declarations WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM fragrance_products WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM machine_status_histories WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_credentials WHERE machine_id = $1`, [fx.machineId]],
