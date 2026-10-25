@@ -18,6 +18,8 @@ export const orderCode = {
   REFUND_CLAIM_ACCEPTED: 'Chấp nhận phiếu khiếu nại',
   MANUAL_REFUND_RECORDED: 'Đã ghi nhận hoàn tiền',
   QUEUE_TIMEOUT: 'Chờ lượt quá lâu, máy chưa phục vụ được',
+  FORCED_MAINTENANCE: 'Máy bị ép bảo trì khi đơn đang chờ lượt',
+  MACHINE_FORCED_MAINTENANCE: 'Máy bị ép bảo trì, đơn chờ thanh toán bị hủy',
   PRESS_TIMEOUT: 'Khách không bấm nút kịp',
   ACTUATOR_FAULT: 'Bơm xịt gặp sự cố',
   NO_CURRENT: 'Bơm không chạy',

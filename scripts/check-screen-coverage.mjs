@@ -53,16 +53,27 @@ for (const [path, item] of Object.entries(doc.paths)) {
   }
 }
 
+/** Mọi chuỗi '…' trong một đối số decorator — `'a'` hoặc `['a', 'b']`. */
+function stringsIn(arg) {
+  const found = [...arg.matchAll(/'([^']*)'/g)].map((m) => m[1]);
+  return found.length > 0 ? found : [''];
+}
+
 // 2. Backend (NestJS decorators)
 const backend = new Set();
 for (const file of walk(join(root, 'apps/api/src')).filter((f) => f.endsWith('.ts'))) {
   const src = readFileSync(file, 'utf8');
   const parts = src.split(/@Controller\(/).slice(1);
   for (const part of parts) {
-    const prefix = part.match(/^\s*'([^']*)'/)?.[1] ?? '';
-    for (const m of part.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(?:'([^']*)')?\s*\)/g)) {
-      const sub = m[2] ?? '';
-      backend.add(`${m[1].toUpperCase()} ${norm(`/${prefix}${sub ? `/${sub}` : ''}`)}`);
+    // `@Controller('a')` hoặc `@Controller(['a', 'b'])` — mảng là nhiều tiền tố cho cùng controller.
+    const prefixes = stringsIn(part.match(/^\s*(\[[^\]]*\]|'[^']*')/)?.[1] ?? "''");
+    for (const m of part.matchAll(/@(Get|Post|Put|Patch|Delete)\(\s*(\[[^\]]*\]|'[^']*')?\s*\)/g)) {
+      const subs = m[2] ? stringsIn(m[2]) : [''];
+      for (const prefix of prefixes) {
+        for (const sub of subs) {
+          backend.add(`${m[1].toUpperCase()} ${norm(`/${prefix}${sub ? `/${sub}` : ''}`)}`);
+        }
+      }
     }
   }
 }

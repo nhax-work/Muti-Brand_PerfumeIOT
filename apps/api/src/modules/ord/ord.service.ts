@@ -272,19 +272,49 @@ export class OrdService {
       throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
     }
 
-    // Gọi cổng NGOÀI transaction: không giữ khóa đơn trong lúc chờ mạng (webhook cần khóa đó).
+    const outcome = await this.cancelPendingPayment(orderId, {
+      reason: 'CUSTOMER_CANCELLED',
+      actorType: 'DEVICE',
+      gatewayNote: 'Customer cancelled at kiosk',
+    });
+    if (outcome === 'ALREADY_PAID') {
+      throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+    }
+
+    const view = await this.getKioskOrderStatus(orderId);
+    if (outcome !== 'CANCELLED' && view.status !== 'EXPIRED') {
+      throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+    }
+    return view;
+  }
+
+  /**
+   * Hủy một đơn chờ thanh toán: hủy link ở cổng rồi PENDING_PAYMENT → EXPIRED. Dùng chung cho khách
+   * hủy trên kiosk (FR-ORD-33) và máy bị ép bảo trì (FR-MNT-17, ADR-0017).
+   *
+   * Gọi cổng NGOÀI transaction: không giữ khóa đơn trong lúc chờ mạng (webhook cần khóa đó).
+   *
+   * @returns `ALREADY_PAID` — cổng báo đã/đang nhận tiền, đơn để nguyên cho webhook;
+   *   `NOT_PENDING` — đơn đã rời PENDING_PAYMENT trước khi lấy được khóa
+   */
+  private async cancelPendingPayment(
+    orderId: string,
+    options: {
+      readonly reason: string;
+      readonly actorType: 'DEVICE' | 'USER';
+      readonly actorId?: string;
+      readonly gatewayNote: string;
+    },
+  ): Promise<'CANCELLED' | 'ALREADY_PAID' | 'NOT_PENDING'> {
     let gatewayCancelled = false;
     try {
-      const result = await this.payments.cancelPendingAtGateway(
-        { orderId },
-        'Customer cancelled at kiosk',
-      );
-      if (result?.kind === 'ALREADY_PAID') {
-        throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
-      }
+      const result = await this.payments.cancelPendingAtGateway({ orderId }, options.gatewayNote);
+      if (result?.kind === 'ALREADY_PAID') return 'ALREADY_PAID';
       gatewayCancelled = result !== null;
     } catch (error) {
       if (error instanceof AppError) throw error;
+      // Không hỏi được cổng: vẫn hủy phía hệ thống — tiền nếu vẫn tới thì webhook đưa đơn vào
+      // REFUND_PENDING như tiền về sau hạn, không mất tiền, không xịt.
       this.logger.warn(
         `Không hủy được link thanh toán của đơn ${orderId} ở cổng — vẫn hủy phía hệ thống: ${String(error)}`,
       );
@@ -301,8 +331,9 @@ export class OrdService {
           brandId: locked.brandId,
           from: 'PENDING_PAYMENT',
           to: 'EXPIRED',
-          reason: 'CUSTOMER_CANCELLED',
-          actorType: 'DEVICE',
+          reason: options.reason,
+          actorType: options.actorType,
+          ...(options.actorId ? { actorId: options.actorId } : {}),
           metadata: { gatewayCancelled },
           at: this.clock.now(),
         },
@@ -311,12 +342,50 @@ export class OrdService {
       await this.payments.closeCancelled({ orderId }, tx);
       return true;
     });
+    return cancelled ? 'CANCELLED' : 'NOT_PENDING';
+  }
 
-    const view = await this.getKioskOrderStatus(orderId);
-    if (!cancelled && view.status !== 'EXPIRED') {
-      throw new AppError('ORDER_NOT_CANCELLABLE', 'ord.orderNotCancellable');
+  // -----------------------------------------------------------------------------------
+  // Máy bị ép bảo trì (FR-MNT-17, ADR-0017 mục 6) — MCH gọi, MCH không tự ghi bảng orders
+  // -----------------------------------------------------------------------------------
+
+  /**
+   * Đơn đã trả tiền đang chờ lượt không còn lượt nào tới → FAILED `FORCED_MAINTENANCE` + kiểm tra
+   * thủ công (FR-MNT-17 AC2, FR-ORD-19). Chạy trong `tx` đổi chế độ máy của MCH.
+   *
+   * Đơn đã có lệnh xịt (DISPENSE_REQUESTED) KHÔNG đụng: thiết bị có thể vẫn đang xịt. Máy nhận cấu
+   * hình MAINTENANCE thì từ chối lệnh chưa sáng đèn, và DSP đưa đơn vào FAILED + kiểm tra thủ công.
+   *
+   * @returns số đơn đã chuyển FAILED
+   */
+  async failQueuedOrdersOnMachine(tx: Executor, machineId: string): Promise<number> {
+    let failed = 0;
+    for (const id of await this.queries.listOrderIdsOnMachine(machineId, ['PAID'], tx)) {
+      if (await this.failBeforeDispense(tx, id, 'FORCED_MAINTENANCE')) failed++;
     }
-    return view;
+    return failed;
+  }
+
+  /**
+   * Hủy các đơn chờ thanh toán trên máy vừa bị ép bảo trì, như khách hủy trên kiosk: hủy link ở cổng
+   * rồi EXPIRED, lý do `MACHINE_FORCED_MAINTENANCE`. Gọi SAU khi MCH commit chế độ MAINTENANCE — máy
+   * đã dừng nhận đơn (và `createNew` khóa dòng máy) nên không có đơn mới chen vào. Đơn mà cổng báo đã
+   * nhận tiền thì để webhook xử lý; chờ lượt quá `PAID_QUEUE_MAX_SEC` sẽ thành FAILED (FR-ORD-34).
+   *
+   * @returns số đơn đã hủy
+   */
+  async cancelUnpaidOrdersOnMachine(machineId: string, actorId: string): Promise<number> {
+    let cancelled = 0;
+    for (const id of await this.queries.listOrderIdsOnMachine(machineId, ['PENDING_PAYMENT'])) {
+      const outcome = await this.cancelPendingPayment(id, {
+        reason: 'MACHINE_FORCED_MAINTENANCE',
+        actorType: 'USER',
+        actorId,
+        gatewayNote: 'Machine forced into maintenance',
+      });
+      if (outcome === 'CANCELLED') cancelled++;
+    }
+    return cancelled;
   }
 
   // -----------------------------------------------------------------------------------
@@ -735,14 +804,10 @@ export class OrdService {
 
   private async createNew(input: CreateOrderInput): Promise<OrderCreated> {
     return this.queries.transaction(async (tx) => {
-      const machine = await this.queries.findMachineBySerial(input.machineSerial, tx);
+      const machine = await this.queries.findMachineBySerial(input.machineSerial, tx, true);
       if (!machine) throw new AppError('NOT_FOUND', 'ord.machineNotFound');
+      // Phiếu nạp mở (FR-INV-30 AC3), DRAINING, MAINTENANCE → MACHINE_IN_MAINTENANCE.
       assertMachineAcceptsOrders(machine);
-
-      // FR-INV-30 AC3 (ADR-0015): Cả máy dừng nhận đơn mới khi có phiếu nạp đang mở
-      if (await this.queries.machineHasActiveRefillSession(machine.id, tx)) {
-        throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
-      }
 
       const [offer] = await this.queries.listSlotOffers(machine.id, input.slotId, tx);
       if (!offer) throw new AppError('NOT_FOUND', 'ord.slotNotFound');

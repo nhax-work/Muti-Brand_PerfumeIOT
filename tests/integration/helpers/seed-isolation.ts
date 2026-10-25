@@ -30,6 +30,9 @@ const ALL_PERMISSIONS = [
   'product.manage',
   'inventory.manage',
   'inventory.adjust',
+  'inventory.declare',
+  'inventory.verify',
+  'notification.manage',
   'refill.request',
   'refill.fulfill',
   'order.view',
@@ -47,6 +50,7 @@ const ALL_PERMISSIONS = [
 const BRAND_ADMIN_PERMISSIONS = [
   'product.manage',
   'rental.request',
+  'inventory.declare',
   'refill.request',
   'report.brand',
   'order.view',

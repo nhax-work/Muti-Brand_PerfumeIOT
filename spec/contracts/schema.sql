@@ -27,6 +27,10 @@
 --                  thêm DRAINING, bottle_status thêm RETURNED_TO_BRAND, uq_machine_open_order, cột
 --                  mới trên brands/rental_checkouts/slot_rentals/bottles, §10g; áp bằng
 --                  migrations/1791100000000_* và migrations/1791100060000_*.
+--                  ADR-0017 (hoàn thiện contract tuần 7) — enum batch_authenticity_status, cột giấy
+--                  tờ chính hãng trên inventory_batches, uq_slot_open_refill_session,
+--                  fk_shipment_product_same_brand, cột bằng chứng gửi email trên notifications; áp
+--                  bằng migrations/1791200000000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -151,6 +155,9 @@ CREATE TYPE brand_payout_status AS ENUM ('DRAFT', 'CONFIRMED', 'PAID');
 
 -- ADR-0014: cách thương hiệu nhận hàng trả về khi báo không gia hạn (FR-EXP-23).
 CREATE TYPE bottle_return_method AS ENUM ('WAREHOUSE_PICKUP', 'SHIP_TO_BRAND');
+
+-- ADR-0017: xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35).
+CREATE TYPE batch_authenticity_status AS ENUM ('NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED');
 
 
 -- =====================================================================================
@@ -763,14 +770,39 @@ CREATE TABLE inventory_batches (
     created_by            uuid         NOT NULL REFERENCES users (id),
     created_at            timestamptz  NOT NULL DEFAULT now(),
 
-    CONSTRAINT chk_batch_quantity_positive CHECK (quantity_received > 0)
+    CONSTRAINT chk_batch_quantity_positive CHECK (quantity_received > 0),
+
+    -- ADR-0017: giấy tờ chính hãng của lô (FR-INV-33 ÷ 35).
+    authenticity_status           batch_authenticity_status NOT NULL DEFAULT 'NOT_SUBMITTED',
+    authenticity_document_url     varchar(1000),
+    authenticity_document_type    varchar(50),
+    authenticity_submitted_by     uuid REFERENCES users (id),
+    authenticity_submitted_at     timestamptz,
+    authenticity_verified_by      uuid REFERENCES users (id),
+    authenticity_verified_at      timestamptz,
+    authenticity_rejection_reason text,
+
+    CONSTRAINT chk_batch_authenticity_submitted CHECK (
+        authenticity_status = 'NOT_SUBMITTED'
+        OR (authenticity_document_url IS NOT NULL
+            AND authenticity_submitted_by IS NOT NULL
+            AND authenticity_submitted_at IS NOT NULL)),
+    CONSTRAINT chk_batch_authenticity_verified CHECK (
+        (authenticity_status IN ('APPROVED', 'REJECTED'))
+        = (authenticity_verified_by IS NOT NULL AND authenticity_verified_at IS NOT NULL)),
+    CONSTRAINT chk_batch_authenticity_rejection CHECK (
+        (authenticity_status = 'REJECTED') = (authenticity_rejection_reason IS NOT NULL))
 );
 
 CREATE UNIQUE INDEX uq_batch_brand_product_number
     ON inventory_batches (brand_id, fragrance_product_id, batch_number);
+CREATE INDEX idx_batches_authenticity ON inventory_batches (authenticity_status, brand_id);
 
 COMMENT ON COLUMN inventory_batches.source_declaration_id IS
     'Đặt khi lô được tạo tự động từ khai báo gửi hàng đã nhận (FR-INV-26); NULL với lô nhập thủ công.';
+COMMENT ON COLUMN inventory_batches.authenticity_status IS
+    'Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0013, ADR-0017). Chỉ chai thuộc lô '
+    'APPROVED mới được lắp vào slot (BATCH_NOT_APPROVED).';
 
 CREATE TABLE bottles (
     id                        uuid               PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -837,6 +869,10 @@ CREATE TABLE refill_sessions (
 );
 
 CREATE INDEX idx_refill_sessions_brand_machine ON refill_sessions (brand_id, machine_id, started_at);
+
+-- ADR-0017: mỗi slot tối đa một phiếu nạp đang mở (FR-INV-29, REFILL_SESSION_OPEN).
+CREATE UNIQUE INDEX uq_slot_open_refill_session ON refill_sessions (slot_id)
+    WHERE status = 'STARTED';
 
 COMMENT ON TABLE refill_sessions IS
     'Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (FR-INV-29); '
@@ -1251,10 +1287,34 @@ CREATE TABLE notifications (
     status            notification_status NOT NULL DEFAULT 'PENDING',
     sent_at           timestamptz,
     read_at           timestamptz,
-    created_at        timestamptz         NOT NULL DEFAULT now()
+    created_at        timestamptz         NOT NULL DEFAULT now(),
+
+    -- ADR-0017: bằng chứng gửi email (FR-ALR-16 AC2, AC3).
+    recipient_address   varchar(320),
+    reference_id        varchar(100),
+    provider_message_id varchar(255),
+    delivery_attempts   int                 NOT NULL DEFAULT 0,
+    last_attempt_at     timestamptz,
+    last_error          text,
+
+    CONSTRAINT chk_notification_attempts_nonnegative CHECK (delivery_attempts >= 0)
 );
 
 CREATE INDEX idx_notifications_recipient ON notifications (recipient_user_id, status, created_at);
+-- ADR-0017: hàng đợi gửi email — job ALR quét PENDING và FAILED còn lượt thử.
+CREATE INDEX idx_notifications_email_outbox ON notifications (status, last_attempt_at)
+    WHERE channel = 'EMAIL' AND status IN ('PENDING', 'FAILED');
+
+COMMENT ON COLUMN notifications.recipient_address IS
+    'Hòm thư nhận tại thời điểm gửi (FR-ALR-16 AC2) — chụp lại, không đọc lại từ users.';
+COMMENT ON COLUMN notifications.reference_id IS
+    'Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán thuê slot (FR-ALR-16 AC2).';
+COMMENT ON COLUMN notifications.provider_message_id IS
+    'Mã thư do dịch vụ email trả về khi nhận gửi (FR-ALR-16 AC2).';
+COMMENT ON COLUMN notifications.delivery_attempts IS
+    'Số lần đã thử gửi email. Job dừng tự thử khi đạt EMAIL_MAX_ATTEMPTS (FR-ALR-16 AC3).';
+COMMENT ON COLUMN notifications.last_error IS
+    'Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2).';
 
 CREATE TABLE audit_logs (
     id          uuid         PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1522,6 +1582,11 @@ ALTER TABLE slot_rentals
 -- (5) Lô nhập phải cùng thương hiệu với sản phẩm trong lô.
 ALTER TABLE inventory_batches
     ADD CONSTRAINT fk_batch_product_same_brand
+    FOREIGN KEY (fragrance_product_id, brand_id) REFERENCES fragrance_products (id, brand_id);
+
+-- (5b) Khai báo gửi hàng phải cùng thương hiệu với sản phẩm khai báo (FR-INV-22 AC2, ADR-0017).
+ALTER TABLE brand_shipment_declarations
+    ADD CONSTRAINT fk_shipment_product_same_brand
     FOREIGN KEY (fragrance_product_id, brand_id) REFERENCES fragrance_products (id, brand_id);
 
 -- (6) Chai phải cùng thương hiệu với lô sinh ra nó.
