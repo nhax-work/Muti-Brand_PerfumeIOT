@@ -11,7 +11,11 @@ import type {
   RevenueOwnerType,
   ShipmentDeclarationStatus,
 } from '../../shared/db/types.generated.js';
-import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
+import {
+  brandScopedByColumn,
+  type BrandScope,
+  ACTIVE_RENTAL_STATUSES,
+} from '../../shared/scoping/index.js';
 
 export type Executor = Kysely<DB> | Transaction<DB>;
 
@@ -216,6 +220,18 @@ export class InvQueries {
     return { items, total };
   }
 
+  async findFragranceProductById(
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<{ id: string; brandId: string; name: string } | null> {
+    const row = await executor
+      .selectFrom('fragrance_products')
+      .select(['id', 'brand_id as brandId', 'name'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row ?? null;
+  }
+
   async findShipmentDeclarationById(
     id: string,
     scope: BrandScope = { kind: 'UNRESTRICTED' },
@@ -246,6 +262,59 @@ export class InvQueries {
       ])
       .where('d.id', '=', id)
       .where(brandScopedByColumn(scope, 'd.brand_id'))
+      .executeTakeFirst();
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      brandId: row.brandId,
+      brandName: row.brandName,
+      fragranceProductId: row.fragranceProductId,
+      productName: row.productName,
+      declaredQuantity: row.declaredQuantity,
+      declaredBottleVolumeMl: String(row.declaredBottleVolumeMl),
+      expectedShipDate: row.expectedShipDate ? new Date(row.expectedShipDate) : null,
+      status: row.status,
+      receivedQuantity: row.receivedQuantity,
+      discrepancyNotes: row.discrepancyNotes,
+      receivedBy: row.receivedBy,
+      receivedAt: row.receivedAt ? new Date(row.receivedAt) : null,
+      declaredBy: row.declaredBy,
+      declaredByName: row.declaredByName,
+      createdAt: new Date(row.createdAt),
+    };
+  }
+
+  async findShipmentDeclarationByIdForUpdate(
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<ShipmentDeclarationRecord | null> {
+    const row = await executor
+      .selectFrom('brand_shipment_declarations as d')
+      .innerJoin('brands as b', 'b.id', 'd.brand_id')
+      .innerJoin('fragrance_products as fp', 'fp.id', 'd.fragrance_product_id')
+      .innerJoin('users as u', 'u.id', 'd.declared_by')
+      .select([
+        'd.id',
+        'd.brand_id as brandId',
+        'b.name as brandName',
+        'd.fragrance_product_id as fragranceProductId',
+        'fp.name as productName',
+        'd.declared_quantity as declaredQuantity',
+        'd.declared_bottle_volume_ml as declaredBottleVolumeMl',
+        'd.expected_ship_date as expectedShipDate',
+        'd.status',
+        'd.received_quantity as receivedQuantity',
+        'd.discrepancy_notes as discrepancyNotes',
+        'd.received_by as receivedBy',
+        'd.received_at as receivedAt',
+        'd.declared_by as declaredBy',
+        'u.full_name as declaredByName',
+        'd.created_at as createdAt',
+      ])
+      .where('d.id', '=', id)
+      .forUpdate('d')
       .executeTakeFirst();
 
     if (!row) return null;
@@ -784,8 +853,115 @@ export class InvQueries {
     return this.findRefillSessionById(row.id, executor);
   }
 
+  async findActiveRefillSessionOnSlot(
+    slotId: string,
+    executor: Executor = this.db,
+  ): Promise<RefillSessionRecord | null> {
+    const row = await executor
+      .selectFrom('refill_sessions as rs')
+      .select(['rs.id'])
+      .where('rs.slot_id', '=', slotId)
+      .where('rs.status', '=', 'STARTED')
+      .executeTakeFirst();
+
+    if (!row) return null;
+    return this.findRefillSessionById(row.id, executor);
+  }
+
+  async findRefillSessionByIdForUpdate(
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<RefillSessionRecord | null> {
+    const row = await executor
+      .selectFrom('refill_sessions as rs')
+      .innerJoin('machines as m', 'm.id', 'rs.machine_id')
+      .innerJoin('machine_slots as ms', 'ms.id', 'rs.slot_id')
+      .innerJoin('brands as b', 'b.id', 'rs.brand_id')
+      .innerJoin('users as u', 'u.id', 'rs.performed_by')
+      .select([
+        'rs.id',
+        'rs.machine_id as machineId',
+        'm.display_name as machineDisplayName',
+        'rs.slot_id as slotId',
+        'ms.slot_number as slotNumber',
+        'rs.brand_id as brandId',
+        'b.name as brandName',
+        'rs.old_bottle_id as oldBottleId',
+        'rs.new_bottle_id as newBottleId',
+        'rs.checklist_completed as checklistCompleted',
+        'rs.status',
+        'rs.notes',
+        'rs.before_weight_g as beforeWeightG',
+        'rs.after_weight_g as afterWeightG',
+        'rs.performed_by as performedBy',
+        'u.full_name as performedByName',
+        'rs.started_at as startedAt',
+        'rs.completed_at as completedAt',
+      ])
+      .where('rs.id', '=', id)
+      .forUpdate('rs')
+      .executeTakeFirst();
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      machineId: row.machineId,
+      machineDisplayName: row.machineDisplayName,
+      slotId: row.slotId,
+      slotNumber: row.slotNumber,
+      brandId: row.brandId,
+      brandName: row.brandName,
+      oldBottleId: row.oldBottleId,
+      newBottleId: row.newBottleId,
+      checklistCompleted: row.checklistCompleted,
+      status: row.status,
+      notes: row.notes,
+      beforeWeightG: row.beforeWeightG ? String(row.beforeWeightG) : null,
+      afterWeightG: row.afterWeightG ? String(row.afterWeightG) : null,
+      performedBy: row.performedBy,
+      performedByName: row.performedByName,
+      startedAt: new Date(row.startedAt),
+      completedAt: row.completedAt ? new Date(row.completedAt) : null,
+    };
+  }
+
+  async findSlotById(
+    slotId: string,
+    executor: Executor = this.db,
+  ): Promise<{
+    id: string;
+    machineId: string;
+    slotNumber: number;
+    activeBottleId: string | null;
+    status: string;
+  } | null> {
+    const row = await executor
+      .selectFrom('machine_slots')
+      .select([
+        'id',
+        'machine_id as machineId',
+        'slot_number as slotNumber',
+        'active_bottle_id as activeBottleId',
+        'status',
+      ])
+      .where('id', '=', slotId)
+      .executeTakeFirst();
+    return row ?? null;
+  }
+
+  async lockMachine(machineId: string, executor: Executor = this.db): Promise<void> {
+    await executor
+      .selectFrom('machines')
+      .select('id')
+      .where('id', '=', machineId)
+      .forUpdate()
+      .executeTakeFirst();
+  }
+
   async listRefillSessions(
     filter: { page: number; pageSize: number; machineId?: string; status?: RefillStatus },
+    scope: BrandScope = { kind: 'UNRESTRICTED' },
     executor: Executor = this.db,
   ): Promise<{ items: RefillSessionRecord[]; total: number }> {
     let baseQuery = executor
@@ -793,7 +969,8 @@ export class InvQueries {
       .innerJoin('machines as m', 'm.id', 'rs.machine_id')
       .innerJoin('machine_slots as ms', 'ms.id', 'rs.slot_id')
       .innerJoin('brands as b', 'b.id', 'rs.brand_id')
-      .innerJoin('users as u', 'u.id', 'rs.performed_by');
+      .innerJoin('users as u', 'u.id', 'rs.performed_by')
+      .where(brandScopedByColumn(scope, 'rs.brand_id'));
 
     if (filter.machineId) {
       baseQuery = baseQuery.where('rs.machine_id', '=', filter.machineId);
@@ -882,6 +1059,25 @@ export class InvQueries {
       .execute();
   }
 
+  async updateBottleRemoved(
+    bottleId: string,
+    data: {
+      status: BottleStatus;
+      removedAt: Date;
+    },
+    executor: Executor = this.db,
+  ): Promise<void> {
+    await executor
+      .updateTable('bottles')
+      .set({
+        status: data.status,
+        removed_at: data.removedAt,
+        updated_at: new Date(),
+      })
+      .where('id', '=', bottleId)
+      .execute();
+  }
+
   // ==========================================
   // CHỐT CHẶN AN TOÀN (FR-INV-30, 32, ADR-0015)
   // ==========================================
@@ -903,13 +1099,13 @@ export class InvQueries {
 
     if (openOrder) return true;
 
-    // 2. Kiểm tra lệnh xịt CUSTOMER đang SENT hoặc ACKNOWLEDGED
+    // 2. Kiểm tra lệnh xịt CUSTOMER đang CREATED, SENT hoặc ACKNOWLEDGED
     const pendingCommand = await executor
       .selectFrom('dispense_commands as dc')
       .innerJoin('orders as o', 'o.id', 'dc.order_id')
       .select('dc.id')
       .where('o.machine_id', '=', machineId)
-      .where('dc.status', 'in', ['SENT', 'ACKNOWLEDGED'])
+      .where('dc.status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
       .executeTakeFirst();
 
     return Boolean(pendingCommand);
@@ -926,7 +1122,16 @@ export class InvQueries {
       .selectFrom('slot_rentals')
       .select(['id', 'brand_id as brandId', 'fragrance_product_id as fragranceProductId'])
       .where('slot_id', '=', slotId)
-      .where('status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE', 'DRAFT'])
+      .where((eb) =>
+        eb.or([
+          eb('status', 'in', ACTIVE_RENTAL_STATUSES),
+          eb.and([
+            eb('status', '=', 'DRAFT'),
+            eb('paid_at', 'is not', null),
+            eb('cancelled_at', 'is', null),
+          ]),
+        ]),
+      )
       .orderBy('starts_at', 'desc')
       .executeTakeFirst();
 

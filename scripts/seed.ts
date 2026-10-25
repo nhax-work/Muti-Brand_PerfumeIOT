@@ -157,12 +157,11 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'order.refund',
     'report.platform',
   ],
-  // machine.view: chọn máy, slot khi mở phiếu nạp (ADR-0017).
   [ID.roleInventoryStaff]: [
-    'machine.view',
     'inventory.manage',
     'inventory.adjust',
     'refill.fulfill',
+    'machine.view',
   ],
   [ID.roleBrandAdmin]: [
     'product.manage',
@@ -572,12 +571,11 @@ async function seedInventory(client: pg.Client): Promise<void> {
     [ID.brandA, ID.batches[0], ID.products[0]],
   );
 
-  // Phiếu nạp máy đang mở (FR-INV-29..31)
+  // Cập nhật đóng phiếu cũ cho DB đã seed (W7-19: tránh phiếu STARTED làm dừng bán kiosk M001)
   await client.query(
-    `INSERT INTO refill_sessions (id, brand_id, machine_id, slot_id, performed_by, status, checklist_completed, notes)
-     VALUES ('ffffffff-ffff-4fff-8fff-000000000001', $1, $2, $3, $4, 'STARTED', false, 'Nạp thay thế chai slot 1 định kỳ')
-     ON CONFLICT (id) DO NOTHING`,
-    [ID.brandA, ID.machine, ID.slots[0], ID.userOpsStaff],
+    `UPDATE refill_sessions
+     SET status = 'CANCELLED', completed_at = now()
+     WHERE id = 'ffffffff-ffff-4fff-8fff-000000000001' AND status = 'STARTED'`,
   );
 }
 
@@ -757,8 +755,8 @@ Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng ch�
 
 Trân trọng,
 Hệ thống Quản trị ScentStation`,
-      status: 'SENT',
-      sentAt: "now() - interval '2 days'",
+      status: 'PENDING',
+      sentAt: null,
       readAt: null,
       createdAt: "now() - interval '2 days'",
     },
@@ -813,8 +811,8 @@ Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng ch�
 
 Trân trọng,
 Hệ thống Quản trị ScentStation`,
-      status: 'SENT',
-      sentAt: "now() - interval '1 day'",
+      status: 'FAILED',
+      sentAt: null,
       readAt: null,
       createdAt: "now() - interval '1 day'",
     },
