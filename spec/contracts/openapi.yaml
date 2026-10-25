@@ -369,6 +369,12 @@ components:
     ShipmentDeclarationStatus:
       type: string
       enum: [DECLARED, RECEIVED, DISCREPANCY, CANCELLED]
+    BatchAuthenticityStatus:
+      type: string
+      enum: [NOT_SUBMITTED, PENDING, APPROVED, REJECTED]
+      description: >-
+        Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0017). Chỉ chai thuộc lô APPROVED mới
+        được lắp vào slot.
     StorageCompensationStatus:
       type: string
       enum: [PENDING, PAID]
@@ -679,6 +685,12 @@ components:
         firmwareVersion: { type: [string, 'null'] }
         configurationVersion: { type: integer }
         slotCount: { type: integer }
+        drainingOrdersCount:
+          type: integer
+          minimum: 0
+          description: >-
+            Chỉ có khi operatingMode = DRAINING: số đơn và lệnh xịt máy còn phải phục vụ trước khi tự
+            sang MAINTENANCE (FR-MCH-09, ADR-0017). Chỉ đọc — đọc máy không đổi chế độ.
     MachineCreate:
       type: object
       required: [locationId, serialNumber, displayName, slotCount]
@@ -1535,12 +1547,14 @@ components:
         id: { type: string, format: uuid }
         brandId: { type: string, format: uuid }
         fragranceProductId: { type: string, format: uuid }
+        productName: { type: string, description: 'Tên sản phẩm khai báo (ADR-0017).' }
         declaredQuantity: { type: integer, minimum: 1 }
         declaredBottleVolumeMl: { type: number }
         expectedShipDate: { type: [string, 'null'], format: date }
         status: { $ref: '#/components/schemas/ShipmentDeclarationStatus' }
         receivedQuantity: { type: [integer, 'null'] }
         discrepancyNotes: { type: [string, 'null'] }
+        receivedBy: { type: [string, 'null'], format: uuid }
         receivedAt: { type: [string, 'null'], format: date-time }
         resultingBatchId: { type: [string, 'null'], format: uuid }
         createdAt: { type: string, format: date-time }
@@ -1566,16 +1580,41 @@ components:
         discrepancyNotes: { type: string }
     InventoryBatch:
       type: object
-      required: [id, brandId, fragranceProductId, batchNumber, receivedAt, quantityReceived]
+      required:
+        [id, brandId, fragranceProductId, batchNumber, receivedAt, quantityReceived, authenticityStatus]
       properties:
         id: { type: string, format: uuid }
         brandId: { type: string, format: uuid }
         fragranceProductId: { type: string, format: uuid }
+        productName: { type: string, description: 'Tên sản phẩm của lô (ADR-0017).' }
         sourceDeclarationId: { type: [string, 'null'], format: uuid }
         batchNumber: { type: string, maxLength: 100 }
         receivedAt: { type: string, format: date-time }
         expiresAt: { type: [string, 'null'], format: date-time }
         quantityReceived: { type: integer, minimum: 1 }
+        authenticityStatus: { $ref: '#/components/schemas/BatchAuthenticityStatus' }
+        authenticityDocumentUrl: { type: [string, 'null'] }
+        authenticityDocumentType: { type: [string, 'null'] }
+        authenticitySubmittedAt: { type: [string, 'null'], format: date-time }
+        authenticityVerifiedAt: { type: [string, 'null'], format: date-time }
+        authenticityRejectionReason: { type: [string, 'null'] }
+    AuthenticityDocumentSubmit:
+      type: object
+      required: [documentUrl]
+      description: >-
+        Nộp giấy tờ chứng minh hàng chính hãng cho lô (FR-INV-33). Nộp lại sau khi bị từ chối được;
+        lô đã APPROVED thì không.
+      properties:
+        documentUrl: { type: string, minLength: 1, maxLength: 1000 }
+        documentType:
+          type: string
+          maxLength: 50
+          description: 'Ví dụ PURCHASE_INVOICE, CERTIFICATE_OF_ORIGIN. Bỏ trống coi như PURCHASE_INVOICE.'
+    AuthenticityReject:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, description: 'Bắt buộc, không rỗng — thiếu trả REASON_REQUIRED.' }
     InventoryBatchCreate:
       type: object
       required: [brandId, fragranceProductId, batchNumber, receivedAt, quantityReceived]
@@ -2433,13 +2472,30 @@ components:
       required: [id, recipientUserId, type, channel, content, status, createdAt]
       properties:
         id: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
         recipientUserId: { type: string, format: uuid }
         type: { type: string }
         channel: { type: string, enum: [IN_APP, EMAIL] }
         subject: { type: [string, 'null'] }
         content: { type: string }
         status: { $ref: '#/components/schemas/NotificationStatus' }
+        sentAt: { type: [string, 'null'], format: date-time }
+        readAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+        recipientAddress:
+          type: [string, 'null']
+          description: Hòm thư nhận lúc gửi email (FR-ALR-16 AC2, ADR-0017).
+        referenceId:
+          type: [string, 'null']
+          description: Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán (FR-ALR-16 AC2).
+        providerMessageId:
+          type: [string, 'null']
+          description: Mã thư dịch vụ email trả về (FR-ALR-16 AC2).
+        deliveryAttempts: { type: integer, minimum: 0 }
+        lastAttemptAt: { type: [string, 'null'], format: date-time }
+        lastError:
+          type: [string, 'null']
+          description: Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2).
 
 # =====================================================================================
 # PATHS
@@ -3171,7 +3227,10 @@ paths:
         FR-MNT-06) nhưng phục vụ nốt đơn đã trả tiền và lệnh đang chạy; khi không còn lệnh CUSTOMER
         hiệu lực, đơn chờ thanh toán hay đơn chờ lượt thì hệ thống tự chuyển sang MAINTENANCE. Phản hồi
         trả operatingMode = DRAINING, hoặc MAINTENANCE nếu máy đã rảnh ngay lúc gọi. force = true kèm
-        reason chuyển thẳng sang MAINTENANCE (FR-MNT-17). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
+        reason chuyển thẳng sang MAINTENANCE (FR-MNT-17); thiếu reason trả REASON_REQUIRED. Khi ép:
+        đơn PAID đang chờ lượt → FAILED mã FORCED_MAINTENANCE kèm kiểm tra thủ công; đơn chờ thanh
+        toán bị hủy link ở cổng rồi chuyển EXPIRED; đơn đang có lệnh xịt đi theo FR-ORD-19 khi thiết
+        bị từ chối; sinh cảnh báo mức máy (ADR-0017). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
 
         Vào MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07). Thao tác nhạy
         cảm — cần xác thực lại (FR-AUTH-09). Ghi lịch sử mọi lần chuyển, kể cả DRAINING → MAINTENANCE
@@ -4541,7 +4600,8 @@ paths:
       operationId: createShipmentDeclaration
       description: >-
         FR-INV-22, FR-INV-23: Brand Admin khai báo sản phẩm, số lượng chai, dung tích mỗi chai và
-        ngày dự kiến gửi. Thông báo cho Inventory Staff (FR-INV-28).
+        ngày dự kiến gửi. Sản phẩm của thương hiệu khác trả PRODUCT_NOT_OWNED. Thông báo cho
+        Inventory Staff (FR-INV-28).
       requestBody:
         required: true
         content:
@@ -4566,7 +4626,9 @@ paths:
       description: >-
         FR-INV-24, FR-INV-25, FR-INV-26: Inventory Staff đối chiếu số thực nhận với khai báo. Lệch
         số lượng thì khai báo chuyển DISCREPANCY và ghi chú là bắt buộc. Xác nhận tiếp nhận thì hệ
-        thống tự tạo lô nước hoa liên kết ngược về khai báo. Ghi nhật ký (FR-AUD-07).
+        thống tự tạo lô nước hoa liên kết ngược về khai báo, trong cùng transaction; nhận 0 chai
+        thì không tạo lô và batch là null (FR-INV-25 AC3). Khai báo không còn DECLARED trả
+        SHIPMENT_ALREADY_PROCESSED. Ghi nhật ký (FR-AUD-07).
       requestBody:
         required: true
         content:
@@ -4582,7 +4644,10 @@ paths:
                 required: [declaration, batch]
                 properties:
                   declaration: { $ref: '#/components/schemas/ShipmentDeclaration' }
-                  batch: { $ref: '#/components/schemas/InventoryBatch' }
+                  batch:
+                    oneOf:
+                      - $ref: '#/components/schemas/InventoryBatch'
+                      - type: 'null'
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -4592,13 +4657,18 @@ paths:
       tags: [INV]
       summary: Danh sách lô nước hoa
       operationId: listInventoryBatches
-      description: 'FR-INV-01, FR-INV-21: Brand Admin chỉ thấy lô của thương hiệu mình.'
+      description: >-
+        FR-INV-01, FR-INV-21: Brand Admin chỉ thấy lô của thương hiệu mình. Lọc theo
+        authenticityStatus để Super Admin xem hàng chờ duyệt giấy tờ (FR-INV-34).
       parameters:
         - $ref: '#/components/parameters/page'
         - $ref: '#/components/parameters/pageSize'
         - name: fragranceProductId
           in: query
           schema: { type: string, format: uuid }
+        - name: authenticityStatus
+          in: query
+          schema: { $ref: '#/components/schemas/BatchAuthenticityStatus' }
       responses:
         '200':
           description: Danh sách lô
@@ -4634,6 +4704,81 @@ paths:
               schema: { $ref: '#/components/schemas/InventoryBatch' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inventory-batches/{id}/authenticity-documents:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Nộp giấy tờ chứng minh hàng chính hãng
+      operationId: submitBatchAuthenticity
+      description: >-
+        FR-INV-33 (ADR-0013, ADR-0017): Brand Admin của thương hiệu sở hữu lô nộp giấy tờ; lô chuyển
+        PENDING. Lô của thương hiệu khác trả FORBIDDEN_SCOPE. Lô đã APPROVED trả
+        AUTHENTICITY_NOT_PENDING. Thương hiệu không còn hóa đơn hiệu lực mà mọi hóa đơn chờ nạp hàng
+        đã quá RENTAL_MAX_STOCKING_DAYS kể từ lúc thanh toán thì trả DOCUMENT_SUBMISSION_EXPIRED. Ghi
+        nhật ký (FR-AUD-07).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthenticityDocumentSubmit' }
+      responses:
+        '200':
+          description: Đã nộp
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inventory-batches/{id}/approve-authenticity:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Duyệt giấy tờ chính hãng của lô
+      operationId: approveBatchAuthenticity
+      description: >-
+        FR-INV-34 AC1 (ADR-0017): chỉ Platform Super Admin, chỉ khi lô ở PENDING — nếu không trả
+        AUTHENTICITY_NOT_PENDING. Ghi người và thời điểm duyệt, thông báo Brand Admin, ghi nhật ký.
+      responses:
+        '200':
+          description: Đã duyệt
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryBatch' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /inventory-batches/{id}/reject-authenticity:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Từ chối giấy tờ chính hãng của lô
+      operationId: rejectBatchAuthenticity
+      description: >-
+        FR-INV-34 AC2, AC3 (ADR-0017): chỉ Platform Super Admin, chỉ khi lô ở PENDING. Lý do bắt
+        buộc — thiếu trả REASON_REQUIRED. Thông báo Brand Admin, ghi nhật ký.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthenticityReject' }
+      responses:
+        '200':
+          description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InventoryBatch' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /bottles:
@@ -4751,9 +4896,12 @@ paths:
       operationId: openRefillSession
       description: >-
         FR-INV-29, FR-INV-30: Inventory Staff mở phiếu trước khi thao tác, ghi nhận máy, slot,
-        người thực hiện và thời điểm. Trong lúc phiếu mở, cảnh báo cửa mở quá DOOR_OPEN_ALERT_MIN
-        bị tạm ngưng cho máy/slot này (FR-ALR-03). Brand Admin KHÔNG gọi được endpoint này
-        (FR-RFQ-11).
+        người thực hiện và thời điểm. Máy suy từ slot. Trong lúc phiếu mở, cảnh báo cửa mở quá
+        DOOR_OPEN_ALERT_MIN bị tạm ngưng cho máy/slot này (FR-ALR-03) và cả máy dừng nhận đơn
+        (ADR-0015). Brand Admin KHÔNG gọi được endpoint này (FR-RFQ-11). Slot không có hóa đơn đã
+        thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006); máy còn đơn chờ thanh toán hoặc lệnh xịt khách
+        hàng hiệu lực trả MACHINE_BUSY (FR-INV-32); slot đã có phiếu mở trả REFILL_SESSION_OPEN
+        (ADR-0017).
       requestBody:
         required: true
         content:
@@ -4782,7 +4930,10 @@ paths:
         mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06);
         chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả
         PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE
-        (FR-MCH-07). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
+        (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35);
+        chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả
+        REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi
+        nhật ký (FR-AUD-07).
       requestBody:
         required: true
         content:
@@ -6226,13 +6377,25 @@ paths:
       description: >-
         Hòm thông báo của người dùng hiện tại: sắp hết hạn hóa đơn (FR-EXP-01/02/03), thanh lý
         hàng tồn (FR-EXP-19), máy chuyển bảo trì (FR-MNT-07), cảnh báo ảnh hưởng slot (FR-ALR-10),
-        yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28).
+        yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28), email tiền/hàng
+        (FR-ALR-16). Người dùng chỉ thấy thông báo gửi cho mình. Người có quyền notification.manage
+        (Super Admin) thấy mọi thông báo để đối soát bằng chứng gửi, lọc được theo brandId,
+        channel, type (ADR-0017); người khác truyền các bộ lọc đó thì bị bỏ qua.
       parameters:
         - $ref: '#/components/parameters/page'
         - $ref: '#/components/parameters/pageSize'
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/NotificationStatus' }
+        - name: channel
+          in: query
+          schema: { type: string, enum: [IN_APP, EMAIL] }
+        - name: type
+          in: query
+          schema: { type: string, maxLength: 80 }
+        - name: brandId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Danh sách thông báo
@@ -6247,6 +6410,46 @@ paths:
                     items: { $ref: '#/components/schemas/Notification' }
                   meta: { $ref: '#/components/schemas/PageMeta' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [RPT]
+      summary: Chi tiết một thông báo
+      operationId: getNotification
+      description: >-
+        Cùng phạm vi như GET /notifications. Với email: người nhận, thời điểm gửi, mã sự kiện, mã thư
+        và phản hồi của dịch vụ email làm bằng chứng (FR-ALR-16 AC2, ADR-0017).
+      responses:
+        '200':
+          description: Thông báo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /notifications/{id}/retry:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RPT]
+      summary: Gửi lại email thông báo bị lỗi
+      operationId: retryNotification
+      description: >-
+        FR-ALR-16 AC3 (ADR-0017): quyền notification.manage. Đưa email FAILED về PENDING để job gửi
+        lại, kể cả khi đã hết EMAIL_MAX_ATTEMPTS lượt tự thử. Thông báo không phải email FAILED trả
+        NOTIFICATION_NOT_RETRYABLE. Ghi nhật ký.
+      responses:
+        '200':
+          description: Đã xếp lại hàng đợi gửi
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
 
   # -----------------------------------------------------------------------------------
   # AUD — Nhật ký kiểm toán

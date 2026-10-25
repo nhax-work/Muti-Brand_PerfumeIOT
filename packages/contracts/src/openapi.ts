@@ -579,7 +579,7 @@ export interface paths {
         /**
          * Đổi chế độ hoạt động của máy
          * @description FR-MCH-11, FR-MNT-05, FR-MNT-12, FR-MNT-17: Operations Staff bật/tắt máy hoặc yêu cầu bảo trì. KHÔNG trở lại NORMAL được khi checklist kiểm tra sau bảo trì chưa hoàn tất (FR-MNT-12).
-         *     Yêu cầu MAINTENANCE (ADR-0015): máy vào DRAINING — không nhận đơn mới (MACHINE_IN_MAINTENANCE, FR-MNT-06) nhưng phục vụ nốt đơn đã trả tiền và lệnh đang chạy; khi không còn lệnh CUSTOMER hiệu lực, đơn chờ thanh toán hay đơn chờ lượt thì hệ thống tự chuyển sang MAINTENANCE. Phản hồi trả operatingMode = DRAINING, hoặc MAINTENANCE nếu máy đã rảnh ngay lúc gọi. force = true kèm reason chuyển thẳng sang MAINTENANCE (FR-MNT-17). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
+         *     Yêu cầu MAINTENANCE (ADR-0015): máy vào DRAINING — không nhận đơn mới (MACHINE_IN_MAINTENANCE, FR-MNT-06) nhưng phục vụ nốt đơn đã trả tiền và lệnh đang chạy; khi không còn lệnh CUSTOMER hiệu lực, đơn chờ thanh toán hay đơn chờ lượt thì hệ thống tự chuyển sang MAINTENANCE. Phản hồi trả operatingMode = DRAINING, hoặc MAINTENANCE nếu máy đã rảnh ngay lúc gọi. force = true kèm reason chuyển thẳng sang MAINTENANCE (FR-MNT-17); thiếu reason trả REASON_REQUIRED. Khi ép: đơn PAID đang chờ lượt → FAILED mã FORCED_MAINTENANCE kèm kiểm tra thủ công; đơn chờ thanh toán bị hủy link ở cổng rồi chuyển EXPIRED; đơn đang có lệnh xịt đi theo FR-ORD-19 khi thiết bị từ chối; sinh cảnh báo mức máy (ADR-0017). Gửi DRAINING trực tiếp trả VALIDATION_ERROR.
          *     Vào MAINTENANCE thì thông báo cho mọi Brand Admin có slot trên máy (FR-MNT-07). Thao tác nhạy cảm — cần xác thực lại (FR-AUTH-09). Ghi lịch sử mọi lần chuyển, kể cả DRAINING → MAINTENANCE tự động (FR-MCH-13).
          */
         put: operations["setMachineMode"];
@@ -1668,7 +1668,7 @@ export interface paths {
         put?: never;
         /**
          * Khai báo lô hàng gửi đến kho nền tảng
-         * @description FR-INV-22, FR-INV-23: Brand Admin khai báo sản phẩm, số lượng chai, dung tích mỗi chai và ngày dự kiến gửi. Thông báo cho Inventory Staff (FR-INV-28).
+         * @description FR-INV-22, FR-INV-23: Brand Admin khai báo sản phẩm, số lượng chai, dung tích mỗi chai và ngày dự kiến gửi. Sản phẩm của thương hiệu khác trả PRODUCT_NOT_OWNED. Thông báo cho Inventory Staff (FR-INV-28).
          */
         post: operations["createShipmentDeclaration"];
         delete?: never;
@@ -1690,7 +1690,7 @@ export interface paths {
         put?: never;
         /**
          * Đối chiếu và tiếp nhận lô hàng
-         * @description FR-INV-24, FR-INV-25, FR-INV-26: Inventory Staff đối chiếu số thực nhận với khai báo. Lệch số lượng thì khai báo chuyển DISCREPANCY và ghi chú là bắt buộc. Xác nhận tiếp nhận thì hệ thống tự tạo lô nước hoa liên kết ngược về khai báo. Ghi nhật ký (FR-AUD-07).
+         * @description FR-INV-24, FR-INV-25, FR-INV-26: Inventory Staff đối chiếu số thực nhận với khai báo. Lệch số lượng thì khai báo chuyển DISCREPANCY và ghi chú là bắt buộc. Xác nhận tiếp nhận thì hệ thống tự tạo lô nước hoa liên kết ngược về khai báo, trong cùng transaction; nhận 0 chai thì không tạo lô và batch là null (FR-INV-25 AC3). Khai báo không còn DECLARED trả SHIPMENT_ALREADY_PROCESSED. Ghi nhật ký (FR-AUD-07).
          */
         post: operations["receiveShipmentDeclaration"];
         delete?: never;
@@ -1708,7 +1708,7 @@ export interface paths {
         };
         /**
          * Danh sách lô nước hoa
-         * @description FR-INV-01, FR-INV-21: Brand Admin chỉ thấy lô của thương hiệu mình.
+         * @description FR-INV-01, FR-INV-21: Brand Admin chỉ thấy lô của thương hiệu mình. Lọc theo authenticityStatus để Super Admin xem hàng chờ duyệt giấy tờ (FR-INV-34).
          */
         get: operations["listInventoryBatches"];
         put?: never;
@@ -1717,6 +1717,72 @@ export interface paths {
          * @description FR-INV-01: Inventory Staff tạo lô với thương hiệu sở hữu, sản phẩm, số lô, số lượng, ngày nhập và hạn sử dụng. Lô nhận từ khai báo gửi hàng được tạo tự động qua POST /shipment-declarations/{id}/receive (FR-INV-26), không qua endpoint này.
          */
         post: operations["createInventoryBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory-batches/{id}/authenticity-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Nộp giấy tờ chứng minh hàng chính hãng
+         * @description FR-INV-33 (ADR-0013, ADR-0017): Brand Admin của thương hiệu sở hữu lô nộp giấy tờ; lô chuyển PENDING. Lô của thương hiệu khác trả FORBIDDEN_SCOPE. Lô đã APPROVED trả AUTHENTICITY_NOT_PENDING. Thương hiệu không còn hóa đơn hiệu lực mà mọi hóa đơn chờ nạp hàng đã quá RENTAL_MAX_STOCKING_DAYS kể từ lúc thanh toán thì trả DOCUMENT_SUBMISSION_EXPIRED. Ghi nhật ký (FR-AUD-07).
+         */
+        post: operations["submitBatchAuthenticity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory-batches/{id}/approve-authenticity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duyệt giấy tờ chính hãng của lô
+         * @description FR-INV-34 AC1 (ADR-0017): chỉ Platform Super Admin, chỉ khi lô ở PENDING — nếu không trả AUTHENTICITY_NOT_PENDING. Ghi người và thời điểm duyệt, thông báo Brand Admin, ghi nhật ký.
+         */
+        post: operations["approveBatchAuthenticity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/inventory-batches/{id}/reject-authenticity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Từ chối giấy tờ chính hãng của lô
+         * @description FR-INV-34 AC2, AC3 (ADR-0017): chỉ Platform Super Admin, chỉ khi lô ở PENDING. Lý do bắt buộc — thiếu trả REASON_REQUIRED. Thông báo Brand Admin, ghi nhật ký.
+         */
+        post: operations["rejectBatchAuthenticity"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1789,7 +1855,7 @@ export interface paths {
         put?: never;
         /**
          * Mở phiếu nạp
-         * @description FR-INV-29, FR-INV-30: Inventory Staff mở phiếu trước khi thao tác, ghi nhận máy, slot, người thực hiện và thời điểm. Trong lúc phiếu mở, cảnh báo cửa mở quá DOOR_OPEN_ALERT_MIN bị tạm ngưng cho máy/slot này (FR-ALR-03). Brand Admin KHÔNG gọi được endpoint này (FR-RFQ-11).
+         * @description FR-INV-29, FR-INV-30: Inventory Staff mở phiếu trước khi thao tác, ghi nhận máy, slot, người thực hiện và thời điểm. Máy suy từ slot. Trong lúc phiếu mở, cảnh báo cửa mở quá DOOR_OPEN_ALERT_MIN bị tạm ngưng cho máy/slot này (FR-ALR-03) và cả máy dừng nhận đơn (ADR-0015). Brand Admin KHÔNG gọi được endpoint này (FR-RFQ-11). Slot không có hóa đơn đã thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006); máy còn đơn chờ thanh toán hoặc lệnh xịt khách hàng hiệu lực trả MACHINE_BUSY (FR-INV-32); slot đã có phiếu mở trả REFILL_SESSION_OPEN (ADR-0017).
          */
         post: operations["openRefillSession"];
         delete?: never;
@@ -1811,7 +1877,7 @@ export interface paths {
         put?: never;
         /**
          * Đóng phiếu nạp
-         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
+         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35); chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
          */
         post: operations["closeRefillSession"];
         delete?: never;
@@ -2986,11 +3052,55 @@ export interface paths {
         };
         /**
          * Thông báo của tôi
-         * @description Hòm thông báo của người dùng hiện tại: sắp hết hạn hóa đơn (FR-EXP-01/02/03), thanh lý hàng tồn (FR-EXP-19), máy chuyển bảo trì (FR-MNT-07), cảnh báo ảnh hưởng slot (FR-ALR-10), yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28).
+         * @description Hòm thông báo của người dùng hiện tại: sắp hết hạn hóa đơn (FR-EXP-01/02/03), thanh lý hàng tồn (FR-EXP-19), máy chuyển bảo trì (FR-MNT-07), cảnh báo ảnh hưởng slot (FR-ALR-10), yêu cầu bổ sung mới (FR-RFQ-05), khai báo gửi hàng mới (FR-INV-28), email tiền/hàng (FR-ALR-16). Người dùng chỉ thấy thông báo gửi cho mình. Người có quyền notification.manage (Super Admin) thấy mọi thông báo để đối soát bằng chứng gửi, lọc được theo brandId, channel, type (ADR-0017); người khác truyền các bộ lọc đó thì bị bỏ qua.
          */
         get: operations["listNotifications"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Chi tiết một thông báo
+         * @description Cùng phạm vi như GET /notifications. Với email: người nhận, thời điểm gửi, mã sự kiện, mã thư và phản hồi của dịch vụ email làm bằng chứng (FR-ALR-16 AC2, ADR-0017).
+         */
+        get: operations["getNotification"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/notifications/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gửi lại email thông báo bị lỗi
+         * @description FR-ALR-16 AC3 (ADR-0017): quyền notification.manage. Đưa email FAILED về PENDING để job gửi lại, kể cả khi đã hết EMAIL_MAX_ATTEMPTS lượt tự thử. Thông báo không phải email FAILED trả NOTIFICATION_NOT_RETRYABLE. Ghi nhật ký.
+         */
+        post: operations["retryNotification"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3150,6 +3260,11 @@ export interface components {
         SlotRentalRequestStatus: "REQUESTED" | "APPROVED" | "REJECTED" | "CONVERTED" | "CANCELLED";
         /** @enum {string} */
         ShipmentDeclarationStatus: "DECLARED" | "RECEIVED" | "DISCREPANCY" | "CANCELLED";
+        /**
+         * @description Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0017). Chỉ chai thuộc lô APPROVED mới được lắp vào slot.
+         * @enum {string}
+         */
+        BatchAuthenticityStatus: "NOT_SUBMITTED" | "PENDING" | "APPROVED" | "REJECTED";
         /**
          * @description Trạng thái chi trả khoản bồi thường hàng hóa (FR-SLT-45, ADR-0006).
          * @enum {string}
@@ -3410,6 +3525,8 @@ export interface components {
             firmwareVersion?: string | null;
             configurationVersion?: number;
             slotCount?: number;
+            /** @description Chỉ có khi operatingMode = DRAINING: số đơn và lệnh xịt máy còn phải phục vụ trước khi tự sang MAINTENANCE (FR-MCH-09, ADR-0017). Chỉ đọc — đọc máy không đổi chế độ. */
+            drainingOrdersCount?: number;
         };
         MachineCreate: {
             /** Format: uuid */
@@ -4136,6 +4253,8 @@ export interface components {
             brandId: string;
             /** Format: uuid */
             fragranceProductId: string;
+            /** @description Tên sản phẩm khai báo (ADR-0017). */
+            productName?: string;
             declaredQuantity: number;
             declaredBottleVolumeMl?: number;
             /** Format: date */
@@ -4143,6 +4262,8 @@ export interface components {
             status: components["schemas"]["ShipmentDeclarationStatus"];
             receivedQuantity?: number | null;
             discrepancyNotes?: string | null;
+            /** Format: uuid */
+            receivedBy?: string | null;
             /** Format: date-time */
             receivedAt?: string | null;
             /** Format: uuid */
@@ -4173,6 +4294,8 @@ export interface components {
             brandId: string;
             /** Format: uuid */
             fragranceProductId: string;
+            /** @description Tên sản phẩm của lô (ADR-0017). */
+            productName?: string;
             /** Format: uuid */
             sourceDeclarationId?: string | null;
             batchNumber: string;
@@ -4181,6 +4304,24 @@ export interface components {
             /** Format: date-time */
             expiresAt?: string | null;
             quantityReceived: number;
+            authenticityStatus: components["schemas"]["BatchAuthenticityStatus"];
+            authenticityDocumentUrl?: string | null;
+            authenticityDocumentType?: string | null;
+            /** Format: date-time */
+            authenticitySubmittedAt?: string | null;
+            /** Format: date-time */
+            authenticityVerifiedAt?: string | null;
+            authenticityRejectionReason?: string | null;
+        };
+        /** @description Nộp giấy tờ chứng minh hàng chính hãng cho lô (FR-INV-33). Nộp lại sau khi bị từ chối được; lô đã APPROVED thì không. */
+        AuthenticityDocumentSubmit: {
+            documentUrl: string;
+            /** @description Ví dụ PURCHASE_INVOICE, CERTIFICATE_OF_ORIGIN. Bỏ trống coi như PURCHASE_INVOICE. */
+            documentType?: string;
+        };
+        AuthenticityReject: {
+            /** @description Bắt buộc, không rỗng — thiếu trả REASON_REQUIRED. */
+            reason: string;
         };
         InventoryBatchCreate: {
             /** Format: uuid */
@@ -4950,6 +5091,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
+            brandId?: string;
+            /** Format: uuid */
             recipientUserId: string;
             type: string;
             /** @enum {string} */
@@ -4958,7 +5101,22 @@ export interface components {
             content: string;
             status: components["schemas"]["NotificationStatus"];
             /** Format: date-time */
+            sentAt?: string | null;
+            /** Format: date-time */
+            readAt?: string | null;
+            /** Format: date-time */
             createdAt: string;
+            /** @description Hòm thư nhận lúc gửi email (FR-ALR-16 AC2, ADR-0017). */
+            recipientAddress?: string | null;
+            /** @description Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán (FR-ALR-16 AC2). */
+            referenceId?: string | null;
+            /** @description Mã thư dịch vụ email trả về (FR-ALR-16 AC2). */
+            providerMessageId?: string | null;
+            deliveryAttempts?: number;
+            /** Format: date-time */
+            lastAttemptAt?: string | null;
+            /** @description Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2). */
+            lastError?: string | null;
         };
     };
     responses: {
@@ -7492,7 +7650,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         declaration: components["schemas"]["ShipmentDeclaration"];
-                        batch: components["schemas"]["InventoryBatch"];
+                        batch: components["schemas"]["InventoryBatch"] | null;
                     };
                 };
             };
@@ -7509,6 +7667,7 @@ export interface operations {
                 /** @description Số bản ghi mỗi trang */
                 pageSize?: components["parameters"]["pageSize"];
                 fragranceProductId?: string;
+                authenticityStatus?: components["schemas"]["BatchAuthenticityStatus"];
             };
             header?: never;
             path?: never;
@@ -7555,6 +7714,91 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    submitBatchAuthenticity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthenticityDocumentSubmit"];
+            };
+        };
+        responses: {
+            /** @description Đã nộp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryBatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    approveBatchAuthenticity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã duyệt */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryBatch"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectBatchAuthenticity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuthenticityReject"];
+            };
+        };
+        responses: {
+            /** @description Đã từ chối */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryBatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -9301,6 +9545,9 @@ export interface operations {
                 /** @description Số bản ghi mỗi trang */
                 pageSize?: components["parameters"]["pageSize"];
                 status?: components["schemas"]["NotificationStatus"];
+                channel?: "IN_APP" | "EMAIL";
+                type?: string;
+                brandId?: string;
             };
             header?: never;
             path?: never;
@@ -9321,6 +9568,55 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Thông báo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    retryNotification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xếp lại hàng đợi gửi */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Notification"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     searchAuditLogs: {

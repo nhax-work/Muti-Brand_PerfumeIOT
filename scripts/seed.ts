@@ -113,6 +113,15 @@ const PERMISSIONS = [
   ['product.manage', 'Quản lý danh mục sản phẩm của thương hiệu mình (FR-PRD-01..05)'],
   ['inventory.manage', 'Nhập lô, đăng ký chai, nạp và tháo chai (FR-INV-01..17)'],
   ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
+  [
+    'inventory.declare',
+    'Khai báo lô hàng gửi kho và nộp giấy tờ chính hãng của thương hiệu mình (FR-INV-22, 33)',
+  ],
+  ['inventory.verify', 'Duyệt hoặc từ chối giấy tờ chính hãng của lô (FR-INV-34)'],
+  [
+    'notification.manage',
+    'Tra bằng chứng gửi thông báo của mọi thương hiệu và gửi lại email lỗi (FR-ALR-16)',
+  ],
   ['refill.request', 'Gửi yêu cầu bổ sung nước hoa (FR-RFQ-01)'],
   ['refill.fulfill', 'Duyệt và lên lịch yêu cầu bổ sung (FR-RFQ-06/07)'],
   [
@@ -157,6 +166,7 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   [ID.roleBrandAdmin]: [
     'product.manage',
     'rental.request',
+    'inventory.declare',
     'refill.request',
     'report.brand',
     'order.view',

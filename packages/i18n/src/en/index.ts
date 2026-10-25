@@ -155,6 +155,9 @@ export const en: SameKeysAs<typeof vi> = {
     REFUND_CLAIM_ACCEPTED: 'Refund claim accepted',
     MANUAL_REFUND_RECORDED: 'Refund recorded',
     QUEUE_TIMEOUT: 'Waited too long, the machine could not serve it',
+    FORCED_MAINTENANCE: 'The machine was forced into maintenance while the order waited',
+    MACHINE_FORCED_MAINTENANCE:
+      'The machine was forced into maintenance; the unpaid order was cancelled',
     PRESS_TIMEOUT: 'Customer did not press the button in time',
     ACTUATOR_FAULT: 'The pump failed',
     NO_CURRENT: 'The pump did not run',
