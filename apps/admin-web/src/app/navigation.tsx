@@ -1,4 +1,5 @@
 import {
+  AlertOutlined,
   AppstoreOutlined,
   BankOutlined,
   DashboardOutlined,
@@ -124,6 +125,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.notifications',
     icon: <MailOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
+  },
+  {
+    path: '/alerts',
+    label: 'ui.alerts',
+    icon: <AlertOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
   },
   {
     path: '/shipments',

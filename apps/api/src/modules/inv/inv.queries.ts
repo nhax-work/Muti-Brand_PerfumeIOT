@@ -108,6 +108,10 @@ export interface StockableRental {
   readonly id: string;
   readonly brandId: string;
   readonly fragranceProductId: string | null;
+  readonly status: string;
+  readonly startsAt: Date;
+  readonly endsAt: Date;
+  readonly previousRentalId: string | null;
 }
 
 export interface PageFilter {
@@ -791,7 +795,15 @@ export class InvQueries {
   async findStockableRental(slotId: string, executor: Executor): Promise<StockableRental | null> {
     const row = await executor
       .selectFrom('slot_rentals')
-      .select(['id', 'brand_id', 'fragrance_product_id'])
+      .select([
+        'id',
+        'brand_id',
+        'fragrance_product_id',
+        'status',
+        'starts_at',
+        'ends_at',
+        'previous_rental_id',
+      ])
       .where('slot_id', '=', slotId)
       .where((eb) =>
         eb.or([
@@ -807,8 +819,37 @@ export class InvQueries {
       .limit(1)
       .executeTakeFirst();
     return row
-      ? { id: row.id, brandId: row.brand_id, fragranceProductId: row.fragrance_product_id }
+      ? {
+          id: row.id,
+          brandId: row.brand_id,
+          fragranceProductId: row.fragrance_product_id,
+          status: row.status,
+          startsAt: row.starts_at,
+          endsAt: row.ends_at,
+          previousRentalId: row.previous_rental_id,
+        }
       : null;
+  }
+
+  /** FR-SLT-24: kích hoạt hóa đơn DRAFT khi lắp chai đầu tiên */
+  async activateRentalOnFirstInstall(
+    rentalId: string,
+    startsAt: Date,
+    endsAt: Date,
+    tx: Executor,
+  ): Promise<boolean> {
+    const result = await tx
+      .updateTable('slot_rentals')
+      .set({
+        status: 'ACTIVE',
+        starts_at: startsAt,
+        ends_at: endsAt,
+        updated_at: startsAt,
+      })
+      .where('id', '=', rentalId)
+      .where('status', '=', 'DRAFT')
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 
   async slotHasOpenRefillSession(slotId: string, executor: Executor): Promise<boolean> {

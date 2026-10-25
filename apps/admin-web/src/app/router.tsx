@@ -154,6 +154,10 @@ export const router = createBrowserRouter([
           })),
       },
       {
+        path: '/alerts',
+        lazy: () => import('@/routes/alerts/AlertsPage').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/shipments',
         lazy: () =>
           import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
