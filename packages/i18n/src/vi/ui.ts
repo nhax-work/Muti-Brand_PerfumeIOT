@@ -618,6 +618,7 @@ export const ui = {
   alertStatusLabel: 'Trạng thái',
   alertTypeLabel: 'Loại cảnh báo',
   alertTitleLabel: 'Tiêu đề cảnh báo',
+  alertDescriptionLabel: 'Mô tả',
   alertMachineLabel: 'Máy / Kiosk',
   alertSlotLabel: 'Slot',
   alertLocationLabel: 'Địa điểm',

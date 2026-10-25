@@ -54,6 +54,7 @@ const SEVERITY_COLORS: Record<AlertSeverity, { color: string; icon: React.ReactN
 const STATUS_COLORS: Record<AlertStatus, { color: string; icon: React.ReactNode }> = {
   OPEN: { color: 'red', icon: <CloseCircleOutlined /> },
   ACKNOWLEDGED: { color: 'blue', icon: <ClockCircleOutlined /> },
+  IN_PROGRESS: { color: 'gold', icon: <ClockCircleOutlined /> },
   RESOLVED: { color: 'green', icon: <CheckCircleOutlined /> },
   CLOSED: { color: 'default', icon: <CheckCircleOutlined /> },
 };
@@ -153,13 +154,13 @@ export default function AlertsPage() {
 
   const columns: ColumnsType<Alert> = [
     {
-      title: t('ui.alertTitle'),
+      title: t('ui.alertTitleLabel'),
       dataIndex: 'title',
       key: 'title',
       render: (val: string, record) => (
         <Space direction="vertical" size={2}>
           <Typography.Text strong>{val}</Typography.Text>
-          <Typography.Text orientation="left" type="secondary" style={{ fontSize: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
             {record.type} · ID: {record.id.slice(0, 8)}
           </Typography.Text>
         </Space>
@@ -180,7 +181,7 @@ export default function AlertsPage() {
       render: (val: AlertStatus) => <StatusTag status={val} />,
     },
     {
-      title: t('ui.alertOccurrences'),
+      title: t('ui.alertOccurrenceCount'),
       dataIndex: 'occurrenceCount',
       key: 'occurrenceCount',
       width: 100,
@@ -200,7 +201,7 @@ export default function AlertsPage() {
       render: (_, record) => (
         <Space wrap size="small">
           <Button size="small" icon={<EyeOutlined />} onClick={() => setSelectedId(record.id)}>
-            {t('ui.viewDetails')}
+            {t('ui.viewDetail')}
           </Button>
 
           {canHandle && record.status === 'OPEN' && (
@@ -275,7 +276,7 @@ export default function AlertsPage() {
                 setPage(1);
               }}
               options={[
-                { value: 'ALL', label: t('ui.allSeverities') },
+                { value: 'ALL', label: t('ui.filterAllSeverities') },
                 { value: 'INFO', label: t('alertSeverity.INFO') },
                 { value: 'WARNING', label: t('alertSeverity.WARNING') },
                 { value: 'HIGH', label: t('alertSeverity.HIGH') },
@@ -291,7 +292,7 @@ export default function AlertsPage() {
                 setPage(1);
               }}
               options={[
-                { value: 'ALL', label: t('ui.allStatuses') },
+                { value: 'ALL', label: t('ui.filterAllStatuses') },
                 { value: 'OPEN', label: t('alertStatus.OPEN') },
                 { value: 'ACKNOWLEDGED', label: t('alertStatus.ACKNOWLEDGED') },
                 { value: 'RESOLVED', label: t('alertStatus.RESOLVED') },
@@ -320,7 +321,7 @@ export default function AlertsPage() {
 
         {/* Modal phân công */}
         <Modal
-          title={t('ui.alertAssignModalTitle')}
+          title={t('ui.alertAssignTitle')}
           open={assignAlertId !== null}
           onCancel={() => {
             setAssignAlertId(null);
@@ -332,8 +333,8 @@ export default function AlertsPage() {
           <Form form={assignForm} layout="vertical" onFinish={handleAssignSubmit}>
             <Form.Item
               name="assignedTo"
-              label={t('ui.alertAssignedToUserId')}
-              rules={[{ required: true, message: t('ui.fieldRequired') }]}
+              label={t('ui.alertAssignSelectStaff')}
+              rules={[{ required: true, message: t('validation.required') }]}
             >
               <Input placeholder="uuid-nhan-vien-van-hanh" />
             </Form.Item>
@@ -342,7 +343,7 @@ export default function AlertsPage() {
 
         {/* Modal ghi nội dung giải quyết */}
         <Modal
-          title={t('ui.alertResolveModalTitle')}
+          title={t('ui.alertResolveTitle')}
           open={resolveAlertId !== null}
           onCancel={() => {
             setResolveAlertId(null);
@@ -354,10 +355,10 @@ export default function AlertsPage() {
           <Form form={resolveForm} layout="vertical" onFinish={handleResolveSubmit}>
             <Form.Item
               name="resolution"
-              label={t('ui.alertResolutionText')}
-              rules={[{ required: true, message: t('ui.alertResolutionRequired') }]}
+              label={t('ui.alertResolution')}
+              rules={[{ required: true, message: t('validation.required') }]}
             >
-              <Input.TextArea rows={4} placeholder={t('ui.alertResolutionPlaceholder')} />
+              <Input.TextArea rows={4} placeholder={t('ui.alertResolvePlaceholder')} />
             </Form.Item>
           </Form>
         </Modal>
@@ -371,7 +372,7 @@ export default function AlertsPage() {
         >
           {detail.data ? (
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label={t('ui.alertTitle')}>{detail.data.title}</Descriptions.Item>
+              <Descriptions.Item label={t('ui.alertTitleLabel')}>{detail.data.title}</Descriptions.Item>
               <Descriptions.Item label={t('ui.alertTypeLabel')}>
                 <Tag>{detail.data.type}</Tag>
               </Descriptions.Item>
@@ -381,18 +382,18 @@ export default function AlertsPage() {
               <Descriptions.Item label={t('ui.alertStatusLabel')}>
                 <StatusTag status={detail.data.status} />
               </Descriptions.Item>
-              <Descriptions.Item label={t('ui.alertDescription')}>
+              <Descriptions.Item label={t('ui.alertDescriptionLabel')}>
                 {detail.data.description || '—'}
               </Descriptions.Item>
-              <Descriptions.Item label={t('ui.alertMachineId')}>
+              <Descriptions.Item label={t('ui.alertMachineLabel')}>
                 {detail.data.machineId}
               </Descriptions.Item>
               {detail.data.slotId && (
-                <Descriptions.Item label={t('ui.alertSlotId')}>
+                <Descriptions.Item label={t('ui.alertSlotLabel')}>
                   {detail.data.slotId}
                 </Descriptions.Item>
               )}
-              <Descriptions.Item label={t('ui.alertOccurrences')}>
+              <Descriptions.Item label={t('ui.alertOccurrenceCount')}>
                 {detail.data.occurrenceCount}
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertFirstOccurredAt')}>
@@ -414,7 +415,7 @@ export default function AlertsPage() {
                   ? `${detail.data.resolvedBy} (${formatDateTime(detail.data.resolvedAt)})`
                   : '—'}
               </Descriptions.Item>
-              <Descriptions.Item label={t('ui.alertResolutionText')}>
+              <Descriptions.Item label={t('ui.alertResolution')}>
                 {detail.data.resolution || '—'}
               </Descriptions.Item>
               {detail.data.affectedBrandIds && detail.data.affectedBrandIds.length > 0 && (
@@ -428,7 +429,7 @@ export default function AlertsPage() {
               )}
             </Descriptions>
           ) : (
-            <Empty description={t('ui.noData')} />
+            <Empty description={t('ui.noAlertsFound')} />
           )}
         </Drawer>
       </Space>

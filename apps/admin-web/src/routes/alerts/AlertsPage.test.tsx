@@ -108,9 +108,9 @@ describe('AlertsPage', () => {
     expect(screen.getByText('Hết nước hoa tại slot')).toBeTruthy();
     expect(screen.getByText('Cửa mở quá hạn')).toBeTruthy();
     expect(screen.getByText('Tiếp nhận')).toBeTruthy();
-    expect(screen.getAllByText('Phân công')).toHaveLength(1);
+    expect(screen.getAllByText('Phân công')).toHaveLength(2);
     expect(screen.getByText('Xử lý')).toBeTruthy();
-    expect(screen.getByText('Đóng')).toBeTruthy();
+    expect(screen.getByText('Đóng cảnh báo')).toBeTruthy();
   });
 
   it('Brand Admin chỉ xem danh sách cảnh báo, không có các nút xử lý vận hành', () => {
@@ -120,7 +120,7 @@ describe('AlertsPage', () => {
     expect(screen.queryByText('Tiếp nhận')).toBeNull();
     expect(screen.queryByText('Phân công')).toBeNull();
     expect(screen.queryByText('Xử lý')).toBeNull();
-    expect(screen.queryByText('Đóng')).toBeNull();
+    expect(screen.queryByText('Đóng cảnh báo')).toBeNull();
   });
 
   it('Bấm Tiếp nhận cảnh báo gọi acknowledge API', async () => {
@@ -142,7 +142,7 @@ describe('AlertsPage', () => {
   it('Đóng cảnh báo đã giải quyết gọi close API', async () => {
     closeMock.mockResolvedValue({ ...resolvedAlert, status: 'CLOSED' });
     renderScreen(<AlertsPage />);
-    fireEvent.click(screen.getByText('Đóng'));
+    fireEvent.click(screen.getByText('Đóng cảnh báo'));
     fireEvent.click(await screen.findByText('Xác nhận'));
     expect(closeMock).toHaveBeenCalledWith('alr-resolved-2');
   });

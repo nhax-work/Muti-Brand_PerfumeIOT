@@ -991,6 +991,7 @@ export const en: SameKeysAs<typeof vi> = {
     alertStatusLabel: 'Status',
     alertTypeLabel: 'Alert Type',
     alertTitleLabel: 'Alert Title',
+    alertDescriptionLabel: 'Description',
     alertMachineLabel: 'Machine / Kiosk',
     alertSlotLabel: 'Slot',
     alertLocationLabel: 'Location',
