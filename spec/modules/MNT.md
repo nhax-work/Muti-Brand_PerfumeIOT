@@ -227,11 +227,11 @@
 ## FR-MNT-17 — Ép máy chuyển sang MAINTENANCE khẩn cấp
 **Tuyên bố:** Hệ thống phải cho phép Operations Staff ép máy chuyển thẳng sang MAINTENANCE kèm lý do bắt buộc trong trường hợp khẩn cấp; đơn bị ảnh hưởng đi theo FR-ORD-19 (ADR-0015).
 
-**Dấu vết:** BR-006, BR-010 · **Ưu tiên:** M · ADR-0015 mục 4 · **API:** `POST /machines/{id}/force-maintenance`
+**Dấu vết:** BR-006, BR-010 · **Ưu tiên:** M · ADR-0015 mục 4 · **API:** `PUT /machines/{id}/mode` với `force = true` (ADR-0017)
 
 **Tiêu chí xét tuyển**
 
-- AC1 (Ép bảo trì khẩn cấp): Cho máy `M` đang ở `NORMAL` hoặc `DRAINING` gặp sự cố nghiêm trọng, Khi Operations Staff gửi `POST /machines/{id}/force-maintenance` kèm lý do `reason = "Cháy nổ/khẩn cấp..."` và đã xác thực lại mật khẩu (`X-Reauth-Token`), Thì máy chuyển ngay lập tức sang `operating_mode = 'MAINTENANCE'`, không chờ xịt nốt.
+- AC1 (Ép bảo trì khẩn cấp): Cho máy `M` đang ở `NORMAL` hoặc `DRAINING` gặp sự cố nghiêm trọng, Khi Operations Staff gửi `PUT /machines/{id}/mode` với `operatingMode = MAINTENANCE`, `force = true` kèm lý do `reason = "Cháy nổ/khẩn cấp..."` và đã xác thực lại mật khẩu (`X-Reauth-Token`), Thì máy chuyển ngay lập tức sang `operating_mode = 'MAINTENANCE'`, không chờ xịt nốt.
 - AC2 (Đơn hàng bị ảnh hưởng xử lý theo FR-ORD-19): Cho máy bị ép sang `MAINTENANCE` khi đang có đơn `PAID` chờ xịt hoặc lệnh xịt đang gửi dở dang, Khi lệnh bị hủy hoặc thiết bị từ chối, Thì toàn bộ các đơn hàng đó chuyển sang `FAILED`, đánh dấu `needs_manual_review = TRUE` và tạo Alert để hỗ trợ hoàn tiền cho khách hàng.
 - AC3 (Bắt buộc lý do): Cho yêu cầu ép bảo trì nhưng không cung cấp `reason`, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 400 `REASON_REQUIRED`.
 - AC4 (Bắt buộc xác thực lại): Cho yêu cầu thiếu `X-Reauth-Token` hợp lệ, Khi gửi yêu cầu, Thì hệ thống từ chối với HTTP 403 `REAUTH_REQUIRED` (FR-AUTH-09).

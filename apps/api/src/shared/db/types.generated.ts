@@ -11,6 +11,8 @@ export type AlertSeverity = "CRITICAL" | "HIGH" | "INFO" | "WARNING";
 
 export type AlertStatus = "ACKNOWLEDGED" | "CLOSED" | "IN_PROGRESS" | "OPEN" | "RESOLVED";
 
+export type BatchAuthenticityStatus = "APPROVED" | "NOT_SUBMITTED" | "PENDING" | "REJECTED";
+
 export type BottleReturnMethod = "SHIP_TO_BRAND" | "WAREHOUSE_PICKUP";
 
 export type BottleStatus = "DAMAGED" | "EMPTY" | "EXPIRED" | "IN_STOCK" | "INSTALLED" | "LIQUIDATED" | "LOW" | "RETURNED_TO_BRAND";
@@ -444,6 +446,17 @@ export interface InventoryAdjustments {
 }
 
 export interface InventoryBatches {
+  authenticity_document_type: string | null;
+  authenticity_document_url: string | null;
+  authenticity_rejection_reason: string | null;
+  /**
+   * Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0013, ADR-0017). Chỉ chai thuộc lô APPROVED mới được lắp vào slot (BATCH_NOT_APPROVED).
+   */
+  authenticity_status: Generated<BatchAuthenticityStatus>;
+  authenticity_submitted_at: Timestamp | null;
+  authenticity_submitted_by: string | null;
+  authenticity_verified_at: Timestamp | null;
+  authenticity_verified_by: string | null;
   batch_number: string;
   brand_id: string;
   created_at: Generated<Timestamp>;
@@ -594,9 +607,30 @@ export interface Notifications {
   channel: string;
   content: string;
   created_at: Generated<Timestamp>;
+  /**
+   * Số lần đã thử gửi email. Job dừng tự thử khi đạt EMAIL_MAX_ATTEMPTS (FR-ALR-16 AC3).
+   */
+  delivery_attempts: Generated<number>;
   id: Generated<string>;
+  last_attempt_at: Timestamp | null;
+  /**
+   * Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2).
+   */
+  last_error: string | null;
+  /**
+   * Mã thư do dịch vụ email trả về khi nhận gửi (FR-ALR-16 AC2).
+   */
+  provider_message_id: string | null;
   read_at: Timestamp | null;
+  /**
+   * Hòm thư nhận tại thời điểm gửi (FR-ALR-16 AC2) — chụp lại, không đọc lại từ users.
+   */
+  recipient_address: string | null;
   recipient_user_id: string;
+  /**
+   * Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán thuê slot (FR-ALR-16 AC2).
+   */
+  reference_id: string | null;
   sent_at: Timestamp | null;
   status: Generated<NotificationStatus>;
   subject: string | null;

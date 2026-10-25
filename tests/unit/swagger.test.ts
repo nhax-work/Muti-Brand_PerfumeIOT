@@ -78,7 +78,9 @@ describe('Swagger UI', () => {
     } finally {
       await app.close();
     }
-  });
+    // Dựng Nest và nạp tài sản swagger-ui mất vài giây khi cả bộ unit chạy song song trên máy yếu —
+    // vượt 5s mặc định làm `npm test` đỏ ngẫu nhiên và dừng luôn các bộ test sau (W7-14).
+  }, 30_000);
 
   it('mặc định bật ở development, tắt ở production; SWAGGER_ENABLED ghi đè', () => {
     expect(loadConfig(BASE_ENV).swaggerEnabled).toBe(true);
