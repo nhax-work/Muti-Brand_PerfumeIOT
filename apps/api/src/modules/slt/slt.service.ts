@@ -15,7 +15,7 @@ import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.j
 import type { RequestOrigin } from '../../shared/http/request-origin.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import { MchQueries } from '../mch/mch.queries.js';
+import { MchQueries } from '../mch/index.js';
 import { newPaymentReference, PaymentService, type PaymentIntent } from '../ord/index.js';
 import { CatalogQueries } from './catalog.queries.js';
 import { toPlanDto } from './catalog.service.js';

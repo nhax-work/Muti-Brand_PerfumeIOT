@@ -1,11 +1,17 @@
 /**
- * Truy vấn CSDL cho Module Tồn kho và nạp nước hoa (FR-INV-01..35).
+ * SQL của module INV: khai báo gửi hàng (FR-INV-22 ÷ 28), lô và giấy tờ chính hãng (FR-INV-01,
+ * 33 ÷ 35), chai (FR-INV-02), phiếu nạp (FR-INV-29 ÷ 32). Chỉ module inv được import file này
+ * (QT3, ADR-0003).
+ *
+ * Mọi hàm ghi nhận `executor` để service gom nhiều bước vào một transaction. Hàm `lock…` dùng
+ * `FOR UPDATE` — chỉ gọi trong transaction.
  */
 
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely, type Transaction } from 'kysely';
-import { DATABASE, type DB } from '../../shared/db/index.js';
+import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
+  BatchAuthenticityStatus,
   BottleStatus,
   RefillStatus,
   RevenueOwnerType,
@@ -13,1118 +19,783 @@ import type {
 } from '../../shared/db/types.generated.js';
 import {
   brandScopedByColumn,
+  HOLDING_RENTAL_STATUSES,
   type BrandScope,
-  ACTIVE_RENTAL_STATUSES,
 } from '../../shared/scoping/index.js';
 
-export type Executor = Kysely<DB> | Transaction<DB>;
+type Executor = Kysely<DB>;
 
-export interface ShipmentDeclarationRecord {
+export interface ShipmentRecord {
   readonly id: string;
   readonly brandId: string;
-  readonly brandName?: string | null;
   readonly fragranceProductId: string;
-  readonly productName?: string | null;
+  readonly productName: string;
   readonly declaredQuantity: number;
   readonly declaredBottleVolumeMl: string;
-  readonly expectedShipDate: Date | null;
+  /** `YYYY-MM-DD` — đọc bằng to_char để không lệch ngày theo múi giờ của tiến trình Node. */
+  readonly expectedShipDate: string | null;
   readonly status: ShipmentDeclarationStatus;
   readonly receivedQuantity: number | null;
   readonly discrepancyNotes: string | null;
   readonly receivedBy: string | null;
   readonly receivedAt: Date | null;
-  readonly declaredBy: string;
-  readonly declaredByName?: string | null;
+  readonly resultingBatchId: string | null;
   readonly createdAt: Date;
 }
 
-export interface InventoryBatchRecord {
+export interface BatchRecord {
   readonly id: string;
   readonly brandId: string;
-  readonly brandName?: string | null;
   readonly fragranceProductId: string;
-  readonly productName?: string | null;
+  readonly productName: string;
   readonly sourceDeclarationId: string | null;
   readonly batchNumber: string;
   readonly receivedAt: Date;
   readonly expiresAt: Date | null;
   readonly quantityReceived: number;
-  readonly supplierInfo: Record<string, unknown> | null;
-  readonly createdBy: string;
-  readonly createdAt: Date;
+  readonly authenticityStatus: BatchAuthenticityStatus;
+  readonly authenticityDocumentUrl: string | null;
+  readonly authenticityDocumentType: string | null;
+  readonly authenticitySubmittedAt: Date | null;
+  readonly authenticityVerifiedAt: Date | null;
+  readonly authenticityRejectionReason: string | null;
 }
 
 export interface BottleRecord {
   readonly id: string;
-  readonly batchId: string;
   readonly brandId: string;
+  readonly owner: RevenueOwnerType;
+  readonly batchId: string;
   readonly fragranceProductId: string;
-  readonly productName?: string | null;
   readonly identifier: string;
   readonly status: BottleStatus;
-  readonly owner: RevenueOwnerType;
   readonly initialVolumeMl: string;
   readonly currentEstimatedMl: string;
-  readonly initialMeasuredWeightG: string | null;
-  readonly currentMeasuredWeightG: string | null;
-  readonly installedAt: Date | null;
-  readonly removedAt: Date | null;
-  readonly createdAt: Date;
+  readonly installedSlotId: string | null;
+  readonly expiresAt: Date | null;
+  readonly sourceRentalId: string | null;
+  readonly liquidatedAt: Date | null;
+  readonly bottleReturnId: string | null;
 }
 
 export interface RefillSessionRecord {
   readonly id: string;
-  readonly machineId: string;
-  readonly machineDisplayName?: string | null;
-  readonly slotId: string;
-  readonly slotNumber?: number | null;
   readonly brandId: string;
-  readonly brandName?: string | null;
+  readonly machineId: string;
+  readonly slotId: string;
   readonly oldBottleId: string | null;
   readonly newBottleId: string | null;
-  readonly checklistCompleted: boolean;
+  readonly performedBy: string;
   readonly status: RefillStatus;
-  readonly notes: string | null;
+  readonly checklistCompleted: boolean;
   readonly beforeWeightG: string | null;
   readonly afterWeightG: string | null;
-  readonly performedBy: string;
-  readonly performedByName?: string | null;
+  readonly notes: string | null;
   readonly startedAt: Date;
   readonly completedAt: Date | null;
 }
 
+/** Slot cùng máy và chai đang lắp — đọc khi mở/đóng phiếu nạp. */
+export interface SlotForRefill {
+  readonly id: string;
+  readonly machineId: string;
+  readonly activeBottleId: string | null;
+  readonly calibratedDosageMl: string | null;
+}
+
+/** Hóa đơn cho phép nạp hàng vào slot (ADR-0006): đang hiệu lực, hoặc đã thanh toán chờ nạp hàng. */
+export interface StockableRental {
+  readonly id: string;
+  readonly brandId: string;
+  readonly fragranceProductId: string | null;
+}
+
+export interface PageFilter {
+  readonly page: number;
+  readonly pageSize: number;
+}
+
+const SHIPMENT_COLUMNS = [
+  'd.id',
+  'd.brand_id',
+  'd.fragrance_product_id',
+  'fp.name as product_name',
+  'd.declared_quantity',
+  'd.declared_bottle_volume_ml',
+  'd.status',
+  'd.received_quantity',
+  'd.discrepancy_notes',
+  'd.received_by',
+  'd.received_at',
+  'd.created_at',
+] as const;
+
+const BATCH_COLUMNS = [
+  'b.id',
+  'b.brand_id',
+  'b.fragrance_product_id',
+  'fp.name as product_name',
+  'b.source_declaration_id',
+  'b.batch_number',
+  'b.received_at',
+  'b.expires_at',
+  'b.quantity_received',
+  'b.authenticity_status',
+  'b.authenticity_document_url',
+  'b.authenticity_document_type',
+  'b.authenticity_submitted_at',
+  'b.authenticity_verified_at',
+  'b.authenticity_rejection_reason',
+] as const;
+
 @Injectable()
 export class InvQueries {
-  constructor(@Inject(DATABASE) private readonly db: Kysely<DB>) {}
+  constructor(@Inject(DATABASE) private readonly db: Database) {}
 
-  // ==========================================
-  // KHAI BÁO GỬI HÀNG (FR-INV-22 ÷ 28)
-  // ==========================================
+  transaction<T>(work: (tx: Transaction<DB>) => Promise<T>): Promise<T> {
+    return this.db.transaction().execute(work);
+  }
 
-  async createShipmentDeclaration(
+  // -----------------------------------------------------------------------------------
+  // Khai báo gửi hàng
+  // -----------------------------------------------------------------------------------
+
+  private shipmentQuery(executor: Executor) {
+    return executor
+      .selectFrom('brand_shipment_declarations as d')
+      .innerJoin('fragrance_products as fp', 'fp.id', 'd.fragrance_product_id')
+      .select(SHIPMENT_COLUMNS)
+      .select(sql<string | null>`to_char(d.expected_ship_date, 'YYYY-MM-DD')`.as('ship_date'))
+      .select((eb) =>
+        eb
+          .selectFrom('inventory_batches as rb')
+          .whereRef('rb.source_declaration_id', '=', 'd.id')
+          .select('rb.id')
+          .limit(1)
+          .as('resulting_batch_id'),
+      );
+  }
+
+  async listShipments(
+    scope: BrandScope,
+    filter: PageFilter & { readonly status?: ShipmentDeclarationStatus | undefined },
+  ): Promise<{ items: ShipmentRecord[]; total: number }> {
+    let base = this.db
+      .selectFrom('brand_shipment_declarations as d')
+      .where(brandScopedByColumn(scope, 'd.brand_id'));
+    if (filter.status) base = base.where('d.status', '=', filter.status);
+
+    const { total } = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+    const rows = await this.shipmentQuery(this.db)
+      .where(brandScopedByColumn(scope, 'd.brand_id'))
+      .$if(filter.status !== undefined, (qb) => qb.where('d.status', '=', filter.status!))
+      .orderBy('d.created_at', 'desc')
+      .orderBy('d.id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+    return { items: rows.map(toShipment), total: Number(total) };
+  }
+
+  async findShipment(id: string, executor: Executor = this.db): Promise<ShipmentRecord | null> {
+    const row = await this.shipmentQuery(executor).where('d.id', '=', id).executeTakeFirst();
+    return row ? toShipment(row) : null;
+  }
+
+  /** Khóa khai báo trước khi tiếp nhận — hai lần bấm "tiếp nhận" cùng lúc chỉ một lần qua. */
+  async lockShipment(
+    id: string,
+    tx: Executor,
+  ): Promise<{
+    id: string;
+    brandId: string;
+    fragranceProductId: string;
+    declaredQuantity: number;
+    status: ShipmentDeclarationStatus;
+  } | null> {
+    const row = await tx
+      .selectFrom('brand_shipment_declarations')
+      .select(['id', 'brand_id', 'fragrance_product_id', 'declared_quantity', 'status'])
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          brandId: row.brand_id,
+          fragranceProductId: row.fragrance_product_id,
+          declaredQuantity: row.declared_quantity,
+          status: row.status,
+        }
+      : null;
+  }
+
+  async findProductBrand(productId: string, executor: Executor = this.db): Promise<string | null> {
+    const row = await executor
+      .selectFrom('fragrance_products')
+      .select('brand_id')
+      .where('id', '=', productId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return row?.brand_id ?? null;
+  }
+
+  async insertShipment(
     data: {
-      brandId: string;
-      fragranceProductId: string;
-      declaredQuantity: number;
-      declaredBottleVolumeMl: string;
-      expectedShipDate?: Date | null;
-      declaredBy: string;
+      readonly brandId: string;
+      readonly fragranceProductId: string;
+      readonly declaredQuantity: number;
+      readonly declaredBottleVolumeMl: number;
+      readonly expectedShipDate: string | null;
+      readonly declaredBy: string;
     },
-    executor: Executor = this.db,
-  ): Promise<ShipmentDeclarationRecord> {
+    executor: Executor,
+  ): Promise<string> {
     const row = await executor
       .insertInto('brand_shipment_declarations')
       .values({
         brand_id: data.brandId,
         fragrance_product_id: data.fragranceProductId,
         declared_quantity: data.declaredQuantity,
-        declared_bottle_volume_ml: data.declaredBottleVolumeMl,
-        expected_ship_date: data.expectedShipDate ?? null,
+        declared_bottle_volume_ml: String(data.declaredBottleVolumeMl),
+        expected_ship_date: data.expectedShipDate,
         declared_by: data.declaredBy,
-        status: 'DECLARED',
-        created_at: new Date(),
-        updated_at: new Date(),
       })
-      .returningAll()
+      .returning('id')
       .executeTakeFirstOrThrow();
-
-    return {
-      id: row.id,
-      brandId: row.brand_id,
-      fragranceProductId: row.fragrance_product_id,
-      declaredQuantity: row.declared_quantity,
-      declaredBottleVolumeMl: String(row.declared_bottle_volume_ml),
-      expectedShipDate: row.expected_ship_date ? new Date(row.expected_ship_date) : null,
-      status: row.status,
-      receivedQuantity: row.received_quantity,
-      discrepancyNotes: row.discrepancy_notes,
-      receivedBy: row.received_by,
-      receivedAt: row.received_at ? new Date(row.received_at) : null,
-      declaredBy: row.declared_by,
-      createdAt: new Date(row.created_at),
-    };
+    return row.id;
   }
 
-  async listShipmentDeclarations(
-    filter: {
-      page: number;
-      pageSize: number;
-      brandId?: string;
-      status?: ShipmentDeclarationStatus;
-    },
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<{ items: ShipmentDeclarationRecord[]; total: number }> {
-    let baseQuery = executor
-      .selectFrom('brand_shipment_declarations as d')
-      .innerJoin('brands as b', 'b.id', 'd.brand_id')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'd.fragrance_product_id')
-      .innerJoin('users as u', 'u.id', 'd.declared_by')
-      .where(brandScopedByColumn(scope, 'd.brand_id'));
-
-    if (scope.kind === 'UNRESTRICTED' && filter.brandId) {
-      baseQuery = baseQuery.where('d.brand_id', '=', filter.brandId);
-    }
-    if (filter.status) {
-      baseQuery = baseQuery.where('d.status', '=', filter.status);
-    }
-
-    const countRes = await baseQuery
-      .select(sql<string>`count(*)`.as('total'))
-      .executeTakeFirstOrThrow();
-    const total = Number(countRes.total);
-
-    const rows = await baseQuery
-      .select([
-        'd.id',
-        'd.brand_id as brandId',
-        'b.name as brandName',
-        'd.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'd.declared_quantity as declaredQuantity',
-        'd.declared_bottle_volume_ml as declaredBottleVolumeMl',
-        'd.expected_ship_date as expectedShipDate',
-        'd.status',
-        'd.received_quantity as receivedQuantity',
-        'd.discrepancy_notes as discrepancyNotes',
-        'd.received_by as receivedBy',
-        'd.received_at as receivedAt',
-        'd.declared_by as declaredBy',
-        'u.full_name as declaredByName',
-        'd.created_at as createdAt',
-      ])
-      .orderBy('d.created_at', 'desc')
-      .limit(filter.pageSize)
-      .offset((filter.page - 1) * filter.pageSize)
-      .execute();
-
-    const items = rows.map((r) => ({
-      id: r.id,
-      brandId: r.brandId,
-      brandName: r.brandName,
-      fragranceProductId: r.fragranceProductId,
-      productName: r.productName,
-      declaredQuantity: r.declaredQuantity,
-      declaredBottleVolumeMl: String(r.declaredBottleVolumeMl),
-      expectedShipDate: r.expectedShipDate ? new Date(r.expectedShipDate) : null,
-      status: r.status,
-      receivedQuantity: r.receivedQuantity,
-      discrepancyNotes: r.discrepancyNotes,
-      receivedBy: r.receivedBy,
-      receivedAt: r.receivedAt ? new Date(r.receivedAt) : null,
-      declaredBy: r.declaredBy,
-      declaredByName: r.declaredByName,
-      createdAt: new Date(r.createdAt),
-    }));
-
-    return { items, total };
-  }
-
-  async findFragranceProductById(
-    id: string,
-    executor: Executor = this.db,
-  ): Promise<{ id: string; brandId: string; name: string } | null> {
-    const row = await executor
-      .selectFrom('fragrance_products')
-      .select(['id', 'brand_id as brandId', 'name'])
-      .where('id', '=', id)
-      .executeTakeFirst();
-    return row ?? null;
-  }
-
-  async findShipmentDeclarationById(
-    id: string,
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<ShipmentDeclarationRecord | null> {
-    const row = await executor
-      .selectFrom('brand_shipment_declarations as d')
-      .innerJoin('brands as b', 'b.id', 'd.brand_id')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'd.fragrance_product_id')
-      .innerJoin('users as u', 'u.id', 'd.declared_by')
-      .select([
-        'd.id',
-        'd.brand_id as brandId',
-        'b.name as brandName',
-        'd.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'd.declared_quantity as declaredQuantity',
-        'd.declared_bottle_volume_ml as declaredBottleVolumeMl',
-        'd.expected_ship_date as expectedShipDate',
-        'd.status',
-        'd.received_quantity as receivedQuantity',
-        'd.discrepancy_notes as discrepancyNotes',
-        'd.received_by as receivedBy',
-        'd.received_at as receivedAt',
-        'd.declared_by as declaredBy',
-        'u.full_name as declaredByName',
-        'd.created_at as createdAt',
-      ])
-      .where('d.id', '=', id)
-      .where(brandScopedByColumn(scope, 'd.brand_id'))
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      brandId: row.brandId,
-      brandName: row.brandName,
-      fragranceProductId: row.fragranceProductId,
-      productName: row.productName,
-      declaredQuantity: row.declaredQuantity,
-      declaredBottleVolumeMl: String(row.declaredBottleVolumeMl),
-      expectedShipDate: row.expectedShipDate ? new Date(row.expectedShipDate) : null,
-      status: row.status,
-      receivedQuantity: row.receivedQuantity,
-      discrepancyNotes: row.discrepancyNotes,
-      receivedBy: row.receivedBy,
-      receivedAt: row.receivedAt ? new Date(row.receivedAt) : null,
-      declaredBy: row.declaredBy,
-      declaredByName: row.declaredByName,
-      createdAt: new Date(row.createdAt),
-    };
-  }
-
-  async findShipmentDeclarationByIdForUpdate(
-    id: string,
-    executor: Executor = this.db,
-  ): Promise<ShipmentDeclarationRecord | null> {
-    const row = await executor
-      .selectFrom('brand_shipment_declarations as d')
-      .innerJoin('brands as b', 'b.id', 'd.brand_id')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'd.fragrance_product_id')
-      .innerJoin('users as u', 'u.id', 'd.declared_by')
-      .select([
-        'd.id',
-        'd.brand_id as brandId',
-        'b.name as brandName',
-        'd.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'd.declared_quantity as declaredQuantity',
-        'd.declared_bottle_volume_ml as declaredBottleVolumeMl',
-        'd.expected_ship_date as expectedShipDate',
-        'd.status',
-        'd.received_quantity as receivedQuantity',
-        'd.discrepancy_notes as discrepancyNotes',
-        'd.received_by as receivedBy',
-        'd.received_at as receivedAt',
-        'd.declared_by as declaredBy',
-        'u.full_name as declaredByName',
-        'd.created_at as createdAt',
-      ])
-      .where('d.id', '=', id)
-      .forUpdate('d')
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      brandId: row.brandId,
-      brandName: row.brandName,
-      fragranceProductId: row.fragranceProductId,
-      productName: row.productName,
-      declaredQuantity: row.declaredQuantity,
-      declaredBottleVolumeMl: String(row.declaredBottleVolumeMl),
-      expectedShipDate: row.expectedShipDate ? new Date(row.expectedShipDate) : null,
-      status: row.status,
-      receivedQuantity: row.receivedQuantity,
-      discrepancyNotes: row.discrepancyNotes,
-      receivedBy: row.receivedBy,
-      receivedAt: row.receivedAt ? new Date(row.receivedAt) : null,
-      declaredBy: row.declaredBy,
-      declaredByName: row.declaredByName,
-      createdAt: new Date(row.createdAt),
-    };
-  }
-
-  async updateShipmentDeclarationReceive(
+  async markShipmentReceived(
     id: string,
     data: {
-      status: ShipmentDeclarationStatus;
-      receivedQuantity: number;
-      discrepancyNotes?: string | null;
-      receivedBy: string;
-      receivedAt: Date;
+      readonly status: 'RECEIVED' | 'DISCREPANCY';
+      readonly receivedQuantity: number;
+      readonly discrepancyNotes: string | null;
+      readonly receivedBy: string;
+      readonly receivedAt: Date;
     },
-    executor: Executor = this.db,
+    tx: Executor,
   ): Promise<void> {
-    await executor
+    await tx
       .updateTable('brand_shipment_declarations')
       .set({
         status: data.status,
         received_quantity: data.receivedQuantity,
-        discrepancy_notes: data.discrepancyNotes ?? null,
+        discrepancy_notes: data.discrepancyNotes,
         received_by: data.receivedBy,
         received_at: data.receivedAt,
-        updated_at: new Date(),
       })
       .where('id', '=', id)
       .execute();
   }
 
-  // ==========================================
-  // LÔ HÀNG (FR-INV-01, 26, 33, 34)
-  // ==========================================
+  // -----------------------------------------------------------------------------------
+  // Lô và giấy tờ chính hãng
+  // -----------------------------------------------------------------------------------
 
-  async createBatch(
-    data: {
-      brandId: string;
-      fragranceProductId: string;
-      sourceDeclarationId?: string | null;
-      batchNumber: string;
-      quantityReceived: number;
-      receivedAt: Date;
-      expiresAt?: Date | null;
-      supplierInfo?: Record<string, unknown> | null;
-      createdBy: string;
+  private batchQuery(executor: Executor) {
+    return executor
+      .selectFrom('inventory_batches as b')
+      .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
+      .select(BATCH_COLUMNS);
+  }
+
+  async listBatches(
+    scope: BrandScope,
+    filter: PageFilter & {
+      readonly fragranceProductId?: string | undefined;
+      readonly authenticityStatus?: BatchAuthenticityStatus | undefined;
     },
+  ): Promise<{ items: BatchRecord[]; total: number }> {
+    let base = this.db
+      .selectFrom('inventory_batches as b')
+      .where(brandScopedByColumn(scope, 'b.brand_id'));
+    if (filter.fragranceProductId) {
+      base = base.where('b.fragrance_product_id', '=', filter.fragranceProductId);
+    }
+    if (filter.authenticityStatus) {
+      base = base.where('b.authenticity_status', '=', filter.authenticityStatus);
+    }
+    const { total } = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    const rows = await this.batchQuery(this.db)
+      .where(brandScopedByColumn(scope, 'b.brand_id'))
+      .$if(filter.fragranceProductId !== undefined, (qb) =>
+        qb.where('b.fragrance_product_id', '=', filter.fragranceProductId!),
+      )
+      .$if(filter.authenticityStatus !== undefined, (qb) =>
+        qb.where('b.authenticity_status', '=', filter.authenticityStatus!),
+      )
+      .orderBy('b.received_at', 'desc')
+      .orderBy('b.id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+    return { items: rows.map(toBatch), total: Number(total) };
+  }
+
+  async findBatch(
+    id: string,
+    scope: BrandScope,
     executor: Executor = this.db,
-  ): Promise<InventoryBatchRecord> {
-    const row = await executor
+  ): Promise<BatchRecord | null> {
+    const row = await this.batchQuery(executor)
+      .where('b.id', '=', id)
+      .where(brandScopedByColumn(scope, 'b.brand_id'))
+      .executeTakeFirst();
+    return row ? toBatch(row) : null;
+  }
+
+  /** Khóa lô trước khi đổi trạng thái giấy tờ. Lọc phạm vi ở đây để Brand B không khóa lô của A. */
+  async lockBatch(
+    id: string,
+    scope: BrandScope,
+    tx: Executor,
+  ): Promise<{ id: string; brandId: string; status: BatchAuthenticityStatus } | null> {
+    const row = await tx
+      .selectFrom('inventory_batches as b')
+      .select(['b.id', 'b.brand_id', 'b.authenticity_status'])
+      .where('b.id', '=', id)
+      .where(brandScopedByColumn(scope, 'b.brand_id'))
+      .forUpdate()
+      .executeTakeFirst();
+    return row ? { id: row.id, brandId: row.brand_id, status: row.authenticity_status } : null;
+  }
+
+  async insertBatch(
+    data: {
+      readonly brandId: string;
+      readonly fragranceProductId: string;
+      readonly sourceDeclarationId: string;
+      readonly batchNumber: string;
+      readonly receivedAt: Date;
+      readonly expiresAt: Date | null;
+      readonly quantityReceived: number;
+      readonly createdBy: string;
+    },
+    tx: Executor,
+  ): Promise<string> {
+    const row = await tx
       .insertInto('inventory_batches')
       .values({
         brand_id: data.brandId,
         fragrance_product_id: data.fragranceProductId,
-        source_declaration_id: data.sourceDeclarationId ?? null,
+        source_declaration_id: data.sourceDeclarationId,
         batch_number: data.batchNumber,
-        quantity_received: data.quantityReceived,
         received_at: data.receivedAt,
-        expires_at: data.expiresAt ?? null,
-        supplier_info: data.supplierInfo ? JSON.stringify(data.supplierInfo) : null,
+        expires_at: data.expiresAt,
+        quantity_received: data.quantityReceived,
         created_by: data.createdBy,
-        created_at: new Date(),
       })
-      .returningAll()
+      .returning('id')
       .executeTakeFirstOrThrow();
-
-    return {
-      id: row.id,
-      brandId: row.brand_id,
-      fragranceProductId: row.fragrance_product_id,
-      sourceDeclarationId: row.source_declaration_id,
-      batchNumber: row.batch_number,
-      receivedAt: new Date(row.received_at),
-      expiresAt: row.expires_at ? new Date(row.expires_at) : null,
-      quantityReceived: row.quantity_received,
-      supplierInfo: row.supplier_info ? (row.supplier_info as Record<string, unknown>) : null,
-      createdBy: row.created_by,
-      createdAt: new Date(row.created_at),
-    };
+    return row.id;
   }
 
-  async listBatches(
-    filter: { page: number; pageSize: number; brandId?: string; fragranceProductId?: string },
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<{ items: InventoryBatchRecord[]; total: number }> {
-    let baseQuery = executor
-      .selectFrom('inventory_batches as b')
-      .innerJoin('brands as br', 'br.id', 'b.brand_id')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
-      .where(brandScopedByColumn(scope, 'b.brand_id'));
-
-    if (scope.kind === 'UNRESTRICTED' && filter.brandId) {
-      baseQuery = baseQuery.where('b.brand_id', '=', filter.brandId);
-    }
-    if (filter.fragranceProductId) {
-      baseQuery = baseQuery.where('b.fragrance_product_id', '=', filter.fragranceProductId);
-    }
-
-    const countRes = await baseQuery
-      .select(sql<string>`count(*)`.as('total'))
-      .executeTakeFirstOrThrow();
-    const total = Number(countRes.total);
-
-    const rows = await baseQuery
-      .select([
-        'b.id',
-        'b.brand_id as brandId',
-        'br.name as brandName',
-        'b.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'b.source_declaration_id as sourceDeclarationId',
-        'b.batch_number as batchNumber',
-        'b.received_at as receivedAt',
-        'b.expires_at as expiresAt',
-        'b.quantity_received as quantityReceived',
-        'b.supplier_info as supplierInfo',
-        'b.created_by as createdBy',
-        'b.created_at as createdAt',
-      ])
-      .orderBy('b.created_at', 'desc')
-      .limit(filter.pageSize)
-      .offset((filter.page - 1) * filter.pageSize)
-      .execute();
-
-    const items = rows.map((r) => ({
-      id: r.id,
-      brandId: r.brandId,
-      brandName: r.brandName,
-      fragranceProductId: r.fragranceProductId,
-      productName: r.productName,
-      sourceDeclarationId: r.sourceDeclarationId,
-      batchNumber: r.batchNumber,
-      receivedAt: new Date(r.receivedAt),
-      expiresAt: r.expiresAt ? new Date(r.expiresAt) : null,
-      quantityReceived: r.quantityReceived,
-      supplierInfo: r.supplierInfo ? (r.supplierInfo as Record<string, unknown>) : null,
-      createdBy: r.createdBy,
-      createdAt: new Date(r.createdAt),
-    }));
-
-    return { items, total };
-  }
-
-  async findBatchById(
+  async submitAuthenticity(
     id: string,
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<InventoryBatchRecord | null> {
-    const row = await executor
-      .selectFrom('inventory_batches as b')
-      .innerJoin('brands as br', 'br.id', 'b.brand_id')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
-      .select([
-        'b.id',
-        'b.brand_id as brandId',
-        'br.name as brandName',
-        'b.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'b.source_declaration_id as sourceDeclarationId',
-        'b.batch_number as batchNumber',
-        'b.received_at as receivedAt',
-        'b.expires_at as expiresAt',
-        'b.quantity_received as quantityReceived',
-        'b.supplier_info as supplierInfo',
-        'b.created_by as createdBy',
-        'b.created_at as createdAt',
-      ])
-      .where('b.id', '=', id)
-      .where(brandScopedByColumn(scope, 'b.brand_id'))
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      brandId: row.brandId,
-      brandName: row.brandName,
-      fragranceProductId: row.fragranceProductId,
-      productName: row.productName,
-      sourceDeclarationId: row.sourceDeclarationId,
-      batchNumber: row.batchNumber,
-      receivedAt: new Date(row.receivedAt),
-      expiresAt: row.expiresAt ? new Date(row.expiresAt) : null,
-      quantityReceived: row.quantityReceived,
-      supplierInfo: row.supplierInfo ? (row.supplierInfo as Record<string, unknown>) : null,
-      createdBy: row.createdBy,
-      createdAt: new Date(row.createdAt),
-    };
-  }
-
-  async updateBatchSupplierInfo(
-    id: string,
-    supplierInfo: Record<string, unknown>,
-    executor: Executor = this.db,
+    data: {
+      readonly documentUrl: string;
+      readonly documentType: string;
+      readonly submittedBy: string;
+      readonly submittedAt: Date;
+    },
+    tx: Executor,
   ): Promise<void> {
-    await executor
+    await tx
       .updateTable('inventory_batches')
       .set({
-        supplier_info: JSON.stringify(supplierInfo),
+        authenticity_status: 'PENDING',
+        authenticity_document_url: data.documentUrl,
+        authenticity_document_type: data.documentType,
+        authenticity_submitted_by: data.submittedBy,
+        authenticity_submitted_at: data.submittedAt,
+        authenticity_verified_by: null,
+        authenticity_verified_at: null,
+        authenticity_rejection_reason: null,
       })
       .where('id', '=', id)
       .execute();
   }
 
-  // ==========================================
-  // CHAI NƯỚC HOA (FR-INV-02 ÷ 07, 35)
-  // ==========================================
-
-  async createBottle(
+  async reviewAuthenticity(
+    id: string,
     data: {
-      batchId: string;
-      brandId: string;
-      fragranceProductId: string;
-      identifier: string;
-      initialVolumeMl: string;
-      emptyWeightG?: string | null;
-      status?: BottleStatus;
+      readonly status: 'APPROVED' | 'REJECTED';
+      readonly verifiedBy: string;
+      readonly verifiedAt: Date;
+      readonly rejectionReason: string | null;
     },
+    tx: Executor,
+  ): Promise<void> {
+    await tx
+      .updateTable('inventory_batches')
+      .set({
+        authenticity_status: data.status,
+        authenticity_verified_by: data.verifiedBy,
+        authenticity_verified_at: data.verifiedAt,
+        authenticity_rejection_reason: data.rejectionReason,
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /**
+   * FR-INV-33 AC3 (ADR-0017 mục 1): thương hiệu còn được nộp giấy tờ khi còn hóa đơn đang hiệu lực,
+   * hoặc có hóa đơn đã thanh toán chờ nạp hàng mà chưa quá `stockingDays` ngày kể từ lúc thanh toán.
+   */
+  async brandCanStillStock(
+    brandId: string,
+    now: Date,
+    stockingDays: number,
     executor: Executor = this.db,
-  ): Promise<BottleRecord> {
+  ): Promise<boolean> {
+    const row = await executor
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('brand_id', '=', brandId)
+      .where((eb) =>
+        eb.or([
+          eb('status', 'in', [...HOLDING_RENTAL_STATUSES]),
+          eb.and([
+            eb('status', '=', 'DRAFT'),
+            eb('paid_at', 'is not', null),
+            eb('cancelled_at', 'is', null),
+            eb(sql<Date>`paid_at + make_interval(days => ${stockingDays})`, '>', now),
+          ]),
+        ]),
+      )
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Chai
+  // -----------------------------------------------------------------------------------
+
+  private bottleQuery(executor: Executor) {
+    return executor
+      .selectFrom('bottles as bt')
+      .leftJoin('machine_slots as ms', 'ms.active_bottle_id', 'bt.id')
+      .select([
+        'bt.id',
+        'bt.brand_id',
+        'bt.owner',
+        'bt.batch_id',
+        'bt.fragrance_product_id',
+        'bt.identifier',
+        'bt.status',
+        'bt.initial_volume_ml',
+        'bt.current_estimated_ml',
+        'ms.id as installed_slot_id',
+        'bt.expires_at',
+        'bt.source_rental_id',
+        'bt.liquidated_at',
+        'bt.bottle_return_id',
+      ]);
+  }
+
+  /**
+   * FR-INV-04, FR-EXP-20: thương hiệu chỉ thấy chai mình còn sở hữu — chai đã thanh lý
+   * (owner = PLATFORM) giữ brand_id cũ nhưng không còn thuộc phạm vi thương hiệu.
+   */
+  async listBottles(
+    scope: BrandScope,
+    filter: PageFilter & {
+      readonly status?: BottleStatus | undefined;
+      readonly batchId?: string | undefined;
+    },
+  ): Promise<{ items: BottleRecord[]; total: number }> {
+    const ownedByBrand = scope.kind === 'BRAND';
+    let base = this.db.selectFrom('bottles as bt').where(brandScopedByColumn(scope, 'bt.brand_id'));
+    if (ownedByBrand) base = base.where('bt.owner', '=', 'BRAND');
+    if (filter.status) base = base.where('bt.status', '=', filter.status);
+    if (filter.batchId) base = base.where('bt.batch_id', '=', filter.batchId);
+    const { total } = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    const rows = await this.bottleQuery(this.db)
+      .where(brandScopedByColumn(scope, 'bt.brand_id'))
+      .$if(ownedByBrand, (qb) => qb.where('bt.owner', '=', 'BRAND'))
+      .$if(filter.status !== undefined, (qb) => qb.where('bt.status', '=', filter.status!))
+      .$if(filter.batchId !== undefined, (qb) => qb.where('bt.batch_id', '=', filter.batchId!))
+      .orderBy('bt.created_at', 'desc')
+      .orderBy('bt.id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+    return { items: rows.map(toBottle), total: Number(total) };
+  }
+
+  async findBottle(id: string, executor: Executor = this.db): Promise<BottleRecord | null> {
+    const row = await this.bottleQuery(executor).where('bt.id', '=', id).executeTakeFirst();
+    return row ? toBottle(row) : null;
+  }
+
+  async findBatchForBottle(
+    batchId: string,
+    executor: Executor = this.db,
+  ): Promise<{ brandId: string; fragranceProductId: string; expiresAt: Date | null } | null> {
+    const row = await executor
+      .selectFrom('inventory_batches')
+      .select(['brand_id', 'fragrance_product_id', 'expires_at'])
+      .where('id', '=', batchId)
+      .executeTakeFirst();
+    return row
+      ? {
+          brandId: row.brand_id,
+          fragranceProductId: row.fragrance_product_id,
+          expiresAt: row.expires_at,
+        }
+      : null;
+  }
+
+  async insertBottle(
+    data: {
+      readonly brandId: string;
+      readonly batchId: string;
+      readonly fragranceProductId: string;
+      readonly identifier: string;
+      readonly initialVolumeMl: number;
+      readonly emptyWeightG: number | null;
+      readonly expiresAt: Date | null;
+    },
+    executor: Executor,
+  ): Promise<string> {
     const row = await executor
       .insertInto('bottles')
       .values({
-        batch_id: data.batchId,
         brand_id: data.brandId,
+        batch_id: data.batchId,
         fragrance_product_id: data.fragranceProductId,
         identifier: data.identifier,
-        initial_volume_ml: data.initialVolumeMl,
-        current_estimated_ml: data.initialVolumeMl,
-        empty_weight_g: data.emptyWeightG ?? null,
-        status: data.status ?? 'IN_STOCK',
-        owner: 'BRAND',
-        created_at: new Date(),
-        updated_at: new Date(),
+        initial_volume_ml: String(data.initialVolumeMl),
+        current_estimated_ml: String(data.initialVolumeMl),
+        empty_weight_g: data.emptyWeightG === null ? null : String(data.emptyWeightG),
+        expires_at: data.expiresAt,
       })
-      .returningAll()
+      .returning('id')
       .executeTakeFirstOrThrow();
-
-    return {
-      id: row.id,
-      batchId: row.batch_id,
-      brandId: row.brand_id,
-      fragranceProductId: row.fragrance_product_id,
-      identifier: row.identifier,
-      status: row.status,
-      owner: row.owner,
-      initialVolumeMl: String(row.initial_volume_ml),
-      currentEstimatedMl: String(row.current_estimated_ml),
-      initialMeasuredWeightG: row.initial_measured_weight_g
-        ? String(row.initial_measured_weight_g)
-        : null,
-      currentMeasuredWeightG: row.current_measured_weight_g
-        ? String(row.current_measured_weight_g)
-        : null,
-      installedAt: row.installed_at ? new Date(row.installed_at) : null,
-      removedAt: row.removed_at ? new Date(row.removed_at) : null,
-      createdAt: new Date(row.created_at),
-    };
+    return row.id;
   }
 
-  async findBottleById(id: string, executor: Executor = this.db): Promise<BottleRecord | null> {
-    const row = await executor
-      .selectFrom('bottles as b')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
-      .select([
-        'b.id',
-        'b.batch_id as batchId',
-        'b.brand_id as brandId',
-        'b.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'b.identifier',
-        'b.status',
-        'b.owner',
-        'b.initial_volume_ml as initialVolumeMl',
-        'b.current_estimated_ml as currentEstimatedMl',
-        'b.initial_measured_weight_g as initialMeasuredWeightG',
-        'b.current_measured_weight_g as currentMeasuredWeightG',
-        'b.installed_at as installedAt',
-        'b.removed_at as removedAt',
-        'b.created_at as createdAt',
-      ])
-      .where('b.id', '=', id)
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      batchId: row.batchId,
-      brandId: row.brandId,
-      fragranceProductId: row.fragranceProductId,
-      productName: row.productName,
-      identifier: row.identifier,
-      status: row.status,
-      owner: row.owner,
-      initialVolumeMl: String(row.initialVolumeMl),
-      currentEstimatedMl: String(row.currentEstimatedMl),
-      initialMeasuredWeightG: row.initialMeasuredWeightG
-        ? String(row.initialMeasuredWeightG)
-        : null,
-      currentMeasuredWeightG: row.currentMeasuredWeightG
-        ? String(row.currentMeasuredWeightG)
-        : null,
-      installedAt: row.installedAt ? new Date(row.installedAt) : null,
-      removedAt: row.removedAt ? new Date(row.removedAt) : null,
-      createdAt: new Date(row.createdAt),
-    };
-  }
-
-  async findBottleByIdentifier(
-    identifier: string,
-    executor: Executor = this.db,
-  ): Promise<BottleRecord | null> {
-    const row = await executor
-      .selectFrom('bottles as b')
-      .select(['b.id', 'b.identifier'])
-      .where('b.identifier', '=', identifier)
-      .executeTakeFirst();
-
-    if (!row) return null;
-    return this.findBottleById(row.id, executor);
-  }
-
-  async listBottles(
-    filter: {
-      page: number;
-      pageSize: number;
-      brandId?: string;
-      batchId?: string;
-      status?: BottleStatus;
-    },
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<{ items: BottleRecord[]; total: number }> {
-    let baseQuery = executor
-      .selectFrom('bottles as b')
-      .innerJoin('fragrance_products as fp', 'fp.id', 'b.fragrance_product_id')
-      .where(brandScopedByColumn(scope, 'b.brand_id'));
-
-    if (scope.kind === 'UNRESTRICTED' && filter.brandId) {
-      baseQuery = baseQuery.where('b.brand_id', '=', filter.brandId);
-    }
-    if (filter.batchId) {
-      baseQuery = baseQuery.where('b.batch_id', '=', filter.batchId);
-    }
-    if (filter.status) {
-      baseQuery = baseQuery.where('b.status', '=', filter.status);
-    }
-
-    const countRes = await baseQuery
-      .select(sql<string>`count(*)`.as('total'))
-      .executeTakeFirstOrThrow();
-    const total = Number(countRes.total);
-
-    const rows = await baseQuery
-      .select([
-        'b.id',
-        'b.batch_id as batchId',
-        'b.brand_id as brandId',
-        'b.fragrance_product_id as fragranceProductId',
-        'fp.name as productName',
-        'b.identifier',
-        'b.status',
-        'b.owner',
-        'b.initial_volume_ml as initialVolumeMl',
-        'b.current_estimated_ml as currentEstimatedMl',
-        'b.initial_measured_weight_g as initialMeasuredWeightG',
-        'b.current_measured_weight_g as currentMeasuredWeightG',
-        'b.installed_at as installedAt',
-        'b.removed_at as removedAt',
-        'b.created_at as createdAt',
-      ])
-      .orderBy('b.created_at', 'desc')
-      .limit(filter.pageSize)
-      .offset((filter.page - 1) * filter.pageSize)
-      .execute();
-
-    const items = rows.map((r) => ({
-      id: r.id,
-      batchId: r.batchId,
-      brandId: r.brandId,
-      fragranceProductId: r.fragranceProductId,
-      productName: r.productName,
-      identifier: r.identifier,
-      status: r.status,
-      owner: r.owner,
-      initialVolumeMl: String(r.initialVolumeMl),
-      currentEstimatedMl: String(r.currentEstimatedMl),
-      initialMeasuredWeightG: r.initialMeasuredWeightG ? String(r.initialMeasuredWeightG) : null,
-      currentMeasuredWeightG: r.currentMeasuredWeightG ? String(r.currentMeasuredWeightG) : null,
-      installedAt: r.installedAt ? new Date(r.installedAt) : null,
-      removedAt: r.removedAt ? new Date(r.removedAt) : null,
-      createdAt: new Date(r.createdAt),
-    }));
-
-    return { items, total };
-  }
-
-  // ==========================================
-  // PHIẾU NẠP NƯỚC HOA (FR-INV-29 ÷ 32)
-  // ==========================================
-
-  async createRefillSession(
-    data: {
-      machineId: string;
-      slotId: string;
-      brandId: string;
-      oldBottleId?: string | null;
-      performedBy: string;
-      notes?: string | null;
-    },
-    executor: Executor = this.db,
-  ): Promise<RefillSessionRecord> {
-    const row = await executor
-      .insertInto('refill_sessions')
-      .values({
-        machine_id: data.machineId,
-        slot_id: data.slotId,
-        brand_id: data.brandId,
-        old_bottle_id: data.oldBottleId ?? null,
-        performed_by: data.performedBy,
-        notes: data.notes ?? null,
-        status: 'STARTED',
-        checklist_completed: false,
-        started_at: new Date(),
-      })
-      .returningAll()
-      .executeTakeFirstOrThrow();
-
-    return {
-      id: row.id,
-      machineId: row.machine_id,
-      slotId: row.slot_id,
-      brandId: row.brand_id,
-      oldBottleId: row.old_bottle_id,
-      newBottleId: row.new_bottle_id,
-      checklistCompleted: row.checklist_completed,
-      status: row.status,
-      notes: row.notes,
-      beforeWeightG: row.before_weight_g ? String(row.before_weight_g) : null,
-      afterWeightG: row.after_weight_g ? String(row.after_weight_g) : null,
-      performedBy: row.performed_by,
-      startedAt: new Date(row.started_at),
-      completedAt: row.completed_at ? new Date(row.completed_at) : null,
-    };
-  }
-
-  async findRefillSessionById(
+  /** Khóa chai chọn để lắp, kèm trạng thái giấy tờ của lô (FR-INV-35). */
+  async lockBottleForInstall(
     id: string,
-    executor: Executor = this.db,
-  ): Promise<RefillSessionRecord | null> {
-    const row = await executor
-      .selectFrom('refill_sessions as rs')
-      .innerJoin('machines as m', 'm.id', 'rs.machine_id')
-      .innerJoin('machine_slots as ms', 'ms.id', 'rs.slot_id')
-      .innerJoin('brands as b', 'b.id', 'rs.brand_id')
-      .innerJoin('users as u', 'u.id', 'rs.performed_by')
-      .select([
-        'rs.id',
-        'rs.machine_id as machineId',
-        'm.display_name as machineDisplayName',
-        'rs.slot_id as slotId',
-        'ms.slot_number as slotNumber',
-        'rs.brand_id as brandId',
-        'b.name as brandName',
-        'rs.old_bottle_id as oldBottleId',
-        'rs.new_bottle_id as newBottleId',
-        'rs.checklist_completed as checklistCompleted',
-        'rs.status',
-        'rs.notes',
-        'rs.before_weight_g as beforeWeightG',
-        'rs.after_weight_g as afterWeightG',
-        'rs.performed_by as performedBy',
-        'u.full_name as performedByName',
-        'rs.started_at as startedAt',
-        'rs.completed_at as completedAt',
-      ])
-      .where('rs.id', '=', id)
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      machineId: row.machineId,
-      machineDisplayName: row.machineDisplayName,
-      slotId: row.slotId,
-      slotNumber: row.slotNumber,
-      brandId: row.brandId,
-      brandName: row.brandName,
-      oldBottleId: row.oldBottleId,
-      newBottleId: row.newBottleId,
-      checklistCompleted: row.checklistCompleted,
-      status: row.status,
-      notes: row.notes,
-      beforeWeightG: row.beforeWeightG ? String(row.beforeWeightG) : null,
-      afterWeightG: row.afterWeightG ? String(row.afterWeightG) : null,
-      performedBy: row.performedBy,
-      performedByName: row.performedByName,
-      startedAt: new Date(row.startedAt),
-      completedAt: row.completedAt ? new Date(row.completedAt) : null,
-    };
-  }
-
-  async findActiveRefillSessionOnMachine(
-    machineId: string,
-    executor: Executor = this.db,
-  ): Promise<RefillSessionRecord | null> {
-    const row = await executor
-      .selectFrom('refill_sessions as rs')
-      .select(['rs.id'])
-      .where('rs.machine_id', '=', machineId)
-      .where('rs.status', '=', 'STARTED')
-      .executeTakeFirst();
-
-    if (!row) return null;
-    return this.findRefillSessionById(row.id, executor);
-  }
-
-  async findActiveRefillSessionOnSlot(
-    slotId: string,
-    executor: Executor = this.db,
-  ): Promise<RefillSessionRecord | null> {
-    const row = await executor
-      .selectFrom('refill_sessions as rs')
-      .select(['rs.id'])
-      .where('rs.slot_id', '=', slotId)
-      .where('rs.status', '=', 'STARTED')
-      .executeTakeFirst();
-
-    if (!row) return null;
-    return this.findRefillSessionById(row.id, executor);
-  }
-
-  async findRefillSessionByIdForUpdate(
-    id: string,
-    executor: Executor = this.db,
-  ): Promise<RefillSessionRecord | null> {
-    const row = await executor
-      .selectFrom('refill_sessions as rs')
-      .innerJoin('machines as m', 'm.id', 'rs.machine_id')
-      .innerJoin('machine_slots as ms', 'ms.id', 'rs.slot_id')
-      .innerJoin('brands as b', 'b.id', 'rs.brand_id')
-      .innerJoin('users as u', 'u.id', 'rs.performed_by')
-      .select([
-        'rs.id',
-        'rs.machine_id as machineId',
-        'm.display_name as machineDisplayName',
-        'rs.slot_id as slotId',
-        'ms.slot_number as slotNumber',
-        'rs.brand_id as brandId',
-        'b.name as brandName',
-        'rs.old_bottle_id as oldBottleId',
-        'rs.new_bottle_id as newBottleId',
-        'rs.checklist_completed as checklistCompleted',
-        'rs.status',
-        'rs.notes',
-        'rs.before_weight_g as beforeWeightG',
-        'rs.after_weight_g as afterWeightG',
-        'rs.performed_by as performedBy',
-        'u.full_name as performedByName',
-        'rs.started_at as startedAt',
-        'rs.completed_at as completedAt',
-      ])
-      .where('rs.id', '=', id)
-      .forUpdate('rs')
-      .executeTakeFirst();
-
-    if (!row) return null;
-
-    return {
-      id: row.id,
-      machineId: row.machineId,
-      machineDisplayName: row.machineDisplayName,
-      slotId: row.slotId,
-      slotNumber: row.slotNumber,
-      brandId: row.brandId,
-      brandName: row.brandName,
-      oldBottleId: row.oldBottleId,
-      newBottleId: row.newBottleId,
-      checklistCompleted: row.checklistCompleted,
-      status: row.status,
-      notes: row.notes,
-      beforeWeightG: row.beforeWeightG ? String(row.beforeWeightG) : null,
-      afterWeightG: row.afterWeightG ? String(row.afterWeightG) : null,
-      performedBy: row.performedBy,
-      performedByName: row.performedByName,
-      startedAt: new Date(row.startedAt),
-      completedAt: row.completedAt ? new Date(row.completedAt) : null,
-    };
-  }
-
-  async findSlotById(
-    slotId: string,
-    executor: Executor = this.db,
+    tx: Executor,
   ): Promise<{
     id: string;
-    machineId: string;
-    slotNumber: number;
-    activeBottleId: string | null;
-    status: string;
+    brandId: string;
+    owner: RevenueOwnerType;
+    fragranceProductId: string;
+    status: BottleStatus;
+    expiresAt: Date | null;
+    currentEstimatedMl: string;
+    batchAuthenticity: BatchAuthenticityStatus;
   } | null> {
-    const row = await executor
-      .selectFrom('machine_slots')
+    const row = await tx
+      .selectFrom('bottles as bt')
+      .innerJoin('inventory_batches as b', 'b.id', 'bt.batch_id')
       .select([
-        'id',
-        'machine_id as machineId',
-        'slot_number as slotNumber',
-        'active_bottle_id as activeBottleId',
-        'status',
+        'bt.id',
+        'bt.brand_id',
+        'bt.owner',
+        'bt.fragrance_product_id',
+        'bt.status',
+        'bt.expires_at',
+        'bt.current_estimated_ml',
+        'b.authenticity_status',
       ])
-      .where('id', '=', slotId)
+      .where('bt.id', '=', id)
+      .forUpdate('bt')
       .executeTakeFirst();
-    return row ?? null;
+    return row
+      ? {
+          id: row.id,
+          brandId: row.brand_id,
+          owner: row.owner,
+          fragranceProductId: row.fragrance_product_id,
+          status: row.status,
+          expiresAt: row.expires_at,
+          currentEstimatedMl: row.current_estimated_ml,
+          batchAuthenticity: row.authenticity_status,
+        }
+      : null;
   }
 
-  async lockMachine(machineId: string, executor: Executor = this.db): Promise<void> {
-    await executor
-      .selectFrom('machines')
-      .select('id')
-      .where('id', '=', machineId)
-      .forUpdate()
-      .executeTakeFirst();
-  }
-
-  async listRefillSessions(
-    filter: { page: number; pageSize: number; machineId?: string; status?: RefillStatus },
-    scope: BrandScope = { kind: 'UNRESTRICTED' },
-    executor: Executor = this.db,
-  ): Promise<{ items: RefillSessionRecord[]; total: number }> {
-    let baseQuery = executor
-      .selectFrom('refill_sessions as rs')
-      .innerJoin('machines as m', 'm.id', 'rs.machine_id')
-      .innerJoin('machine_slots as ms', 'ms.id', 'rs.slot_id')
-      .innerJoin('brands as b', 'b.id', 'rs.brand_id')
-      .innerJoin('users as u', 'u.id', 'rs.performed_by')
-      .where(brandScopedByColumn(scope, 'rs.brand_id'));
-
-    if (filter.machineId) {
-      baseQuery = baseQuery.where('rs.machine_id', '=', filter.machineId);
-    }
-    if (filter.status) {
-      baseQuery = baseQuery.where('rs.status', '=', filter.status);
-    }
-
-    const countRes = await baseQuery
-      .select(sql<string>`count(*)`.as('total'))
-      .executeTakeFirstOrThrow();
-    const total = Number(countRes.total);
-
-    const rows = await baseQuery
-      .select([
-        'rs.id',
-        'rs.machine_id as machineId',
-        'm.display_name as machineDisplayName',
-        'rs.slot_id as slotId',
-        'ms.slot_number as slotNumber',
-        'rs.brand_id as brandId',
-        'b.name as brandName',
-        'rs.old_bottle_id as oldBottleId',
-        'rs.new_bottle_id as newBottleId',
-        'rs.checklist_completed as checklistCompleted',
-        'rs.status',
-        'rs.notes',
-        'rs.before_weight_g as beforeWeightG',
-        'rs.after_weight_g as afterWeightG',
-        'rs.performed_by as performedBy',
-        'u.full_name as performedByName',
-        'rs.started_at as startedAt',
-        'rs.completed_at as completedAt',
-      ])
-      .orderBy('rs.started_at', 'desc')
-      .limit(filter.pageSize)
-      .offset((filter.page - 1) * filter.pageSize)
-      .execute();
-
-    const items = rows.map((r) => ({
-      id: r.id,
-      machineId: r.machineId,
-      machineDisplayName: r.machineDisplayName,
-      slotId: r.slotId,
-      slotNumber: r.slotNumber,
-      brandId: r.brandId,
-      brandName: r.brandName,
-      oldBottleId: r.oldBottleId,
-      newBottleId: r.newBottleId,
-      checklistCompleted: r.checklistCompleted,
-      status: r.status,
-      notes: r.notes,
-      beforeWeightG: r.beforeWeightG ? String(r.beforeWeightG) : null,
-      afterWeightG: r.afterWeightG ? String(r.afterWeightG) : null,
-      performedBy: r.performedBy,
-      performedByName: r.performedByName,
-      startedAt: new Date(r.startedAt),
-      completedAt: r.completedAt ? new Date(r.completedAt) : null,
-    }));
-
-    return { items, total };
-  }
-
-  async closeRefillSession(
+  /**
+   * Chai mới vào slot: INSTALLED. Khối lượng đo được chỉ ghi khi người kho nhập — không có thì giữ
+   * nguyên, không ghi 0 (FR-INV-05, FR-INV-13).
+   */
+  async installBottle(
     id: string,
-    data: {
-      newBottleId: string;
-      afterWeightG: string;
-      checklistCompleted: boolean;
-      notes?: string | null;
-      completedAt: Date;
-    },
-    executor: Executor = this.db,
+    data: { readonly at: Date; readonly measuredWeightG: number | null },
+    tx: Executor,
   ): Promise<void> {
-    await executor
-      .updateTable('refill_sessions')
+    const weight = data.measuredWeightG === null ? null : String(data.measuredWeightG);
+    await tx
+      .updateTable('bottles')
       .set({
-        new_bottle_id: data.newBottleId,
-        after_weight_g: data.afterWeightG,
-        checklist_completed: data.checklistCompleted,
-        notes: data.notes ?? null,
-        status: 'COMPLETED',
-        completed_at: data.completedAt,
+        status: 'INSTALLED',
+        installed_at: data.at,
+        opened_at: sql<Date>`coalesce(opened_at, ${data.at})`,
+        removed_at: null,
+        ...(weight !== null
+          ? { initial_measured_weight_g: weight, current_measured_weight_g: weight }
+          : {}),
       })
       .where('id', '=', id)
       .execute();
   }
 
-  async updateBottleRemoved(
-    bottleId: string,
-    data: {
-      status: BottleStatus;
-      removedAt: Date;
-    },
-    executor: Executor = this.db,
-  ): Promise<void> {
-    await executor
+  /** Chai cũ rời slot khi đóng phiếu nạp: còn nước hoa thì về kho, hết thì EMPTY (FR-INV-13, 15). */
+  async removeBottle(id: string, at: Date, tx: Executor): Promise<void> {
+    await tx
       .updateTable('bottles')
       .set({
-        status: data.status,
-        removed_at: data.removedAt,
-        updated_at: new Date(),
+        status: sql<BottleStatus>`CASE WHEN current_estimated_ml > 0 THEN 'IN_STOCK' ELSE 'EMPTY' END::bottle_status`,
+        removed_at: at,
       })
-      .where('id', '=', bottleId)
+      .where('id', '=', id)
+      .where('status', 'in', ['INSTALLED', 'LOW', 'EMPTY'])
       .execute();
   }
 
-  // ==========================================
-  // CHỐT CHẶN AN TOÀN (FR-INV-30, 32, ADR-0015)
-  // ==========================================
+  // -----------------------------------------------------------------------------------
+  // Phiếu nạp
+  // -----------------------------------------------------------------------------------
 
-  /**
-   * FR-INV-32: Kiểm tra máy có lệnh xịt đang hiệu lực hoặc đơn chờ thanh toán.
-   */
-  async hasPendingOrdersOrDispenseOnMachine(
-    machineId: string,
+  async listRefillSessions(
+    scope: BrandScope,
+    filter: PageFilter & {
+      readonly machineId?: string | undefined;
+      readonly status?: RefillStatus | undefined;
+    },
+  ): Promise<{ items: RefillSessionRecord[]; total: number }> {
+    let base = this.db
+      .selectFrom('refill_sessions as rs')
+      .where(brandScopedByColumn(scope, 'rs.brand_id'));
+    if (filter.machineId) base = base.where('rs.machine_id', '=', filter.machineId);
+    if (filter.status) base = base.where('rs.status', '=', filter.status);
+    const { total } = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    const rows = await base
+      .selectAll('rs')
+      .orderBy('rs.started_at', 'desc')
+      .orderBy('rs.id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+    return { items: rows.map(toRefillSession), total: Number(total) };
+  }
+
+  async findRefillSession(
+    id: string,
     executor: Executor = this.db,
-  ): Promise<boolean> {
-    // 1. Kiểm tra đơn hàng đang CREATED hoặc PENDING_PAYMENT
-    const openOrder = await executor
-      .selectFrom('orders')
-      .select('id')
-      .where('machine_id', '=', machineId)
-      .where('status', 'in', ['CREATED', 'PENDING_PAYMENT'])
+  ): Promise<RefillSessionRecord | null> {
+    const row = await executor
+      .selectFrom('refill_sessions')
+      .selectAll()
+      .where('id', '=', id)
       .executeTakeFirst();
+    return row ? toRefillSession(row) : null;
+  }
 
-    if (openOrder) return true;
-
-    // 2. Kiểm tra lệnh xịt CUSTOMER đang CREATED, SENT hoặc ACKNOWLEDGED
-    const pendingCommand = await executor
-      .selectFrom('dispense_commands as dc')
-      .innerJoin('orders as o', 'o.id', 'dc.order_id')
-      .select('dc.id')
-      .where('o.machine_id', '=', machineId)
-      .where('dc.status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
+  async lockRefillSession(id: string, tx: Executor): Promise<RefillSessionRecord | null> {
+    const row = await tx
+      .selectFrom('refill_sessions')
+      .selectAll()
+      .where('id', '=', id)
+      .forUpdate()
       .executeTakeFirst();
-
-    return Boolean(pendingCommand);
+    return row ? toRefillSession(row) : null;
   }
 
   /**
-   * Lấy slot kèm hợp đồng thuê slot hiện tại (đã thanh toán) để kiểm tra thương hiệu sở hữu.
+   * Khóa máy rồi slot. Khóa dòng `machines` để kiosk không tạo đơn chen vào giữa bước kiểm "máy
+   * bận" và bước ghi phiếu — ORD khóa cùng dòng khi tạo đơn (FR-INV-32, ADR-0015, ADR-0017).
    */
-  async findActiveSlotRental(
-    slotId: string,
-    executor: Executor = this.db,
-  ): Promise<{ rentalId: string; brandId: string; fragranceProductId: string | null } | null> {
+  async lockSlotAndMachine(slotId: string, tx: Executor): Promise<SlotForRefill | null> {
+    const slot = await tx
+      .selectFrom('machine_slots')
+      .select('machine_id')
+      .where('id', '=', slotId)
+      .executeTakeFirst();
+    if (!slot) return null;
+    await tx
+      .selectFrom('machines')
+      .select('id')
+      .where('id', '=', slot.machine_id)
+      .forUpdate()
+      .execute();
+    const locked = await tx
+      .selectFrom('machine_slots')
+      .select(['id', 'machine_id', 'active_bottle_id', 'calibrated_dosage_ml'])
+      .where('id', '=', slotId)
+      .forUpdate()
+      .executeTakeFirstOrThrow();
+    return {
+      id: locked.id,
+      machineId: locked.machine_id,
+      activeBottleId: locked.active_bottle_id,
+      calibratedDosageMl: locked.calibrated_dosage_ml,
+    };
+  }
+
+  /**
+   * FR-INV-32: máy còn đơn chờ thanh toán hoặc lệnh xịt khách hàng hiệu lực (`CREATED`, `SENT`,
+   * `ACKNOWLEDGED` — cùng tập với `uq_machine_active_customer_command`).
+   */
+  async machineIsBusy(machineId: string, executor: Executor): Promise<boolean> {
+    const row = await executor
+      .selectFrom('machines as m')
+      .select((eb) => [
+        eb
+          .exists(
+            eb
+              .selectFrom('orders as o')
+              .select('o.id')
+              .whereRef('o.machine_id', '=', 'm.id')
+              .where('o.status', 'in', ['CREATED', 'PENDING_PAYMENT']),
+          )
+          .as('open_order'),
+        eb
+          .exists(
+            eb
+              .selectFrom('dispense_commands as dc')
+              .select('dc.id')
+              .whereRef('dc.machine_id', '=', 'm.id')
+              .where('dc.command_type', '=', 'CUSTOMER')
+              .where('dc.status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED']),
+          )
+          .as('active_command'),
+      ])
+      .where('m.id', '=', machineId)
+      .executeTakeFirstOrThrow();
+    return Boolean(row.open_order) || Boolean(row.active_command);
+  }
+
+  /**
+   * ADR-0006: slot chỉ nhận chai khi có hóa đơn đã thanh toán — đang hiệu lực, hoặc `DRAFT` đã có
+   * `paid_at` (chờ nạp hàng). `DRAFT` chưa thanh toán là đang giữ chỗ trong lúc mua, KHÔNG nhận chai.
+   */
+  async findStockableRental(slotId: string, executor: Executor): Promise<StockableRental | null> {
     const row = await executor
       .selectFrom('slot_rentals')
-      .select(['id', 'brand_id as brandId', 'fragrance_product_id as fragranceProductId'])
+      .select(['id', 'brand_id', 'fragrance_product_id'])
       .where('slot_id', '=', slotId)
       .where((eb) =>
         eb.or([
-          eb('status', 'in', ACTIVE_RENTAL_STATUSES),
+          eb('status', 'in', [...HOLDING_RENTAL_STATUSES]),
           eb.and([
             eb('status', '=', 'DRAFT'),
             eb('paid_at', 'is not', null),
@@ -1132,52 +803,293 @@ export class InvQueries {
           ]),
         ]),
       )
-      .orderBy('starts_at', 'desc')
+      .orderBy('created_at', 'desc')
+      .limit(1)
       .executeTakeFirst();
-
-    if (!row) return null;
-    return {
-      rentalId: row.id,
-      brandId: row.brandId,
-      fragranceProductId: row.fragranceProductId,
-    };
+    return row
+      ? { id: row.id, brandId: row.brand_id, fragranceProductId: row.fragrance_product_id }
+      : null;
   }
 
-  /**
-   * Cập nhật slot gắn chai mới.
-   */
-  async updateSlotBottle(
-    slotId: string,
-    bottleId: string,
-    executor: Executor = this.db,
+  async slotHasOpenRefillSession(slotId: string, executor: Executor): Promise<boolean> {
+    const row = await executor
+      .selectFrom('refill_sessions')
+      .select('id')
+      .where('slot_id', '=', slotId)
+      .where('status', '=', 'STARTED')
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
+  async insertRefillSession(
+    data: {
+      readonly brandId: string;
+      readonly machineId: string;
+      readonly slotId: string;
+      readonly oldBottleId: string | null;
+      readonly performedBy: string;
+      readonly beforeWeightG: number | null;
+      readonly startedAt: Date;
+    },
+    tx: Executor,
+  ): Promise<string> {
+    const row = await tx
+      .insertInto('refill_sessions')
+      .values({
+        brand_id: data.brandId,
+        machine_id: data.machineId,
+        slot_id: data.slotId,
+        old_bottle_id: data.oldBottleId,
+        performed_by: data.performedBy,
+        before_weight_g: data.beforeWeightG === null ? null : String(data.beforeWeightG),
+        started_at: data.startedAt,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async completeRefillSession(
+    id: string,
+    data: {
+      readonly oldBottleId: string | null;
+      readonly newBottleId: string;
+      readonly afterWeightG: number | null;
+      readonly notes: string | null;
+      readonly completedAt: Date;
+    },
+    tx: Executor,
   ): Promise<void> {
-    await executor
+    await tx
+      .updateTable('refill_sessions')
+      .set({
+        status: 'COMPLETED',
+        old_bottle_id: data.oldBottleId,
+        new_bottle_id: data.newBottleId,
+        checklist_completed: true,
+        after_weight_g: data.afterWeightG === null ? null : String(data.afterWeightG),
+        notes: data.notes,
+        completed_at: data.completedAt,
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /** Slot nhận chai mới; lượng còn lại ước tính lấy theo chai (FR-INV-09). */
+  async setSlotBottle(
+    slot: SlotForRefill,
+    bottle: { readonly id: string; readonly currentEstimatedMl: string },
+    tx: Executor,
+  ): Promise<void> {
+    const ml = Number(bottle.currentEstimatedMl);
+    const dosage = slot.calibratedDosageMl === null ? null : Number(slot.calibratedDosageMl);
+    await tx
       .updateTable('machine_slots')
       .set({
-        active_bottle_id: bottleId,
+        active_bottle_id: bottle.id,
+        estimated_remaining_ml: bottle.currentEstimatedMl,
+        // Slot chưa hiệu chuẩn thì chưa quy được ra số lượt — giữ nguyên tới lúc hiệu chuẩn (FR-MCH-06).
+        ...(dosage && dosage > 0 ? { estimated_remaining_sprays: Math.floor(ml / dosage) } : {}),
       })
-      .where('id', '=', slotId)
+      .where('id', '=', slot.id)
       .execute();
   }
 
-  /**
-   * Cập nhật chai sang trạng thái INSTALLED.
-   */
-  async updateBottleInstalled(
-    bottleId: string,
-    initialMeasuredWeightG: string,
-    executor: Executor = this.db,
+  // -----------------------------------------------------------------------------------
+  // Người nhận thông báo
+  // -----------------------------------------------------------------------------------
+
+  /** Tài khoản ACTIVE mang vai trò Inventory Staff — nhận thông báo khai báo mới (FR-INV-28). */
+  async findActiveInventoryStaff(executor: Executor): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .select('u.id')
+      .where('u.status', '=', 'ACTIVE')
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('user_roles as ur')
+            .innerJoin('roles as r', 'r.id', 'ur.role_id')
+            .select('ur.id')
+            .whereRef('ur.user_id', '=', 'u.id')
+            .where('r.code', '=', 'INVENTORY_STAFF'),
+        ),
+      )
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  async insertInAppNotifications(
+    data: {
+      readonly brandId: string;
+      readonly recipients: readonly string[];
+      readonly type: string;
+      readonly subject: string;
+      readonly content: string;
+      readonly referenceId: string;
+      readonly at: Date;
+    },
+    executor: Executor,
   ): Promise<void> {
+    if (data.recipients.length === 0) return;
     await executor
-      .updateTable('bottles')
-      .set({
-        status: 'INSTALLED',
-        installed_at: new Date(),
-        initial_measured_weight_g: initialMeasuredWeightG,
-        current_measured_weight_g: initialMeasuredWeightG,
-        updated_at: new Date(),
-      })
-      .where('id', '=', bottleId)
+      .insertInto('notifications')
+      .values(
+        data.recipients.map((recipient) => ({
+          brand_id: data.brandId,
+          recipient_user_id: recipient,
+          type: data.type,
+          channel: 'IN_APP',
+          subject: data.subject,
+          content: data.content,
+          status: 'SENT' as const,
+          sent_at: data.at,
+          reference_id: data.referenceId,
+          created_at: data.at,
+        })),
+      )
       .execute();
   }
+}
+
+// -------------------------------------------------------------------------------------
+// Ánh xạ dòng → bản ghi
+// -------------------------------------------------------------------------------------
+
+function toShipment(r: {
+  id: string;
+  brand_id: string;
+  fragrance_product_id: string;
+  product_name: string;
+  declared_quantity: number;
+  declared_bottle_volume_ml: string;
+  ship_date: string | null;
+  status: ShipmentDeclarationStatus;
+  received_quantity: number | null;
+  discrepancy_notes: string | null;
+  received_by: string | null;
+  received_at: Date | null;
+  resulting_batch_id: string | null;
+  created_at: Date;
+}): ShipmentRecord {
+  return {
+    id: r.id,
+    brandId: r.brand_id,
+    fragranceProductId: r.fragrance_product_id,
+    productName: r.product_name,
+    declaredQuantity: r.declared_quantity,
+    declaredBottleVolumeMl: r.declared_bottle_volume_ml,
+    expectedShipDate: r.ship_date,
+    status: r.status,
+    receivedQuantity: r.received_quantity,
+    discrepancyNotes: r.discrepancy_notes,
+    receivedBy: r.received_by,
+    receivedAt: r.received_at,
+    resultingBatchId: r.resulting_batch_id,
+    createdAt: r.created_at,
+  };
+}
+
+function toBatch(r: {
+  id: string;
+  brand_id: string;
+  fragrance_product_id: string;
+  product_name: string;
+  source_declaration_id: string | null;
+  batch_number: string;
+  received_at: Date;
+  expires_at: Date | null;
+  quantity_received: number;
+  authenticity_status: BatchAuthenticityStatus;
+  authenticity_document_url: string | null;
+  authenticity_document_type: string | null;
+  authenticity_submitted_at: Date | null;
+  authenticity_verified_at: Date | null;
+  authenticity_rejection_reason: string | null;
+}): BatchRecord {
+  return {
+    id: r.id,
+    brandId: r.brand_id,
+    fragranceProductId: r.fragrance_product_id,
+    productName: r.product_name,
+    sourceDeclarationId: r.source_declaration_id,
+    batchNumber: r.batch_number,
+    receivedAt: r.received_at,
+    expiresAt: r.expires_at,
+    quantityReceived: r.quantity_received,
+    authenticityStatus: r.authenticity_status,
+    authenticityDocumentUrl: r.authenticity_document_url,
+    authenticityDocumentType: r.authenticity_document_type,
+    authenticitySubmittedAt: r.authenticity_submitted_at,
+    authenticityVerifiedAt: r.authenticity_verified_at,
+    authenticityRejectionReason: r.authenticity_rejection_reason,
+  };
+}
+
+function toBottle(r: {
+  id: string;
+  brand_id: string;
+  owner: RevenueOwnerType;
+  batch_id: string;
+  fragrance_product_id: string;
+  identifier: string;
+  status: BottleStatus;
+  initial_volume_ml: string;
+  current_estimated_ml: string;
+  installed_slot_id: string | null;
+  expires_at: Date | null;
+  source_rental_id: string | null;
+  liquidated_at: Date | null;
+  bottle_return_id: string | null;
+}): BottleRecord {
+  return {
+    id: r.id,
+    brandId: r.brand_id,
+    owner: r.owner,
+    batchId: r.batch_id,
+    fragranceProductId: r.fragrance_product_id,
+    identifier: r.identifier,
+    status: r.status,
+    initialVolumeMl: r.initial_volume_ml,
+    currentEstimatedMl: r.current_estimated_ml,
+    installedSlotId: r.installed_slot_id,
+    expiresAt: r.expires_at,
+    sourceRentalId: r.source_rental_id,
+    liquidatedAt: r.liquidated_at,
+    bottleReturnId: r.bottle_return_id,
+  };
+}
+
+function toRefillSession(r: {
+  id: string;
+  brand_id: string;
+  machine_id: string;
+  slot_id: string;
+  old_bottle_id: string | null;
+  new_bottle_id: string | null;
+  performed_by: string;
+  status: RefillStatus;
+  checklist_completed: boolean;
+  before_weight_g: string | null;
+  after_weight_g: string | null;
+  notes: string | null;
+  started_at: Date;
+  completed_at: Date | null;
+}): RefillSessionRecord {
+  return {
+    id: r.id,
+    brandId: r.brand_id,
+    machineId: r.machine_id,
+    slotId: r.slot_id,
+    oldBottleId: r.old_bottle_id,
+    newBottleId: r.new_bottle_id,
+    performedBy: r.performed_by,
+    status: r.status,
+    checklistCompleted: r.checklist_completed,
+    beforeWeightG: r.before_weight_g,
+    afterWeightG: r.after_weight_g,
+    notes: r.notes,
+    startedAt: r.started_at,
+    completedAt: r.completed_at,
+  };
 }

@@ -16,6 +16,6 @@ import { InvService } from './inv.service.js';
     RefillSessionsController,
   ],
   providers: [InvQueries, InvService],
-  exports: [InvQueries, InvService],
+  exports: [InvService],
 })
 export class InvModule {}

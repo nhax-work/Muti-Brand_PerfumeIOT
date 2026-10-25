@@ -23,6 +23,7 @@ import {
   RequireReauth,
   type AuthenticatedUser,
 } from '../auth/index.js';
+import { MachineModeService } from './machine-mode.service.js';
 import { MchService } from './mch.service.js';
 
 const MACHINE_MANAGE = 'machine.manage';
@@ -126,10 +127,6 @@ const MachineModeBody = z.object({
   force: z.boolean().optional(),
 });
 
-const ForceMaintenanceBody = z.object({
-  reason: z.string().min(1, 'mch.reasonRequired'),
-});
-
 const MachineListQuery = PageQuery.extend({
   locationId: z.string().uuid().optional(),
   status: z.enum(['ONLINE', 'UNSTABLE', 'OFFLINE']).optional(),
@@ -139,7 +136,10 @@ const MachineListQuery = PageQuery.extend({
 @Controller('machines')
 @RequirePermissions(MACHINE_MANAGE)
 export class MachinesController {
-  constructor(@Inject(MchService) private readonly mch: MchService) {}
+  constructor(
+    @Inject(MchService) private readonly mch: MchService,
+    @Inject(MachineModeService) private readonly machineMode: MachineModeService,
+  ) {}
 
   /** FR-MCH-08..10: Danh sách máy */
   @Get()
@@ -180,32 +180,14 @@ export class MachinesController {
   setMode(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(MachineModeBody, body);
-    return this.mch.setMachineMode(actor, validatedId, input);
-  }
-
-  /** FR-MNT-17: Ép máy chuyển sang MAINTENANCE khẩn cấp kèm lý do bắt buộc. Thao tác nhạy cảm (FR-AUTH-09). */
-  @Post(':id/force-maintenance')
-  @RequirePermissions(MACHINE_OPERATE)
-  @RequireReauth()
-  forceMaintenance(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ) {
-    const validatedId = parseBody(IdParam, id);
-    const input = parseBody(ForceMaintenanceBody, body);
-    return this.mch.setMachineMode(actor, validatedId, {
-      operatingMode: 'MAINTENANCE',
-      force: true,
-      reason: input.reason.trim(),
-    });
+    return this.machineMode.setMode(actor, validatedId, input);
   }
 
   /** Xóa mềm máy (chuyển sang DISABLED) */
   @Delete(':id')
   softDelete(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     const validatedId = parseBody(IdParam, id);
-    return this.mch.softDeleteMachine(actor, validatedId);
+    return this.machineMode.softDelete(actor, validatedId);
   }
 
   /** FR-MCH-15..17: Danh sách slots của máy */

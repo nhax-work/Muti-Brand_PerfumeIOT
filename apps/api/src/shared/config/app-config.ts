@@ -195,6 +195,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  const smtp = loadSmtpConfig(env);
+  if (appEnv === 'production' && !smtp) {
+    throw new Error(
+      'SMTP_HOST ở production là bắt buộc — bằng chứng gửi email không được là bản ghi chỉ ghi log (FR-ALR-16, ADR-0017).',
+    );
+  }
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -222,7 +229,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     refundClaimTokenSecret,
     adminWebBaseUrl,
     devLogEmailVerificationToken,
-    smtp: loadSmtpConfig(env),
+    smtp,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },

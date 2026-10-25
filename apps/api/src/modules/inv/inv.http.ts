@@ -1,109 +1,155 @@
 /**
- * HTTP Controllers cho Module Tồn kho và nạp nước hoa (FR-INV-01..35).
+ * Cửa vào HTTP của INV. Đường dẫn và dữ liệu theo spec/contracts/openapi.yaml (tag INV, ADR-0017).
+ *
+ *   Đọc khai báo, lô, chai, phiếu nạp — mọi tài khoản đã đăng nhập, phạm vi qua `brand_id`.
+ *   Khai báo gửi hàng, nộp giấy tờ — `inventory.declare` (Brand Admin).
+ *   Duyệt/từ chối giấy tờ — `inventory.verify` (Super Admin).
+ *   Tiếp nhận lô, đăng ký chai, mở/đóng phiếu nạp — `inventory.manage` (Inventory Staff).
  */
 
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
-import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
+import type { BrandScope } from '../../shared/scoping/index.js';
+import {
+  CurrentBrandScope,
+  CurrentUser,
+  RequirePermissions,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { InvService } from './inv.service.js';
 
-const IdParam = z.string().uuid();
+const INVENTORY_DECLARE = 'inventory.declare';
+const INVENTORY_VERIFY = 'inventory.verify';
+const INVENTORY_MANAGE = 'inventory.manage';
 
-const PageQuery = z.object({
+const IdParam = z.object({ id: z.string().uuid() });
+const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const Page = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
+};
+
+const ShipmentQuery = z.object({
+  ...Page,
+  status: z.enum(['DECLARED', 'RECEIVED', 'DISCREPANCY', 'CANCELLED']).optional(),
 });
 
-const DeclareShipmentBody = z.object({
+/** openapi `ShipmentDeclarationCreate`. */
+const ShipmentCreateBody = z.object({
   fragranceProductId: z.string().uuid(),
   declaredQuantity: z.number().int().min(1),
-  declaredBottleVolumeMl: z.string().min(1),
-  expectedShipDate: z.string().optional().nullable(),
+  declaredBottleVolumeMl: z.number().positive(),
+  expectedShipDate: IsoDate.optional(),
 });
 
-const ReceiveShipmentBody = z.object({
+/** openapi `ShipmentReceive`. */
+const ShipmentReceiveBody = z.object({
   receivedQuantity: z.number().int().min(0),
-  batchNumber: z.string().min(1).max(100).optional(),
-  expiresAt: z.string().optional().nullable(),
-  discrepancyNotes: z.string().optional().nullable(),
+  batchNumber: z.string().trim().min(1).max(100),
+  expiresAt: z.coerce.date().optional(),
+  discrepancyNotes: z.string().max(2000).optional(),
 });
 
-const SubmitAuthenticityBody = z.object({
-  documentUrl: z.string().min(1),
-  documentType: z.string().optional(),
+const BatchQuery = z.object({
+  ...Page,
+  fragranceProductId: z.string().uuid().optional(),
+  authenticityStatus: z.enum(['NOT_SUBMITTED', 'PENDING', 'APPROVED', 'REJECTED']).optional(),
 });
 
-const RejectAuthenticityBody = z.object({
-  reason: z.string().min(1),
+/** openapi `AuthenticityDocumentSubmit`. */
+const AuthenticitySubmitBody = z.object({
+  documentUrl: z.string().trim().min(1).max(1000),
+  documentType: z.string().trim().max(50).optional(),
 });
 
-const RegisterBottleBody = z.object({
+/** openapi `AuthenticityReject` — thiếu lý do trả REASON_REQUIRED ở service, không phải 400 chung. */
+const AuthenticityRejectBody = z.object({ reason: z.string().optional() });
+
+const BottleQuery = z.object({
+  ...Page,
+  status: z
+    .enum([
+      'IN_STOCK',
+      'INSTALLED',
+      'LOW',
+      'EMPTY',
+      'DAMAGED',
+      'EXPIRED',
+      'LIQUIDATED',
+      'RETURNED_TO_BRAND',
+    ])
+    .optional(),
+  batchId: z.string().uuid().optional(),
+});
+
+/** openapi `BottleCreate`. */
+const BottleCreateBody = z.object({
   batchId: z.string().uuid(),
-  identifier: z.string().min(1).max(100),
-  initialVolumeMl: z.string().min(1),
-  emptyWeightG: z.string().optional().nullable(),
+  identifier: z.string().trim().min(1).max(150),
+  initialVolumeMl: z.number().positive(),
+  emptyWeightG: z.number().min(0).optional(),
+  expiresAt: z.coerce.date().optional(),
 });
 
-const OpenRefillSessionBody = z.object({
+const RefillQuery = z.object({
+  ...Page,
   machineId: z.string().uuid().optional(),
-  slotId: z.string().uuid(),
-  beforeWeightG: z.number().min(0).optional().nullable(),
-  refillRequestId: z.string().uuid().optional().nullable(),
-  notes: z.string().optional().nullable(),
+  status: z.enum(['STARTED', 'COMPLETED', 'CANCELLED']).optional(),
 });
 
-const CloseRefillSessionBody = z.object({
+/** openapi `RefillSessionOpen` — máy suy từ slot. */
+const RefillOpenBody = z.object({
+  slotId: z.string().uuid(),
+  beforeWeightG: z.number().min(0).optional(),
+});
+
+/** openapi `RefillSessionClose` — checklist phải hoàn tất (FR-INV-14). */
+const RefillCloseBody = z.object({
   newBottleId: z.string().uuid(),
-  initialMeasuredWeightG: z.number().positive().optional(),
-  afterWeightG: z.number().positive().optional(),
-  checklistCompleted: z.boolean(),
-  notes: z.string().optional().nullable(),
+  checklistCompleted: z.literal(true),
+  afterWeightG: z.number().min(0).optional(),
+  notes: z.string().max(2000).optional(),
 });
 
 @Controller('shipment-declarations')
 export class ShipmentDeclarationsController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
-  @Post()
-  declare(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
-    const input = parseBody(DeclareShipmentBody, body);
-    return this.inv.declareShipment(actor, input);
-  }
-
+  /** FR-INV-27 */
   @Get()
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: unknown) {
-    const pq = parseBody(
-      PageQuery.extend({
-        brandId: z.string().uuid().optional(),
-        status: z.enum(['DECLARED', 'RECEIVED', 'DISCREPANCY', 'CANCELLED']).optional(),
-      }),
-      query,
-    );
-    const { items, total } = await this.inv.listShipmentDeclarations(actor, pq);
-    return {
-      items,
-      meta: {
-        page: pq.page,
-        pageSize: pq.pageSize,
-        total,
-      },
-    };
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const query = parseBody(ShipmentQuery, rawQuery);
+    const { items, total } = await this.inv.listShipments(scope, query);
+    return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
-  @Get(':id')
-  get(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
-    const validatedId = parseBody(IdParam, id);
-    return this.inv.getShipmentDeclaration(actor, validatedId);
+  /** FR-INV-22, 23, 28 */
+  @Post()
+  @RequirePermissions(INVENTORY_DECLARE)
+  declare(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Body() body: unknown,
+  ) {
+    return this.inv.declareShipment(actor, scope, parseBody(ShipmentCreateBody, body));
   }
 
+  /** FR-INV-24, 25, 26 */
   @Post(':id/receive')
   @HttpCode(200)
-  @RequirePermissions('inventory.manage')
-  receive(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
-    const validatedId = parseBody(IdParam, id);
-    const input = parseBody(ReceiveShipmentBody, body);
-    return this.inv.receiveShipment(actor, validatedId, input);
+  @RequirePermissions(INVENTORY_MANAGE)
+  receive(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    return this.inv.receiveShipment(
+      actor,
+      parseBody(IdParam, params).id,
+      parseBody(ShipmentReceiveBody, body),
+    );
   }
 }
 
@@ -111,61 +157,47 @@ export class ShipmentDeclarationsController {
 export class InventoryBatchesController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
+  /** FR-INV-01, 21, 34 */
   @Get()
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: unknown) {
-    const pq = parseBody(
-      PageQuery.extend({
-        brandId: z.string().uuid().optional(),
-        fragranceProductId: z.string().uuid().optional(),
-      }),
-      query,
-    );
-    const { items, total } = await this.inv.listBatches(actor, pq);
-    return {
-      items,
-      meta: {
-        page: pq.page,
-        pageSize: pq.pageSize,
-        total,
-      },
-    };
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const query = parseBody(BatchQuery, rawQuery);
+    const { items, total } = await this.inv.listBatches(scope, query);
+    return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
-  @Get(':id')
-  get(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
-    const validatedId = parseBody(IdParam, id);
-    return this.inv.getBatch(actor, validatedId);
-  }
-
+  /** FR-INV-33 */
   @Post(':id/authenticity-documents')
   @HttpCode(200)
+  @RequirePermissions(INVENTORY_DECLARE)
   submitAuthenticity(
     @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
     @Body() body: unknown,
   ) {
-    const validatedId = parseBody(IdParam, id);
-    const input = parseBody(SubmitAuthenticityBody, body);
-    return this.inv.submitBatchAuthenticity(actor, validatedId, input);
+    return this.inv.submitAuthenticity(
+      actor,
+      scope,
+      parseBody(IdParam, params).id,
+      parseBody(AuthenticitySubmitBody, body),
+    );
   }
 
+  /** FR-INV-34 AC1 */
   @Post(':id/approve-authenticity')
   @HttpCode(200)
-  approveAuthenticity(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
-    const validatedId = parseBody(IdParam, id);
-    return this.inv.approveBatchAuthenticity(actor, validatedId);
+  @RequirePermissions(INVENTORY_VERIFY)
+  approve(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
+    return this.inv.approveAuthenticity(actor, parseBody(IdParam, params).id);
   }
 
+  /** FR-INV-34 AC2, AC3 */
   @Post(':id/reject-authenticity')
   @HttpCode(200)
-  rejectAuthenticity(
-    @CurrentUser() actor: AuthenticatedUser,
-    @Param('id') id: string,
-    @Body() body: unknown,
-  ) {
-    const validatedId = parseBody(IdParam, id);
-    const input = parseBody(RejectAuthenticityBody, body);
-    return this.inv.rejectBatchAuthenticity(actor, validatedId, input);
+  @RequirePermissions(INVENTORY_VERIFY)
+  reject(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown, @Body() body: unknown) {
+    const { reason } = parseBody(AuthenticityRejectBody, body ?? {});
+    return this.inv.rejectAuthenticity(actor, parseBody(IdParam, params).id, reason);
   }
 }
 
@@ -173,43 +205,19 @@ export class InventoryBatchesController {
 export class BottlesController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
-  @Post()
-  @RequirePermissions('inventory.manage')
-  register(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
-    const input = parseBody(RegisterBottleBody, body);
-    return this.inv.registerBottle(actor, input);
+  /** FR-INV-04, 21 */
+  @Get()
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const query = parseBody(BottleQuery, rawQuery);
+    const { items, total } = await this.inv.listBottles(scope, query);
+    return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
-  @Get()
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: unknown) {
-    const pq = parseBody(
-      PageQuery.extend({
-        brandId: z.string().uuid().optional(),
-        batchId: z.string().uuid().optional(),
-        status: z
-          .enum([
-            'IN_STOCK',
-            'INSTALLED',
-            'LOW',
-            'EMPTY',
-            'DAMAGED',
-            'EXPIRED',
-            'LIQUIDATED',
-            'RETURNED_TO_BRAND',
-          ])
-          .optional(),
-      }),
-      query,
-    );
-    const { items, total } = await this.inv.listBottles(actor, pq);
-    return {
-      items,
-      meta: {
-        page: pq.page,
-        pageSize: pq.pageSize,
-        total,
-      },
-    };
+  /** FR-INV-02, 03, 05 */
+  @Post()
+  @RequirePermissions(INVENTORY_MANAGE)
+  register(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.inv.registerBottle(actor, parseBody(BottleCreateBody, body));
   }
 }
 
@@ -217,39 +225,30 @@ export class BottlesController {
 export class RefillSessionsController {
   constructor(@Inject(InvService) private readonly inv: InvService) {}
 
-  @Post()
-  @RequirePermissions('inventory.manage')
-  open(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
-    const input = parseBody(OpenRefillSessionBody, body);
-    return this.inv.openRefillSession(actor, input);
-  }
-
+  /** FR-INV-13: Brand Admin chỉ thấy phiếu trên slot mình thuê. */
   @Get()
-  async list(@CurrentUser() actor: AuthenticatedUser, @Query() query: unknown) {
-    const pq = parseBody(
-      PageQuery.extend({
-        machineId: z.string().uuid().optional(),
-        status: z.enum(['STARTED', 'COMPLETED', 'CANCELLED']).optional(),
-      }),
-      query,
-    );
-    const { items, total } = await this.inv.listRefillSessions(actor, pq);
-    return {
-      items,
-      meta: {
-        page: pq.page,
-        pageSize: pq.pageSize,
-        total,
-      },
-    };
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() rawQuery: unknown) {
+    const query = parseBody(RefillQuery, rawQuery);
+    const { items, total } = await this.inv.listRefillSessions(scope, query);
+    return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
+  /** FR-INV-29, 30, 32 */
+  @Post()
+  @RequirePermissions(INVENTORY_MANAGE)
+  open(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.inv.openRefillSession(actor, parseBody(RefillOpenBody, body));
+  }
+
+  /** FR-INV-31, 35 */
   @Post(':id/close')
   @HttpCode(200)
-  @RequirePermissions('inventory.manage')
-  close(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
-    const validatedId = parseBody(IdParam, id);
-    const input = parseBody(CloseRefillSessionBody, body);
-    return this.inv.closeRefillSession(actor, validatedId, input);
+  @RequirePermissions(INVENTORY_MANAGE)
+  close(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown, @Body() body: unknown) {
+    return this.inv.closeRefillSession(
+      actor,
+      parseBody(IdParam, params).id,
+      parseBody(RefillCloseBody, body),
+    );
   }
 }

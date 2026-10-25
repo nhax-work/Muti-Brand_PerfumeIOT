@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { EmailModule } from './adapters/email/index.js';
 import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
 import { AlrModule } from './modules/alr/index.js';
@@ -36,6 +37,8 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     OrdModule,
     // Kết nối broker dùng chung (@Global) — chỉ kết nối khi entrypoints/mqtt.ts gọi connect().
     MqttModule,
+    // Kênh gửi email dùng chung (@Global) — ALR và AUTH (ADR-0017 mục 4).
+    EmailModule,
     DspModule,
     IotModule,
   ],

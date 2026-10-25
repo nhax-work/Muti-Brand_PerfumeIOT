@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
 import { useReauth } from '@/shared/auth';
 
-export type Machine = components['schemas']['Machine'] & { drainingOrdersCount?: number };
+export type Machine = components['schemas']['Machine'];
 export type MachineSlot = components['schemas']['MachineSlot'];
 export type Location = components['schemas']['Location'];
 export type SlotRental = components['schemas']['SlotRental'];

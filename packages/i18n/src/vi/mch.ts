@@ -21,6 +21,7 @@ export const mch = {
   drainingDirectSetForbidden:
     'Không được đặt trực tiếp chế độ DRAINING. Hãy chọn chế độ Bảo trì để hệ thống tự chuyển',
   reasonRequired: 'Lý do là bắt buộc khi ép bảo trì khẩn cấp',
+  forcedMaintenanceAlertTitle: 'Máy {machine} bị ép bảo trì khẩn cấp',
 } as const;
 
 /** Nhãn hiển thị của `slot_status`. Khóa trùng đúng giá trị enum trong CSDL. */

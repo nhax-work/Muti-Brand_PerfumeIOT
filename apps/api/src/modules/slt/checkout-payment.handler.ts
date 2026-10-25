@@ -6,8 +6,10 @@
  */
 
 import { Global, Inject, Injectable, Module } from '@nestjs/common';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Transaction } from 'kysely';
 import type { DB } from '../../shared/db/index.js';
+import { AlrService } from '../alr/index.js';
 import {
   RENTAL_CHECKOUT_PAYMENT_HANDLER,
   type CheckoutPaymentOutcome,
@@ -19,7 +21,10 @@ import { SltQueries } from './slt.queries.js';
 
 @Injectable()
 export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
-  constructor(@Inject(SltQueries) private readonly queries: SltQueries) {}
+  constructor(
+    @Inject(SltQueries) private readonly queries: SltQueries,
+    @Inject(AlrService) private readonly alr: AlrService,
+  ) {}
 
   async onPaymentSucceeded(
     tx: Transaction<DB>,
@@ -56,57 +61,21 @@ export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
       await this.queries.markRentalPaid(r.id, event.paidAt, invoiceNumber, tx);
     }
 
-    // 6. Thông báo FR-SLT-43 AC1 & FR-ALR-16: Một bản ghi IN_APP và EMAIL cho mỗi Brand Admin đang hoạt động.
-    const brandAdmins = await this.queries.findActiveBrandAdmins(event.brandId, tx);
-    const invoiceListText = invoiceNumbers.join(', ');
-    const notificationContent = `Kính gửi Quý đối tác,
-
-Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
-- Mã phiên thanh toán: ${event.checkoutId}
-- Danh sách mã hóa đơn: ${invoiceListText}
-- Thời điểm thanh toán: ${event.paidAt.toISOString()}
-
-Vui lòng gửi hàng và cấu hình slot cho các chai nước hoa theo quy định.
-
-Thông báo này được lưu trữ trong hệ thống làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
-
-Trân trọng,
-Hệ thống ScentStation`;
-    const notificationSubject = `[ScentStation] Xác nhận thanh toán thuê slot thành công (${invoiceListText})`;
-
-    for (const admin of brandAdmins) {
-      // Kênh IN_APP (FR-SLT-43)
-      await this.queries.insertNotification(
-        {
-          brandId: event.brandId,
-          recipientUserId: admin.id,
-          type: 'RENTAL_CHECKOUT_PAID',
-          channel: 'IN_APP',
-          subject: notificationSubject,
-          content: notificationContent,
-          status: 'SENT',
-          sentAt: event.receivedAt,
-          createdAt: event.receivedAt,
-        },
-        tx,
-      );
-
-      // Kênh EMAIL làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013)
-      await this.queries.insertNotification(
-        {
-          brandId: event.brandId,
-          recipientUserId: admin.id,
-          type: 'RENTAL_CHECKOUT_PAID',
-          channel: 'EMAIL',
-          subject: notificationSubject,
-          content: notificationContent,
-          status: 'SENT',
-          sentAt: event.receivedAt,
-          createdAt: event.receivedAt,
-        },
-        tx,
-      );
-    }
+    // 5. FR-SLT-43 AC1, FR-ALR-16: mỗi Brand Admin ACTIVE một thông báo trong ứng dụng và một email.
+    //    Email chỉ XẾP HÀNG ở đây; job ALR gửi sau khi webhook commit — không gọi mạng trong tx này.
+    const params = {
+      invoices: invoiceNumbers.join(', '),
+      checkout: event.checkoutId,
+      paidAt: event.paidAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    };
+    await this.alr.notifyBrandAdmins(tx, {
+      brandId: event.brandId,
+      type: 'RENTAL_CHECKOUT_PAID',
+      subject: translate(DEFAULT_LOCALE, 'slt.checkoutPaidSubject', params),
+      content: translate(DEFAULT_LOCALE, 'slt.checkoutPaidContent', params),
+      referenceId: event.checkoutId,
+      at: event.receivedAt,
+    });
 
     return { kind: 'PAID' };
   }

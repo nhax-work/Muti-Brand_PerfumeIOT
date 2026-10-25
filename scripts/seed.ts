@@ -504,40 +504,62 @@ async function seedProducts(client: pg.Client): Promise<void> {
 }
 
 async function seedInventory(client: pg.Client): Promise<void> {
+  // Giấy tờ chính hãng ghi vào cột riêng của lô (ADR-0017 mục 1): lô của A đang chờ duyệt, lô của B
+  // đã được Super Admin duyệt nên chai của lô này lắp được vào slot (FR-INV-35).
   const batches = [
-    [
-      ID.batches[0],
-      ID.brandA,
-      ID.products[0],
-      'LOT-MA-2026-01',
-      ID.userInventoryStaff,
-      JSON.stringify({
-        authenticityStatus: 'PENDING',
-        documentUrl: 'https://example.com/docs/coo-ma-2026.pdf',
-        documentType: 'CERTIFICATE_OF_ORIGIN',
-      }),
-    ],
-    [
-      ID.batches[1],
-      ID.brandB,
-      ID.products[2],
-      'LOT-HV-2026-01',
-      ID.userInventoryStaff,
-      JSON.stringify({
-        authenticityStatus: 'APPROVED',
-        documentUrl: 'https://example.com/docs/coo-hv-2026.pdf',
-        documentType: 'CERTIFICATE_OF_ORIGIN',
-      }),
-    ],
+    {
+      id: ID.batches[0],
+      brandId: ID.brandA,
+      productId: ID.products[0],
+      batchNumber: 'LOT-MA-2026-01',
+      status: 'PENDING',
+      documentUrl: 'https://example.com/docs/coo-ma-2026.pdf',
+      submittedBy: ID.userBrandAdminA,
+      verifiedBy: null,
+    },
+    {
+      id: ID.batches[1],
+      brandId: ID.brandB,
+      productId: ID.products[2],
+      batchNumber: 'LOT-HV-2026-01',
+      status: 'APPROVED',
+      documentUrl: 'https://example.com/docs/coo-hv-2026.pdf',
+      submittedBy: ID.userBrandAdminB,
+      verifiedBy: ID.userSuperAdmin,
+    },
   ] as const;
 
-  for (const [id, brandId, productId, batchNumber, createdBy, supplierInfo] of batches) {
+  for (const batch of batches) {
     await client.query(
-      `INSERT INTO inventory_batches (id, brand_id, fragrance_product_id, batch_number,
-                                      received_at, expires_at, quantity_received, supplier_info, created_by)
-       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5::jsonb, $6)
-       ON CONFLICT (id) DO UPDATE SET supplier_info = EXCLUDED.supplier_info`,
-      [id, brandId, productId, batchNumber, supplierInfo, createdBy],
+      `INSERT INTO inventory_batches (id, brand_id, fragrance_product_id, batch_number, received_at,
+                                      expires_at, quantity_received, created_by,
+                                      authenticity_status, authenticity_document_url,
+                                      authenticity_document_type, authenticity_submitted_by,
+                                      authenticity_submitted_at, authenticity_verified_by,
+                                      authenticity_verified_at)
+       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5,
+               $6::batch_authenticity_status, $7, 'CERTIFICATE_OF_ORIGIN', $8, now(), $9::uuid,
+               CASE WHEN $9::uuid IS NULL THEN NULL ELSE now() END)
+       ON CONFLICT (id) DO UPDATE SET
+         authenticity_status = EXCLUDED.authenticity_status,
+         authenticity_document_url = EXCLUDED.authenticity_document_url,
+         authenticity_document_type = EXCLUDED.authenticity_document_type,
+         authenticity_submitted_by = EXCLUDED.authenticity_submitted_by,
+         authenticity_submitted_at = EXCLUDED.authenticity_submitted_at,
+         authenticity_verified_by = EXCLUDED.authenticity_verified_by,
+         authenticity_verified_at = EXCLUDED.authenticity_verified_at,
+         authenticity_rejection_reason = NULL`,
+      [
+        batch.id,
+        batch.brandId,
+        batch.productId,
+        batch.batchNumber,
+        ID.userInventoryStaff,
+        batch.status,
+        batch.documentUrl,
+        batch.submittedBy,
+        batch.verifiedBy,
+      ],
     );
   }
 
@@ -759,6 +781,9 @@ Hệ thống Quản trị ScentStation`,
       sentAt: null,
       readAt: null,
       createdAt: "now() - interval '2 days'",
+      referenceId: ID.checkoutA,
+      attempts: 0,
+      lastError: null,
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000002',
@@ -780,6 +805,10 @@ Hệ thống Vận hành ScentStation`,
       sentAt: null,
       readAt: null,
       createdAt: "now() - interval '1 day'",
+      referenceId: null,
+      // Hết lượt tự thử — chỉ Super Admin gửi lại tay được (FR-ALR-16 AC3).
+      attempts: 5,
+      lastError: '550 5.1.1 Mailbox unavailable',
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000003',
@@ -793,6 +822,9 @@ Hệ thống Vận hành ScentStation`,
       sentAt: "now() - interval '2 days'",
       readAt: "now() - interval '2 days'",
       createdAt: "now() - interval '2 days'",
+      referenceId: ID.checkoutA,
+      attempts: 0,
+      lastError: null,
     },
     {
       id: 'dddddddd-dddd-4ddd-8ddd-000000000004',
@@ -815,15 +847,36 @@ Hệ thống Quản trị ScentStation`,
       sentAt: null,
       readAt: null,
       createdAt: "now() - interval '1 day'",
+      referenceId: ID.checkoutB,
+      attempts: 1,
+      lastError: 'SMTP 421: dịch vụ tạm thời không nhận thư',
     },
   ];
 
   for (const n of notifs) {
     await client.query(
-      `INSERT INTO notifications (id, brand_id, recipient_user_id, type, channel, subject, content, status, sent_at, read_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, ${n.sentAt ?? 'NULL'}, ${n.readAt ?? 'NULL'}, ${n.createdAt})
+      // Email mang bằng chứng gửi (ADR-0017 mục 4): địa chỉ chụp lúc xếp hàng, số lần thử, lỗi cuối.
+      `INSERT INTO notifications (id, brand_id, recipient_user_id, type, channel, subject, content, status,
+                                  sent_at, read_at, created_at, reference_id, recipient_address,
+                                  delivery_attempts, last_attempt_at, last_error)
+       SELECT $1, $2, $3, $4, $5::varchar, $6, $7, $8, ${n.sentAt ?? 'NULL'}, ${n.readAt ?? 'NULL'}, ${n.createdAt},
+              $9, CASE WHEN $5::varchar = 'EMAIL' THEN u.email END, $10::int,
+              CASE WHEN $10::int > 0 THEN ${n.createdAt} END, $11
+         FROM users u WHERE u.id = $3
        ON CONFLICT (id) DO NOTHING`,
-      [n.id, n.brandId, n.recipientUserId, n.type, n.channel, n.subject, n.content, n.status],
+      [
+        n.id,
+        n.brandId,
+        n.recipientUserId,
+        n.type,
+        n.channel,
+        n.subject,
+        n.content,
+        n.status,
+        n.referenceId,
+        n.attempts,
+        n.lastError,
+      ],
     );
   }
 }

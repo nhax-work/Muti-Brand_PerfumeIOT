@@ -18,7 +18,7 @@ import type {
   EmailProvider,
   EmailSendOptions,
   EmailSendResult,
-} from '../../apps/api/src/modules/alr/alr.service.js';
+} from '../../apps/api/src/adapters/email/index.js';
 
 function fakeConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {

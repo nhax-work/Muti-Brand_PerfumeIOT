@@ -34,4 +34,9 @@ export const slt = {
   slotSwapBottleInstalled: 'Hóa đơn đã lắp chai đầu tiên, không thể đổi slot',
   slotSwapNotDraft: 'Hóa đơn không ở trạng thái chờ nạp hàng (DRAFT), không thể đổi slot',
   slotSwapUnpaid: 'Hóa đơn chưa thanh toán, không thể đổi slot',
+  checkoutPaidSubject: '[ScentStation] Xác nhận thanh toán thuê slot thành công ({invoices})',
+  checkoutPaidContent:
+    'Phiên thanh toán thuê slot {checkout} đã được xác nhận lúc {paidAt}. Mã hóa đơn: {invoices}. ' +
+    'Bước tiếp theo: khai báo lô hàng gửi kho, nộp giấy tờ chính hãng và cấu hình sản phẩm cho slot. ' +
+    'Thông báo này được lưu làm bằng chứng đối soát.',
 } as const;

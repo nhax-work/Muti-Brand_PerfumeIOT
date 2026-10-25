@@ -2,134 +2,119 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
 import NotificationsPage from './NotificationsPage';
-import type { NotificationItem } from './api';
+import type { Notification } from './api';
 
-let mockUser: { id: string; brandId: string | null; roles: string[] } = {
+interface MockUser {
+  id: string;
+  brandId: string | null;
+  roles: string[];
+  permissions: string[];
+}
+
+const SUPER_ADMIN: MockUser = {
   id: 'u-admin',
   brandId: null,
   roles: ['PLATFORM_SUPER_ADMIN'],
+  permissions: ['notification.manage'],
 };
+const BRAND_ADMIN: MockUser = {
+  id: 'u-brand',
+  brandId: 'b-1',
+  roles: ['BRAND_ADMIN'],
+  permissions: ['product.manage'],
+};
+
+let mockUser: MockUser = SUPER_ADMIN;
 
 vi.mock('@/shared/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/auth')>()),
   useAuth: () => ({ user: mockUser }),
 }));
 
-const mockNotifications: NotificationItem[] = [
-  {
-    id: 'notif-1111-2222-3333-4444',
-    brandId: 'b-1',
-    brandName: "Maison De L'Amour",
-    recipientUserId: 'u-brand-1',
-    recipientName: 'Quản Lý Thương Hiệu 1',
-    recipientEmail: 'contact@maison.vn',
-    type: 'RENTAL_CHECKOUT_PAID',
-    channel: 'EMAIL',
-    subject: '[ScentStation] Xác nhận thanh toán thuê slot thành công (INV-2026-001)',
-    content:
-      'Kính gửi Quý đối tác,\nPhiên thanh toán thuê slot của quý thương hiệu đã được xác nhận.',
-    status: 'SENT',
-    sentAt: '2026-10-21T10:05:00Z',
-    readAt: null,
-    createdAt: '2026-10-21T10:00:00Z',
-  },
-  {
-    id: 'notif-9999-8888-7777-6666',
-    brandId: 'b-1',
-    brandName: "Maison De L'Amour",
-    recipientUserId: 'u-brand-1',
-    recipientName: 'Quản Lý Thương Hiệu 1',
-    recipientEmail: 'contact@maison.vn',
-    type: 'RENTAL_CHECKOUT_PAID',
-    channel: 'EMAIL',
-    subject: '[ScentStation] Xác nhận thanh toán thuê slot thành công (INV-2026-002)',
-    content: 'Nội dung email bị lỗi kết nối mail server',
-    status: 'FAILED',
-    sentAt: null,
-    readAt: null,
-    createdAt: '2026-10-21T10:10:00Z',
-  },
-];
+const sent: Notification = {
+  id: 'notif-sent',
+  brandId: 'b-1',
+  recipientUserId: 'u-brand',
+  type: 'RENTAL_CHECKOUT_PAID',
+  channel: 'EMAIL',
+  subject: 'Xác nhận thanh toán thuê slot (HD-001)',
+  content: 'Phiên thanh toán đã được xác nhận.',
+  status: 'SENT',
+  sentAt: '2026-10-21T10:05:00Z',
+  readAt: null,
+  createdAt: '2026-10-21T10:00:00Z',
+  recipientAddress: 'admin@maison.vn',
+  referenceId: 'checkout-1',
+  providerMessageId: '<smtp-123@mail>',
+  deliveryAttempts: 1,
+  lastAttemptAt: '2026-10-21T10:05:00Z',
+  lastError: null,
+};
 
-const mockRetry = vi.fn().mockResolvedValue({ ...mockNotifications[1], status: 'SENT' });
+const failed: Notification = {
+  ...sent,
+  id: 'notif-failed',
+  subject: 'Xác nhận thanh toán thuê slot (HD-002)',
+  status: 'FAILED',
+  sentAt: null,
+  providerMessageId: null,
+  deliveryAttempts: 5,
+  lastError: 'SMTP 550: hộp thư không tồn tại',
+};
+
+const retry = vi.fn();
+let detail: Notification | undefined;
 
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   useNotifications: () => ({
-    data: {
-      items: mockNotifications,
-      meta: { page: 1, pageSize: 20, total: 2 },
-    },
-    isLoading: false,
-    refetch: vi.fn(),
-    isFetching: false,
-  }),
-  useNotification: (id: string | null) => ({
-    data: id ? (mockNotifications.find((n) => n.id === id) ?? null) : null,
+    data: { items: [sent, failed], meta: { total: 2, page: 1, pageSize: 20 } },
     isLoading: false,
   }),
-  useRetryNotification: () => ({
-    mutateAsync: mockRetry,
-    isPending: false,
-    variables: null,
-  }),
+  useNotification: () => ({ data: detail, isLoading: false }),
+  useRetryNotification: () => ({ mutateAsync: retry, isPending: false }),
 }));
 
-beforeAll(() => {
-  installDomStubs();
-});
-
-afterEach(() => {
-  cleanup();
-});
-
-describe('Màn hình Lịch sử thông báo & Bằng chứng gửi (FR-ALR-16, FR-SLT-43)', () => {
-  it('hiển thị danh sách thông báo và bằng chứng gửi với đầy đủ thông tin', () => {
-    mockUser = { id: 'u-admin', brandId: null, roles: ['PLATFORM_SUPER_ADMIN'] };
-    renderScreen(<NotificationsPage />);
-
-    // Kiểm tra tiêu đề trang
-    expect(screen.getByText('Lịch sử thông báo & Bằng chứng gửi')).toBeTruthy();
-    expect(
-      screen.getByText(
-        'Lưu trữ toàn bộ bằng chứng gửi email và thông báo giao dịch làm căn cứ đối soát pháp lý.',
-      ),
-    ).toBeTruthy();
-
-    // Kiểm tra các item xuất hiện trong bảng
-    expect(screen.getByText(/INV-2026-001/)).toBeTruthy();
-    expect(screen.getAllByText('contact@maison.vn').length).toBe(2);
-    expect(screen.getAllByText("Maison De L'Amour").length).toBe(2);
-
-    // Trạng thái hiển thị
-    expect(screen.getAllByText('Đã gửi thành công').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Gửi thất bại').length).toBeGreaterThan(0);
+describe('NotificationsPage', () => {
+  beforeAll(() => {
+    installDomStubs();
   });
 
-  it('mở drawer xem chi tiết bằng chứng gửi đối soát pháp lý khi nhấn Xem bằng chứng', async () => {
-    mockUser = { id: 'u-admin', brandId: null, roles: ['PLATFORM_SUPER_ADMIN'] };
-    renderScreen(<NotificationsPage />);
-
-    const viewButtons = screen.getAllByRole('button', { name: /Xem bằng chứng gửi/i });
-    expect(viewButtons.length).toBeGreaterThan(0);
-
-    // Click xem bằng chứng của item đầu tiên
-    fireEvent.click(viewButtons[0]!);
-
-    // Drawer hiển thị tiêu đề và nội dung bằng chứng
-    expect(screen.getByText('Bằng chứng thông báo đối soát pháp lý')).toBeTruthy();
-    expect(screen.getByText('notif-1111-2222-3333-4444')).toBeTruthy();
-    expect(
-      screen.getByText(/Phiên thanh toán thuê slot của quý thương hiệu đã được xác nhận/),
-    ).toBeTruthy();
+  afterEach(() => {
+    cleanup();
+    mockUser = SUPER_ADMIN;
+    detail = undefined;
+    retry.mockReset();
   });
 
-  it('hiển thị nút Thử gửi lại cho thông báo có trạng thái FAILED qua kênh EMAIL', () => {
-    mockUser = { id: 'u-admin', brandId: null, roles: ['PLATFORM_SUPER_ADMIN'] };
+  it('Super Admin thấy hòm thư nhận và nút gửi lại chỉ ở email FAILED', () => {
     renderScreen(<NotificationsPage />);
+    expect(screen.getAllByText('admin@maison.vn')).toHaveLength(2);
+    expect(screen.getAllByText('Gửi lại email')).toHaveLength(1);
+  });
 
-    // Nút Gửi lại chỉ xuất hiện cho dòng FAILED
-    const retryButtons = screen.getAllByRole('button', { name: /Gửi lại email/i });
-    expect(retryButtons.length).toBe(1);
+  it('Brand Admin không thấy cột hòm thư và không gửi lại được', () => {
+    mockUser = BRAND_ADMIN;
+    renderScreen(<NotificationsPage />);
+    expect(screen.getByText('Xác nhận thanh toán thuê slot (HD-001)')).toBeTruthy();
+    expect(screen.queryByText('admin@maison.vn')).toBeNull();
+    expect(screen.queryByText('Gửi lại email')).toBeNull();
+  });
+
+  it('Xem bằng chứng gửi: mã thư, số lần thử, phản hồi lỗi', () => {
+    detail = failed;
+    renderScreen(<NotificationsPage />);
+    fireEvent.click(screen.getAllByText('Xem bằng chứng gửi')[1]!);
+    expect(screen.getByText('SMTP 550: hộp thư không tồn tại')).toBeTruthy();
+    expect(screen.getByText('5')).toBeTruthy();
+    expect(screen.getByText('checkout-1')).toBeTruthy();
+  });
+
+  it('Gửi lại đưa email vào hàng đợi', async () => {
+    retry.mockResolvedValue({ ...failed, status: 'PENDING' });
+    renderScreen(<NotificationsPage />);
+    fireEvent.click(screen.getByText('Gửi lại email'));
+    fireEvent.click(await screen.findByText('Xác nhận'));
+    expect(retry).toHaveBeenCalledWith('notif-failed');
   });
 });

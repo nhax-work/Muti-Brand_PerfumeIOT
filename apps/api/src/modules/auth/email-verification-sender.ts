@@ -9,7 +9,7 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
-import { EMAIL_PROVIDER, type EmailProvider } from '../alr/alr.service.js';
+import { EMAIL_PROVIDER, type EmailProvider } from '../../adapters/email/index.js';
 
 export interface EmailVerificationSender {
   sendVerificationEmail(email: string, rawToken: string): Promise<void>;

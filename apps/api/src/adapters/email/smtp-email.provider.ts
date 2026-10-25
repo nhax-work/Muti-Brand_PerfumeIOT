@@ -6,7 +6,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
-import type { EmailProvider, EmailSendOptions, EmailSendResult } from './alr.service.js';
+import type { EmailProvider, EmailSendOptions, EmailSendResult } from './email-provider.js';
 
 @Injectable()
 export class SmtpEmailProvider implements EmailProvider {
