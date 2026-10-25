@@ -138,12 +138,10 @@ describe('FR-ALR-16 — gửi email và lưu bằng chứng', () => {
   });
 
   it('test_FR_ALR_16_failed_send_recorded_and_retried — lỗi ghi FAILED kèm phản hồi, thử lại sau khoảng chờ', async () => {
-    const send = vi
-      .spyOn(provider, 'send')
-      .mockResolvedValueOnce({
-        success: false,
-        error: 'SMTP 421: dịch vụ tạm thời không nhận thư',
-      });
+    const send = vi.spyOn(provider, 'send').mockResolvedValueOnce({
+      success: false,
+      error: 'SMTP 421: dịch vụ tạm thời không nhận thư',
+    });
     const referenceId = await queueForBrandA();
 
     expect(await alr.dispatchDueEmails()).toEqual({ sent: 0, failed: 1 });
