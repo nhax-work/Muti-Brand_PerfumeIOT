@@ -65,6 +65,9 @@ export const en: SameKeysAs<typeof vi> = {
     invalidVerificationToken: 'Invalid or nonexistent verification token',
     verificationTokenExpired: 'Verification token has expired',
     brandCodeTaken: 'Brand code is already taken',
+    verificationEmailSubject: 'Verify your ScentStation brand account',
+    verificationEmailBody:
+      'Welcome to ScentStation. Please click the following link to verify your email address: {link}. This link will expire in {hours} hours.',
   },
 
   mch: {

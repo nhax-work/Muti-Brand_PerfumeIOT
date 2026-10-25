@@ -14,6 +14,7 @@ export {
 export { hashPassword, generateTemporaryPassword } from './password.js';
 export {
   EMAIL_VERIFICATION_SENDER,
+  DefaultEmailVerificationSender,
   LoggingEmailVerificationSender,
   type EmailVerificationSender,
 } from './email-verification-sender.js';

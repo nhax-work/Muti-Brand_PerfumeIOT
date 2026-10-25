@@ -9,7 +9,7 @@ import { PrincipalLoader } from './principal.loader.js';
 
 import {
   EMAIL_VERIFICATION_SENDER,
-  LoggingEmailVerificationSender,
+  DefaultEmailVerificationSender,
 } from './email-verification-sender.js';
 
 @Module({
@@ -19,7 +19,7 @@ import {
     PrincipalLoader,
     tokenServiceProvider,
     AuthService,
-    { provide: EMAIL_VERIFICATION_SENDER, useClass: LoggingEmailVerificationSender },
+    { provide: EMAIL_VERIFICATION_SENDER, useClass: DefaultEmailVerificationSender },
     // Guard toàn cục: MỌI endpoint của MỌI module đều qua đây, trừ endpoint gắn @Public().
     { provide: APP_GUARD, useClass: AccessGuard },
   ],

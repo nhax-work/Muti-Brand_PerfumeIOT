@@ -69,7 +69,18 @@ export interface AppConfig {
    * Cấm bật ở production.
    */
   readonly devLogEmailVerificationToken: boolean;
+  /** Cấu hình máy chủ gửi thư SMTP thật (FR-USR-07, FR-ALR-16). `null` khi chạy ở chế độ console log. */
+  readonly smtp: SmtpConfig | null;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
+}
+
+export interface SmtpConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly secure: boolean;
+  readonly user: string | null;
+  readonly pass: string | null;
+  readonly from: string;
 }
 
 export interface PayosConfig {
@@ -211,10 +222,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     refundClaimTokenSecret,
     adminWebBaseUrl,
     devLogEmailVerificationToken,
+    smtp: loadSmtpConfig(env),
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
   };
+}
+
+/** Tải cấu hình SMTP gửi email thật; thiếu SMTP_HOST hoặc SMTP_USER thì trả `null`. */
+function loadSmtpConfig(env: NodeJS.ProcessEnv): SmtpConfig | null {
+  const host = env['SMTP_HOST'];
+  if (!host || host === PLACEHOLDER_SECRET) return null;
+  const port = Number(env['SMTP_PORT'] ?? 587);
+  const secure = env['SMTP_SECURE'] === 'true' || port === 465;
+  const user = env['SMTP_USER'] || null;
+  const pass = env['SMTP_PASS'] || null;
+  const from =
+    env['SMTP_FROM'] ||
+    (user ? `"ScentStation" <${user}>` : '"ScentStation" <no-reply@scentstation.vn>');
+  return { host, port, secure, user, pass, from };
 }
 
 /** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */

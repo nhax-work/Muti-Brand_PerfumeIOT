@@ -337,11 +337,11 @@
 * **API:** `POST /slot-rentals/{id}/non-renewal`
 * **Acceptance criteria:**
   * **AC1 (Báo không gia hạn trước hạn):** Given Brand Admin của thương hiệu sở hữu hóa đơn `H` đang ở trạng thái `ACTIVE` hoặc `EXPIRING`,  
-    When gửi yêu cầu báo không gia hạn kèm hình thức nhận hàng (`PICKUP_AT_WAREHOUSE` hoặc `DELIVER_TO_BRAND`), địa chỉ nhận hàng và người liên hệ nếu gửi về,  
+    When gửi yêu cầu báo không gia hạn kèm hình thức nhận hàng `returnMethod` (`WAREHOUSE_PICKUP` hoặc `SHIP_TO_BRAND`),  
     Then hệ thống ghi nhận `non_renewal_requested_at = now()`, hình thức nhận hàng và ghi AuditLog.
-  * **AC2 (Hóa đơn đã hết hạn hoặc đang ân hạn):** Given hóa đơn `H` đã chuyển sang `GRACE`, `LIQUIDATED` hoặc `CLOSED`,  
+  * **AC2 (Hóa đơn đã hết hạn hoặc đang ân hạn):** Given hóa đơn `H` đã chuyển sang `GRACE`, `LIQUIDATED` hoặc `CLOSED` hoặc đã quá hạn `ends_at`,  
     When gọi báo không gia hạn,  
-    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR` (chỉ được báo trước mốc `ends_at`).
+    Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE` (chỉ được báo trước mốc `ends_at`).
   * **AC3 (Phân quyền):** Given người gọi không phải Brand Admin của thương hiệu sở hữu hóa đơn,  
     When gọi báo không gia hạn,  
     Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
@@ -359,7 +359,7 @@
     Then hệ thống xóa thông tin báo không gia hạn (`non_renewal_requested_at = null`), cho phép gia hạn bình thường và ghi AuditLog.
   * **AC2 (Đã quá hạn hết hạn):** Given hóa đơn `H` đã qua mốc `ends_at`,  
     When gửi yêu cầu rút lại việc báo không gia hạn,  
-    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
+    Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE`.
 * **Test:** `test_FR_EXP_24_cancel_non_renewal_request`
 
 ---
