@@ -152,4 +152,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: <FileSearchOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN'],
   },
+  {
+    path: '/bottle-returns',
+    label: 'ui.bottleReturns',
+    icon: <RollbackOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF', 'BRAND_ADMIN'],
+  },
 ];

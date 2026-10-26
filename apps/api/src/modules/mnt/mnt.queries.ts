@@ -73,40 +73,40 @@ export interface CreateTicketParams {
 function mapTicket(row: Record<string, unknown>): MaintenanceTicketRecord {
   let replacementParts: string[] | null = null;
   if (Array.isArray(row.replacement_parts)) {
-    replacementParts = row.replacement_parts;
+    replacementParts = row.replacement_parts as string[];
   } else if (typeof row.replacement_parts === 'string') {
     try {
-      replacementParts = JSON.parse(row.replacement_parts);
+      replacementParts = JSON.parse(row.replacement_parts) as string[];
     } catch {
       replacementParts = null;
     }
   }
 
   return {
-    id: row.id,
-    brandId: row.brand_id,
-    machineId: row.machine_id,
-    sourceAlertId: row.source_alert_id,
-    ticketNumber: row.ticket_number,
-    category: row.category,
-    severity: row.severity,
-    priority: row.priority,
-    status: row.status,
-    assignedTo: row.assigned_to,
-    dueAt: row.due_at ? new Date(row.due_at) : null,
-    startedAt: row.started_at ? new Date(row.started_at) : null,
-    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : null,
-    closedAt: row.closed_at ? new Date(row.closed_at) : null,
-    diagnosis: row.diagnosis,
-    correctiveAction: row.corrective_action,
+    id: String(row.id),
+    brandId: row.brand_id ? String(row.brand_id) : null,
+    machineId: String(row.machine_id),
+    sourceAlertId: row.source_alert_id ? String(row.source_alert_id) : null,
+    ticketNumber: String(row.ticket_number),
+    category: String(row.category),
+    severity: row.severity as AlertSeverity,
+    priority: row.priority as TicketPriority,
+    status: row.status as TicketStatus,
+    assignedTo: row.assigned_to ? String(row.assigned_to) : null,
+    dueAt: row.due_at ? new Date(row.due_at as string | number | Date) : null,
+    startedAt: row.started_at ? new Date(row.started_at as string | number | Date) : null,
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at as string | number | Date) : null,
+    closedAt: row.closed_at ? new Date(row.closed_at as string | number | Date) : null,
+    diagnosis: row.diagnosis ? String(row.diagnosis) : null,
+    correctiveAction: row.corrective_action ? String(row.corrective_action) : null,
     replacementParts,
     cost: row.cost !== null && row.cost !== undefined ? String(row.cost) : null,
-    postTestResult: row.post_test_result,
-    postTestedBy: row.post_tested_by,
-    postTestedAt: row.post_tested_at ? new Date(row.post_tested_at) : null,
-    downtimeMinutes: row.downtime_minutes,
-    createdAt: new Date(row.created_at),
-    updatedAt: new Date(row.updated_at),
+    postTestResult: row.post_test_result ? String(row.post_test_result) : null,
+    postTestedBy: row.post_tested_by ? String(row.post_tested_by) : null,
+    postTestedAt: row.post_tested_at ? new Date(row.post_tested_at as string | number | Date) : null,
+    downtimeMinutes: row.downtime_minutes != null ? Number(row.downtime_minutes) : null,
+    createdAt: new Date(row.created_at as string | number | Date),
+    updatedAt: new Date(row.updated_at as string | number | Date),
   };
 }
 

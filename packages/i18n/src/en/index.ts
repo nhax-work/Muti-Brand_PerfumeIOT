@@ -1230,6 +1230,34 @@ export const en: SameKeysAs<typeof vi> = {
     day: 'Day',
     week: 'Week',
     month: 'Month',
+
+    // Bottle returns (FR-EXP-26..28)
+    bottleReturns: 'Bottle Returns',
+    bottleReturnsTitle: 'Bottle Returns Management',
+    bottleReturnsSubtitle: 'Manage bottle uninstallations and returns upon non-renewal.',
+    openReturnsOnly: 'Open returns only',
+    createBottleReturn: 'Create Return Ticket',
+    createBottleReturnTitle: 'Uninstall & Create Return Ticket',
+    selectSlotRental: 'Select ended slot rental',
+    slotRentalId: 'Rental Invoice ID',
+    returnMethod: 'Return Method',
+    readyAt: 'Ready At',
+    pickupDeadline: 'Pickup Deadline',
+    handedOverAt: 'Handed Over At',
+    recipientName: 'Recipient Name',
+    trackingNumber: 'Tracking Number',
+    shippingAddress: 'Shipping Address',
+    forfeitedAt: 'Forfeited At',
+    handoverReturn: 'Handover Return',
+    handoverReturnTitle: 'Confirm Return Handover',
+    measuredWeightG: 'Measured Weight (g)',
+    bottlesToReturn: 'Bottles to Return',
+    bottleCount: 'Bottle Count',
+    handoverSuccess: 'Return handed over successfully',
+    createReturnSuccess: 'Return ticket created successfully',
+    statusHandedOver: 'Handed Over',
+    statusForfeited: 'Forfeited / Liquidated',
+    statusWaitingPickup: 'Waiting for Pickup',
   },
 
   kiosk: {
@@ -1429,10 +1457,27 @@ export const en: SameKeysAs<typeof vi> = {
     REOPENED: 'Reopened',
   },
 
-  ticketPriority: {
+    ticketPriority: {
     LOW: 'Low',
     MEDIUM: 'Medium',
     HIGH: 'High',
     CRITICAL: 'Critical',
+  },
+
+  exp: {
+    returnNotFound: 'Bottle return ticket not found',
+    forbiddenBrandScope: 'No permission to access bottle returns of another brand',
+    rentalNotFound: 'Slot rental invoice not found',
+    rentalRenewalNotDeclined: 'Bottle return can only be created for non-renewed slot rentals',
+    bottlesRequired: 'At least one bottle is required to create a return ticket',
+    bottleNotFound: 'Perfume bottle not found in system',
+    bottleNotOwnedByBrand: 'Perfume bottle is not owned by the renting brand',
+    returnAlreadyClosed: 'Bottle return ticket is already handed over or forfeited',
+    trackingNumberRequiredForShipping: 'Tracking number is required when shipping to brand',
+  },
+
+  bottleReturnMethod: {
+    PICKUP_AT_STATION: 'Pickup at station / warehouse',
+    SHIP_TO_BRAND: 'Ship to brand',
   },
 };

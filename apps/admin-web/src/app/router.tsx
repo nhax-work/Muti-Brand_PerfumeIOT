@@ -174,6 +174,13 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/audit-logs/AuditLogsPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/bottle-returns',
+        lazy: () =>
+          import('@/routes/bottle-returns/BottleReturnsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
     ],
   },
 
