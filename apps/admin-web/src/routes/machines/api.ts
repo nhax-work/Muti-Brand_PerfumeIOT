@@ -13,6 +13,8 @@ export type Location = components['schemas']['Location'];
 export type SlotRental = components['schemas']['SlotRental'];
 export type Brand = components['schemas']['Brand'];
 export type Product = components['schemas']['Product'];
+export type SensorReading = components['schemas']['SensorReading'];
+export type DeviceEvent = components['schemas']['DeviceEvent'];
 
 export interface MachineFilterParams {
   readonly page?: number;
@@ -351,5 +353,55 @@ export function useMachineStatusHistory(machineId: string | undefined, page: num
         }),
       ),
     enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-04: số đo cảm biến của máy, mới nhất trước. */
+export function useSensorReadings(
+  machineId: string | undefined,
+  params: { page: number; slotId?: string; readingType?: string },
+) {
+  return useQuery({
+    queryKey: ['machine-sensor-readings', machineId, params],
+    queryFn: () =>
+      unwrap(
+        api.GET('/machines/{id}/sensor-readings', {
+          params: { path: { id: machineId! }, query: { ...params, pageSize: 20 } },
+        }),
+      ),
+    enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-05: sự kiện thiết bị (khởi động, kết nối lại, lỗi…), mới nhất trước. */
+export function useDeviceEvents(machineId: string | undefined, page: number) {
+  return useQuery({
+    queryKey: ['machine-device-events', machineId, page],
+    queryFn: () =>
+      unwrap(
+        api.GET('/machines/{id}/device-events', {
+          params: { path: { id: machineId! }, query: { page, pageSize: 20 } },
+        }),
+      ),
+    enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-06: đẩy lại cấu hình xuống thiết bị — đổi cấu hình máy nên cần xác thực lại. */
+export function usePushMachineConfig() {
+  const queryClient = useQueryClient();
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (machineId: string) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/config/push', {
+          params: { path: { id: machineId }, header: { 'X-Reauth-Token': reauthToken } },
+        }),
+      );
+    },
+    onSuccess: (machine) => {
+      queryClient.setQueryData(['machine', machine.id], machine);
+    },
   });
 }

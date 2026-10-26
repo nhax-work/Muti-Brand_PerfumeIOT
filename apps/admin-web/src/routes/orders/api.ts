@@ -5,6 +5,7 @@ import { api, unwrap } from '@/shared/api';
 export type Order = components['schemas']['Order'];
 export type OrderStatus = components['schemas']['OrderStatus'];
 export type OrderStatusHistoryEntry = components['schemas']['OrderStatusHistoryEntry'];
+export type OrderTrace = components['schemas']['OrderTrace'];
 
 export interface OrderSearch {
   readonly page: number;
@@ -42,6 +43,19 @@ export function useOrderHistory(orderId: string | undefined) {
     queryKey: ['orders', orderId, 'history'],
     queryFn: () => unwrap(api.GET('/orders/{id}/history', { params: { path: { id: orderId! } } })),
     enabled: Boolean(orderId),
+  });
+}
+
+/** Truy vết đầu-cuối một đơn (FR-AUD-11) — chỉ người có `audit.read`. */
+export function useOrderTrace(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ['orders', orderId, 'trace'],
+    queryFn: () =>
+      unwrap(
+        api.GET('/audit-logs/order-trace/{orderId}', { params: { path: { orderId: orderId! } } }),
+      ),
+    enabled: Boolean(orderId),
+    retry: false,
   });
 }
 

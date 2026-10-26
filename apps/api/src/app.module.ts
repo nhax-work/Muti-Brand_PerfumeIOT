@@ -4,6 +4,7 @@ import { EmailModule } from './adapters/email/index.js';
 import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
 import { AlrModule } from './modules/alr/index.js';
+import { AudModule } from './modules/aud/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { DspModule } from './modules/dsp/index.js';
@@ -43,6 +44,8 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     EmailModule,
     DspModule,
     IotModule,
+    // Truy vết đơn (FR-AUD-11) — đọc qua ORD và SLT, không module nào phụ thuộc ngược.
+    AudModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiExceptionFilter }],
 })
