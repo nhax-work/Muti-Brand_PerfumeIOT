@@ -33,6 +33,7 @@ import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus 
 import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { rev } from './rev.js';
+import { refillRequestReason, refillRequestStatus, rfq } from './rfq.js';
 import { slt, storageCompensationStatus } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
@@ -73,4 +74,7 @@ export const vi = {
   authenticityStatus,
   refillSessionStatus,
   bottleStatus,
+  rfq,
+  refillRequestStatus,
+  refillRequestReason,
 } as const;

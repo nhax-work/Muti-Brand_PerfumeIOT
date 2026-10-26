@@ -1,4 +1,9 @@
-import { AppstoreAddOutlined, ReloadOutlined, SettingOutlined } from '@ant-design/icons';
+import {
+  AppstoreAddOutlined,
+  InteractionOutlined,
+  ReloadOutlined,
+  SettingOutlined,
+} from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
   Alert,
@@ -150,7 +155,12 @@ export default function MySlotsPage() {
     {
       title: t('ui.mySlotsRemainingSprays'),
       key: 'remaining',
-      render: (_, { map }) => map?.estimatedRemainingSprays ?? '—',
+      render: (_, { map }) => (
+        <Space size={4}>
+          {map?.estimatedRemainingSprays ?? '—'}
+          {map?.lowStock && <Tag color="volcano">{t('ui.mySlotsLowStock')}</Tag>}
+        </Space>
+      ),
     },
     {
       title: t('ui.mySlotsOrders'),
@@ -173,15 +183,29 @@ export default function MySlotsPage() {
     {
       title: t('ui.actions'),
       key: 'actions',
-      render: (_, { rental }) => (
-        <Button
-          type="link"
-          size="small"
-          icon={<SettingOutlined />}
-          onClick={() => void navigate(`/rentals/${rental.id}`)}
-        >
-          {t('ui.mySlotsConfigure')}
-        </Button>
+      render: (_, { rental, map }) => (
+        <Space size={0} wrap>
+          <Button
+            type="link"
+            size="small"
+            icon={<SettingOutlined />}
+            onClick={() => void navigate(`/rentals/${rental.id}`)}
+          >
+            {t('ui.mySlotsConfigure')}
+          </Button>
+          {/* FR-RFQ-03: máy chủ gắn cờ sắp hết, màn hình gợi ý tạo yêu cầu điền sẵn slot. */}
+          {map?.lowStock && (
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<InteractionOutlined />}
+              onClick={() => void navigate(`/refill-requests?rentalId=${rental.id}`)}
+            >
+              {t('ui.mySlotsRequestRefill')}
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];

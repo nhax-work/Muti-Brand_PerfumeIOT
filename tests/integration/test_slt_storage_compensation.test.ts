@@ -102,8 +102,8 @@ afterEach(async () => {
 
 afterAll(async () => {
   await flow.cleanup();
-  await inventoryStaff.cleanup();
   await cleanupIsolationFixture(client, fx);
+  await inventoryStaff.cleanup();
   await client.end();
   await app.close();
 });

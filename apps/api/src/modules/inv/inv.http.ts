@@ -105,10 +105,11 @@ const RefillQuery = z.object({
   status: z.enum(['STARTED', 'COMPLETED', 'CANCELLED']).optional(),
 });
 
-/** openapi `RefillSessionOpen` — máy suy từ slot. */
+/** openapi `RefillSessionOpen` — máy suy từ slot; yêu cầu bổ sung được xử lý, nếu có (FR-RFQ-08). */
 const RefillOpenBody = z.object({
   slotId: z.string().uuid(),
   beforeWeightG: z.number().min(0).optional(),
+  refillRequestId: z.string().uuid().optional(),
 });
 
 /** openapi `RefillSessionClose` — checklist phải hoàn tất (FR-INV-14). */

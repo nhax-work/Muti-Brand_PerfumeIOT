@@ -34,6 +34,7 @@ function toOwnSlotDto(row: MachineMapRow): MachineMapSlotDto {
     slotId: row.slotId,
     productName: row.productName,
     estimatedRemainingSprays: row.estimatedRemainingSprays,
+    lowStock: row.lowStock,
   };
 }
 

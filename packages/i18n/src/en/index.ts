@@ -1113,6 +1113,38 @@ export const en: SameKeysAs<typeof vi> = {
     bottleExpiresAt: 'Expires',
     yes: 'Yes',
     no: 'No',
+    refillRequests: 'Refill requests',
+    refillRequestsSubtitle:
+      'Brands request more perfume for their rented slots; the warehouse reviews, schedules and refills through a refill session.',
+    refillRequestSlot: 'Machine · slot',
+    refillRequestReason: 'Reason',
+    refillRequestNote: 'Note',
+    refillRequestInvoice: 'Invoice (slot)',
+    refillRequestInvoiceRequired: 'Choose the invoice of the slot to refill',
+    refillRequestScheduledAt: 'Scheduled for',
+    refillRequestCreatedAt: 'Submitted at',
+    refillRequestCreate: 'New refill request',
+    refillRequestSubmit: 'Submit request',
+    refillRequestCreated: 'Refill request submitted',
+    refillRequestAccept: 'Accept',
+    refillRequestAccepted: 'Request accepted',
+    refillRequestReject: 'Reject',
+    refillRequestRejected: 'Request rejected',
+    refillRequestRejectPlaceholder: 'Rejection reason (required)',
+    refillRequestSchedule: 'Schedule',
+    refillRequestScheduled: 'Request scheduled',
+    refillRequestScheduleHint:
+      'Pick when the warehouse plans to refill. The brand will be notified.',
+    refillRequestOpenSession: 'Open refill session',
+    refillRequestSessionOpened:
+      'Refill session opened for the request — close it under Warehouse to complete',
+    refillRequestCancel: 'Cancel request',
+    refillRequestCancelConfirm: 'Cancel this refill request?',
+    refillRequestCancelled: 'Request cancelled',
+    refillRequestInSession: 'Refilling',
+    noRefillRequests: 'No refill requests yet',
+    mySlotsLowStock: 'Running low',
+    mySlotsRequestRefill: 'Request refill',
   },
 
   kiosk: {
@@ -1284,6 +1316,56 @@ export const en: SameKeysAs<typeof vi> = {
     PENDING: 'Pending review',
     APPROVED: 'Approved authentic',
     REJECTED: 'Rejected',
+  },
+
+  rfq: {
+    brandAccountOnly:
+      'Only the Brand Admin of the brand renting the slot can submit a refill request',
+    rentalNotActive:
+      "The slot's invoice is unpaid or has ended, so it cannot take a refill request",
+    productNotConfigured:
+      'The slot has no product configured yet — configure it before requesting a refill',
+    requestPending: 'This slot already has an unfinished refill request',
+    rejectionReasonRequired: 'A rejection reason is required',
+    scheduleInPast: 'The scheduled time must be in the future',
+    requestNotForSlot: "The refill request does not belong to this refill session's slot",
+    requestNotLinkable:
+      'The refill request is not accepted, has ended, or is already linked to another refill session',
+    invalidTransition: 'Cannot move the request from {from} to {to}',
+    requestInProgress: 'The request is being handled by a refill session and cannot be cancelled',
+    newRequestSubject: 'New refill request: {brand} — machine {machine}, slot {slot}',
+    newRequestContent:
+      'Brand {brand} requested a refill of {product} for slot {slot} on machine {machine}. Please review and accept or reject it.',
+    acceptedSubject: 'Refill request for slot {slot} accepted',
+    acceptedContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was accepted. The warehouse will schedule it.',
+    rejectedSubject: 'Refill request for slot {slot} rejected',
+    rejectedContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was rejected. Reason: {reason}.',
+    scheduledSubject: 'Refill scheduled for slot {slot}',
+    scheduledContent:
+      'The refill of {product} for slot {slot}, machine {machine}, is scheduled at {at}.',
+    cancelledSubject: 'Refill request for slot {slot} cancelled',
+    cancelledContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was cancelled before refilling.',
+    completedSubject: 'Slot {slot} refilled',
+    completedContent:
+      'Slot {slot} on machine {machine} has been refilled with {product} as requested.',
+  },
+
+  refillRequestStatus: {
+    SUBMITTED: 'Submitted',
+    ACCEPTED: 'Accepted',
+    REJECTED: 'Rejected',
+    SCHEDULED: 'Scheduled',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  },
+
+  refillRequestReason: {
+    LOW_STOCK: 'Running low',
+    EXPIRING: 'Stock expiring',
+    PRODUCT_CHANGE: 'Product change',
   },
 
   bottleStatus: {

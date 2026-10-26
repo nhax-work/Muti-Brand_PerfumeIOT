@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { RfqModule } from '../rfq/index.js';
 import { SltCompensationModule } from '../slt/index.js';
 import {
   BottlesController,
@@ -10,8 +11,8 @@ import { InvQueries } from './inv.queries.js';
 import { InvService } from './inv.service.js';
 
 @Module({
-  // Chai hư hỏng sinh khoản bồi thường trong cùng transaction (FR-SLT-44, ADR-0018).
-  imports: [SltCompensationModule],
+  // Chai hư hỏng sinh khoản bồi thường; phiếu nạp nối yêu cầu bổ sung — cùng transaction (ADR-0018).
+  imports: [SltCompensationModule, RfqModule],
   controllers: [
     ShipmentDeclarationsController,
     InventoryBatchesController,

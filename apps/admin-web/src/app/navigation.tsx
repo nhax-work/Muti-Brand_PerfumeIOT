@@ -8,6 +8,7 @@ import {
   FundOutlined,
   IdcardOutlined,
   InboxOutlined,
+  InteractionOutlined,
   MailOutlined,
   RollbackOutlined,
   SafetyOutlined,
@@ -131,6 +132,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.notifications',
     icon: <MailOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
+  },
+  {
+    path: '/refill-requests',
+    label: 'ui.refillRequests',
+    icon: <InteractionOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF', 'BRAND_ADMIN'],
   },
   {
     path: '/shipments',

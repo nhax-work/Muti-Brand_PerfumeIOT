@@ -35,6 +35,7 @@ import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.j
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
+import { RfqService } from '../rfq/index.js';
 import { CompensationService, type StorageCompensation } from '../slt/index.js';
 import {
   InvQueries,
@@ -78,6 +79,8 @@ export interface RegisterBottleInput {
 export interface OpenRefillInput {
   readonly slotId: string;
   readonly beforeWeightG?: number | undefined;
+  /** Yêu cầu bổ sung mà phiếu này xử lý (FR-RFQ-08). */
+  readonly refillRequestId?: string | undefined;
 }
 
 export interface CloseRefillInput {
@@ -94,6 +97,7 @@ export class InvService {
     @Inject(InvQueries) private readonly queries: InvQueries,
     @Inject(AlrService) private readonly alr: AlrService,
     @Inject(CompensationService) private readonly compensation: CompensationService,
+    @Inject(RfqService) private readonly refillRequests: RfqService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -608,6 +612,13 @@ export class InvService {
           },
           tx,
         );
+        if (input.refillRequestId) {
+          await this.refillRequests.linkToSession(tx, {
+            requestId: input.refillRequestId,
+            slotId: slot.id,
+            sessionId,
+          });
+        }
         await this.audit.log(
           {
             actorType: 'USER',
@@ -616,7 +627,12 @@ export class InvService {
             action: 'inv.refill.opened',
             targetType: 'RefillSession',
             targetId: sessionId,
-            after: { machineId: slot.machineId, slotId: slot.id, rentalId: rental.id },
+            after: {
+              machineId: slot.machineId,
+              slotId: slot.id,
+              rentalId: rental.id,
+              refillRequestId: input.refillRequestId ?? null,
+            },
           },
           tx,
         );
@@ -678,6 +694,8 @@ export class InvService {
         },
         tx,
       );
+      // FR-RFQ-09: yêu cầu bổ sung liên kết với phiếu này hoàn tất cùng lúc.
+      await this.refillRequests.completeForSession(tx, session.id, actor.userId);
       // FR-SLT-24 (tuần 8): kích hoạt hóa đơn khi lắp chai đầu tiên sẽ gọi SLT trong `tx` này.
       await this.audit.log(
         {

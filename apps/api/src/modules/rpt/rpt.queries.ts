@@ -46,6 +46,11 @@ export interface MachineMapRow {
   /** Chỉ khác null khi slot thuộc phạm vi khai thác của người gọi — xem ghi chú dưới. */
   readonly productName: string | null;
   readonly estimatedRemainingSprays: number;
+  /**
+   * Chai đang lắp ở LOW/EMPTY, hoặc lượng còn lại chạm `low_stock_threshold_ml` của slot — gợi ý tạo
+   * yêu cầu bổ sung (FR-RFQ-03, ADR-0018). Chỉ được đưa ra ngoài cho slot của người gọi.
+   */
+  readonly lowStock: boolean;
 }
 
 @Injectable()
@@ -84,6 +89,12 @@ export class RptQueries {
       .selectFrom('machine_slots as s')
       .select(['s.id as slot_id', 's.slot_number', 's.status', 's.estimated_remaining_sprays'])
       .select(sql<boolean>`${brandHoldsSlotNow(scope, 's.id')}`.as('mine'))
+      .select(
+        sql<boolean>`coalesce((select b.status in ('LOW', 'EMPTY') from bottles b
+                                where b.id = s.active_bottle_id), false)
+          or (s.low_stock_threshold_ml is not null
+              and s.estimated_remaining_ml <= s.low_stock_threshold_ml)`.as('low_stock'),
+      )
       .select((eb) =>
         eb
           .selectFrom('slot_rentals as r')
@@ -108,6 +119,7 @@ export class RptQueries {
       mine: r.mine,
       productName: r.product_name ?? null,
       estimatedRemainingSprays: r.estimated_remaining_sprays,
+      lowStock: r.low_stock,
     }));
   }
 
