@@ -1,6 +1,7 @@
 import {
   AppstoreOutlined,
   BankOutlined,
+  BarChartOutlined,
   DashboardOutlined,
   DollarOutlined,
   EnvironmentOutlined,
@@ -65,6 +66,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/brand-payouts',
     label: 'ui.brandPayouts',
     icon: <BankOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/reports',
+    label: 'ui.reports',
+    icon: <BarChartOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
   },
   {

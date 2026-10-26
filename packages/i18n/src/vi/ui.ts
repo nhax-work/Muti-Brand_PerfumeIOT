@@ -784,4 +784,29 @@ export const ui = {
   noRefillRequests: 'Chưa có yêu cầu bổ sung nào',
   mySlotsLowStock: 'Sắp hết',
   mySlotsRequestRefill: 'Yêu cầu bổ sung',
+  // Báo cáo (FR-RPT-06, FR-SLT-47)
+  reports: 'Báo cáo',
+  reportsSubtitle:
+    'Xếp hạng sản phẩm theo mức độ quan tâm trên kiosk và doanh thu bán gói thuê slot.',
+  productRanking: 'Xếp hạng sản phẩm',
+  rankingHint:
+    'Xếp theo số lượt khách chọn sản phẩm trên kiosk. Lượt xem là số lần sản phẩm hiện trên màn hình; số đơn là đơn đã thanh toán trong cùng khoảng.',
+  rankingSelections: 'Lượt chọn',
+  rankingImpressions: 'Lượt xem',
+  rankingConversion: 'Tỷ lệ chọn',
+  rankingOrders: 'Số đơn',
+  rankingEmpty: 'Chưa có tương tác nào trên kiosk trong khoảng này',
+  rentalSales: 'Doanh thu bán gói',
+  rentalSalesHint:
+    'Tiền bán gói thuê và gói bảo quản của các hóa đơn đã thanh toán trong khoảng (theo thời điểm thanh toán). Không gồm hóa đơn chưa trả tiền hoặc đã hủy.',
+  rentalSalesByPackage: 'Gói thuê',
+  rentalSalesByPlan: 'Gói bảo quản',
+  rentalSalesByMachine: 'Máy',
+  rentalSalesByLocation: 'Địa điểm',
+  rentalSalesInvoices: 'Số hóa đơn',
+  rentalSalesRent: 'Phí thuê',
+  rentalSalesStorage: 'Phí bảo quản',
+  rentalSalesGraceFee: 'Phí ân hạn',
+  rentalSalesTotal: 'Tổng doanh thu',
+  rentalSalesEmpty: 'Chưa có hóa đơn đã thanh toán trong khoảng này',
 } as const;

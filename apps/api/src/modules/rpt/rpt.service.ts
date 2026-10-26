@@ -1,20 +1,37 @@
 /**
  * Nghiệp vụ báo cáo (module RPT).
  *
- * Hiện chỉ có sơ đồ máy (FR-RPT-12) — đây là đường DUY NHẤT để Brand Admin nhìn thấy slot của mình
- * trên một máy dùng chung. Các endpoint báo cáo còn lại trong `spec/contracts/openapi.yaml`
- * (`/reports/platform-dashboard`, `/reports/orders-timeseries`, `/reports/product-ranking`,
- * `/reports/brand-slots`, `/reports/inventory`) chưa được hiện thực.
+ * Sơ đồ máy (FR-RPT-12) — đường DUY NHẤT để Brand Admin nhìn thấy slot của mình trên một máy dùng
+ * chung —, báo cáo theo slot (FR-RPT-08), xếp hạng sản phẩm (FR-RPT-06) và doanh thu bán gói
+ * (FR-SLT-47, chỉ Super Admin).
  */
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
-import { invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { CLOCK, type Clock } from '../../shared/clock.js';
+import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope, Principal } from '../../shared/scoping/index.js';
-import { RptQueries, type MachineMapRow, type ReportPeriod } from './rpt.queries.js';
+import {
+  RptQueries,
+  type MachineMapRow,
+  type ProductRankingFilter,
+  type ReportPeriod,
+  type RentalSalesGroupBy,
+} from './rpt.queries.js';
 
 export type MachineMapSlotDto = Schema<'MachineMapSlot'>;
 export type BrandSlotReportDto = Schema<'BrandSlotReportItem'>;
+export type ProductRankingDto = Schema<'ProductRankingItem'>;
+export type RentalSalesReportDto = Schema<'RentalSalesReport'>;
+
+/** Việt Nam không có giờ mùa hè — lệch cố định UTC+7. */
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Ngày đầu tháng chứa `at`, theo giờ Việt Nam, dưới dạng mốc UTC. */
+function vnMonthStart(at: Date): Date {
+  const local = new Date(at.getTime() + VN_OFFSET_MS);
+  return new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), 1) - VN_OFFSET_MS);
+}
 
 /**
  * Slot ngoài phạm vi khai thác: đúng ba trường, không hơn.
@@ -40,7 +57,10 @@ function toOwnSlotDto(row: MachineMapRow): MachineMapSlotDto {
 
 @Injectable()
 export class RptService {
-  constructor(@Inject(RptQueries) private readonly queries: RptQueries) {}
+  constructor(
+    @Inject(RptQueries) private readonly queries: RptQueries,
+    @Inject(CLOCK) private readonly clock: Clock,
+  ) {}
 
   /**
    * FR-RPT-12: Brand Admin chỉ thấy slot thuộc hợp đồng của mình; slot còn lại là `mine = false`,
@@ -85,5 +105,52 @@ export class RptService {
       orderCount: row.orderCount,
       revenue: row.revenue,
     }));
+  }
+
+  /**
+   * FR-RPT-06: xếp hạng sản phẩm theo lượt được chọn trên kiosk. Brand Admin chỉ thấy sản phẩm của mình
+   * (BR-007, BR-012) — phạm vi áp ở truy vấn.
+   */
+  async getProductRanking(
+    scope: BrandScope,
+    filter: ProductRankingFilter,
+  ): Promise<ProductRankingDto[]> {
+    if (filter.from && filter.to && filter.from >= filter.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    return this.queries.productRanking(scope, filter);
+  }
+
+  /**
+   * FR-SLT-47, FR-RPT-15: doanh thu bán gói của nền tảng. Mặc định từ đầu tháng hiện tại (giờ Việt Nam)
+   * tới hiện tại. Quyền `revenue.manage` chỉ Super Admin có; kiểm phạm vi thêm một lần để tài khoản
+   * thương hiệu không bao giờ thấy doanh thu nền tảng dù được cấp nhầm quyền.
+   */
+  async getRentalSales(
+    scope: BrandScope,
+    filter: {
+      readonly from?: Date | undefined;
+      readonly to?: Date | undefined;
+      readonly groupBy: RentalSalesGroupBy;
+      readonly machineId?: string | undefined;
+      readonly locationId?: string | undefined;
+    },
+  ): Promise<RentalSalesReportDto> {
+    if (scope.kind !== 'UNRESTRICTED') {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+    const now = this.clock.now();
+    const to = filter.to ?? now;
+    const from = filter.from ?? vnMonthStart(now);
+    if (from >= to) throw invalidField('to', 'validation.periodEndBeforeStart');
+    const { totals, items } = await this.queries.rentalSales({ ...filter, from, to });
+    return {
+      from: from.toISOString(),
+      to: to.toISOString(),
+      currency: 'VND',
+      groupBy: filter.groupBy,
+      totals,
+      items,
+    };
   }
 }

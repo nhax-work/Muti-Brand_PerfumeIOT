@@ -16,6 +16,7 @@ import {
 import { RptService } from './rpt.service.js';
 
 const REPORT_BRAND = 'report.brand';
+const REVENUE_MANAGE = 'revenue.manage';
 
 const IdParam = z.string().uuid();
 
@@ -24,6 +25,26 @@ const PeriodQuery = z
   .object({
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
+  })
+  .strict();
+
+const ProductRankingQuery = z
+  .object({
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    slotId: z.string().uuid().optional(),
+    machineId: z.string().uuid().optional(),
+    locationId: z.string().uuid().optional(),
+  })
+  .strict();
+
+const RentalSalesQuery = z
+  .object({
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    groupBy: z.enum(['PACKAGE', 'STORAGE_PLAN', 'MACHINE', 'LOCATION']).default('PACKAGE'),
+    machineId: z.string().uuid().optional(),
+    locationId: z.string().uuid().optional(),
   })
   .strict();
 
@@ -53,5 +74,19 @@ export class RptController {
   @RequirePermissions(REPORT_BRAND)
   getBrandSlots(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
     return this.reports.getBrandSlotReport(scope, parseBody(PeriodQuery, query));
+  }
+
+  /** FR-RPT-06, FR-RPT-10: xếp hạng sản phẩm theo lượt được chọn trên kiosk. */
+  @Get('product-ranking')
+  @RequirePermissions(REPORT_BRAND)
+  getProductRanking(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    return this.reports.getProductRanking(scope, parseBody(ProductRankingQuery, query));
+  }
+
+  /** FR-SLT-47, FR-RPT-15: doanh thu bán gói — chỉ Super Admin (`revenue.manage`). */
+  @Get('rental-sales')
+  @RequirePermissions(REVENUE_MANAGE)
+  getRentalSales(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    return this.reports.getRentalSales(scope, parseBody(RentalSalesQuery, query));
   }
 }
