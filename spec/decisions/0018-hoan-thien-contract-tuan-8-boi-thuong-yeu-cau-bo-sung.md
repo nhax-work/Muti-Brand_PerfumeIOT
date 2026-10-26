@@ -74,3 +74,9 @@ bổ sung điền sẵn slot theo cờ này.
 | `spec/modules/RFQ.md`, `SLT.md` | API của FR-RFQ-04, 07 và FR-SLT-44 |
 | INV | Endpoint chai hư hỏng; mở/đóng phiếu nạp nối yêu cầu bổ sung — TV1 làm, TV4 review |
 | Mã lỗi, ngưỡng, quyền | Không thêm |
+
+## Nhật ký áp dụng — 2026-10-26
+
+Áp contract, migration và toàn bộ hiện thực trên nhánh `feat/tv1-week8`: bảo hiểm hàng hóa (SLT +
+endpoint chai hư hỏng ở INV), module RFQ và phần nối phiếu nạp ở INV, cờ `lowStock` ở RPT, kèm màn
+hình. Phần sửa trong INV (module của TV4) cần TV4 review.
