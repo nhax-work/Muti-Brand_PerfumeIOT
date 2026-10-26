@@ -4,3 +4,9 @@ export { CatalogService } from './catalog.service.js';
 export { SltCheckoutPaymentModule } from './checkout-payment.handler.js';
 export { newInvoiceNumber, INVOICE_NUMBER_PATTERN } from './invoice-number.js';
 export { SltJobs } from './slt.jobs.js';
+export { SltCompensationModule } from './compensation.module.js';
+export {
+  CompensationService,
+  type DamagedBottle,
+  type StorageCompensation,
+} from './compensation.service.js';

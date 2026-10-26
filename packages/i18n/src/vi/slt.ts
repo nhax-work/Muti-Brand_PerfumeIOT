@@ -39,4 +39,17 @@ export const slt = {
     'Phiên thanh toán thuê slot {checkout} đã được xác nhận lúc {paidAt}. Mã hóa đơn: {invoices}. ' +
     'Bước tiếp theo: khai báo lô hàng gửi kho, nộp giấy tờ chính hãng và cấu hình sản phẩm cho slot. ' +
     'Thông báo này được lưu làm bằng chứng đối soát.',
+  // Bảo hiểm hàng hóa (FR-SLT-44 ÷ 46, ADR-0018)
+  compensationAlreadyPaid: 'Khoản bồi thường này đã được ghi nhận chi trả',
+  compensationCreatedSubject: 'Chai {bottle} hư hỏng — đã ghi nhận khoản bồi thường {amount} đ',
+  compensationCreatedContent:
+    'Chai {bottle} bị hư hỏng khi nền tảng đang giữ. Khoản bồi thường {amount} đ theo gói bảo quản đã được ghi nhận và chờ chi trả.',
+  compensationPaidSubject: 'Đã chi trả bồi thường chai {bottle}',
+  compensationPaidContent:
+    'Khoản bồi thường {amount} đ cho chai {bottle} đã được chuyển khoản. Mã giao dịch: {reference}.',
+} as const;
+
+export const storageCompensationStatus = {
+  PENDING: 'Chờ chi trả',
+  PAID: 'Đã chi trả',
 } as const;

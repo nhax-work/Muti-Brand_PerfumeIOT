@@ -76,6 +76,8 @@ export interface BottleRecord {
   readonly sourceRentalId: string | null;
   readonly liquidatedAt: Date | null;
   readonly bottleReturnId: string | null;
+  readonly damagedAt: Date | null;
+  readonly damageReason: string | null;
 }
 
 export interface RefillSessionRecord {
@@ -498,6 +500,8 @@ export class InvQueries {
         'bt.source_rental_id',
         'bt.liquidated_at',
         'bt.bottle_return_id',
+        'bt.damaged_at',
+        'bt.damage_reason',
       ]);
   }
 
@@ -650,6 +654,90 @@ export class InvQueries {
         ...(weight !== null
           ? { initial_measured_weight_g: weight, current_measured_weight_g: weight }
           : {}),
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /**
+   * Khóa chai sắp ghi nhận hư hỏng (ADR-0018), kèm slot đang lắp và mốc bàn giao của phiếu trả hàng.
+   * Khóa đúng hàng `bottles` — slot được khóa riêng qua `lockSlotAndMachine` theo thứ tự máy → slot như
+   * phiếu nạp, để hai luồng không khóa chéo nhau.
+   */
+  async lockBottleForDamage(
+    id: string,
+    tx: Executor,
+  ): Promise<{
+    id: string;
+    brandId: string;
+    owner: RevenueOwnerType;
+    fragranceProductId: string;
+    status: BottleStatus;
+    expiresAt: Date | null;
+    bottleReturnId: string | null;
+    returnHandedOver: boolean;
+  } | null> {
+    const row = await tx
+      .selectFrom('bottles as bt')
+      .leftJoin('bottle_returns as br', 'br.id', 'bt.bottle_return_id')
+      .select([
+        'bt.id',
+        'bt.brand_id',
+        'bt.owner',
+        'bt.fragrance_product_id',
+        'bt.status',
+        'bt.expires_at',
+        'bt.bottle_return_id',
+        'br.handed_over_at',
+      ])
+      .where('bt.id', '=', id)
+      .forUpdate('bt')
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          brandId: row.brand_id,
+          owner: row.owner,
+          fragranceProductId: row.fragrance_product_id,
+          status: row.status,
+          expiresAt: row.expires_at,
+          bottleReturnId: row.bottle_return_id,
+          returnHandedOver: row.handed_over_at !== null,
+        }
+      : null;
+  }
+
+  /** Slot đang lắp chai này, nếu có (`uq_slot_active_bottle` bảo đảm tối đa một). */
+  async slotHoldingBottle(bottleId: string, executor: Executor): Promise<string | null> {
+    const row = await executor
+      .selectFrom('machine_slots')
+      .select('id')
+      .where('active_bottle_id', '=', bottleId)
+      .executeTakeFirst();
+    return row?.id ?? null;
+  }
+
+  /** Gỡ chai hỏng khỏi slot: slot không còn gì để bán (ADR-0018). */
+  async clearSlotBottle(slotId: string, tx: Executor): Promise<void> {
+    await tx
+      .updateTable('machine_slots')
+      .set({ active_bottle_id: null, estimated_remaining_ml: '0', estimated_remaining_sprays: 0 })
+      .where('id', '=', slotId)
+      .execute();
+  }
+
+  async markBottleDamaged(
+    id: string,
+    data: { readonly at: Date; readonly reason: string; readonly wasInstalled: boolean },
+    tx: Executor,
+  ): Promise<void> {
+    await tx
+      .updateTable('bottles')
+      .set({
+        status: 'DAMAGED',
+        damaged_at: data.at,
+        damage_reason: data.reason,
+        ...(data.wasInstalled ? { removed_at: data.at } : {}),
       })
       .where('id', '=', id)
       .execute();
@@ -1041,6 +1129,8 @@ function toBottle(r: {
   source_rental_id: string | null;
   liquidated_at: Date | null;
   bottle_return_id: string | null;
+  damaged_at: Date | null;
+  damage_reason: string | null;
 }): BottleRecord {
   return {
     id: r.id,
@@ -1057,6 +1147,8 @@ function toBottle(r: {
     sourceRentalId: r.source_rental_id,
     liquidatedAt: r.liquidated_at,
     bottleReturnId: r.bottle_return_id,
+    damagedAt: r.damaged_at,
+    damageReason: r.damage_reason,
   };
 }
 

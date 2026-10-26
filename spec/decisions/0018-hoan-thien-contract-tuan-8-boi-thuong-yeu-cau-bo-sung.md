@@ -38,9 +38,9 @@ phẩm (FR-RPT-06). Đối chiếu AC với `openapi.yaml` và `schema.sql` cho 
 | Trạng thái nguồn | Mọi trạng thái trừ `DAMAGED` (lặp lại trả `VALIDATION_ERROR`) và chai `RETURNED_TO_BRAND` đã bàn giao (hàng đã rời nền tảng — `VALIDATION_ERROR`) |
 | Chai đang lắp | Máy phải rảnh (`MACHINE_BUSY` như mở phiếu nạp); slot gỡ `active_bottle_id`, lượng tồn về 0 — slot không bán tiếp chai hỏng |
 | Phản hồi | `{ bottle, compensation }`, `compensation` là `null` khi không bồi thường |
-| Chọn hóa đơn áp gói | Chai đang lắp: hóa đơn đang giữ slot của chai. Chai trong kho: hóa đơn `ACTIVE`/`EXPIRING`/`GRACE` của thương hiệu có `storage_coverage_percent` cao nhất (AC2). Chai `RETURNED_TO_BRAND` chưa bàn giao: hóa đơn của phiếu trả hàng |
-| Số tiền | `min(storage_coverage_percent × full_bottle_retail_price, storage_coverage_cap − tổng bồi thường đã ghi của hóa đơn)`, làm tròn tới đồng |
-| Không bồi thường (AC4) | Chai `EXPIRED`, `LIQUIDATED`, `owner = PLATFORM`, không có hóa đơn áp được, hóa đơn không chụp gói bảo quản, sản phẩm chưa khai giá bán lẻ (chưa chứng minh được giá trị), hoặc hạn mức đã hết |
+| Chọn hóa đơn áp gói | Chai đang lắp: hóa đơn đang giữ slot của chai. Chai trong kho: hóa đơn `ACTIVE`/`EXPIRING`/`GRACE` — hoặc `DRAFT` đã thanh toán đang chờ nạp hàng, vì gói bảo quản đã được trả tiền và hàng nằm kho chính là lúc đó — của thương hiệu có `storage_coverage_percent` cao nhất (AC2); hòa thì lấy hóa đơn còn hạn mức lớn hơn. Chai `RETURNED_TO_BRAND` chưa bàn giao: hóa đơn của phiếu trả hàng |
+| Số tiền | `min(storage_coverage_percent × full_bottle_retail_price, storage_coverage_cap − tổng bồi thường đã ghi của hóa đơn)`, phần tỷ lệ làm tròn nửa lên tới đồng. Khóa hóa đơn trước khi cộng phần đã dùng — hai chai cùng hóa đơn hỏng đồng thời không vượt hạn mức |
+| Không bồi thường (AC4) | Chai `EXPIRED` (hoặc đã quá `expires_at`), `LIQUIDATED`, `EMPTY` (không còn hàng để mất), `owner = PLATFORM`, không có hóa đơn áp được, hóa đơn không chụp gói bảo quản, sản phẩm chưa khai giá bán lẻ (chưa chứng minh được giá trị), hoặc hạn mức đã hết |
 | Chi trả | Như contract: `POST /storage-compensations/{id}/payout`, quyền `revenue.manage` (cùng nhóm tiền với kỳ chi trả — chỉ Super Admin) |
 | Thông báo | Brand Admin nhận thông báo trong ứng dụng khi có khoản bồi thường và khi đã chi trả. Không thuộc 8 sự kiện email của FR-ALR-16 |
 | Hiển thị | `StorageCompensation` thêm `brandName`, `invoiceNumber`, `damagedAt`; `GET /storage-compensations` thêm lọc `brandId` cho tài khoản nền tảng |

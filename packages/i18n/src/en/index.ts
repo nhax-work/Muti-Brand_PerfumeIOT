@@ -278,6 +278,18 @@ export const en: SameKeysAs<typeof vi> = {
       'Slot rental checkout {checkout} was confirmed at {paidAt}. Invoice numbers: {invoices}. ' +
       'Next steps: declare the shipment to the warehouse, submit authenticity documents and configure the slot product. ' +
       'This notice is kept as reconciliation evidence.',
+    compensationAlreadyPaid: 'This compensation has already been recorded as paid',
+    compensationCreatedSubject: 'Bottle {bottle} damaged — compensation of {amount} VND recorded',
+    compensationCreatedContent:
+      'Bottle {bottle} was damaged while held by the platform. A compensation of {amount} VND under the storage plan has been recorded and is awaiting payout.',
+    compensationPaidSubject: 'Compensation for bottle {bottle} paid',
+    compensationPaidContent:
+      'The compensation of {amount} VND for bottle {bottle} has been transferred. Transaction reference: {reference}.',
+  },
+
+  storageCompensationStatus: {
+    PENDING: 'Awaiting payout',
+    PAID: 'Paid',
   },
 
   ord: {
@@ -1067,6 +1079,40 @@ export const en: SameKeysAs<typeof vi> = {
     revenueOrderCount: '{count} orders',
     revenuePeriod: 'From {from} to {to}',
     allMachines: 'All machines',
+    storageCompensations: 'Goods compensation',
+    storageCompensationsSubtitle:
+      "Bottles damaged while held by the platform are compensated under the invoice's storage plan, within the remaining cap.",
+    compensations: 'Compensations',
+    damagedBottles: 'Record damaged bottles',
+    compensationBottle: 'Bottle',
+    compensationProduct: 'Product',
+    compensationInvoice: 'Covering invoice',
+    compensationPlan: 'Storage plan',
+    compensationRetailPrice: 'Bottle retail price',
+    compensationCoverage: 'Coverage rate',
+    compensationAmount: 'Compensation',
+    compensationFormula: '{percent}% × {price}, within the remaining cap',
+    compensationDamagedAt: 'Damaged at',
+    noCompensations: 'No compensations yet',
+    compensationPayout: 'Record payout',
+    compensationPayoutHint:
+      'Record only after the compensation has actually been transferred to the brand. You will be asked for your password again.',
+    compensationPaidDone: 'Compensation payout recorded',
+    damageHint:
+      'Record bottles damaged while held by the platform (in stock, installed, awaiting return). The compensation is computed from the storage plan; an installed bottle is removed from its slot.',
+    markDamaged: 'Record damage',
+    markDamagedTitle: 'Record bottle {bottle} as damaged',
+    markDamagedHint:
+      'This cannot be undone. The reason supports the compensation. You will be asked for your password again.',
+    damageReasonPlaceholder: 'Describe the damage',
+    damageRecordedWithCompensation: 'Damage recorded — compensation of {amount} awaiting payout',
+    damageRecordedNoCompensation:
+      'Damage recorded — this bottle is not eligible for compensation (expired, liquidated, empty or no storage plan)',
+    bottleInstalled: 'Installed',
+    bottleRemainingMl: 'Remaining',
+    bottleExpiresAt: 'Expires',
+    yes: 'Yes',
+    no: 'No',
   },
 
   kiosk: {
@@ -1210,6 +1256,10 @@ export const en: SameKeysAs<typeof vi> = {
     refillSessionOpen: 'The slot already has an open refill session',
     refillSessionNotOpen: 'The refill session is already closed or cancelled',
     refillSessionNotFound: 'Refill session not found',
+    damageReasonRequired: 'A damage reason is required',
+    bottleAlreadyDamaged: 'This bottle has already been recorded as damaged',
+    bottleHandedOver:
+      'The bottle has been handed back to the brand; the platform no longer holds it, so it cannot be recorded as damaged',
 
     newShipmentSubject: 'New shipment declaration: {product}',
     newShipmentContent:
@@ -1234,6 +1284,17 @@ export const en: SameKeysAs<typeof vi> = {
     PENDING: 'Pending review',
     APPROVED: 'Approved authentic',
     REJECTED: 'Rejected',
+  },
+
+  bottleStatus: {
+    IN_STOCK: 'In stock',
+    INSTALLED: 'Installed',
+    LOW: 'Low',
+    EMPTY: 'Empty',
+    DAMAGED: 'Damaged',
+    EXPIRED: 'Expired',
+    LIQUIDATED: 'Liquidated',
+    RETURNED_TO_BRAND: 'Awaiting return to brand',
   },
 
   refillSessionStatus: {

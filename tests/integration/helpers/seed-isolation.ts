@@ -557,9 +557,16 @@ export async function cleanupIsolationFixture(
       `DELETE FROM notifications WHERE brand_id = ANY($1::uuid[]) OR recipient_user_id = ANY($2::uuid[])`,
       [brands, users],
     ],
+    // Tương tác kiosk (FR-RPT-06), yêu cầu bổ sung (FR-RFQ), khoản bồi thường và điều chỉnh tồn
+    // kho (FR-SLT-44, ADR-0018) do test sinh ra — trỏ tới hóa đơn, phiên nạp, chai.
+    [`DELETE FROM kiosk_interaction_events WHERE machine_id = $1`, [fx.machineId]],
+    [`DELETE FROM refill_requests WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM storage_compensations WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM inventory_adjustments WHERE brand_id = ANY($1::uuid[])`, [brands]],
     // Phiếu nạp và khai báo gửi hàng do test INV sinh ra (ADR-0017) — trỏ tới chai, lô, slot.
     [`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM bottle_returns WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM brand_shipment_declarations WHERE brand_id = ANY($1::uuid[])`, [brands]],

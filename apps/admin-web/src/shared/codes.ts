@@ -11,7 +11,11 @@ type CodeNamespace =
   | 'machineOperatingMode'
   | 'commandStatus'
   | 'dispenseType'
-  | 'brandPayoutStatus';
+  | 'brandPayoutStatus'
+  | 'storageCompensationStatus'
+  | 'bottleStatus'
+  | 'refillRequestStatus'
+  | 'refillRequestReason';
 
 /**
  * Nhãn dễ hiểu cho một mã máy chủ trả về (mã lỗi, lý do, trạng thái…). Mã chưa có trong catalog —

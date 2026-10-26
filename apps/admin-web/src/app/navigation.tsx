@@ -10,6 +10,7 @@ import {
   InboxOutlined,
   MailOutlined,
   RollbackOutlined,
+  SafetyOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
   SkinOutlined,
@@ -64,6 +65,12 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.brandPayouts',
     icon: <BankOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/storage-compensations',
+    label: 'ui.storageCompensations',
+    icon: <SafetyOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
   },
   {
     path: '/revenue',

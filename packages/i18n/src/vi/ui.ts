@@ -718,4 +718,39 @@ export const ui = {
   revenueOrderCount: '{count} đơn',
   revenuePeriod: 'Từ {from} đến {to}',
   allMachines: 'Mọi máy',
+  // Bảo hiểm hàng hóa (FR-SLT-44 ÷ 46, ADR-0018)
+  storageCompensations: 'Bồi thường hàng hóa',
+  storageCompensationsSubtitle:
+    'Chai hư hỏng khi nền tảng đang giữ được bồi thường theo gói bảo quản của hóa đơn, trong hạn mức còn lại.',
+  compensations: 'Khoản bồi thường',
+  damagedBottles: 'Ghi nhận chai hư hỏng',
+  compensationBottle: 'Chai',
+  compensationProduct: 'Sản phẩm',
+  compensationInvoice: 'Hóa đơn áp gói',
+  compensationPlan: 'Gói bảo quản',
+  compensationRetailPrice: 'Giá bán lẻ chai',
+  compensationCoverage: 'Tỷ lệ bồi thường',
+  compensationAmount: 'Số tiền bồi thường',
+  compensationFormula: '{percent}% × {price}, trong hạn mức còn lại',
+  compensationDamagedAt: 'Hư hỏng lúc',
+  noCompensations: 'Chưa có khoản bồi thường nào',
+  compensationPayout: 'Ghi nhận đã chi trả',
+  compensationPayoutHint:
+    'Chỉ ghi nhận sau khi đã chuyển tiền bồi thường thật cho thương hiệu. Bạn sẽ được yêu cầu nhập lại mật khẩu.',
+  compensationPaidDone: 'Đã ghi nhận chi trả bồi thường',
+  damageHint:
+    'Ghi nhận chai hư hỏng khi nền tảng đang giữ (trong kho, đang lắp, chờ trả thương hiệu). Hệ thống tự tính khoản bồi thường theo gói bảo quản; chai đang lắp sẽ được gỡ khỏi slot.',
+  markDamaged: 'Ghi nhận hư hỏng',
+  markDamagedTitle: 'Ghi nhận chai {bottle} hư hỏng',
+  markDamagedHint:
+    'Thao tác không hoàn tác được. Lý do là căn cứ của khoản bồi thường. Bạn sẽ được yêu cầu nhập lại mật khẩu.',
+  damageReasonPlaceholder: 'Mô tả tình trạng hư hỏng',
+  damageRecordedWithCompensation: 'Đã ghi nhận hư hỏng — khoản bồi thường {amount} chờ chi trả',
+  damageRecordedNoCompensation:
+    'Đã ghi nhận hư hỏng — chai này không thuộc diện bồi thường (hết hạn, đã thanh lý, hết hàng hoặc không có gói bảo quản)',
+  bottleInstalled: 'Đang lắp',
+  bottleRemainingMl: 'Còn lại',
+  bottleExpiresAt: 'Hạn sử dụng',
+  yes: 'Có',
+  no: 'Không',
 } as const;

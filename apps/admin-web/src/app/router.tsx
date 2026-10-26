@@ -98,6 +98,13 @@ export const router = createBrowserRouter([
           import('@/routes/brand-payouts/BrandPayoutsPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/storage-compensations',
+        lazy: () =>
+          import('@/routes/storage-compensations/StorageCompensationsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
         path: '/revenue',
         lazy: () => import('@/routes/revenue/RevenuePage').then((m) => ({ Component: m.default })),
       },

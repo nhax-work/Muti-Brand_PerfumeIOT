@@ -5,6 +5,7 @@
  *   Khai báo gửi hàng, nộp giấy tờ — `inventory.declare` (Brand Admin).
  *   Duyệt/từ chối giấy tờ — `inventory.verify` (Super Admin).
  *   Tiếp nhận lô, đăng ký chai, mở/đóng phiếu nạp — `inventory.manage` (Inventory Staff).
+ *   Ghi nhận chai hư hỏng — `inventory.adjust` + xác thực lại (FR-SLT-44, ADR-0018).
  */
 
 import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
@@ -15,6 +16,7 @@ import {
   CurrentBrandScope,
   CurrentUser,
   RequirePermissions,
+  RequireReauth,
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { InvService } from './inv.service.js';
@@ -22,6 +24,7 @@ import { InvService } from './inv.service.js';
 const INVENTORY_DECLARE = 'inventory.declare';
 const INVENTORY_VERIFY = 'inventory.verify';
 const INVENTORY_MANAGE = 'inventory.manage';
+const INVENTORY_ADJUST = 'inventory.adjust';
 
 const IdParam = z.object({ id: z.string().uuid() });
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -83,6 +86,9 @@ const BottleQuery = z.object({
     .optional(),
   batchId: z.string().uuid().optional(),
 });
+
+/** openapi `BottleDamageReport` — lý do rỗng sau khi cắt khoảng trắng bị service từ chối. */
+const BottleDamageBody = z.object({ reason: z.string().max(2000) });
 
 /** openapi `BottleCreate`. */
 const BottleCreateBody = z.object({
@@ -218,6 +224,20 @@ export class BottlesController {
   @RequirePermissions(INVENTORY_MANAGE)
   register(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     return this.inv.registerBottle(actor, parseBody(BottleCreateBody, body));
+  }
+
+  /** FR-SLT-44, ADR-0018 */
+  @Post(':id/mark-damaged')
+  @HttpCode(200)
+  @RequirePermissions(INVENTORY_ADJUST)
+  @RequireReauth()
+  markDamaged(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { reason } = parseBody(BottleDamageBody, body);
+    return this.inv.markBottleDamaged(actor, parseBody(IdParam, params).id, reason);
   }
 }
 

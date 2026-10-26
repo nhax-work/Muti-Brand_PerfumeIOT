@@ -12,6 +12,9 @@
  *
  * Phiếu nạp mở thì cả máy dừng nhận đơn — chốt chặn nằm ở ORD/DSP (`openRefillSessionOn`), module
  * này chỉ ghi phiếu.
+ *
+ *   chai hư hỏng ─tx─▶ khóa chai (+ máy, slot nếu đang lắp) → DAMAGED → SLT tính bồi thường cùng tx
+ *                      (FR-SLT-44, ADR-0018)
  */
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -32,6 +35,7 @@ import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.j
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
+import { CompensationService, type StorageCompensation } from '../slt/index.js';
 import {
   InvQueries,
   type BatchRecord,
@@ -44,6 +48,7 @@ export type ShipmentDeclaration = Schema<'ShipmentDeclaration'>;
 export type InventoryBatch = Schema<'InventoryBatch'>;
 export type Bottle = Schema<'Bottle'>;
 export type RefillSession = Schema<'RefillSession'>;
+export type BottleDamageResult = Schema<'BottleDamageResult'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
@@ -88,6 +93,7 @@ export class InvService {
   constructor(
     @Inject(InvQueries) private readonly queries: InvQueries,
     @Inject(AlrService) private readonly alr: AlrService,
+    @Inject(CompensationService) private readonly compensation: CompensationService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -475,6 +481,82 @@ export class InvService {
     return toBottleDto((await this.queries.findBottle(id))!);
   }
 
+  /**
+   * FR-SLT-44, ADR-0018: Inventory Staff ghi nhận chai hư hỏng; khoản bồi thường (nếu có) sinh trong
+   * cùng transaction. Xác thực lại kiểm ở controller (nhóm "điều chỉnh tồn kho", FR-AUTH-09).
+   *
+   * Chai đang lắp: máy phải rảnh như lúc mở phiếu nạp (MACHINE_BUSY) — gỡ chai khỏi slot đang có lượt
+   * xịt chờ khách bấm là làm hỏng lượt đó. Slot được gỡ chai và về 0 lượt còn lại.
+   */
+  async markBottleDamaged(
+    actor: AuthenticatedUser,
+    bottleId: string,
+    reason: string,
+  ): Promise<BottleDamageResult> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw invalidField('reason', 'inv.damageReasonRequired');
+
+    const compensation = await this.queries.transaction(async (tx) => {
+      // Khóa máy → slot trước, chai sau: cùng thứ tự với đóng phiếu nạp, không khóa chéo.
+      const installedSlotId = await this.queries.slotHoldingBottle(bottleId, tx);
+      const slot = installedSlotId
+        ? await this.queries.lockSlotAndMachine(installedSlotId, tx)
+        : null;
+      const bottle = await this.queries.lockBottleForDamage(bottleId, tx);
+      if (!bottle) throw notFoundFor(actor);
+      if (bottle.status === 'DAMAGED') {
+        throw new AppError('VALIDATION_ERROR', 'inv.bottleAlreadyDamaged');
+      }
+      if (bottle.status === 'RETURNED_TO_BRAND' && bottle.returnHandedOver) {
+        throw new AppError('VALIDATION_ERROR', 'inv.bottleHandedOver');
+      }
+      // Chai đã rời slot giữa lúc đọc và lúc khóa: coi như không lắp.
+      const stillInstalled = slot !== null && slot.activeBottleId === bottle.id;
+      if (stillInstalled && (await this.queries.machineIsBusy(slot.machineId, tx))) {
+        throw new AppError('MACHINE_BUSY', 'inv.machineBusy');
+      }
+
+      const now = this.clock.now();
+      if (stillInstalled) await this.queries.clearSlotBottle(slot.id, tx);
+      await this.queries.markBottleDamaged(
+        bottle.id,
+        { at: now, reason: trimmed, wasInstalled: stillInstalled },
+        tx,
+      );
+      const created: StorageCompensation | null = await this.compensation.compensateDamagedBottle(
+        tx,
+        {
+          id: bottle.id,
+          brandId: bottle.brandId,
+          owner: bottle.owner,
+          previousStatus: bottle.status,
+          expiresAt: bottle.expiresAt,
+          fragranceProductId: bottle.fragranceProductId,
+          installedSlotId: stillInstalled ? slot.id : null,
+          bottleReturnId: bottle.bottleReturnId,
+        },
+        now,
+      );
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: bottle.brandId,
+          action: 'inv.bottle.damaged',
+          targetType: 'Bottle',
+          targetId: bottle.id,
+          severity: 'WARNING',
+          before: { status: bottle.status, installedSlotId: stillInstalled ? slot.id : null },
+          after: { status: 'DAMAGED', reason: trimmed },
+          metadata: { compensationId: created?.id ?? null, amount: created?.amount ?? null },
+        },
+        tx,
+      );
+      return created;
+    });
+    return { bottle: toBottleDto((await this.queries.findBottle(bottleId))!), compensation };
+  }
+
   // -----------------------------------------------------------------------------------
   // Phiếu nạp (FR-INV-29 ÷ 32)
   // -----------------------------------------------------------------------------------
@@ -706,6 +788,8 @@ export function toBottleDto(r: BottleRecord): Bottle {
     sourceRentalId: r.sourceRentalId,
     liquidatedAt: iso(r.liquidatedAt),
     bottleReturnId: r.bottleReturnId,
+    damagedAt: iso(r.damagedAt),
+    damageReason: r.damageReason,
   };
 }
 

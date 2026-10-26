@@ -112,7 +112,10 @@ const PERMISSIONS = [
   ['rental.request', 'Gửi yêu cầu thuê slot trống (FR-SLT-20)'],
   ['product.manage', 'Quản lý danh mục sản phẩm của thương hiệu mình (FR-PRD-01..05)'],
   ['inventory.manage', 'Nhập lô, đăng ký chai, nạp và tháo chai (FR-INV-01..17)'],
-  ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
+  [
+    'inventory.adjust',
+    'Điều chỉnh tồn kho kèm lý do, ghi nhận chai hư hỏng (FR-INV-16, FR-SLT-44)',
+  ],
   [
     'inventory.declare',
     'Khai báo lô hàng gửi kho và nộp giấy tờ chính hãng của thương hiệu mình (FR-INV-22, 33)',
@@ -136,7 +139,7 @@ const PERMISSIONS = [
   ['report.platform', 'Xem báo cáo tổng hợp toàn nền tảng (FR-RPT-15)'],
   [
     'revenue.manage',
-    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, xem doanh thu tách hai nguồn (FR-SLT-53, 54, FR-REV-04)',
+    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, chi trả bồi thường, xem doanh thu tách hai nguồn và doanh thu bán gói (FR-SLT-45, 47, 53, 54, FR-REV-04)',
   ],
   ['audit.read', 'Tra cứu nhật ký kiểm toán (FR-AUD-10)'],
 ] as const;
