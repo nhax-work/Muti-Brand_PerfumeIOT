@@ -56,7 +56,7 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 ## FR-RFQ-04 — Quản lý trạng thái yêu cầu bổ sung
 * **Statement:** Hệ thống phải quản lý trạng thái yêu cầu theo tập: SUBMITTED, ACCEPTED, REJECTED, SCHEDULED, COMPLETED, CANCELLED.
 * **Traces:** BR-005 · **Priority:** M
-* **API:** `GET /refill-requests`
+* **API:** `GET /refill-requests`, `POST /refill-requests/{id}/schedule`, `POST /refill-requests/{id}/cancel` (ADR-0018)
 * **Acceptance criteria:**
   * **AC1 (Duyệt/Từ chối ban đầu):** Given yêu cầu ở trạng thái `SUBMITTED`,  
     When Platform Super Admin xử lý,  
@@ -109,6 +109,7 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 ## FR-RFQ-07 — Lên lịch xử lý yêu cầu bổ sung
 * **Statement:** Hệ thống phải cho phép Inventory Staff lên lịch xử lý yêu cầu đã được chấp nhận.
 * **Traces:** BR-005 · **Priority:** S
+* **API:** `POST /refill-requests/{id}/schedule` (ADR-0018)
 * **Acceptance criteria:**
   * **AC1:** Given yêu cầu `R` ở trạng thái `ACCEPTED`,  
     When Inventory Staff gán mốc thời gian xử lý dự kiến `scheduledAt`,  

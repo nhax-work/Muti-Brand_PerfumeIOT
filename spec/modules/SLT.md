@@ -796,6 +796,7 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ## FR-SLT-44 — Tính bồi thường hàng hóa hư hỏng
 * **Statement:** Hệ thống phải tính số tiền bồi thường khi chai của thương hiệu chuyển sang DAMAGED trong lúc nền tảng đang giữ, kể cả lúc chờ thương hiệu nhận hàng trả về, bằng tỷ lệ bồi thường của gói bảo quản áp dụng nhân giá trị chai đã được chứng minh, không vượt hạn mức còn lại (ADR-0013, ADR-0014).
 * **Traces:** BR-005, BR-008 · **Priority:** M
+* **API:** `POST /bottles/{id}/mark-damaged` (ADR-0018), `GET /storage-compensations`
 * **Acceptance criteria:**
   * **AC1 (Chai đang lắp):** Given chai `X` của thương hiệu `B` đang lắp trong slot `S`, hóa đơn của `S` chụp gói bồi thường `60%`, hạn mức `5,000,000 VND` chưa dùng, giá bán lẻ chai `2,000,000 VND` (FR-PRD-05),  
     When Inventory Staff chuyển `X` sang `DAMAGED`,  

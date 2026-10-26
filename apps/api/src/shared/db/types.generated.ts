@@ -207,6 +207,14 @@ export interface Bottles {
   created_at: Generated<Timestamp>;
   current_estimated_ml: Numeric;
   current_measured_weight_g: Numeric | null;
+  /**
+   * Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44).
+   */
+  damage_reason: string | null;
+  /**
+   * Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018).
+   */
+  damaged_at: Timestamp | null;
   empty_weight_g: Numeric | null;
   expires_at: Timestamp | null;
   fragrance_product_id: string;
@@ -745,9 +753,13 @@ export interface RefillRequests {
   created_at: Generated<Timestamp>;
   fragrance_product_id: string;
   id: Generated<string>;
+  /**
+   * Ghi chú của Brand Admin khi tạo yêu cầu (RefillRequestCreate.note).
+   */
+  note: string | null;
   reason: RefillRequestReason;
   /**
-   * Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — xem §13.
+   * Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — chk_refill_request_completed_has_session.
    */
   refill_session_id: string | null;
   rejection_reason: string | null;

@@ -1389,11 +1389,14 @@ components:
       properties:
         id: { type: string, format: uuid }
         brandId: { type: string, format: uuid }
+        brandName: { type: string }
         bottleId: { type: string, format: uuid }
         bottleIdentifier: { type: string }
         productName: { type: string }
         slotRentalId: { type: string, format: uuid }
+        invoiceNumber: { type: [string, 'null'] }
         storagePlanName: { type: string }
+        damagedAt: { type: [string, 'null'], format: date-time }
         bottleRetailPrice: { $ref: '#/components/schemas/Money' }
         coveragePercent: { type: number, minimum: 0, maximum: 100 }
         amount: { $ref: '#/components/schemas/Money' }
@@ -1650,6 +1653,27 @@ components:
           type: [string, 'null']
           format: uuid
           description: Phiếu trả hàng chứa chai (FR-EXP-26). Có giá trị khi status = RETURNED_TO_BRAND.
+        damagedAt: { type: [string, 'null'], format: date-time }
+        damageReason: { type: [string, 'null'] }
+    BottleDamageReport:
+      type: object
+      required: [reason]
+      description: >-
+        Inventory Staff ghi nhận chai hư hỏng (FR-SLT-44, ADR-0018). Lý do là căn cứ của khoản bồi
+        thường.
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    BottleDamageResult:
+      type: object
+      required: [bottle, compensation]
+      description: >-
+        compensation là null khi không bồi thường: chai EXPIRED/LIQUIDATED, thuộc nền tảng, thương
+        hiệu không có hóa đơn hiệu lực, hóa đơn không chụp gói bảo quản, sản phẩm chưa khai giá bán
+        lẻ, hoặc hạn mức đã hết (FR-SLT-44 AC4).
+      properties:
+        bottle: { $ref: '#/components/schemas/Bottle' }
+        compensation:
+          oneOf: [{ $ref: '#/components/schemas/StorageCompensation' }, { type: 'null' }]
     BottleReturn:
       type: object
       required:
@@ -1813,7 +1837,20 @@ components:
         rejectionReason: { type: [string, 'null'] }
         scheduledAt: { type: [string, 'null'], format: date-time }
         refillSessionId: { type: [string, 'null'], format: uuid }
+        note: { type: [string, 'null'] }
+        machineId: { type: string, format: uuid }
+        machineSerial: { type: string }
+        slotNumber: { type: integer }
+        productName: { type: string }
+        brandName: { type: string }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RefillRequestSchedule:
+      type: object
+      required: [scheduledAt]
+      description: Lên lịch xử lý yêu cầu đã chấp nhận (FR-RFQ-07, ADR-0018).
+      properties:
+        scheduledAt: { type: string, format: date-time }
     RefillRequestCreate:
       type: object
       required: [slotRentalId, reason]
@@ -2426,6 +2463,11 @@ components:
         slotId: { type: [string, 'null'], format: uuid }
         productName: { type: [string, 'null'] }
         estimatedRemainingSprays: { type: [integer, 'null'] }
+        lowStock:
+          type: boolean
+          description: >-
+            Chỉ có trên slot của người gọi. true khi chai đang lắp ở LOW/EMPTY hoặc lượng còn lại chạm
+            low_stock_threshold_ml của slot — màn hình gợi ý tạo yêu cầu bổ sung (FR-RFQ-03, ADR-0018).
     AuditLogEntry:
       type: object
       required: [id, actorType, action, targetType, occurredAt]
@@ -4130,14 +4172,18 @@ paths:
       operationId: listStorageCompensations
       description: >-
         FR-SLT-44, FR-SLT-46: Brand Admin chỉ thấy khoản của thương hiệu mình; Platform Super Admin
-        thấy tất cả. Khoản bồi thường do hệ thống tạo khi chai chuyển DAMAGED, không có endpoint
-        tạo tay.
+        thấy tất cả và lọc được theo brandId (Brand Admin truyền brandId thì bị bỏ qua). Khoản bồi
+        thường do hệ thống tạo khi chai chuyển DAMAGED (POST /bottles/{id}/mark-damaged), không có
+        endpoint tạo tay.
       parameters:
         - $ref: '#/components/parameters/page'
         - $ref: '#/components/parameters/pageSize'
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/StorageCompensationStatus' }
+        - name: brandId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Danh sách khoản bồi thường
@@ -4834,6 +4880,35 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /bottles/{id}/mark-damaged:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [INV]
+      summary: Ghi nhận chai hư hỏng
+      operationId: markBottleDamaged
+      description: >-
+        FR-SLT-44, ADR-0018: chuyển chai sang DAMAGED và, nếu chai được bảo hiểm, tạo khoản bồi
+        thường PENDING trong cùng transaction. Chai đang lắp thì máy phải rảnh (MACHINE_BUSY) và slot
+        được gỡ chai. Chai đã DAMAGED hoặc đã bàn giao trả thương hiệu trả VALIDATION_ERROR. Thao tác
+        nhạy cảm nhóm "điều chỉnh tồn kho" — cần xác thực lại (FR-AUTH-09). Ghi nhật ký.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleDamageReport' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BottleDamageResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /bottles/{id}/history:
     parameters:
       - $ref: '#/components/parameters/idPath'
@@ -5157,13 +5232,16 @@ paths:
       tags: [RFQ]
       summary: Chấp nhận yêu cầu bổ sung
       operationId: acceptRefillRequest
-      description: 'FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu.'
+      description: >-
+        FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu SUBMITTED. Trạng thái khác trả
+        VALIDATION_ERROR (FR-RFQ-04 AC4).
       responses:
         '200':
           description: Đã chấp nhận
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -5183,6 +5261,49 @@ paths:
       responses:
         '200':
           description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /refill-requests/{id}/schedule:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Lên lịch xử lý yêu cầu bổ sung
+      operationId: scheduleRefillRequest
+      description: >-
+        FR-RFQ-07, ADR-0018: Inventory Staff gán mốc xử lý dự kiến cho yêu cầu ACCEPTED (hoặc dời lịch
+        yêu cầu SCHEDULED). Trạng thái khác trả VALIDATION_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillRequestSchedule' }
+      responses:
+        '200':
+          description: Đã lên lịch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /refill-requests/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Hủy yêu cầu bổ sung
+      operationId: cancelRefillRequest
+      description: >-
+        FR-RFQ-04 AC2, ADR-0018: hủy yêu cầu ACCEPTED hoặc SCHEDULED trước khi nạp. Trạng thái khác trả
+        VALIDATION_ERROR.
+      responses:
+        '200':
+          description: Đã hủy
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefillRequest' }

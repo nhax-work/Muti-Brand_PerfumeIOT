@@ -861,6 +861,8 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
 | `bottle_return_id` | `uuid` | có |  | Phiếu trả hàng chứa chai này (FR-EXP-26). Bắt buộc khi status = RETURNED_TO_BRAND. |
+| `damaged_at` | `timestamp with time zone` | có |  | Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018). |
+| `damage_reason` | `text` | có |  | Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44). |
 
 **Ràng buộc kiểm tra**
 
@@ -1493,9 +1495,14 @@ Cảnh báo, bảo trì, yêu cầu bổ sung, thông báo và nhật ký kiểm
 | `reviewed_by` | `uuid` | có |  |  |
 | `rejection_reason` | `text` | có |  |  |
 | `scheduled_at` | `timestamp with time zone` | có |  |  |
-| `refill_session_id` | `uuid` | có |  | Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — xem §13. |
+| `refill_session_id` | `uuid` | có |  | Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — chk_refill_request_completed_has_session. |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `note` | `text` | có |  | Ghi chú của Brand Admin khi tạo yêu cầu (RefillRequestCreate.note). |
+
+**Ràng buộc kiểm tra**
+
+- `chk_refill_request_completed_has_session` — `CHECK ((((status)::text <> 'COMPLETED'::text) OR (refill_session_id IS NOT NULL)))`
 
 **Khóa ngoại**
 
