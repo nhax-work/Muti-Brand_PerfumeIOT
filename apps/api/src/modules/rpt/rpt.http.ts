@@ -16,6 +16,7 @@ import {
 import { RptService } from './rpt.service.js';
 
 const REPORT_BRAND = 'report.brand';
+const REPORT_PLATFORM = 'report.platform';
 
 const IdParam = z.string().uuid();
 
@@ -27,9 +28,55 @@ const PeriodQuery = z
   })
   .strict();
 
+const TimeseriesQuery = z
+  .object({
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    granularity: z.enum(['DAY', 'WEEK', 'MONTH']).optional(),
+  })
+  .strict();
+
+const InventoryReportQuery = z
+  .object({
+    lowStockOnly: z.union([z.boolean(), z.string().transform((v) => v === 'true')]).optional(),
+    machineId: z.string().uuid().optional(),
+    fragranceProductId: z.string().uuid().optional(),
+  })
+  .strict();
+
 @Controller('reports')
 export class RptController {
   constructor(@Inject(RptService) private readonly reports: RptService) {}
+
+  /**
+   * FR-RPT-01, FR-RPT-03, FR-RPT-04, FR-RPT-15: Dashboard nền tảng.
+   * Chỉ Platform Super Admin và Operations Staff.
+   */
+  @Get('platform-dashboard')
+  @RequirePermissions(REPORT_PLATFORM)
+  getPlatformDashboard(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    return this.reports.getPlatformDashboard(scope, parseBody(PeriodQuery, query));
+  }
+
+  /**
+   * FR-RPT-02, FR-RPT-10: Chuỗi thời gian số giao dịch và doanh thu.
+   */
+  @Get('orders-timeseries')
+  @RequirePermissions(REPORT_BRAND)
+  getOrdersTimeseries(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    const q = parseBody(TimeseriesQuery, query);
+    return this.reports.getOrdersTimeseries(scope, { from: q.from, to: q.to }, q.granularity);
+  }
+
+  /**
+   * FR-INV-21, FR-RPT-07: Báo cáo tồn kho.
+   */
+  @Get('inventory')
+  @RequirePermissions(REPORT_BRAND)
+  getInventoryReport(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    const q = parseBody(InventoryReportQuery, query);
+    return this.reports.getInventoryReport(scope, q);
+  }
 
   /**
    * FR-RPT-12: Sơ đồ slot của một máy.

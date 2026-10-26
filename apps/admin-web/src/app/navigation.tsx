@@ -6,6 +6,7 @@ import {
   DollarOutlined,
   EnvironmentOutlined,
   ExperimentOutlined,
+  FileSearchOutlined,
   FundOutlined,
   IdcardOutlined,
   InboxOutlined,
@@ -17,6 +18,7 @@ import {
   TagsOutlined,
   TeamOutlined,
   ThunderboltOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
@@ -137,5 +139,17 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.shipments',
     icon: <InboxOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
+  },
+  {
+    path: '/maintenance-tickets',
+    label: 'ui.maintenanceTickets',
+    icon: <ToolOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
+  {
+    path: '/audit-logs',
+    label: 'ui.auditLogs',
+    icon: <FileSearchOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN'],
   },
 ];

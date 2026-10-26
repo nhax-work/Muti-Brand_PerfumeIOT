@@ -9,7 +9,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
-import { invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope, Principal } from '../../shared/scoping/index.js';
 import { RptQueries, type MachineMapRow, type ReportPeriod } from './rpt.queries.js';
 
@@ -84,5 +84,42 @@ export class RptService {
       orderCount: row.orderCount,
       revenue: row.revenue,
     }));
+  }
+
+  /**
+   * FR-RPT-01, FR-RPT-03, FR-RPT-04, FR-RPT-15: Dashboard nền tảng (chỉ Platform Super Admin).
+   */
+  async getPlatformDashboard(scope: BrandScope, period: ReportPeriod) {
+    if (scope.kind !== 'UNRESTRICTED') {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+    if (period.from && period.to && period.from >= period.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    return this.queries.platformDashboard(period);
+  }
+
+  /**
+   * FR-RPT-02, FR-RPT-10: Chuỗi thời gian đơn hàng và doanh thu.
+   */
+  async getOrdersTimeseries(
+    scope: BrandScope,
+    period: ReportPeriod,
+    granularity: 'DAY' | 'WEEK' | 'MONTH' = 'DAY',
+  ) {
+    if (period.from && period.to && period.from >= period.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    return this.queries.ordersTimeseries(scope, period, granularity);
+  }
+
+  /**
+   * FR-INV-21, FR-RPT-07: Báo cáo tồn kho slot và máy.
+   */
+  async getInventoryReport(
+    scope: BrandScope,
+    filter: { lowStockOnly?: boolean; machineId?: string; fragranceProductId?: string },
+  ) {
+    return this.queries.inventoryReport(scope, filter);
   }
 }

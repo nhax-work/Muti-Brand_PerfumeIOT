@@ -24,6 +24,7 @@ import { authenticityStatus, inv, refillSessionStatus, shipmentStatus } from './
 import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import { mnt, ticketPriority, ticketStatus } from './mnt.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { rev } from './rev.js';
@@ -67,4 +68,7 @@ export const vi = {
   shipmentStatus,
   authenticityStatus,
   refillSessionStatus,
+  mnt,
+  ticketStatus,
+  ticketPriority,
 } as const;

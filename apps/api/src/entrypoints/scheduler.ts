@@ -152,7 +152,8 @@ export function startScheduler(
     sweepingAlerts = true;
     Promise.all([alr.sweepDoorOpenAlerts(), alr.sweepLowStockAlerts()])
       .then(([doors, stocks]) => {
-        if (doors + stocks > 0) logger.log(`Cảnh báo: ${doors} cửa mở quá hạn, ${stocks} slot cạn/hết`);
+        if (doors + stocks > 0)
+          logger.log(`Cảnh báo: ${doors} cửa mở quá hạn, ${stocks} slot cạn/hết`);
       })
       .catch((e: unknown) => logger.error(`Quét cảnh báo lỗi: ${String(e)}`))
       .finally(() => (sweepingAlerts = false));

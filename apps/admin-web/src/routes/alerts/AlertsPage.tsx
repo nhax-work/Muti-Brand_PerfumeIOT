@@ -372,7 +372,9 @@ export default function AlertsPage() {
         >
           {detail.data ? (
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label={t('ui.alertTitleLabel')}>{detail.data.title}</Descriptions.Item>
+              <Descriptions.Item label={t('ui.alertTitleLabel')}>
+                {detail.data.title}
+              </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertTypeLabel')}>
                 <Tag>{detail.data.type}</Tag>
               </Descriptions.Item>

@@ -162,6 +162,18 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/maintenance-tickets',
+        lazy: () =>
+          import('@/routes/maintenance-tickets/MaintenanceTicketsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/audit-logs',
+        lazy: () =>
+          import('@/routes/audit-logs/AuditLogsPage').then((m) => ({ Component: m.default })),
+      },
     ],
   },
 
