@@ -317,6 +317,7 @@ export const en: SameKeysAs<typeof vi> = {
     claimFeatureDisabled: 'Refund claims are not enabled yet. Please contact technical support.',
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
+    orderRateLimited: 'This machine is receiving too many requests. Please try again shortly.',
   },
 
   dsp: {
