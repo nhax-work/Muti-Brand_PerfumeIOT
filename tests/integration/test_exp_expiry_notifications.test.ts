@@ -38,10 +38,25 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await client.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
+  await client.query(`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]);
   await client.query(
-    `DELETE FROM audit_logs WHERE brand_id = $1 AND action IN ('EXPIRY_NOTICE_SENT', 'slt.rental.activated_first_bottle')`,
+    `UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1 AND slot_number = 99`,
+    [fx.machineId],
+  );
+  await client.query(`DELETE FROM bottles WHERE brand_id = $1 AND identifier LIKE 'BTL-%'`, [
+    fx.brandA,
+  ]);
+  await client.query(
+    `DELETE FROM inventory_batches WHERE brand_id = $1 AND batch_number LIKE 'LOT-%'`,
     [fx.brandA],
   );
+  await client.query(
+    `DELETE FROM slot_rentals WHERE slot_id IN (SELECT id FROM machine_slots WHERE machine_id = $1 AND slot_number = 99)`,
+    [fx.machineId],
+  );
+  await client.query(`DELETE FROM machine_slots WHERE machine_id = $1 AND slot_number = 99`, [
+    fx.machineId,
+  ]);
 });
 
 afterAll(async () => {
@@ -170,8 +185,10 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
     await client.query(
       `INSERT INTO inventory_batches (
          id, brand_id, fragrance_product_id, batch_number, received_at, expires_at,
-         quantity_received, created_by, authenticity_status
-       ) VALUES ($1, $2, $3, $4, $5, $6, 10, $7, 'APPROVED')`,
+         quantity_received, created_by, authenticity_status,
+         authenticity_document_url, authenticity_submitted_by, authenticity_submitted_at,
+         authenticity_verified_by, authenticity_verified_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, 10, $7, 'APPROVED', $8, $7, $5, $7, $5)`,
       [
         batchId,
         fx.brandA,
@@ -180,6 +197,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
         now,
         new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
         opsStaff.userId,
+        'https://example.com/doc.pdf',
       ],
     );
 

@@ -634,7 +634,7 @@ export class AlrQueries {
       .limit(1)
       .executeTakeFirst();
 
-    if (!latestReading || latestReading.numeric_value !== '1') {
+    if (!latestReading || Number(latestReading.numeric_value) !== 1) {
       return null; // Cửa đang đóng hoặc chưa có số đo
     }
 
