@@ -58,7 +58,6 @@ import {
   type RentalInvoiceStage,
 } from './api';
 
-
 const { Title, Text, Paragraph } = Typography;
 
 const STAGE_TAGS: Record<RentalInvoiceStage, { color: string; labelKey: string }> = {
@@ -249,14 +248,10 @@ export default function RentalDetailPage() {
     }
   };
 
-  const canRenew =
-    isBrandAdmin && ['EXPIRING', 'GRACE'].includes(rental?.status ?? invoice.stage);
-  const canEditGracePeriod =
-    isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
-  const canLiquidate =
-    isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
-  const canCloseRental =
-    isSuperAdmin && (rental?.status ?? invoice.stage) === 'LIQUIDATED';
+  const canRenew = isBrandAdmin && ['EXPIRING', 'GRACE'].includes(rental?.status ?? invoice.stage);
+  const canEditGracePeriod = isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
+  const canLiquidate = isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
+  const canCloseRental = isSuperAdmin && (rental?.status ?? invoice.stage) === 'LIQUIDATED';
 
   const handleRenewSubmit = async () => {
     if (!id || !selectedRenewalPackageId || !selectedRenewalPlanId) return;
@@ -535,11 +530,11 @@ export default function RentalDetailPage() {
                 </Text>
               )}
             </Descriptions.Item>
-            {invoice.graceEndsAt && (
+            {rental?.graceEndsAt && (
               <Descriptions.Item label={t('ui.graceEndsAt')}>
                 <Text type="danger">
-                  {new Date(invoice.graceEndsAt).toLocaleDateString('vi-VN')}{' '}
-                  {new Date(invoice.graceEndsAt).toLocaleTimeString('vi-VN', {
+                  {new Date(rental.graceEndsAt).toLocaleDateString('vi-VN')}{' '}
+                  {new Date(rental.graceEndsAt).toLocaleTimeString('vi-VN', {
                     hour: '2-digit',
                     minute: '2-digit',
                   })}
@@ -781,7 +776,8 @@ export default function RentalDetailPage() {
           okText={t('ui.renew')}
         >
           <Paragraph type="secondary">
-            Gia hạn slot #{invoice.slotNumber} tại {invoice.locationName}. Sau khi chọn gói, bạn sẽ được chuyển đến trang thanh toán.
+            Gia hạn slot #{invoice.slotNumber} tại {invoice.locationName}. Sau khi chọn gói, bạn sẽ
+            được chuyển đến trang thanh toán.
           </Paragraph>
           {Number(invoice.graceFeeAmount) > 0 && (
             <Alert
@@ -793,7 +789,7 @@ export default function RentalDetailPage() {
             />
           )}
           <Form layout="vertical">
-            <Form.Item label={t('ui.selectRentalPackage')} required>
+            <Form.Item label={t('ui.selectPackage')} required>
               <Select
                 placeholder={t('ui.selectPackagePlaceholder')}
                 value={selectedRenewalPackageId}
@@ -834,15 +830,16 @@ export default function RentalDetailPage() {
           onOk={handleSetGracePeriodSubmit}
           confirmLoading={setGracePeriod.isPending}
           okButtonProps={{ disabled: !graceEndsAtInput }}
-          okText={t('common.save')}
+          okText={t('ui.save')}
         >
           <Paragraph type="secondary">
-            Cập nhật ngày kết thúc giai đoạn ân hạn cho slot #{invoice.slotNumber}. Ngày được chọn phải ở tương lai.
+            Cập nhật ngày kết thúc giai đoạn ân hạn cho slot #{invoice.slotNumber}. Ngày được chọn
+            phải ở tương lai.
           </Paragraph>
-          {invoice.graceEndsAt && (
+          {rental?.graceEndsAt && (
             <div style={{ marginBottom: 16 }}>
               <Text strong>{t('ui.graceEndsAt')} hiện tại: </Text>
-              <Text>{new Date(invoice.graceEndsAt).toLocaleString('vi-VN')}</Text>
+              <Text>{new Date(rental.graceEndsAt).toLocaleString('vi-VN')}</Text>
             </div>
           )}
           <Form layout="vertical">
