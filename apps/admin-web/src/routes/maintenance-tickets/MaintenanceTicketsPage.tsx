@@ -228,7 +228,7 @@ export default function MaintenanceTicketsPage() {
       render: (p: TicketPriority) => {
         const color =
           p === 'CRITICAL' ? 'red' : p === 'HIGH' ? 'orange' : p === 'MEDIUM' ? 'blue' : 'default';
-        return <Tag color={color}>{p}</Tag>;
+        return <Tag color={color}>{t(`ticketPriority.${p}`) ?? p}</Tag>;
       },
     },
     {
@@ -237,7 +237,7 @@ export default function MaintenanceTicketsPage() {
       key: 'severity',
       render: (s: AlertSeverity) => {
         const color = s === 'CRITICAL' ? 'red' : s === 'WARNING' ? 'gold' : 'blue';
-        return <Tag color={color}>{s}</Tag>;
+        return <Tag color={color}>{t(`alertSeverity.${s}`) ?? s}</Tag>;
       },
     },
     {
@@ -255,7 +255,7 @@ export default function MaintenanceTicketsPage() {
                 : st === 'RESOLVED'
                   ? 'cyan'
                   : 'success';
-        return <Tag color={color}>{st}</Tag>;
+        return <Tag color={color}>{t(`ticketStatus.${st}`) ?? st}</Tag>;
       },
     },
     {
@@ -369,42 +369,42 @@ export default function MaintenanceTicketsPage() {
                   }))}
                 />
                 <Select
-                  style={{ width: 140 }}
+                  style={{ width: 150 }}
                   placeholder={t('ui.ticketStatus') ?? 'Trạng thái'}
                   allowClear
                   value={status}
                   onChange={setStatus}
                   options={[
-                    { label: 'OPEN', value: 'OPEN' },
-                    { label: 'ASSIGNED', value: 'ASSIGNED' },
-                    { label: 'IN_PROGRESS', value: 'IN_PROGRESS' },
-                    { label: 'RESOLVED', value: 'RESOLVED' },
-                    { label: 'CLOSED', value: 'CLOSED' },
+                    { label: t('ticketStatus.OPEN'), value: 'OPEN' },
+                    { label: t('ticketStatus.ASSIGNED'), value: 'ASSIGNED' },
+                    { label: t('ticketStatus.IN_PROGRESS'), value: 'IN_PROGRESS' },
+                    { label: t('ticketStatus.RESOLVED'), value: 'RESOLVED' },
+                    { label: t('ticketStatus.CLOSED'), value: 'CLOSED' },
                   ]}
                 />
                 <Select
-                  style={{ width: 130 }}
+                  style={{ width: 140 }}
                   placeholder={t('ui.ticketPriority') ?? 'Ưu tiên'}
                   allowClear
                   value={priority}
                   onChange={setPriority}
                   options={[
-                    { label: 'LOW', value: 'LOW' },
-                    { label: 'MEDIUM', value: 'MEDIUM' },
-                    { label: 'HIGH', value: 'HIGH' },
-                    { label: 'CRITICAL', value: 'CRITICAL' },
+                    { label: t('ticketPriority.LOW'), value: 'LOW' },
+                    { label: t('ticketPriority.MEDIUM'), value: 'MEDIUM' },
+                    { label: t('ticketPriority.HIGH'), value: 'HIGH' },
+                    { label: t('ticketPriority.CRITICAL'), value: 'CRITICAL' },
                   ]}
                 />
                 <Select
-                  style={{ width: 130 }}
+                  style={{ width: 140 }}
                   placeholder={t('ui.ticketSeverity') ?? 'Mức độ'}
                   allowClear
                   value={severity}
                   onChange={setSeverity}
                   options={[
-                    { label: 'INFO', value: 'INFO' },
-                    { label: 'WARNING', value: 'WARNING' },
-                    { label: 'CRITICAL', value: 'CRITICAL' },
+                    { label: t('alertSeverity.INFO'), value: 'INFO' },
+                    { label: t('alertSeverity.WARNING'), value: 'WARNING' },
+                    { label: t('alertSeverity.CRITICAL'), value: 'CRITICAL' },
                   ]}
                 />
               </Space>
@@ -482,10 +482,10 @@ export default function MaintenanceTicketsPage() {
                 >
                   <Select
                     options={[
-                      { label: 'LOW', value: 'LOW' },
-                      { label: 'MEDIUM', value: 'MEDIUM' },
-                      { label: 'HIGH', value: 'HIGH' },
-                      { label: 'CRITICAL', value: 'CRITICAL' },
+                      { label: t('ticketPriority.LOW'), value: 'LOW' },
+                      { label: t('ticketPriority.MEDIUM'), value: 'MEDIUM' },
+                      { label: t('ticketPriority.HIGH'), value: 'HIGH' },
+                      { label: t('ticketPriority.CRITICAL'), value: 'CRITICAL' },
                     ]}
                   />
                 </Form.Item>
@@ -499,9 +499,10 @@ export default function MaintenanceTicketsPage() {
                 >
                   <Select
                     options={[
-                      { label: 'INFO', value: 'INFO' },
-                      { label: 'WARNING', value: 'WARNING' },
-                      { label: 'CRITICAL', value: 'CRITICAL' },
+                      { label: t('alertSeverity.INFO'), value: 'INFO' },
+                      { label: t('alertSeverity.WARNING'), value: 'WARNING' },
+                      { label: t('alertSeverity.HIGH'), value: 'HIGH' },
+                      { label: t('alertSeverity.CRITICAL'), value: 'CRITICAL' },
                     ]}
                   />
                 </Form.Item>
@@ -652,13 +653,13 @@ export default function MaintenanceTicketsPage() {
                   <strong>{viewingTicket.ticketNumber}</strong>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketStatus') ?? 'Trạng thái'}>
-                  <Tag>{viewingTicket.status}</Tag>
+                  <Tag>{t(`ticketStatus.${viewingTicket.status}`) ?? viewingTicket.status}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketPriority') ?? 'Ưu tiên'}>
-                  <Tag>{viewingTicket.priority}</Tag>
+                  <Tag>{t(`ticketPriority.${viewingTicket.priority}`) ?? viewingTicket.priority}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketSeverity') ?? 'Mức độ'}>
-                  <Tag>{viewingTicket.severity}</Tag>
+                  <Tag>{t(`alertSeverity.${viewingTicket.severity}`) ?? viewingTicket.severity}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketDueAt') ?? 'Hạn xử lý'} span={2}>
                   {viewingTicket.dueAt ? formatDateTime(viewingTicket.dueAt) : '-'}
