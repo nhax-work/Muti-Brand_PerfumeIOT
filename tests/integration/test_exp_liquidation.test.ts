@@ -232,7 +232,7 @@ describe('Liquidation & Close Rental Integration Tests (Task 3 / FR-EXP-14..16, 
       ],
     );
 
-    const shouldInstall = params.isInstalledOnSlot ?? (params.status === 'INSTALLED');
+    const shouldInstall = params.isInstalledOnSlot ?? params.status === 'INSTALLED';
     if (shouldInstall) {
       await raw.query(`UPDATE machine_slots SET active_bottle_id = $1 WHERE id = $2`, [
         bottleId,

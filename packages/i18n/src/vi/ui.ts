@@ -738,4 +738,3 @@ export const ui = {
   reauthPasswordLabel: 'Mật khẩu xác thực lại',
   reauthPasswordPlaceholder: 'Nhập mật khẩu Super Admin...',
 } as const;
-

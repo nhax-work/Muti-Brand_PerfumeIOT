@@ -47,11 +47,13 @@ export const slt = {
   rentalExpiringT7Content:
     'Các hóa đơn sau sắp hết hạn vào ngày {expiryDate}: {invoices}. ' +
     'Vui lòng truy cập hệ thống để gia hạn hoặc rút lại yêu cầu không gia hạn: {actionLinks}',
-  rentalExpiringT3Subject: '[ScentStation] Nhắc nhở lần 2: Hóa đơn thuê slot sắp hết hạn trong 3 ngày',
+  rentalExpiringT3Subject:
+    '[ScentStation] Nhắc nhở lần 2: Hóa đơn thuê slot sắp hết hạn trong 3 ngày',
   rentalExpiringT3Content:
     'Các hóa đơn sau sắp hết hạn vào ngày {expiryDate}: {invoices}. ' +
     'Nếu không gia hạn trước ngày kết thúc, hóa đơn sẽ chuyển sang giai đoạn ân hạn có tính phí lưu kho và nguy cơ thanh lý hàng tồn: {actionLinks}',
-  rentalGraceEnteredSubject: '[ScentStation] Hóa đơn thuê slot đã chuyển sang giai đoạn ân hạn ({invoiceNumber})',
+  rentalGraceEnteredSubject:
+    '[ScentStation] Hóa đơn thuê slot đã chuyển sang giai đoạn ân hạn ({invoiceNumber})',
   rentalGraceEnteredContent:
     'Hóa đơn {invoiceNumber} đã hết hạn và chuyển sang giai đoạn ân hạn đến ngày {graceEndsAt}. ' +
     'Phí ân hạn phát sinh hằng ngày. Quý khách vui lòng gia hạn để duy trì slot và tránh thanh lý hàng tồn.',
@@ -66,7 +68,5 @@ export const slt = {
   rentalLiquidatedContent:
     'Hóa đơn {invoiceNumber} đã quá thời hạn ân hạn và được chuyển sang thanh lý. Toàn bộ chai tồn tại slot đã chuyển quyền sở hữu sang nền tảng.',
   rentalClosedSubject: '[ScentStation] Hóa đơn thuê slot đã đóng ({invoiceNumber})',
-  rentalClosedContent:
-    'Hóa đơn {invoiceNumber} đã được đóng và slot đã được giải phóng.',
+  rentalClosedContent: 'Hóa đơn {invoiceNumber} đã được đóng và slot đã được giải phóng.',
 } as const;
-

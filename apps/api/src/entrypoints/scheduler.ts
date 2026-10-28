@@ -134,7 +134,6 @@ export function startScheduler(
   handleExpiryJobs();
   timers.push(setInterval(handleExpiryJobs, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
 
-
   const claims = app.get(RefundClaimsService);
   let maintainingClaims = false;
   timers.push(

@@ -403,13 +403,7 @@ export function useRenewSlotRental() {
 export function useSetGracePeriod() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      rentalId,
-      graceEndsAt,
-    }: {
-      rentalId: string;
-      graceEndsAt: string;
-    }) =>
+    mutationFn: ({ rentalId, graceEndsAt }: { rentalId: string; graceEndsAt: string }) =>
       unwrap(
         api.PUT('/slot-rentals/{id}/grace-period', {
           params: { path: { id: rentalId } },
@@ -428,13 +422,7 @@ export function useSetGracePeriod() {
 export function useLiquidateSlotRental() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      rentalId,
-      password,
-    }: {
-      rentalId: string;
-      password: string;
-    }) => {
+    mutationFn: async ({ rentalId, password }: { rentalId: string; password: string }) => {
       // 1. Reauthenticate để lấy reauth token (FR-AUTH-09)
       const reauthRes = await unwrap(
         api.POST('/auth/reauth' as any, {
@@ -478,5 +466,3 @@ export function useCloseSlotRental() {
     },
   });
 }
-
-

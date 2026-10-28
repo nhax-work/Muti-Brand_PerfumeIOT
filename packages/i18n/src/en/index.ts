@@ -290,18 +290,21 @@ export const en: SameKeysAs<typeof vi> = {
     rentalExpiringT3Content:
       'The following slot rental invoices will expire on {expiryDate}: {invoices}. ' +
       'If not renewed before expiry, the invoice will enter a grace period with storage fees and risk of inventory liquidation: {actionLinks}',
-    rentalGraceEnteredSubject: '[ScentStation] Slot rental invoice has entered grace period ({invoiceNumber})',
+    rentalGraceEnteredSubject:
+      '[ScentStation] Slot rental invoice has entered grace period ({invoiceNumber})',
     rentalGraceEnteredContent:
       'Rental invoice {invoiceNumber} has expired and entered grace period until {graceEndsAt}. ' +
       'Daily grace fees apply. Please renew to maintain the slot and prevent inventory liquidation.',
-    rentalRenewedSubject: '[ScentStation] Slot rental invoice renewed successfully ({invoiceNumber})',
+    rentalRenewedSubject:
+      '[ScentStation] Slot rental invoice renewed successfully ({invoiceNumber})',
     rentalRenewedContent:
       'Renewal invoice {invoiceNumber} has been activated from {startsAt} to {endsAt}. ' +
       'The previous invoice has transitioned to RENEWED and grace fee accrual (if any) has stopped.',
     rentalNotLiquidated: 'Rental invoice is not in liquidated status',
     rentalBottleStillActive:
       'Cannot close rental invoice because bottle on slot still has volume and has not been removed',
-    rentalLiquidatedSubject: '[ScentStation] Slot rental invoice has been liquidated ({invoiceNumber})',
+    rentalLiquidatedSubject:
+      '[ScentStation] Slot rental invoice has been liquidated ({invoiceNumber})',
     rentalLiquidatedContent:
       'Rental invoice {invoiceNumber} has expired past the grace period and transitioned to liquidated. Remaining bottles on slot have transferred ownership to the platform.',
     rentalClosedSubject: '[ScentStation] Slot rental invoice has been closed ({invoiceNumber})',
