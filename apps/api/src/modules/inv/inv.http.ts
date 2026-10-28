@@ -95,7 +95,6 @@ const BottleCreateBody = z.object({
   batchId: z.string().uuid(),
   identifier: z.string().trim().min(1).max(150),
   initialVolumeMl: z.number().positive(),
-  emptyWeightG: z.number().min(0).optional(),
   expiresAt: z.coerce.date().optional(),
 });
 
@@ -108,7 +107,6 @@ const RefillQuery = z.object({
 /** openapi `RefillSessionOpen` — máy suy từ slot; yêu cầu bổ sung được xử lý, nếu có (FR-RFQ-08). */
 const RefillOpenBody = z.object({
   slotId: z.string().uuid(),
-  beforeWeightG: z.number().min(0).optional(),
   refillRequestId: z.string().uuid().optional(),
 });
 
@@ -116,7 +114,6 @@ const RefillOpenBody = z.object({
 const RefillCloseBody = z.object({
   newBottleId: z.string().uuid(),
   checklistCompleted: z.literal(true),
-  afterWeightG: z.number().min(0).optional(),
   notes: z.string().max(2000).optional(),
 });
 

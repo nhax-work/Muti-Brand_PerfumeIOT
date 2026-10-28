@@ -128,7 +128,6 @@ export class IotService {
       for (const slot of message.slots) {
         const id = ids.get(slot.slot_number)!;
         add('ACTUATOR_STATUS', id, null, null, slot);
-        if (slot.load_cell_g !== undefined) add('LOAD_CELL_G', id, slot.load_cell_g, 'g', slot);
         if (slot.estimated_remaining_ml !== undefined) {
           add('ESTIMATED_REMAINING_ML', id, slot.estimated_remaining_ml, 'ml', slot);
         }

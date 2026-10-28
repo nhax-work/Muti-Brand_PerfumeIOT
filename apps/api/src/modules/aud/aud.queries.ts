@@ -96,7 +96,6 @@ export class AudQueries {
         'dr.result_code',
         'dr.failure_code',
         'dr.executed_at',
-        'dr.measured_quantity_ml',
         'dr.received_at',
       ])
       .where('dc.order_id', '=', orderId)
@@ -126,8 +125,6 @@ export class AudQueries {
               resultCode: r.result_code,
               failureCode: r.failure_code,
               executedAt: iso(r.executed_at),
-              measuredQuantityMl:
-                r.measured_quantity_ml === null ? null : Number(r.measured_quantity_ml),
               receivedAt: r.received_at.toISOString(),
             },
     }));

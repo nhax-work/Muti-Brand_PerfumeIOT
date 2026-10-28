@@ -642,8 +642,6 @@ export const ui = {
   invSlot: 'Slot',
   invStartedAt: 'Mở lúc',
   invNewBottle: 'Chai mới',
-  invAfterWeight: 'Khối lượng sau nạp (g)',
-  invBeforeWeight: 'Khối lượng trước nạp (g)',
   invNotes: 'Ghi chú',
   batchExpiresAtLabel: 'Hạn sử dụng của lô',
   discrepancyNotesHelp: 'Bắt buộc khi số thực nhận khác số khai báo.',

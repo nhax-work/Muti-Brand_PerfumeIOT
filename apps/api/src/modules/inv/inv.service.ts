@@ -72,20 +72,17 @@ export interface RegisterBottleInput {
   readonly batchId: string;
   readonly identifier: string;
   readonly initialVolumeMl: number;
-  readonly emptyWeightG?: number | undefined;
   readonly expiresAt?: Date | undefined;
 }
 
 export interface OpenRefillInput {
   readonly slotId: string;
-  readonly beforeWeightG?: number | undefined;
   /** Yêu cầu bổ sung mà phiếu này xử lý (FR-RFQ-08). */
   readonly refillRequestId?: string | undefined;
 }
 
 export interface CloseRefillInput {
   readonly newBottleId: string;
-  readonly afterWeightG?: number | undefined;
   readonly notes?: string | undefined;
 }
 
@@ -457,7 +454,6 @@ export class InvService {
             fragranceProductId: batch.fragranceProductId,
             identifier: input.identifier.trim(),
             initialVolumeMl: input.initialVolumeMl,
-            emptyWeightG: input.emptyWeightG ?? null,
             expiresAt: input.expiresAt ?? batch.expiresAt,
           },
           tx,
@@ -607,7 +603,6 @@ export class InvService {
             slotId: slot.id,
             oldBottleId: slot.activeBottleId,
             performedBy: actor.userId,
-            beforeWeightG: input.beforeWeightG ?? null,
             startedAt: now,
           },
           tx,
@@ -677,18 +672,13 @@ export class InvService {
       if (oldBottleId && oldBottleId !== bottle.id) {
         await this.queries.removeBottle(oldBottleId, now, tx);
       }
-      await this.queries.installBottle(
-        bottle.id,
-        { at: now, measuredWeightG: input.afterWeightG ?? null },
-        tx,
-      );
+      await this.queries.installBottle(bottle.id, now, tx);
       await this.queries.setSlotBottle(slot, bottle, tx);
       await this.queries.completeRefillSession(
         session.id,
         {
           oldBottleId,
           newBottleId: bottle.id,
-          afterWeightG: input.afterWeightG ?? null,
           notes: input.notes?.trim() || null,
           completedAt: now,
         },
@@ -822,8 +812,6 @@ export function toRefillDto(r: RefillSessionRecord): RefillSession {
     performedBy: r.performedBy,
     status: r.status,
     checklistCompleted: r.checklistCompleted,
-    beforeWeightG: r.beforeWeightG === null ? null : Number(r.beforeWeightG),
-    afterWeightG: r.afterWeightG === null ? null : Number(r.afterWeightG),
     notes: r.notes,
     startedAt: r.startedAt.toISOString(),
     completedAt: iso(r.completedAt),

@@ -312,9 +312,9 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     for (let i = 0; i < bottles.length; i++) {
       await client.query(
         `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                              status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                              status, initial_volume_ml, current_estimated_ml,
                               opened_at, installed_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000,
                  $7, $7, now() + interval '18 months')`,
         [
           bottles[i],
@@ -389,7 +389,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
         await client.query(
           `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                         measured_at)
-           VALUES ($1, $2, $3, 'slot_weight_g', 120.5, 'g', $4)`,
+           VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 48.0, 'ml', $4)`,
           [randomUUID(), machineId, slots[i], measuredAt],
         );
       }
@@ -398,7 +398,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     await client.query(
       `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                     measured_at)
-       VALUES ($1, $2, $3, 'slot_weight_g', 999.9, 'g', $4)`,
+       VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 49.5, 'ml', $4)`,
       [readingBeforeRentalId, machineId, slots[0], new Date(now - days(60))],
     );
 

@@ -1804,7 +1804,7 @@ export interface paths {
         put?: never;
         /**
          * Đăng ký chai
-         * @description FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở hữu và khối lượng ban đầu.
+         * @description FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở hữu và dung tích ban đầu `initialVolumeMl` (ADR-0019).
          */
         post: operations["createBottle"];
         delete?: never;
@@ -1905,7 +1905,7 @@ export interface paths {
         put?: never;
         /**
          * Đóng phiếu nạp
-         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35); chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
+         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ và chai mới; lượng còn lại của chai cũ là ước tính `currentEstimatedMl` lúc tháo (ADR-0019); checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35); chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
          */
         post: operations["closeRefillSession"];
         delete?: never;
@@ -1928,7 +1928,7 @@ export interface paths {
         post?: never;
         /**
          * Tháo chai khỏi slot và trả về kho
-         * @description FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
+         * @description FR-INV-15: tháo chai về kho; lượng còn lại là ước tính `currentEstimatedMl` lúc tháo (ADR-0019). Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
          */
         delete: operations["removeBottleFromSlot"];
         options?: never;
@@ -1951,7 +1951,7 @@ export interface paths {
         put?: never;
         /**
          * Tháo chai và lập phiếu trả hàng
-         * @description FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi nhật ký (FR-AUD-07).
+         * @description FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng transaction: ghi lượng còn lại ước tính từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi nhật ký (FR-AUD-07).
          */
         post: operations["createBottleReturn"];
         delete?: never;
@@ -4482,14 +4482,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        /** @description Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17), thông báo Brand Admin. */
+        /** @description Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26). Lượng còn lại từng chai lấy theo ước tính `currentEstimatedMl`, không nhập tay (FR-INV-15, ADR-0019). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17), thông báo Brand Admin. */
         BottleReturnCreate: {
             /** Format: uuid */
             slotRentalId: string;
             bottles: {
                 /** Format: uuid */
                 bottleId: string;
-                measuredWeightG: number;
             }[];
         };
         /** @description Bàn giao hàng trả về (FR-EXP-27). SHIP_TO_BRAND bắt buộc trackingNumber. */
@@ -4508,7 +4507,6 @@ export interface components {
             /** @description Mã định danh duy nhất trong phạm vi thương hiệu (FR-INV-02). */
             identifier: string;
             initialVolumeMl: number;
-            emptyWeightG?: number;
             /** Format: date-time */
             expiresAt?: string;
         };
@@ -4530,8 +4528,6 @@ export interface components {
             performedBy: string;
             status: components["schemas"]["RefillStatus"];
             checklistCompleted?: boolean;
-            beforeWeightG?: number | null;
-            afterWeightG?: number | null;
             notes?: string | null;
             /** Format: date-time */
             startedAt: string;
@@ -4542,7 +4538,6 @@ export interface components {
         RefillSessionOpen: {
             /** Format: uuid */
             slotId: string;
-            beforeWeightG?: number;
             /**
              * Format: uuid
              * @description Yêu cầu bổ sung được xử lý bởi phiên này, nếu có (FR-RFQ-08).
@@ -4555,12 +4550,10 @@ export interface components {
             newBottleId: string;
             /** @constant */
             checklistCompleted: true;
-            afterWeightG?: number;
             notes?: string;
         };
-        /** @description Tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại (FR-INV-15). */
+        /** @description Tháo chai khỏi slot và trả về kho (FR-INV-15). Lượng còn lại lấy theo ước tính `currentEstimatedMl` của chai, không nhập tay; lệch thực tế thì ghi điều chỉnh tồn kho (FR-INV-16, ADR-0019). */
         BottleRemoval: {
-            remainingMl: number;
             notes?: string;
         };
         InventoryAdjustment: {
@@ -4919,7 +4912,6 @@ export interface components {
             failureCode?: string | null;
             /** Format: date-time */
             executedAt?: string | null;
-            measuredQuantityMl?: number | null;
             /** Format: date-time */
             receivedAt: string;
         };
@@ -8129,7 +8121,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["BottleRemoval"];
             };

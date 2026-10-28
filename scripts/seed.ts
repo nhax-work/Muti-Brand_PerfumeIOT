@@ -588,10 +588,10 @@ async function seedInventory(client: pg.Client): Promise<void> {
   // Chai dự phòng trong kho sẵn sàng nạp máy (status = IN_STOCK)
   await client.query(
     `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                          status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                          status, initial_volume_ml, current_estimated_ml,
                           opened_at, installed_at, expires_at)
      VALUES ('99999999-9999-4999-8999-000000000009', $1, 'BRAND', $2, $3, 'BTL-MA-SPARE-01',
-             'IN_STOCK', 50.0000, 50.0000, 62.5000, NULL, NULL, now() + interval '18 months')
+             'IN_STOCK', 50.0000, 50.0000, NULL, NULL, now() + interval '18 months')
      ON CONFLICT (id) DO NOTHING`,
     [ID.brandA, ID.batches[0], ID.products[0]],
   );
@@ -731,9 +731,9 @@ async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
 
     await client.query(
       `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                            status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                            status, initial_volume_ml, current_estimated_ml,
                             opened_at, installed_at, expires_at)
-       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000,
                now() - interval '30 days', now() - interval '30 days',
                now() + interval '18 months')
        ON CONFLICT (id) DO NOTHING`,

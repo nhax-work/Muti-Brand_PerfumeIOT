@@ -1005,8 +1005,6 @@ export const en: SameKeysAs<typeof vi> = {
     invSlot: 'Slot',
     invStartedAt: 'Opened at',
     invNewBottle: 'New bottle',
-    invAfterWeight: 'Weight after refill (g)',
-    invBeforeWeight: 'Weight before refill (g)',
     invNotes: 'Notes',
     batchExpiresAtLabel: 'Batch expiry date',
     discrepancyNotesHelp: 'Required when the received quantity differs from the declaration.',
@@ -1350,6 +1348,12 @@ export const en: SameKeysAs<typeof vi> = {
     authenticityRejectedSubject: 'Batch {batch} authenticity rejected',
     authenticityRejectedContent:
       'The authenticity documents of batch {batch} ({product}) were rejected. Reason: {reason}. Please resubmit.',
+    lowStockAlertTitle: 'Slot {slot} is running low',
+    lowStockAlertContent:
+      'Slot {slot} has {remainingMl} ml left (about {sprays} sprays), below the {thresholdMl} ml threshold.',
+    slotEmptyAlertTitle: 'Slot {slot} is empty',
+    slotEmptyAlertContent:
+      'Slot {slot} has {remainingMl} ml left, not enough for one {dosageMl} ml spray — the slot has stopped selling.',
   },
 
   shipmentStatus: {

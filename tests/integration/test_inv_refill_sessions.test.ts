@@ -85,7 +85,7 @@ afterAll(async () => {
 
 function open(slotIndex: number, as = staff) {
   return as('POST', '/refill-sessions', {
-    payload: { slotId: fx.slots[slotIndex], beforeWeightG: 80 },
+    payload: { slotId: fx.slots[slotIndex] },
   });
 }
 
@@ -97,7 +97,7 @@ async function openOk(slotIndex: number): Promise<Session> {
 
 function close(sessionId: string, newBottleId: string, checklistCompleted: boolean = true) {
   return staff('POST', `/refill-sessions/${sessionId}/close`, {
-    payload: { newBottleId, checklistCompleted, afterWeightG: 112.5, notes: 'Thay chai' },
+    payload: { newBottleId, checklistCompleted, notes: 'Thay chai' },
   });
 }
 
@@ -339,5 +339,28 @@ describe('Đóng phiếu nạp (FR-INV-31, 35; FR-INV-06, 07, 08)', () => {
     });
     expect(dup.statusCode).toBe(400);
     expect(dup.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
+
+  it('test_FR_INV_05_initial_volume — dung tích ban đầu thành lượng còn lại, thiếu thì từ chối', async () => {
+    // AC1: không cân chai (ADR-0019) — lượng còn lại bắt đầu đúng bằng dung tích khai báo.
+    const res = await staff('POST', '/bottles', {
+      payload: {
+        batchId: batchA,
+        identifier: `VOL-${randomUUID().slice(0, 8)}`,
+        initialVolumeMl: 30,
+      },
+    });
+    expect(res.statusCode, res.body).toBe(201);
+    expect(res.json()).toMatchObject({ initialVolumeMl: 30, currentEstimatedMl: 30 });
+
+    // AC2: thiếu hoặc không dương.
+    for (const payload of [
+      { batchId: batchA, identifier: `VOL-${randomUUID().slice(0, 8)}` },
+      { batchId: batchA, identifier: `VOL-${randomUUID().slice(0, 8)}`, initialVolumeMl: 0 },
+    ]) {
+      const bad = await staff('POST', '/bottles', { payload });
+      expect(bad.statusCode).toBe(400);
+      expect(bad.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+    }
   });
 });

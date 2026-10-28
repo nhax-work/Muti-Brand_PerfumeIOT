@@ -52,6 +52,12 @@ export const inv = {
   authenticityRejectedSubject: 'Lô {batch} bị từ chối giấy tờ chính hãng',
   authenticityRejectedContent:
     'Giấy tờ chính hãng của lô {batch} ({product}) bị từ chối. Lý do: {reason}. Vui lòng nộp lại.',
+  lowStockAlertTitle: 'Slot {slot} sắp hết nước hoa',
+  lowStockAlertContent:
+    'Slot {slot} còn {remainingMl} ml (khoảng {sprays} lượt), dưới ngưỡng {thresholdMl} ml.',
+  slotEmptyAlertTitle: 'Slot {slot} đã hết nước hoa',
+  slotEmptyAlertContent:
+    'Slot {slot} còn {remainingMl} ml, không đủ một lượt {dosageMl} ml — slot đã ngừng bán.',
 } as const;
 
 export const shipmentStatus = {

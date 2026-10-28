@@ -14,7 +14,6 @@ import {
 
 /** Loại số đo backend ghi từ bản tin telemetry (`iot.service.ts`, spec/contracts/mqtt.md). */
 const READING_TYPES = [
-  'LOAD_CELL_G',
   'ESTIMATED_REMAINING_ML',
   'ACTUATOR_STATUS',
   'DOOR_OPEN',

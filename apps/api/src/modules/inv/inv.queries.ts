@@ -16,6 +16,7 @@ import type {
   RefillStatus,
   RevenueOwnerType,
   ShipmentDeclarationStatus,
+  SlotStatus,
 } from '../../shared/db/types.generated.js';
 import {
   brandScopedByColumn,
@@ -90,8 +91,6 @@ export interface RefillSessionRecord {
   readonly performedBy: string;
   readonly status: RefillStatus;
   readonly checklistCompleted: boolean;
-  readonly beforeWeightG: string | null;
-  readonly afterWeightG: string | null;
   readonly notes: string | null;
   readonly startedAt: Date;
   readonly completedAt: Date | null;
@@ -103,6 +102,20 @@ export interface SlotForRefill {
   readonly machineId: string;
   readonly activeBottleId: string | null;
   readonly calibratedDosageMl: string | null;
+}
+
+/** Slot kèm chai đang lắp, đọc dưới khóa trước khi trừ một liều (FR-INV-10, ADR-0019). */
+export interface SlotStock {
+  readonly slotId: string;
+  readonly slotNumber: number;
+  readonly machineId: string;
+  readonly slotStatus: SlotStatus;
+  readonly calibratedDosageMl: string | null;
+  readonly lowStockThresholdMl: string | null;
+  readonly bottleId: string;
+  readonly brandId: string;
+  readonly bottleStatus: BottleStatus;
+  readonly currentEstimatedMl: string;
 }
 
 /** Hóa đơn cho phép nạp hàng vào slot (ADR-0006): đang hiệu lực, hoặc đã thanh toán chờ nạp hàng. */
@@ -568,7 +581,6 @@ export class InvQueries {
       readonly fragranceProductId: string;
       readonly identifier: string;
       readonly initialVolumeMl: number;
-      readonly emptyWeightG: number | null;
       readonly expiresAt: Date | null;
     },
     executor: Executor,
@@ -582,7 +594,6 @@ export class InvQueries {
         identifier: data.identifier,
         initial_volume_ml: String(data.initialVolumeMl),
         current_estimated_ml: String(data.initialVolumeMl),
-        empty_weight_g: data.emptyWeightG === null ? null : String(data.emptyWeightG),
         expires_at: data.expiresAt,
       })
       .returning('id')
@@ -635,25 +646,16 @@ export class InvQueries {
   }
 
   /**
-   * Chai mới vào slot: INSTALLED. Khối lượng đo được chỉ ghi khi người kho nhập — không có thì giữ
-   * nguyên, không ghi 0 (FR-INV-05, FR-INV-13).
+   * Chai mới vào slot: INSTALLED. Lượng còn lại giữ theo `current_estimated_ml` của chai (ADR-0019).
    */
-  async installBottle(
-    id: string,
-    data: { readonly at: Date; readonly measuredWeightG: number | null },
-    tx: Executor,
-  ): Promise<void> {
-    const weight = data.measuredWeightG === null ? null : String(data.measuredWeightG);
+  async installBottle(id: string, at: Date, tx: Executor): Promise<void> {
     await tx
       .updateTable('bottles')
       .set({
         status: 'INSTALLED',
-        installed_at: data.at,
-        opened_at: sql<Date>`coalesce(opened_at, ${data.at})`,
+        installed_at: at,
+        opened_at: sql<Date>`coalesce(opened_at, ${at})`,
         removed_at: null,
-        ...(weight !== null
-          ? { initial_measured_weight_g: weight, current_measured_weight_g: weight }
-          : {}),
       })
       .where('id', '=', id)
       .execute();
@@ -754,6 +756,102 @@ export class InvQueries {
       .where('id', '=', id)
       .where('status', 'in', ['INSTALLED', 'LOW', 'EMPTY'])
       .execute();
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Trừ lượng sau lượt xịt (FR-INV-09 ÷ 12, ADR-0019)
+  // -----------------------------------------------------------------------------------
+
+  /** Khóa slot và chai đang lắp; `null` khi slot không có chai. */
+  async lockSlotStock(slotId: string, tx: Executor): Promise<SlotStock | null> {
+    const row = await tx
+      .selectFrom('machine_slots as ms')
+      .innerJoin('bottles as b', 'b.id', 'ms.active_bottle_id')
+      .select([
+        'ms.id',
+        'ms.slot_number',
+        'ms.machine_id',
+        'ms.status',
+        'ms.calibrated_dosage_ml',
+        'ms.low_stock_threshold_ml',
+        'b.id as bottle_id',
+        'b.brand_id',
+        'b.status as bottle_status',
+        'b.current_estimated_ml',
+      ])
+      .where('ms.id', '=', slotId)
+      .forUpdate()
+      .executeTakeFirst();
+    return row
+      ? {
+          slotId: row.id,
+          slotNumber: row.slot_number,
+          machineId: row.machine_id,
+          slotStatus: row.status,
+          calibratedDosageMl: row.calibrated_dosage_ml,
+          lowStockThresholdMl: row.low_stock_threshold_ml,
+          bottleId: row.bottle_id,
+          brandId: row.brand_id,
+          bottleStatus: row.bottle_status,
+          currentEstimatedMl: row.current_estimated_ml,
+        }
+      : null;
+  }
+
+  async setBottleStock(
+    id: string,
+    data: { readonly remainingMl: string; readonly status: BottleStatus },
+    tx: Executor,
+  ): Promise<void> {
+    await tx
+      .updateTable('bottles')
+      .set({ current_estimated_ml: data.remainingMl, status: data.status, updated_at: new Date() })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async setSlotStock(
+    id: string,
+    data: { readonly remainingMl: string; readonly sprays: number; readonly status: SlotStatus },
+    tx: Executor,
+  ): Promise<void> {
+    await tx
+      .updateTable('machine_slots')
+      .set((eb) => ({
+        estimated_remaining_ml: data.remainingMl,
+        estimated_remaining_sprays: data.sprays,
+        status: data.status,
+        version: eb('version', '+', 1),
+        updated_at: new Date(),
+      }))
+      .where('id', '=', id)
+      .execute();
+  }
+
+  /**
+   * Cảnh báo FR-ALR-02. Chống trùng bằng `uq_alert_dedup_unresolved` (FR-ALR-07): còn cảnh báo cùng
+   * loại chưa xử lý trên slot thì không tạo thêm.
+   */
+  async raiseStockAlert(
+    alert: {
+      readonly type: 'LOW_STOCK' | 'SLOT_EMPTY';
+      readonly brandId: string;
+      readonly machineId: string;
+      readonly slotId: string;
+      readonly title: string;
+      readonly description: string;
+      readonly at: Date;
+    },
+    tx: Executor,
+  ): Promise<void> {
+    const severity = alert.type === 'SLOT_EMPTY' ? 'HIGH' : 'WARNING';
+    await sql`
+      INSERT INTO alerts (brand_id, machine_id, slot_id, type, severity, deduplication_key, title,
+                          description, first_occurred_at, last_occurred_at)
+      VALUES (${alert.brandId}, ${alert.machineId}, ${alert.slotId}, ${alert.type},
+              ${severity}::alert_severity, ${`${alert.type}:${alert.slotId}`}, ${alert.title},
+              ${alert.description}, ${alert.at}, ${alert.at})
+      ON CONFLICT DO NOTHING`.execute(tx);
   }
 
   // -----------------------------------------------------------------------------------
@@ -916,7 +1014,6 @@ export class InvQueries {
       readonly slotId: string;
       readonly oldBottleId: string | null;
       readonly performedBy: string;
-      readonly beforeWeightG: number | null;
       readonly startedAt: Date;
     },
     tx: Executor,
@@ -929,7 +1026,6 @@ export class InvQueries {
         slot_id: data.slotId,
         old_bottle_id: data.oldBottleId,
         performed_by: data.performedBy,
-        before_weight_g: data.beforeWeightG === null ? null : String(data.beforeWeightG),
         started_at: data.startedAt,
       })
       .returning('id')
@@ -942,7 +1038,6 @@ export class InvQueries {
     data: {
       readonly oldBottleId: string | null;
       readonly newBottleId: string;
-      readonly afterWeightG: number | null;
       readonly notes: string | null;
       readonly completedAt: Date;
     },
@@ -955,7 +1050,6 @@ export class InvQueries {
         old_bottle_id: data.oldBottleId,
         new_bottle_id: data.newBottleId,
         checklist_completed: true,
-        after_weight_g: data.afterWeightG === null ? null : String(data.afterWeightG),
         notes: data.notes,
         completed_at: data.completedAt,
       })
@@ -1162,8 +1256,6 @@ function toRefillSession(r: {
   performed_by: string;
   status: RefillStatus;
   checklist_completed: boolean;
-  before_weight_g: string | null;
-  after_weight_g: string | null;
   notes: string | null;
   started_at: Date;
   completed_at: Date | null;
@@ -1178,8 +1270,6 @@ function toRefillSession(r: {
     performedBy: r.performed_by,
     status: r.status,
     checklistCompleted: r.checklist_completed,
-    beforeWeightG: r.before_weight_g,
-    afterWeightG: r.after_weight_g,
     notes: r.notes,
     startedAt: r.started_at,
     completedAt: r.completed_at,

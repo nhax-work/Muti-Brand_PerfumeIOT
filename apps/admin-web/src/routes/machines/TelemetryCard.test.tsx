@@ -16,9 +16,9 @@ vi.mock('./api', async () => ({
             id: 'r-1',
             machineId: 'm-1',
             slotId: 's-1',
-            readingType: 'LOAD_CELL_G',
-            numericValue: 118.2,
-            unit: 'g',
+            readingType: 'ESTIMATED_REMAINING_ML',
+            numericValue: 48.2,
+            unit: 'ml',
             measuredAt: '2026-10-26T03:00:00Z',
           },
           {
@@ -44,7 +44,7 @@ vi.mock('./api', async () => ({
           machineId: 'm-1',
           deviceEventId: 'EVT-1',
           eventType: 'SENSOR_ERROR',
-          payload: { sensor: 'load_cell_2' },
+          payload: { sensor: 'door_switch' },
           occurredAt: '2026-10-26T02:00:00Z',
           receivedAt: '2026-10-26T02:00:01Z',
         },
@@ -66,7 +66,7 @@ describe('TelemetryCard (FR-IOT-04, 05)', () => {
   it('test_FR_IOT_04_list_sensor_readings — số đo hiện slot, loại, giá trị kèm đơn vị; số đo mức máy ghi "Cả máy"', () => {
     renderScreen(<TelemetryCard machineId="m-1" slots={SLOTS} />);
     expect(screen.getByText('#1')).toBeTruthy();
-    expect(screen.getByText('118.2 g')).toBeTruthy();
+    expect(screen.getByText('48.2 ml')).toBeTruthy();
     expect(screen.getByText('Cả máy')).toBeTruthy();
     expect(readingsQuery).toHaveBeenCalledWith('m-1', { page: 1 });
   });
@@ -75,6 +75,6 @@ describe('TelemetryCard (FR-IOT-04, 05)', () => {
     renderScreen(<TelemetryCard machineId="m-1" slots={SLOTS} />);
     fireEvent.click(screen.getByText('Sự kiện thiết bị'));
     expect(screen.getByText('SENSOR_ERROR')).toBeTruthy();
-    expect(screen.getByText('{"sensor":"load_cell_2"}')).toBeTruthy();
+    expect(screen.getByText('{"sensor":"door_switch"}')).toBeTruthy();
   });
 });

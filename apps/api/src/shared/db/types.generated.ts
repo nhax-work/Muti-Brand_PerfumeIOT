@@ -206,7 +206,6 @@ export interface Bottles {
   brand_id: string;
   created_at: Generated<Timestamp>;
   current_estimated_ml: Numeric;
-  current_measured_weight_g: Numeric | null;
   /**
    * Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44).
    */
@@ -215,12 +214,10 @@ export interface Bottles {
    * Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018).
    */
   damaged_at: Timestamp | null;
-  empty_weight_g: Numeric | null;
   expires_at: Timestamp | null;
   fragrance_product_id: string;
   id: Generated<string>;
   identifier: string;
-  initial_measured_weight_g: Numeric | null;
   initial_volume_ml: Numeric;
   installed_at: Timestamp | null;
   liquidated_at: Timestamp | null;
@@ -387,7 +384,6 @@ export interface DispenseResults {
    */
   failure_code: string | null;
   id: Generated<string>;
-  measured_quantity_ml: Numeric | null;
   raw_payload: Json | null;
   received_at: Generated<Timestamp>;
   result_code: string | null;
@@ -773,8 +769,6 @@ export interface RefillRequests {
 }
 
 export interface RefillSessions {
-  after_weight_g: Numeric | null;
-  before_weight_g: Numeric | null;
   brand_id: string;
   /**
    * Cổng chặn của FR-INV-14: phải true trước khi đóng phiếu.

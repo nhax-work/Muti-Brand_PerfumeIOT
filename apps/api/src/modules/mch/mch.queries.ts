@@ -4,7 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { Kysely, Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
   CredentialStatus,
@@ -699,6 +699,12 @@ export class MchQueries {
           ? {
               calibrated_dosage_ml:
                 data.calibratedDosageMl !== null ? String(data.calibratedDosageMl) : null,
+            }
+          : {}),
+        // Đổi liều thì quy lại số lượt từ lượng còn lại; không tính lại lịch sử (ADR-0019 mục 2).
+        ...(data.calibratedDosageMl
+          ? {
+              estimated_remaining_sprays: sql<number>`floor(estimated_remaining_ml / ${String(data.calibratedDosageMl)}::numeric)::int`,
             }
           : {}),
         ...(data.lowStockThresholdMl !== undefined

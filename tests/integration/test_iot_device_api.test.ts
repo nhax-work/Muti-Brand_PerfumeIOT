@@ -84,7 +84,7 @@ afterAll(async () => {
 });
 
 describe('Telemetry (FR-IOT-04)', () => {
-  it('test_FR_IOT_04_list_sensor_readings — bản tin telemetry lưu đủ cửa, nguồn, cơ cấu, khối lượng từng slot', async () => {
+  it('test_FR_IOT_04_list_sensor_readings — bản tin telemetry lưu đủ cửa, nguồn và cơ cấu từng slot', async () => {
     const ts = new Date(Date.now() - 60_000).toISOString();
     // Dựng qua đúng schema mà gateway MQTT dùng để kiểm bản tin thiết bị (mqtt.md).
     const stored = await app.get(IotService).telemetry(
@@ -95,8 +95,8 @@ describe('Telemetry (FR-IOT-04)', () => {
         door_open: false,
         power_status: 'AC',
         slots: [
-          { slot_number: 1, actuator_status: 'IDLE', load_cell_g: 118.2 },
-          { slot_number: 2, actuator_status: 'IDLE', load_cell_g: 96.5 },
+          { slot_number: 1, actuator_status: 'IDLE' },
+          { slot_number: 2, actuator_status: 'IDLE' },
         ],
       }),
     );
@@ -109,35 +109,27 @@ describe('Telemetry (FR-IOT-04)', () => {
     expect(res.statusCode, res.body).toBe(200);
     const body = res.json<Page<Reading>>();
     const types = body.items.map((r) => r.readingType).sort();
-    expect(types).toEqual(
-      [
-        'ACTUATOR_STATUS',
-        'ACTUATOR_STATUS',
-        'DOOR_OPEN',
-        'LOAD_CELL_G',
-        'LOAD_CELL_G',
-        'POWER_STATUS',
-      ].sort(),
+    // Máy không có load cell (ADR-0019): không có số đo khối lượng nào.
+    expect(types).toEqual(['ACTUATOR_STATUS', 'ACTUATOR_STATUS', 'DOOR_OPEN', 'POWER_STATUS']);
+    const slot2 = body.items.find(
+      (r) => r.readingType === 'ACTUATOR_STATUS' && r.slotId === fx.slots[1],
     );
-    const slot1 = body.items.find(
-      (r) => r.readingType === 'LOAD_CELL_G' && r.slotId === fx.slots[0],
-    );
-    expect(slot1).toMatchObject({ numericValue: 118.2, unit: 'g', measuredAt: ts });
-    expect(body.meta.total).toBe(6);
+    expect(slot2).toMatchObject({ slotId: fx.slots[1], measuredAt: ts });
+    expect(body.meta.total).toBe(4);
   });
 
   it('test_FR_IOT_04_list_sensor_readings — lọc slot, loại số đo, khoảng thời gian; mới nhất trước', async () => {
     const res = await inventoryUser(
       'GET',
-      `/machines/${fx.machineId}/sensor-readings?slotId=${fx.slots[0]}&readingType=slot_weight_g`,
+      `/machines/${fx.machineId}/sensor-readings?slotId=${fx.slots[0]}&readingType=ESTIMATED_REMAINING_ML`,
     );
     expect(res.statusCode, res.body).toBe(200);
     const items = res.json<Page<Reading>>().items;
     // Fixture: hai số đo trong kỳ hạn + một số đo trước kỳ hạn trên slot 1.
     expect(items).toHaveLength(3);
-    expect(items.every((r) => r.slotId === fx.slots[0] && r.readingType === 'slot_weight_g')).toBe(
-      true,
-    );
+    expect(
+      items.every((r) => r.slotId === fx.slots[0] && r.readingType === 'ESTIMATED_REMAINING_ML'),
+    ).toBe(true);
     const times = items.map((r) => r.measuredAt);
     expect([...times].sort().reverse()).toEqual(times);
 
