@@ -38,25 +38,6 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await client.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
-  await client.query(`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]);
-  await client.query(
-    `UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1 AND slot_number = 99`,
-    [fx.machineId],
-  );
-  await client.query(`DELETE FROM bottles WHERE brand_id = $1 AND identifier LIKE 'BTL-%'`, [
-    fx.brandA,
-  ]);
-  await client.query(
-    `DELETE FROM inventory_batches WHERE brand_id = $1 AND batch_number LIKE 'LOT-%'`,
-    [fx.brandA],
-  );
-  await client.query(
-    `DELETE FROM slot_rentals WHERE slot_id IN (SELECT id FROM machine_slots WHERE machine_id = $1 AND slot_number = 99)`,
-    [fx.machineId],
-  );
-  await client.query(`DELETE FROM machine_slots WHERE machine_id = $1 AND slot_number = 99`, [
-    fx.machineId,
-  ]);
 });
 
 afterAll(async () => {
@@ -150,111 +131,117 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
   it('test_FR_SLT_24_activate_rental_on_first_install: Kích hoạt hợp đồng DRAFT sang ACTIVE khi gắn chai đầu tiên', async () => {
     const draftRentalId = randomUUID();
     const testSlotId = randomUUID();
-    const now = new Date();
-
-    // Tạo slot riêng để kiểm thử kích hoạt
-    await client.query(
-      `INSERT INTO machine_slots (
-         id, machine_id, slot_number, calibrated_dosage_ml, low_stock_threshold_ml,
-         estimated_remaining_ml, estimated_remaining_sprays, status
-       ) VALUES ($1, $2, 99, 0.1200, 5.0000, 0, 0, 'AVAILABLE')`,
-      [testSlotId, fx.machineId],
-    );
-
-    const invoiceNum = `INV-TEST-${randomUUID().slice(0, 8)}`;
-    await client.query(
-      `INSERT INTO slot_rentals (
-         id, slot_id, brand_id, fragrance_product_id, product_assigned_at,
-         status, starts_at, ends_at, price_per_spray, currency,
-         paid_at, invoice_number, created_by
-       ) VALUES ($1, $2, $3, $4, $5, 'DRAFT', $5, $6, '35000.0000', 'VND', $5, $7, $8)`,
-      [
-        draftRentalId,
-        testSlotId,
-        fx.brandA,
-        fx.products[0],
-        now,
-        new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-        invoiceNum,
-        opsStaff.userId,
-      ],
-    );
-
-    // Lô hàng được duyệt chính hãng
     const batchId = randomUUID();
-    await client.query(
-      `INSERT INTO inventory_batches (
-         id, brand_id, fragrance_product_id, batch_number, received_at, expires_at,
-         quantity_received, created_by, authenticity_status,
-         authenticity_document_url, authenticity_submitted_by, authenticity_submitted_at,
-         authenticity_verified_by, authenticity_verified_at
-       ) VALUES ($1, $2, $3, $4, $5, $6, 10, $7, 'APPROVED', $8, $7, $5, $7, $5)`,
-      [
-        batchId,
-        fx.brandA,
-        fx.products[0],
-        `LOT-${randomUUID().slice(0, 8)}`,
-        now,
-        new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
-        opsStaff.userId,
-        'https://example.com/doc.pdf',
-      ],
-    );
-
     const bottleId = randomUUID();
-    await client.query(
-      `INSERT INTO bottles (
-         id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-         status, initial_volume_ml, current_estimated_ml, empty_weight_g,
-         opened_at, installed_at, expires_at
-       ) VALUES ($1, $2, 'BRAND', $3, $4, $5, 'IN_STOCK', 100, 100, 60, null, null, $6)`,
-      [
-        bottleId,
-        fx.brandA,
-        batchId,
-        fx.products[0],
-        `BTL-${randomUUID().slice(0, 8)}`,
-        new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
-      ],
-    );
+    const now = new Date();
+    let sessionId: string | undefined;
 
-    const staffActor: AuthenticatedUser = {
-      userId: opsStaff.userId,
-      email: opsStaff.email,
-      fullName: 'Ops Staff',
-      roles: ['INVENTORY_STAFF'],
-      permissions: new Set(['inventory.refill']),
-      brandId: null,
-      sessionId: randomUUID(),
-      mustChangePassword: false,
-      permissionVersion: 1,
-      scope: { type: 'PLATFORM' },
-    };
+    try {
+      // Tạo slot riêng để kiểm thử kích hoạt
+      await client.query(
+        `INSERT INTO machine_slots (
+           id, machine_id, slot_number, calibrated_dosage_ml, low_stock_threshold_ml,
+           estimated_remaining_ml, estimated_remaining_sprays, status
+         ) VALUES ($1, $2, 99, 0.1200, 5.0000, 0, 0, 'AVAILABLE')`,
+        [testSlotId, fx.machineId],
+      );
 
-    const session = await inv.openRefillSession(staffActor, { slotId: testSlotId });
+      const invoiceNum = `INV-TEST-${randomUUID().slice(0, 8)}`;
+      await client.query(
+        `INSERT INTO slot_rentals (
+           id, slot_id, brand_id, fragrance_product_id, product_assigned_at,
+           status, starts_at, ends_at, price_per_spray, currency,
+           paid_at, invoice_number, created_by
+         ) VALUES ($1, $2, $3, $4, $5, 'DRAFT', $5, $6, '35000.0000', 'VND', $5, $7, $8)`,
+        [
+          draftRentalId,
+          testSlotId,
+          fx.brandA,
+          fx.products[0],
+          now,
+          new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+          invoiceNum,
+          opsStaff.userId,
+        ],
+      );
 
-    await inv.closeRefillSession(staffActor, session.id, { newBottleId: bottleId });
+      // Lô hàng được duyệt chính hãng
+      await client.query(
+        `INSERT INTO inventory_batches (
+           id, brand_id, fragrance_product_id, batch_number, received_at, expires_at,
+           quantity_received, created_by, authenticity_status,
+           authenticity_document_url, authenticity_submitted_by, authenticity_submitted_at,
+           authenticity_verified_by, authenticity_verified_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, 10, $7, 'APPROVED', $8, $7, $5, $7, $5)`,
+        [
+          batchId,
+          fx.brandA,
+          fx.products[0],
+          `LOT-${randomUUID().slice(0, 8)}`,
+          now,
+          new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+          opsStaff.userId,
+          'https://example.com/doc.pdf',
+        ],
+      );
 
-    const rentalCheck = await client.query(`SELECT status FROM slot_rentals WHERE id = $1`, [
-      draftRentalId,
-    ]);
-    expect(rentalCheck.rows[0].status).toBe('ACTIVE');
+      await client.query(
+        `INSERT INTO bottles (
+           id, brand_id, owner, batch_id, fragrance_product_id, identifier,
+           status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+           opened_at, installed_at, expires_at
+         ) VALUES ($1, $2, 'BRAND', $3, $4, $5, 'IN_STOCK', 100, 100, 60, null, null, $6)`,
+        [
+          bottleId,
+          fx.brandA,
+          batchId,
+          fx.products[0],
+          `BTL-ACTIVATE-${randomUUID().slice(0, 8)}`,
+          new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+        ],
+      );
 
-    const notifCheck = await client.query(
-      `SELECT type, subject FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_ACTIVATED'`,
-      [fx.brandA],
-    );
-    expect(notifCheck.rows.length).toBeGreaterThanOrEqual(1);
-    expect(notifCheck.rows[0].subject).toContain('kích hoạt');
+      const staffActor: AuthenticatedUser = {
+        userId: opsStaff.userId,
+        email: opsStaff.email,
+        fullName: 'Ops Staff',
+        roles: ['INVENTORY_STAFF'],
+        permissions: new Set(['inventory.refill']),
+        brandId: null,
+        sessionId: randomUUID(),
+        mustChangePassword: false,
+        permissionVersion: 1,
+        scope: { type: 'PLATFORM' },
+      };
 
-    // Dọn dẹp dữ liệu test đã tạo
-    await client.query(`DELETE FROM refill_sessions WHERE id = $1`, [session.id]);
-    await client.query(`UPDATE machine_slots SET active_bottle_id = NULL WHERE id = $1`, [
-      testSlotId,
-    ]);
-    await client.query(`DELETE FROM bottles WHERE id = $1`, [bottleId]);
-    await client.query(`DELETE FROM inventory_batches WHERE id = $1`, [batchId]);
-    await client.query(`DELETE FROM slot_rentals WHERE id = $1`, [draftRentalId]);
-    await client.query(`DELETE FROM machine_slots WHERE id = $1`, [testSlotId]);
+      const session = await inv.openRefillSession(staffActor, { slotId: testSlotId });
+      sessionId = session.id;
+
+      await inv.closeRefillSession(staffActor, session.id, { newBottleId: bottleId });
+
+      const rentalCheck = await client.query(`SELECT status FROM slot_rentals WHERE id = $1`, [
+        draftRentalId,
+      ]);
+      expect(rentalCheck.rows[0].status).toBe('ACTIVE');
+
+      const notifCheck = await client.query(
+        `SELECT type, subject FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_ACTIVATED'`,
+        [fx.brandA],
+      );
+      expect(notifCheck.rows.length).toBeGreaterThanOrEqual(1);
+      expect(notifCheck.rows[0].subject).toContain('hiệu lực');
+    } finally {
+      // Dọn dẹp an toàn các bản ghi do test này tạo ra
+      if (sessionId) {
+        await client.query(`DELETE FROM refill_sessions WHERE id = $1`, [sessionId]);
+      }
+      await client.query(`UPDATE machine_slots SET active_bottle_id = NULL WHERE id = $1`, [
+        testSlotId,
+      ]);
+      await client.query(`DELETE FROM bottles WHERE id = $1`, [bottleId]);
+      await client.query(`DELETE FROM inventory_batches WHERE id = $1`, [batchId]);
+      await client.query(`DELETE FROM slot_rentals WHERE id = $1`, [draftRentalId]);
+      await client.query(`DELETE FROM machine_slots WHERE id = $1`, [testSlotId]);
+    }
   });
 });
