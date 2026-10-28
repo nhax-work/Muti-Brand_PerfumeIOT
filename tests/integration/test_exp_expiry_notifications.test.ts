@@ -39,7 +39,7 @@ beforeAll(async () => {
 afterEach(async () => {
   await client.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
   await client.query(
-    `DELETE FROM audit_logs WHERE brand_id = $1 AND action = 'EXPIRY_NOTICE_SENT'`,
+    `DELETE FROM audit_logs WHERE brand_id = $1 AND action IN ('EXPIRY_NOTICE_SENT', 'slt.rental.activated_first_bottle')`,
     [fx.brandA],
   );
 });
@@ -55,7 +55,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
   it('test_FR_EXP_01_expiring_rentals_7_days: Thông báo trước 7 ngày khi hóa đơn sắp hết hạn', async () => {
     const now = new Date('2026-10-25T10:00:00Z');
     const end7Days = new Date('2026-11-01T15:00:00Z');
-    await client.query(`UPDATE slot_rentals SET end_date = $1, status = 'ACTIVE' WHERE id = $2`, [
+    await client.query(`UPDATE slot_rentals SET ends_at = $1, status = 'ACTIVE' WHERE id = $2`, [
       end7Days,
       fx.rentals[0],
     ]);
@@ -75,7 +75,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
   it('test_FR_EXP_02_expiring_rentals_3_days: Thông báo khẩn cấp trước 3 ngày khi hóa đơn sắp hết hạn', async () => {
     const now = new Date('2026-10-25T10:00:00Z');
     const end3Days = new Date('2026-10-28T15:00:00Z');
-    await client.query(`UPDATE slot_rentals SET end_date = $1, status = 'ACTIVE' WHERE id = $2`, [
+    await client.query(`UPDATE slot_rentals SET ends_at = $1, status = 'ACTIVE' WHERE id = $2`, [
       end3Days,
       fx.rentals[0],
     ]);
@@ -95,10 +95,10 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
   it('test_FR_EXP_03_group_expiring_notifications: Gom thông báo cho nhiều slot của cùng thương hiệu hết hạn cùng ngày', async () => {
     const now = new Date('2026-10-25T10:00:00Z');
     const end7Days = new Date('2026-11-01T15:00:00Z');
-    await client.query(`UPDATE slot_rentals SET end_date = $1, status = 'ACTIVE' WHERE id = $2`, [
-      end7Days,
-      fx.rentals[0],
-    ]);
+    await client.query(
+      `UPDATE slot_rentals SET ends_at = $1, status = 'ACTIVE' WHERE id IN ($2, $3)`,
+      [end7Days, fx.rentals[0], fx.rentals[1]],
+    );
 
     // Xóa thông báo cũ để kiểm tra gom
     await client.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
@@ -116,7 +116,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
   it('test_FR_EXP_04_audit_log_expiring_notice: Ghi AuditLog EXPIRY_NOTICE_SENT cho từng hóa đơn được nhắc nhở', async () => {
     const now = new Date('2026-10-25T10:00:00Z');
     const end7Days = new Date('2026-11-01T15:00:00Z');
-    await client.query(`UPDATE slot_rentals SET end_date = $1, status = 'ACTIVE' WHERE id = $2`, [
+    await client.query(`UPDATE slot_rentals SET ends_at = $1, status = 'ACTIVE' WHERE id = $2`, [
       end7Days,
       fx.rentals[0],
     ]);
@@ -134,39 +134,70 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
 
   it('test_FR_SLT_24_activate_rental_on_first_install: Kích hoạt hợp đồng DRAFT sang ACTIVE khi gắn chai đầu tiên', async () => {
     const draftRentalId = randomUUID();
+    const testSlotId = randomUUID();
     const now = new Date();
 
-    const pkgRes = await client.query<{ id: string }>('SELECT id FROM rental_packages LIMIT 1');
-    const packageId = pkgRes.rows[0]?.id ?? randomUUID();
+    // Tạo slot riêng để kiểm thử kích hoạt
+    await client.query(
+      `INSERT INTO machine_slots (
+         id, machine_id, slot_number, calibrated_dosage_ml, low_stock_threshold_ml,
+         estimated_remaining_ml, estimated_remaining_sprays, status
+       ) VALUES ($1, $2, 99, 0.1200, 5.0000, 0, 0, 'AVAILABLE')`,
+      [testSlotId, fx.machineId],
+    );
 
+    const invoiceNum = `INV-TEST-${randomUUID().slice(0, 8)}`;
     await client.query(
       `INSERT INTO slot_rentals (
-         id, slot_id, brand_id, package_id, status, start_date, end_date, price_package, created_at
-       ) VALUES ($1, $2, $3, $4, 'DRAFT', $5, $6, 1000000, $7)`,
+         id, slot_id, brand_id, fragrance_product_id, product_assigned_at,
+         status, starts_at, ends_at, price_per_spray, currency,
+         paid_at, invoice_number, created_by
+       ) VALUES ($1, $2, $3, $4, $5, 'DRAFT', $5, $6, '35000.0000', 'VND', $5, $7, $8)`,
       [
         draftRentalId,
-        fx.slots[0],
+        testSlotId,
         fx.brandA,
-        packageId,
+        fx.products[0],
         now,
         new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
-        now,
+        invoiceNum,
+        opsStaff.userId,
       ],
     );
 
-    // Lấy batch hợp lệ hoặc tạo mới
+    // Lô hàng được duyệt chính hãng
     const batchId = randomUUID();
     await client.query(
-      `INSERT INTO inventory_batches (id, brand_id, batch_code, status, created_at)
-       VALUES ($1, $2, $3, 'APPROVED', $4) ON CONFLICT DO NOTHING`,
-      [batchId, fx.brandA, `BATCH-${randomUUID().slice(0, 8)}`, now],
+      `INSERT INTO inventory_batches (
+         id, brand_id, fragrance_product_id, batch_number, received_at, expires_at,
+         quantity_received, created_by, authenticity_status
+       ) VALUES ($1, $2, $3, $4, $5, $6, 10, $7, 'APPROVED')`,
+      [
+        batchId,
+        fx.brandA,
+        fx.products[0],
+        `LOT-${randomUUID().slice(0, 8)}`,
+        now,
+        new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+        opsStaff.userId,
+      ],
     );
 
     const bottleId = randomUUID();
     await client.query(
-      `INSERT INTO bottles (id, batch_id, product_id, status, capacity_ml, remaining_ml, serial_number, registered_at)
-       VALUES ($1, $2, $3, 'IN_STOCK', 100, 100, $4, $5)`,
-      [bottleId, batchId, fx.products[0], `SN-${randomUUID().slice(0, 8)}`, now],
+      `INSERT INTO bottles (
+         id, brand_id, owner, batch_id, fragrance_product_id, identifier,
+         status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+         opened_at, installed_at, expires_at
+       ) VALUES ($1, $2, 'BRAND', $3, $4, $5, 'IN_STOCK', 100, 100, 60, null, null, $6)`,
+      [
+        bottleId,
+        fx.brandA,
+        batchId,
+        fx.products[0],
+        `BTL-${randomUUID().slice(0, 8)}`,
+        new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000),
+      ],
     );
 
     const staffActor: AuthenticatedUser = {
@@ -182,7 +213,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
       scope: { type: 'PLATFORM' },
     };
 
-    const session = await inv.openRefillSession(staffActor, { slotId: fx.slots[0]! });
+    const session = await inv.openRefillSession(staffActor, { slotId: testSlotId });
 
     await inv.closeRefillSession(staffActor, session.id, { newBottleId: bottleId });
 
@@ -197,5 +228,15 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
     );
     expect(notifCheck.rows.length).toBeGreaterThanOrEqual(1);
     expect(notifCheck.rows[0].subject).toContain('kích hoạt');
+
+    // Dọn dẹp dữ liệu test đã tạo
+    await client.query(`DELETE FROM refill_sessions WHERE id = $1`, [session.id]);
+    await client.query(`UPDATE machine_slots SET active_bottle_id = NULL WHERE id = $1`, [
+      testSlotId,
+    ]);
+    await client.query(`DELETE FROM bottles WHERE id = $1`, [bottleId]);
+    await client.query(`DELETE FROM inventory_batches WHERE id = $1`, [batchId]);
+    await client.query(`DELETE FROM slot_rentals WHERE id = $1`, [draftRentalId]);
+    await client.query(`DELETE FROM machine_slots WHERE id = $1`, [testSlotId]);
   });
 });

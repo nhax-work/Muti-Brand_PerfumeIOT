@@ -47,6 +47,7 @@ afterEach(async () => {
   await client.query(`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]);
   await client.query(`UPDATE machines SET operating_mode = 'NORMAL' WHERE id = $1`, [fx.machineId]);
   await client.query(`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]);
+  await client.query(`DELETE FROM sensor_readings WHERE machine_id = $1`, [fx.machineId]);
 });
 
 afterAll(async () => {
@@ -80,8 +81,8 @@ describe('ALR Alerts Integration Tests', () => {
   it('test_FR_ALR_02_slot_stock_alert: Cảnh báo hết/ít nước hoa tại slot khi dung tích còn <= 10%', async () => {
     // Giả lập slot của brand A có chai dung tích còn 8% (dưới ngưỡng 10%)
     await client.query(
-      `UPDATE bottles SET remaining_ml = 8, capacity_ml = 100
-       WHERE id = (SELECT current_bottle_id FROM slots WHERE id = $1)`,
+      `UPDATE bottles SET current_estimated_ml = 8, initial_volume_ml = 100
+       WHERE id = (SELECT active_bottle_id FROM machine_slots WHERE id = $1)`,
       [fx.slots[0]],
     );
 
@@ -98,11 +99,12 @@ describe('ALR Alerts Integration Tests', () => {
   });
 
   it('test_FR_ALR_03_door_open_alert: Cửa mở quá hạn loại trừ khi máy ở MAINTENANCE hoặc có refill_sessions mở', async () => {
-    const doorOpenSince = new Date(Date.now() - 5 * 60 * 1000); // Mở 5 phút trước (> 3 phút)
-    await client.query(`UPDATE machines SET door_open_since = $1 WHERE id = $2`, [
-      doorOpenSince,
-      fx.machineId,
-    ]);
+    const doorOpenSince = new Date(Date.now() - 6 * 60 * 1000); // Mở 6 phút trước (> 5 phút DOOR_OPEN_ALERT_MIN)
+    await client.query(
+      `INSERT INTO sensor_readings (id, machine_id, reading_type, numeric_value, measured_at)
+       VALUES (gen_random_uuid(), $1, 'DOOR_OPEN', '1', $2)`,
+      [fx.machineId, doorOpenSince],
+    );
 
     // 1. Trường hợp bình thường (NORMAL mode, không có phiên nạp): Cảnh báo PHẢI được sinh
     await alr.sweepAlerts();
@@ -130,9 +132,9 @@ describe('ALR Alerts Integration Tests', () => {
     // 3. Ngoại lệ 2: Có phiên nạp mở (refill_sessions ở trạng thái STARTED) -> KHÔNG sinh cảnh báo (FR-INV-30 / ADR-0015)
     const sessionId = randomUUID();
     await client.query(
-      `INSERT INTO refill_sessions (id, machine_id, staff_id, status, started_at)
-       VALUES ($1, $2, $3, 'STARTED', $4)`,
-      [sessionId, fx.machineId, opsStaff.userId, new Date()],
+      `INSERT INTO refill_sessions (id, brand_id, machine_id, slot_id, performed_by, status, started_at)
+       VALUES ($1, $2, $3, $4, $5, 'STARTED', $6)`,
+      [sessionId, fx.brandA, fx.machineId, fx.slots[0], opsStaff.userId, new Date()],
     );
 
     await alr.sweepAlerts();
@@ -143,7 +145,7 @@ describe('ALR Alerts Integration Tests', () => {
     // 4. Khi phiên nạp kết thúc (COMPLETED) mà cửa vẫn mở quá hạn -> Cảnh báo được phục hồi (AC4)
     await client.query(
       `UPDATE refill_sessions SET status = 'COMPLETED', completed_at = $1 WHERE id = $2`,
-      [new Date(Date.now() - 4 * 60 * 1000), sessionId],
+      [new Date(Date.now() - 6 * 60 * 1000), sessionId],
     );
 
     await alr.sweepAlerts();
