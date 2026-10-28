@@ -231,7 +231,7 @@ bước này.
 | TV3 | Thương hiệu tự đăng ký + xác minh email (FR-USR-06, 07; sửa FR-USR-01, 05) · hợp đồng khung có phiên bản, đồng ý một lần kèm phiên bản, người, thời điểm, IP, mã băm (FR-SLT-48, 49) · `POST /rental-checkouts` từ chối khi chưa xác minh email hoặc chưa đồng ý (`EMAIL_NOT_VERIFIED`, `AGREEMENT_NOT_ACCEPTED`) · giới hạn tần suất đăng ký **[ADR-0013]** |
 | TV3 | Viết AC cho RFQ (12 FR) — để TV1 hiện thực ở T8 |
 | TV4 | Kiosk theo ADR-0015: gọi hủy đơn ở **mọi** lối thoát màn QR (khách xác nhận rời, phiên kiosk reset, hết giờ) · `MACHINE_BUSY` khi máy đã có đơn chờ thanh toán · màn sự cố `QUEUE_TIMEOUT` kèm QR khiếu nại · màn tạm ngưng khi `MACHINE_IN_MAINTENANCE` **[ADR-0015]** |
-| TV2+TV4 | Hiệu chuẩn lượng xịt từng ngăn bằng cân 0,01g · lưu tham số hiệu chuẩn vào NVS |
+| TV2+TV4 | Hiệu chuẩn lượng xịt từng ngăn: xịt hết chai mẫu dung tích đã biết, liều = dung tích ÷ số lượt đếm được **[ADR-0019]** · lưu tham số hiệu chuẩn vào NVS |
 | TV2 | Chuyển mạch từ breadboard sang **bo hàn lỗ đa năng** |
 | TV2 | Lắp thử vách ngăn và quạt hút khoang ướt |
 
@@ -296,7 +296,7 @@ test cạnh file.
 | TV4 | ALR: 5 loại cảnh báo, cửa mở quá hạn loại trừ cả phiên nạp đang mở (FR-ALR-03 đã sửa) · nối email cho các thông báo tiền/hàng còn lại · **màn hình cảnh báo** (`/alerts…`, FR-ALR-06, 08, 11, 12) và **thông báo trong ứng dụng** cho Brand Admin (`GET /notifications`, FR-EXP-01) **[UI-16/10]** *(dời từ T8 cũ)* |
 | TV4 | MNT: phiếu bảo trì kèm màn hình (`/maintenance-tickets…`, FR-MNT-01 ÷ 03, 10, 11, 14) · **Dashboard** thay trang giữ chỗ hiện tại: `GET /reports/platform-dashboard`, `/reports/orders-timeseries` (FR-RPT-01, 02, 09) · báo cáo tồn kho `GET /reports/inventory` (FR-INV-21) · AuditLog `GET /audit-logs` (FR-AUD-08) · tỉ lệ thành công / thất bại / `FORFEITED` **theo từng máy** (FR-RPT-04) **[ADR-0015, UI-16/10]** *(dời từ T9 cũ)* |
 | TV2 | **Vẽ PCB đế** (chỗ cắm ESP32 DevKit, module MOSFET, module hạ áp, domino cho từng tải) và gửi gia công |
-| TV2 | Load cell + HX711 |
+| TV2 | ~~Load cell + HX711~~ — bỏ, máy không lắp load cell **[ADR-0019]** |
 
 **Gate 5 — code hoàn thành:** **hóa đơn đi hết vòng đời theo cả hai nhánh, bắt đầu từ thương hiệu tự đăng ký: đăng ký → hợp đồng khung → phụ lục → thanh toán PayOS → lắp chai kích hoạt → bán → (a) hết hạn → ân hạn 7 ngày → gia hạn hoặc LIQUIDATED; (b) báo không gia hạn → tháo chai → trả hàng → CLOSED** **[ADR-0006, ADR-0013, ADR-0014]** · doanh thu tách đúng hai nguồn · **một kỳ chi trả tháng đi tới `PAID` cho thương hiệu đã xác minh, kỳ của thương hiệu chưa xác minh bị chặn** **[ADR-0013]** · refill request hoàn tất · **một chai DAMAGED sinh đúng một khoản bồi thường theo gói** · mọi FR ưu tiên M có code và test mang đúng mã · **mọi endpoint mà một vai trò cần thao tác đều có màn hình — chạy lại script đối chiếu `openapi.yaml` × backend × web quản trị, không còn dòng "có backend, không có màn hình"** **[UI-16/10]** · **đóng băng code**
 
@@ -315,7 +315,7 @@ hoàn tiền thật của khách, nên **bảo mật và sao lưu phải xong tr
 | TV1 | Test cô lập chéo trên 100% endpoint — **gồm hóa đơn, bồi thường, bảng giá cho slot, kỳ chi trả, phiếu trả hàng, phụ lục** · test tranh chấp đồng thời · test tải 50 simulator **[ADR-0006, ADR-0013, ADR-0014]** · tối ưu truy vấn báo cáo, bổ sung index theo EXPLAIN |
 | TV3 | Kịch bản lỗi: webhook lặp, sai chữ ký, mất mạng, hóa đơn hết hạn giữa lúc có đơn chờ · hai thương hiệu giữ chỗ cùng slot · tiền về sau khi hóa đơn đã hủy · đổi bảng giá khi hóa đơn đang chờ thanh toán **[ADR-0006]** · **đổi slot đồng thời với thương hiệu khác giữ slot đích · giỏ vượt 5 slot · báo không gia hạn sát `ends_at` · đổi phiên bản hợp đồng khung khi thương hiệu đang giữ chỗ** **[ADR-0013, ADR-0014]** · sửa bug · hoàn thiện tài liệu module |
 | TV4 | UAT với người ngoài nhóm — **gồm luồng thương hiệu tự đăng ký → mua gói, khách gửi khiếu nại → nhân viên ghi nhận hoàn tiền, khách rời màn QR** **[ADR-0006, ADR-0012, ADR-0013, ADR-0015]** · thiết lập sao lưu CSDL hằng ngày (NFR-DAT-05) · Test Report · ma trận truy vết · hỗ trợ TV2 1–2 ngày |
-| TV2 | Lắp PCB và cơ cấu vào vỏ máy · tích hợp load cell vào firmware · ~~lên 4 ngăn thật nếu còn thời gian~~ **bỏ — giữ 2 ngăn thật + 2 simulator** |
+| TV2 | Lắp PCB và cơ cấu vào vỏ máy · ~~tích hợp load cell vào firmware~~ **bỏ [ADR-0019]** · ~~lên 4 ngăn thật nếu còn thời gian~~ **bỏ — giữ 2 ngăn thật + 2 simulator** |
 | Nhóm | Mỗi người nộp **dàn ý chương báo cáo** của mình (xem T12) |
 
 **Gate 6:** 100% FR ưu tiên M có test đạt · CI xanh · không còn bug nghiêm trọng · **TLS, secret, rate limit, sao lưu hằng ngày đã chạy trên môi trường pilot**

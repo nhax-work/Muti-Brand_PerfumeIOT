@@ -11,13 +11,13 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 ---
 
 ## FR-IOT-04 — Telemetry của thiết bị
-* **Statement:** Thiết bị phải gửi dữ liệu telemetry gồm khối lượng từng slot, trạng thái cửa, trạng thái cơ cấu xịt và trạng thái nguồn điện.
+* **Statement:** Thiết bị phải gửi dữ liệu telemetry gồm trạng thái cửa, trạng thái cơ cấu xịt của từng slot và trạng thái nguồn điện. Máy không có load cell nên telemetry không mang số đo khối lượng (ADR-0019).
 * **Traces:** BR-005, BR-006 · **Priority:** M
 * **API:** `GET /machines/{id}/sensor-readings` (bản tin vào qua topic `telemetry`, `spec/contracts/mqtt.md`)
 * **Acceptance criteria:**
-  * **AC1 (Lưu bản tin):** Given máy `M` gửi telemetry có `door_open`, `power_status` và hai slot kèm `load_cell_g`,  
+  * **AC1 (Lưu bản tin):** Given máy `M` gửi telemetry có `door_open`, `power_status` và hai slot kèm `actuator_status`,  
     When nền tảng nhận bản tin,  
-    Then `sensor_readings` có một số đo `DOOR_OPEN`, một `POWER_STATUS` (mức máy) và cho từng slot một `ACTUATOR_STATUS`, một `LOAD_CELL_G` đơn vị `g`, cùng `measured_at` lấy từ `ts` của bản tin.
+    Then `sensor_readings` có một số đo `DOOR_OPEN`, một `POWER_STATUS` (mức máy) và cho từng slot một `ACTUATOR_STATUS`, cùng `measured_at` lấy từ `ts` của bản tin.
   * **AC2 (Tra cứu):** Given máy `M` có số đo trong và ngoài khoảng `[from, to)`,  
     When Operations Staff gọi `GET /machines/{M}/sensor-readings?from&to&slotId&readingType`,  
     Then hệ thống trả các số đo của `M` thỏa bộ lọc, mới nhất trước, có phân trang; `from ≥ to` trả HTTP 400 `VALIDATION_ERROR`.
