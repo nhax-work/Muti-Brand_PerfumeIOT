@@ -34,6 +34,9 @@
 --                  ADR-0018 (hoàn thiện contract tuần 8) — bottles.damaged_at/damage_reason,
 --                  refill_requests.note, chk_refill_request_completed_has_session; áp bằng
 --                  migrations/1791300000000_*.
+--                  ADR-0019 (đếm lượt xịt, bỏ load cell) — xóa cột khối lượng trên bottles,
+--                  refill_sessions và dispense_results.measured_quantity_ml; áp bằng
+--                  migrations/1791400000000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -817,9 +820,6 @@ CREATE TABLE bottles (
     status                    bottle_status      NOT NULL DEFAULT 'IN_STOCK',
     initial_volume_ml         numeric(14,4)      NOT NULL,
     current_estimated_ml      numeric(14,4)      NOT NULL,
-    empty_weight_g            numeric(14,4),
-    initial_measured_weight_g numeric(14,4),
-    current_measured_weight_g numeric(14,4),
     opened_at                 timestamptz,
     installed_at              timestamptz,
     removed_at                timestamptz,
@@ -872,8 +872,6 @@ CREATE TABLE refill_sessions (
     performed_by         uuid          NOT NULL REFERENCES users (id),
     status               refill_status NOT NULL DEFAULT 'STARTED',
     checklist_completed  boolean       NOT NULL DEFAULT false,
-    before_weight_g      numeric(14,4),
-    after_weight_g       numeric(14,4),
     notes                text,
     started_at           timestamptz   NOT NULL DEFAULT now(),
     completed_at         timestamptz
@@ -1135,7 +1133,6 @@ CREATE TABLE dispense_results (
     failure_code         varchar(100),
     executed_at          timestamptz,
     received_at          timestamptz   NOT NULL DEFAULT now(),
-    measured_quantity_ml numeric(10,4),
     sensor_snapshot      jsonb,
     raw_payload          jsonb,
     device_event_id      varchar(150)

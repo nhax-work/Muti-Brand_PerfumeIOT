@@ -1705,9 +1705,10 @@ components:
       type: object
       required: [slotRentalId, bottles]
       description: >-
-        Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại
-        từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot →
-        UNAVAILABLE (FR-MCH-17), thông báo Brand Admin.
+        Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26). Lượng còn lại từng
+        chai lấy theo ước tính `currentEstimatedMl`, không nhập tay (FR-INV-15, ADR-0019). Cùng
+        transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17),
+        thông báo Brand Admin.
       properties:
         slotRentalId: { type: string, format: uuid }
         bottles:
@@ -1715,10 +1716,9 @@ components:
           minItems: 1
           items:
             type: object
-            required: [bottleId, measuredWeightG]
+            required: [bottleId]
             properties:
               bottleId: { type: string, format: uuid }
-              measuredWeightG: { type: number, minimum: 0 }
     BottleReturnHandover:
       type: object
       required: [recipientName]
@@ -1741,7 +1741,6 @@ components:
           maxLength: 150
           description: Mã định danh duy nhất trong phạm vi thương hiệu (FR-INV-02).
         initialVolumeMl: { type: number, exclusiveMinimum: 0 }
-        emptyWeightG: { type: number, minimum: 0 }
         expiresAt: { type: string, format: date-time }
     RefillSession:
       type: object
@@ -1760,8 +1759,6 @@ components:
         performedBy: { type: string, format: uuid }
         status: { $ref: '#/components/schemas/RefillStatus' }
         checklistCompleted: { type: boolean }
-        beforeWeightG: { type: [number, 'null'] }
-        afterWeightG: { type: [number, 'null'] }
         notes: { type: [string, 'null'] }
         startedAt: { type: string, format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
@@ -1771,7 +1768,6 @@ components:
       description: Mở phiếu nạp trước khi thao tác (FR-INV-29).
       properties:
         slotId: { type: string, format: uuid }
-        beforeWeightG: { type: number, minimum: 0 }
         refillRequestId:
           type: string
           format: uuid
@@ -1787,14 +1783,14 @@ components:
       properties:
         newBottleId: { type: string, format: uuid }
         checklistCompleted: { type: boolean, const: true }
-        afterWeightG: { type: number, minimum: 0 }
         notes: { type: string }
     BottleRemoval:
       type: object
-      required: [remainingMl]
-      description: Tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại (FR-INV-15).
+      description: >-
+        Tháo chai khỏi slot và trả về kho (FR-INV-15). Lượng còn lại lấy theo ước tính
+        `currentEstimatedMl` của chai, không nhập tay; lệch thực tế thì ghi điều chỉnh tồn kho
+        (FR-INV-16, ADR-0019).
       properties:
-        remainingMl: { type: number, minimum: 0 }
         notes: { type: string }
     InventoryAdjustment:
       type: object
@@ -2214,7 +2210,6 @@ components:
           type: [string, 'null']
           description: Chỉ dùng mã trong spec/errors.md mục "Lệnh xịt".
         executedAt: { type: [string, 'null'], format: date-time }
-        measuredQuantityMl: { type: [number, 'null'] }
         receivedAt: { type: string, format: date-time }
     DiagnosticDispenseCreate:
       type: object
@@ -4864,7 +4859,7 @@ paths:
       operationId: createBottle
       description: >-
         FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở
-        hữu và khối lượng ban đầu.
+        hữu và dung tích ban đầu `initialVolumeMl` (ADR-0019).
       requestBody:
         required: true
         content:
@@ -5000,8 +4995,8 @@ paths:
       summary: Đóng phiếu nạp
       operationId: closeRefillSession
       description: >-
-        FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và
-        sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa
+        FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ và chai mới; lượng còn lại của chai cũ là
+        ước tính `currentEstimatedMl` lúc tháo (ADR-0019); checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa
         mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06);
         chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả
         PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE
@@ -5032,11 +5027,11 @@ paths:
       summary: Tháo chai khỏi slot và trả về kho
       operationId: removeBottleFromSlot
       description: >-
-        FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật
-        ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns`
-        (FR-EXP-26), không qua endpoint này.
+        FR-INV-15: tháo chai về kho; lượng còn lại là ước tính `currentEstimatedMl` lúc tháo
+        (ADR-0019). Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã
+        báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: '#/components/schemas/BottleRemoval' }
@@ -5083,7 +5078,7 @@ paths:
       operationId: createBottleReturn
       description: >-
         FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng
-        transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot
+        transaction: ghi lượng còn lại ước tính từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot
         → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi
         email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không
         ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi

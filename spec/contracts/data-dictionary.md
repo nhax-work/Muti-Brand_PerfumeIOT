@@ -849,9 +849,6 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `status` | `bottle_status` | — | `'IN_STOCK'::bottle_status` |  |
 | `initial_volume_ml` | `numeric(14,4)` | — |  |  |
 | `current_estimated_ml` | `numeric(14,4)` | — |  |  |
-| `empty_weight_g` | `numeric(14,4)` | có |  |  |
-| `initial_measured_weight_g` | `numeric(14,4)` | có |  |  |
-| `current_measured_weight_g` | `numeric(14,4)` | có |  |  |
 | `opened_at` | `timestamp with time zone` | có |  |  |
 | `installed_at` | `timestamp with time zone` | có |  |  |
 | `removed_at` | `timestamp with time zone` | có |  |  |
@@ -903,8 +900,6 @@ Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (F
 | `performed_by` | `uuid` | — |  |  |
 | `status` | `refill_status` | — | `'STARTED'::refill_status` |  |
 | `checklist_completed` | `boolean` | — | `false` | Cổng chặn của FR-INV-14: phải true trước khi đóng phiếu. |
-| `before_weight_g` | `numeric(14,4)` | có |  |  |
-| `after_weight_g` | `numeric(14,4)` | có |  |  |
 | `notes` | `text` | có |  |  |
 | `started_at` | `timestamp with time zone` | — | `now()` |  |
 | `completed_at` | `timestamp with time zone` | có |  |  |
@@ -1253,7 +1248,6 @@ Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân h�
 | `failure_code` | `character varying(100)` | có |  | Chỉ dùng mã trong spec/errors.md §"Lệnh xịt": CMD_INVALID_SIGNATURE, CMD_EXPIRED, CMD_WRONG_MACHINE, CMD_DUPLICATE, DOOR_OPEN, SLOT_EMPTY, ACTUATOR_FAULT, HARD_TIMEOUT, NO_CURRENT. |
 | `executed_at` | `timestamp with time zone` | có |  |  |
 | `received_at` | `timestamp with time zone` | — | `now()` |  |
-| `measured_quantity_ml` | `numeric(10,4)` | có |  |  |
 | `sensor_snapshot` | `jsonb` | có |  |  |
 | `raw_payload` | `jsonb` | có |  |  |
 | `device_event_id` | `character varying(150)` | có |  |  |
