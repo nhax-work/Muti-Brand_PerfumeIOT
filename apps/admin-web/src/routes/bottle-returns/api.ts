@@ -7,11 +7,7 @@ export type BottleReturnCreate = components['schemas']['BottleReturnCreate'];
 export type BottleReturnHandover = components['schemas']['BottleReturnHandover'];
 export type BottleReturnMethod = components['schemas']['BottleReturnMethod'];
 
-export function useBottleReturns(query?: {
-  page?: number;
-  pageSize?: number;
-  open?: boolean;
-}) {
+export function useBottleReturns(query?: { page?: number; pageSize?: number; open?: boolean }) {
   return useQuery({
     queryKey: ['bottle-returns', query],
     queryFn: () =>
@@ -39,8 +35,7 @@ export function useBottleReturn(id: string | undefined) {
 export function useCreateBottleReturn() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: BottleReturnCreate) =>
-      unwrap(api.POST('/bottle-returns', { body })),
+    mutationFn: (body: BottleReturnCreate) => unwrap(api.POST('/bottle-returns', { body })),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['bottle-returns'] });
       void qc.invalidateQueries({ queryKey: ['my-slots'] });

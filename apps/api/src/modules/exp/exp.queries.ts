@@ -61,7 +61,9 @@ function mapBottleRow(row: Record<string, unknown>): BottleDto {
     installedSlotId: row.installed_slot_id ? String(row.installed_slot_id) : null,
     expiresAt: row.expires_at ? new Date(row.expires_at as string | Date).toISOString() : null,
     sourceRentalId: row.source_rental_id ? String(row.source_rental_id) : null,
-    liquidatedAt: row.liquidated_at ? new Date(row.liquidated_at as string | Date).toISOString() : null,
+    liquidatedAt: row.liquidated_at
+      ? new Date(row.liquidated_at as string | Date).toISOString()
+      : null,
     bottleReturnId: row.bottle_return_id ? String(row.bottle_return_id) : null,
   };
 }
@@ -119,9 +121,7 @@ export class ExpQueries {
     }
 
     if (filters.open) {
-      countQuery = countQuery
-        .where('handed_over_at', 'is', null)
-        .where('forfeited_at', 'is', null);
+      countQuery = countQuery.where('handed_over_at', 'is', null).where('forfeited_at', 'is', null);
       selectQuery = selectQuery
         .where('handed_over_at', 'is', null)
         .where('forfeited_at', 'is', null);
@@ -153,10 +153,7 @@ export class ExpQueries {
     }
 
     const items = rows.map((r: Record<string, unknown>) =>
-      mapReturnRow(
-        r,
-        bottlesByReturnId.get(String(r.id)) ?? [],
-      ),
+      mapReturnRow(r, bottlesByReturnId.get(String(r.id)) ?? []),
     );
 
     return { items, total };
@@ -212,7 +209,9 @@ export class ExpQueries {
       brandId: row.brand_id,
       slotId: row.slot_id,
       status: row.status,
-      nonRenewalRequestedAt: row.non_renewal_requested_at ? new Date(row.non_renewal_requested_at) : null,
+      nonRenewalRequestedAt: row.non_renewal_requested_at
+        ? new Date(row.non_renewal_requested_at)
+        : null,
       returnMethod: row.return_method,
       brandAddress: address,
     };

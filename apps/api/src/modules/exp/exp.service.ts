@@ -11,11 +11,7 @@ import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import {
-  ExpQueries,
-  type BottleReturnDto,
-  type BottleReturnFilters,
-} from './exp.queries.js';
+import { ExpQueries, type BottleReturnDto, type BottleReturnFilters } from './exp.queries.js';
 
 export type BottleReturn = Schema<'BottleReturn'>;
 export type BottleReturnCreate = Schema<'BottleReturnCreate'>;
@@ -47,10 +43,7 @@ export class ExpService {
   /**
    * Chi tiết phiếu trả hàng.
    */
-  async getBottleReturn(
-    scope: BrandScope,
-    id: string,
-  ): Promise<BottleReturnDto> {
+  async getBottleReturn(scope: BrandScope, id: string): Promise<BottleReturnDto> {
     const item = await this.queries.findBottleReturnById(id);
     if (!item) {
       throw new AppError('NOT_FOUND', 'exp.returnNotFound');
@@ -168,7 +161,10 @@ export class ExpService {
     }
 
     // FR-EXP-27: SHIP_TO_BRAND bắt buộc có mã vận đơn
-    if (existing.returnMethod === 'SHIP_TO_BRAND' && (!input.trackingNumber || !input.trackingNumber.trim())) {
+    if (
+      existing.returnMethod === 'SHIP_TO_BRAND' &&
+      (!input.trackingNumber || !input.trackingNumber.trim())
+    ) {
       throw new AppError('VALIDATION_ERROR', 'exp.trackingNumberRequiredForShipping');
     }
 

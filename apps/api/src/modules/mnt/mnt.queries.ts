@@ -103,7 +103,9 @@ function mapTicket(row: Record<string, unknown>): MaintenanceTicketRecord {
     cost: row.cost !== null && row.cost !== undefined ? String(row.cost) : null,
     postTestResult: row.post_test_result ? String(row.post_test_result) : null,
     postTestedBy: row.post_tested_by ? String(row.post_tested_by) : null,
-    postTestedAt: row.post_tested_at ? new Date(row.post_tested_at as string | number | Date) : null,
+    postTestedAt: row.post_tested_at
+      ? new Date(row.post_tested_at as string | number | Date)
+      : null,
     downtimeMinutes: row.downtime_minutes != null ? Number(row.downtime_minutes) : null,
     createdAt: new Date(row.created_at as string | number | Date),
     updatedAt: new Date(row.updated_at as string | number | Date),

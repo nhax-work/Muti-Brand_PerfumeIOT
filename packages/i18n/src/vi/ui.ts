@@ -863,7 +863,8 @@ export const ui = {
   // Bottle returns (FR-EXP-26..28)
   bottleReturns: 'Phiếu trả hàng',
   bottleReturnsTitle: 'Quản lý phiếu trả hàng',
-  bottleReturnsSubtitle: 'Quản lý tháo chai và bàn giao trả hàng khi thương hiệu không gia hạn thuê slot.',
+  bottleReturnsSubtitle:
+    'Quản lý tháo chai và bàn giao trả hàng khi thương hiệu không gia hạn thuê slot.',
   openReturnsOnly: 'Chỉ xem phiếu chưa đóng',
   createBottleReturn: 'Lập phiếu trả hàng',
   createBottleReturnTitle: 'Tháo chai & Lập phiếu trả hàng',

@@ -163,14 +163,22 @@ export default function BottleReturnsPage() {
       dataIndex: 'id',
       key: 'id',
       width: 140,
-      render: (id: string) => <Typography.Text copyable ellipsis>{id}</Typography.Text>,
+      render: (id: string) => (
+        <Typography.Text copyable ellipsis>
+          {id}
+        </Typography.Text>
+      ),
     },
     {
       title: t('ui.slotRentalId'),
       dataIndex: 'slotRentalId',
       key: 'slotRentalId',
       width: 140,
-      render: (id: string) => <Typography.Text copyable ellipsis>{id}</Typography.Text>,
+      render: (id: string) => (
+        <Typography.Text copyable ellipsis>
+          {id}
+        </Typography.Text>
+      ),
     },
     {
       title: t('ui.returnMethod'),
@@ -270,9 +278,7 @@ export default function BottleReturnsPage() {
               <RollbackOutlined style={{ marginRight: 8 }} />
               {t('ui.bottleReturnsTitle')}
             </Typography.Title>
-            <Typography.Text type="secondary">
-              {t('ui.bottleReturnsSubtitle')}
-            </Typography.Text>
+            <Typography.Text type="secondary">{t('ui.bottleReturnsSubtitle')}</Typography.Text>
           </div>
           <Space>
             <Button icon={<ReloadOutlined />} onClick={() => void refetch()}>
@@ -367,11 +373,7 @@ export default function BottleReturnsPage() {
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.pickupDeadline')}>
                 <Typography.Text
-                  type={
-                    dayjs(detailData.pickupDeadline).isBefore(dayjs())
-                      ? 'danger'
-                      : undefined
-                  }
+                  type={dayjs(detailData.pickupDeadline).isBefore(dayjs()) ? 'danger' : undefined}
                 >
                   {formatDateTime(detailData.pickupDeadline)}
                 </Typography.Text>

@@ -656,10 +656,14 @@ export default function MaintenanceTicketsPage() {
                   <Tag>{t(`ticketStatus.${viewingTicket.status}`) ?? viewingTicket.status}</Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketPriority') ?? 'Ưu tiên'}>
-                  <Tag>{t(`ticketPriority.${viewingTicket.priority}`) ?? viewingTicket.priority}</Tag>
+                  <Tag>
+                    {t(`ticketPriority.${viewingTicket.priority}`) ?? viewingTicket.priority}
+                  </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketSeverity') ?? 'Mức độ'}>
-                  <Tag>{t(`alertSeverity.${viewingTicket.severity}`) ?? viewingTicket.severity}</Tag>
+                  <Tag>
+                    {t(`alertSeverity.${viewingTicket.severity}`) ?? viewingTicket.severity}
+                  </Tag>
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.ticketDueAt') ?? 'Hạn xử lý'} span={2}>
                   {viewingTicket.dueAt ? formatDateTime(viewingTicket.dueAt) : '-'}

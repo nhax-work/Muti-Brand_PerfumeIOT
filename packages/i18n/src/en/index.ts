@@ -1457,7 +1457,7 @@ export const en: SameKeysAs<typeof vi> = {
     REOPENED: 'Reopened',
   },
 
-    ticketPriority: {
+  ticketPriority: {
     LOW: 'Low',
     MEDIUM: 'Medium',
     HIGH: 'High',

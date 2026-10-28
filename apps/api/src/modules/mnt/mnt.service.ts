@@ -71,9 +71,7 @@ export class MntService {
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async listTickets(
-    filter: TicketFilter,
-  ): Promise<{
+  async listTickets(filter: TicketFilter): Promise<{
     items: MaintenanceTicket[];
     meta: { total: number; page: number; pageSize: number };
   }> {
