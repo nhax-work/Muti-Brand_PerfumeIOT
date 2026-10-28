@@ -39,4 +39,34 @@ export const slt = {
     'Phiên thanh toán thuê slot {checkout} đã được xác nhận lúc {paidAt}. Mã hóa đơn: {invoices}. ' +
     'Bước tiếp theo: khai báo lô hàng gửi kho, nộp giấy tờ chính hãng và cấu hình sản phẩm cho slot. ' +
     'Thông báo này được lưu làm bằng chứng đối soát.',
+  rentalActivatedSubject: '[ScentStation] Hóa đơn thuê slot bắt đầu có hiệu lực ({invoiceNumber})',
+  rentalActivatedContent:
+    'Hóa đơn thuê slot {invoiceNumber} đã bắt đầu có hiệu lực từ {startsAt} đến {endsAt}. ' +
+    'Thông báo này được lưu làm bằng chứng đối soát.',
+  rentalExpiringT7Subject: '[ScentStation] Cảnh báo hóa đơn thuê slot sắp hết hạn trong 7 ngày',
+  rentalExpiringT7Content:
+    'Các hóa đơn sau sắp hết hạn vào ngày {expiryDate}: {invoices}. ' +
+    'Vui lòng truy cập hệ thống để gia hạn hoặc rút lại yêu cầu không gia hạn: {actionLinks}',
+  rentalExpiringT3Subject: '[ScentStation] Nhắc nhở lần 2: Hóa đơn thuê slot sắp hết hạn trong 3 ngày',
+  rentalExpiringT3Content:
+    'Các hóa đơn sau sắp hết hạn vào ngày {expiryDate}: {invoices}. ' +
+    'Nếu không gia hạn trước ngày kết thúc, hóa đơn sẽ chuyển sang giai đoạn ân hạn có tính phí lưu kho và nguy cơ thanh lý hàng tồn: {actionLinks}',
+  rentalGraceEnteredSubject: '[ScentStation] Hóa đơn thuê slot đã chuyển sang giai đoạn ân hạn ({invoiceNumber})',
+  rentalGraceEnteredContent:
+    'Hóa đơn {invoiceNumber} đã hết hạn và chuyển sang giai đoạn ân hạn đến ngày {graceEndsAt}. ' +
+    'Phí ân hạn phát sinh hằng ngày. Quý khách vui lòng gia hạn để duy trì slot và tránh thanh lý hàng tồn.',
+  rentalRenewedSubject: '[ScentStation] Gia hạn hóa đơn thuê slot thành công ({invoiceNumber})',
+  rentalRenewedContent:
+    'Hóa đơn gia hạn {invoiceNumber} đã được kích hoạt thành công, bắt đầu từ {startsAt} đến {endsAt}. ' +
+    'Hóa đơn cũ đã chuyển sang trạng thái RENEWED và việc tính phí ân hạn (nếu có) đã dừng lại.',
+  rentalNotLiquidated: 'Hóa đơn không ở trạng thái thanh lý',
+  rentalBottleStillActive:
+    'Không thể đóng hóa đơn do chai nước hoa trong slot vẫn còn dung lượng và chưa tháo',
+  rentalLiquidatedSubject: '[ScentStation] Hóa đơn thuê slot đã được thanh lý ({invoiceNumber})',
+  rentalLiquidatedContent:
+    'Hóa đơn {invoiceNumber} đã quá thời hạn ân hạn và được chuyển sang thanh lý. Toàn bộ chai tồn tại slot đã chuyển quyền sở hữu sang nền tảng.',
+  rentalClosedSubject: '[ScentStation] Hóa đơn thuê slot đã đóng ({invoiceNumber})',
+  rentalClosedContent:
+    'Hóa đơn {invoiceNumber} đã được đóng và slot đã được giải phóng.',
 } as const;
+

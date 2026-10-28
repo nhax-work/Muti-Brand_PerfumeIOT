@@ -32,6 +32,7 @@ import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.j
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
+import { SltService } from '../slt/index.js';
 import {
   InvQueries,
   type BatchRecord,
@@ -87,6 +88,7 @@ type Executor = Kysely<DB>;
 export class InvService {
   constructor(
     @Inject(InvQueries) private readonly queries: InvQueries,
+    @Inject(SltService) private readonly slt: SltService,
     @Inject(AlrService) private readonly alr: AlrService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
@@ -596,7 +598,8 @@ export class InvService {
         },
         tx,
       );
-      // FR-SLT-24 (tuần 8): kích hoạt hóa đơn khi lắp chai đầu tiên sẽ gọi SLT trong `tx` này.
+      // FR-SLT-24: kích hoạt hóa đơn khi lắp chai đầu tiên trong cùng tx với việc đóng phiếu nạp.
+      await this.slt.activateOnFirstBottleInstall(rental.id, now, actor, tx);
       await this.audit.log(
         {
           actorType: 'USER',

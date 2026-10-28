@@ -95,6 +95,46 @@ export function startScheduler(
     }, RENTAL_CHECKOUT_EXPIRY_TICK_MS),
   );
 
+  let activatingStockingOverdue = false;
+  const activateStockingOverdue = () => {
+    if (activatingStockingOverdue) return;
+    activatingStockingOverdue = true;
+    slt
+      .autoActivateStockingOverdue()
+      .then((n) => n > 0 && logger.log(`Đã tự kích hoạt ${n} hóa đơn quá hạn lưu kho`))
+      .catch((e: unknown) => logger.error(`Tự kích hoạt hóa đơn quá hạn lỗi: ${String(e)}`))
+      .finally(() => (activatingStockingOverdue = false));
+  };
+  // Chạy ngay khi khởi động để bù hóa đơn quá hạn trong lúc dịch vụ tắt (FR-SLT-42 AC2).
+  activateStockingOverdue();
+  timers.push(setInterval(activateStockingOverdue, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
+
+  let handlingExpiry = false;
+  const handleExpiryJobs = () => {
+    if (handlingExpiry) return;
+    handlingExpiry = true;
+    Promise.all([
+      slt.scanExpiringRentals(),
+      slt.sendExpiringNotices(),
+      slt.autoTransitionToGrace(),
+      slt.calculateDailyGraceFees(),
+      slt.autoTransitionToLiquidated(),
+    ])
+      .then(([expiringCount, noticesCount, graceCount, feeCount, liquidatedCount]) => {
+        if (expiringCount > 0) logger.log(`Đã chuyển ${expiringCount} hóa đơn sang EXPIRING`);
+        if (noticesCount > 0) logger.log(`Đã gửi ${noticesCount} thông báo hết hạn T-7/T-3`);
+        if (graceCount > 0) logger.log(`Đã xử lý ${graceCount} hóa đơn chuyển GRACE/RENEWED`);
+        if (feeCount > 0) logger.log(`Đã tính phí lưu kho ân hạn cho ${feeCount} hóa đơn`);
+        if (liquidatedCount > 0) logger.log(`Đã chuyển ${liquidatedCount} hóa đơn sang thanh lý`);
+      })
+      .catch((e: unknown) => logger.error(`Quét hết hạn và ân hạn lỗi: ${String(e)}`))
+      .finally(() => (handlingExpiry = false));
+  };
+  // Chạy ngay khi khởi động để bù kiểm tra hết hạn / ân hạn trong lúc dịch vụ tắt
+  handleExpiryJobs();
+  timers.push(setInterval(handleExpiryJobs, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
+
+
   const claims = app.get(RefundClaimsService);
   let maintainingClaims = false;
   timers.push(
@@ -147,7 +187,7 @@ export function startScheduler(
   timers.push(setInterval(dispatchEmails, EMAIL_TICK_MS));
 
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại, kỳ chi trả, gửi email${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }

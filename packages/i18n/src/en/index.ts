@@ -278,6 +278,35 @@ export const en: SameKeysAs<typeof vi> = {
       'Slot rental checkout {checkout} was confirmed at {paidAt}. Invoice numbers: {invoices}. ' +
       'Next steps: declare the shipment to the warehouse, submit authenticity documents and configure the slot product. ' +
       'This notice is kept as reconciliation evidence.',
+    rentalActivatedSubject: '[ScentStation] Slot rental invoice is now active ({invoiceNumber})',
+    rentalActivatedContent:
+      'Slot rental invoice {invoiceNumber} has become active from {startsAt} to {endsAt}. ' +
+      'This notice is kept as reconciliation evidence.',
+    rentalExpiringT7Subject: '[ScentStation] Slot rental invoice expiring in 7 days',
+    rentalExpiringT7Content:
+      'The following slot rental invoices will expire on {expiryDate}: {invoices}. ' +
+      'Please access the system to renew or withdraw non-renewal: {actionLinks}',
+    rentalExpiringT3Subject: '[ScentStation] Second notice: Slot rental invoice expiring in 3 days',
+    rentalExpiringT3Content:
+      'The following slot rental invoices will expire on {expiryDate}: {invoices}. ' +
+      'If not renewed before expiry, the invoice will enter a grace period with storage fees and risk of inventory liquidation: {actionLinks}',
+    rentalGraceEnteredSubject: '[ScentStation] Slot rental invoice has entered grace period ({invoiceNumber})',
+    rentalGraceEnteredContent:
+      'Rental invoice {invoiceNumber} has expired and entered grace period until {graceEndsAt}. ' +
+      'Daily grace fees apply. Please renew to maintain the slot and prevent inventory liquidation.',
+    rentalRenewedSubject: '[ScentStation] Slot rental invoice renewed successfully ({invoiceNumber})',
+    rentalRenewedContent:
+      'Renewal invoice {invoiceNumber} has been activated from {startsAt} to {endsAt}. ' +
+      'The previous invoice has transitioned to RENEWED and grace fee accrual (if any) has stopped.',
+    rentalNotLiquidated: 'Rental invoice is not in liquidated status',
+    rentalBottleStillActive:
+      'Cannot close rental invoice because bottle on slot still has volume and has not been removed',
+    rentalLiquidatedSubject: '[ScentStation] Slot rental invoice has been liquidated ({invoiceNumber})',
+    rentalLiquidatedContent:
+      'Rental invoice {invoiceNumber} has expired past the grace period and transitioned to liquidated. Remaining bottles on slot have transferred ownership to the platform.',
+    rentalClosedSubject: '[ScentStation] Slot rental invoice has been closed ({invoiceNumber})',
+    rentalClosedContent:
+      'Rental invoice {invoiceNumber} has been closed and the slot has been released.',
   },
 
   ord: {
@@ -1067,6 +1096,25 @@ export const en: SameKeysAs<typeof vi> = {
     revenueOrderCount: '{count} orders',
     revenuePeriod: 'From {from} to {to}',
     allMachines: 'All machines',
+    renew: 'Renew',
+    renewModalTitle: 'Renew slot rental invoice',
+    renewSuccess: 'Renewal checkout created successfully',
+    editGracePeriod: 'Edit grace period',
+    gracePeriodUpdated: 'Grace period updated successfully',
+    graceEndsAt: 'Grace ends at',
+    selectPackagePlaceholder: 'Select rental package...',
+    selectStoragePlanPlaceholder: 'Select storage plan...',
+    liquidate: 'Liquidate Inventory',
+    liquidateModalTitle: 'Confirm Inventory Liquidation',
+    liquidateConfirmText:
+      'Liquidation will transfer ownership of all remaining bottles on this slot to the Platform and transition the invoice to LIQUIDATED. This action requires re-entering your password for verification.',
+    liquidateSuccess: 'Inventory liquidated and ownership transferred successfully',
+    closeRental: 'Close Rental',
+    closeRentalConfirmText:
+      'Are you sure you want to close this liquidated rental invoice? This action will release the slot for new rentals.',
+    closeRentalSuccess: 'Rental closed and slot released successfully',
+    reauthPasswordLabel: 'Re-authentication password',
+    reauthPasswordPlaceholder: 'Enter Super Admin password...',
   },
 
   kiosk: {

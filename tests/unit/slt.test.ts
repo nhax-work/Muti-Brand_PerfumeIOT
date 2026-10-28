@@ -632,6 +632,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       mchQueries,
       audit as never,
       paymentService as never,
+      {} as never,
       fakeClock as never,
       fakeDb as never,
       fakeConfig as never,
@@ -1425,8 +1426,10 @@ describe('SltJobs — job hủy phiên hết giờ giữ chỗ (FR-SLT-39)', () 
       queries as unknown as SltQueries,
       payments as unknown as PaymentService,
       audit as unknown as AuditService,
+      {} as never,
       clock,
       db as unknown as Database,
+      { constraint: () => 30 } as never,
     );
   });
 
@@ -1663,6 +1666,7 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
       {} as unknown as MchQueries,
       audit as never,
       {} as unknown as PaymentService,
+      {} as never,
       fakeClock as never,
       fakeDb as never,
       fakeConfig as never,

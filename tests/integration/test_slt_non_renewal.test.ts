@@ -12,6 +12,7 @@ import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { SltJobs } from '../../apps/api/src/modules/slt/index.js';
 import { asUser, createTestApp, login } from './helpers/app.js';
 import { openRawClient } from './helpers/db.js';
 import {
@@ -280,9 +281,39 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
     expect(dbRental.rows[0].non_renewal_requested_at).not.toBeNull();
   });
 
-  // FR-EXP-25 AC1 cần job chuyển GRACE (FR-EXP-06, lịch T8) — chưa có job nên chưa kiểm được. Job đó
-  // phải lọc `non_renewal_requested_at IS NULL`: không vào GRACE, không phí ân hạn, không phí lưu kho.
-  it.todo(
-    'test_FR_EXP_25_grace_job_skips_non_renewal — job GRACE (T8) bỏ qua hóa đơn đã báo không gia hạn',
-  );
+  // FR-EXP-25 AC1: Job chuyển GRACE bỏ qua hóa đơn đã báo không gia hạn:
+  // không vào GRACE, không tính phí ân hạn.
+  it('test_FR_EXP_25_grace_job_skips_non_renewal — job GRACE bỏ qua hóa đơn đã báo không gia hạn', async () => {
+    const sltJobs = app.get(SltJobs);
+    const rentalId = fx.rentals[0];
+    await raw.query(
+      `UPDATE slot_rentals 
+       SET status = 'EXPIRING', 
+           ends_at = NOW() - INTERVAL '1 hour',
+           non_renewal_requested_at = NOW() - INTERVAL '2 days',
+           non_renewal_requested_by = $2,
+           return_method = 'SHIP_TO_BRAND'
+       WHERE id = $1`,
+      [rentalId, fx.superAdminId],
+    );
+
+    // Chạy job autoTransitionToGrace
+    await sltJobs.autoTransitionToGrace();
+
+    // Hóa đơn KHÔNG chuyển sang GRACE, vẫn giữ nguyên EXPIRING, không có grace_ends_at
+    const check = await raw.query(
+      `SELECT status, grace_ends_at, grace_fee_amount FROM slot_rentals WHERE id = $1`,
+      [rentalId],
+    );
+    expect(check.rows[0].status).toBe('EXPIRING');
+    expect(check.rows[0].grace_ends_at).toBeNull();
+    expect(Number(check.rows[0].grace_fee_amount)).toBe(0);
+
+    // Chạy job tính phí ân hạn calculateDailyGraceFees
+    await sltJobs.calculateDailyGraceFees();
+    const feeCheck = await raw.query(`SELECT grace_fee_amount FROM slot_rentals WHERE id = $1`, [
+      rentalId,
+    ]);
+    expect(Number(feeCheck.rows[0].grace_fee_amount)).toBe(0);
+  });
 });

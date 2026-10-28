@@ -13,8 +13,9 @@ import { sql, type Expression, type Kysely, type SqlBool, type Transaction } fro
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { BottleReturnMethod, SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
+import type { BottleRecord } from '../inv/inv.queries.js';
 
-export type { BottleReturnMethod, SlotRentalStatus };
+export type { BottleRecord, BottleReturnMethod, SlotRentalStatus };
 export type Executor = Kysely<DB> | Transaction<DB>;
 
 /**
@@ -280,9 +281,13 @@ export class SltQueries {
     return { items: rows.map(toRecord), total: Number(count.total) };
   }
 
-  async findById(scope: BrandScope, id: string): Promise<SlotRentalRecord | null> {
+  async findById(
+    scope: BrandScope,
+    id: string,
+    executor: Executor = this.db,
+  ): Promise<SlotRentalRecord | null> {
     const row = await this.selectColumns(
-      this.base(scope).where('sr.id', '=', id),
+      this.base(scope, executor).where('sr.id', '=', id),
     ).executeTakeFirst();
     return row ? toRecord(row) : null;
   }
@@ -1143,8 +1148,730 @@ export class SltQueries {
     return toRecord(row);
   }
 
-  private base(scope: BrandScope) {
-    return this.db
+  /**
+   * Khóa một hóa đơn để xử lý kích hoạt (FR-SLT-24, FR-SLT-42).
+   */
+  async lockRentalForActivation(rentalId: string, executor: Executor = this.db) {
+    return executor
+      .selectFrom('slot_rentals')
+      .selectAll()
+      .where('id', '=', rentalId)
+      .forUpdate()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Chuyển hóa đơn sang ACTIVE và cập nhật starts_at, ends_at (FR-SLT-24, FR-SLT-42).
+   */
+  async activateRental(
+    rentalId: string,
+    startsAt: Date,
+    endsAt: Date,
+    now: Date,
+    executor: Executor = this.db,
+  ) {
+    return executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'ACTIVE',
+        starts_at: startsAt,
+        ends_at: endsAt,
+        updated_at: now,
+      })
+      .where('id', '=', rentalId)
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * Tìm các hóa đơn DRAFT đã thanh toán quá hạn RENTAL_MAX_STOCKING_DAYS chưa nạp chai (FR-SLT-42).
+   */
+  async findOverdueStockingRentalIds(
+    cutoff: Date,
+    batchSize: number,
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('status', '=', 'DRAFT')
+      .where('paid_at', 'is not', null)
+      .where('paid_at', '<', cutoff)
+      .where('previous_rental_id', 'is', null)
+      .orderBy('paid_at', 'asc')
+      .limit(batchSize)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * Kiểm tra hóa đơn đã có thông báo kích hoạt hay chưa (chống gửi trùng thông báo).
+   */
+  async hasActivationNotification(
+    rentalId: string,
+    executor: Executor = this.db,
+  ): Promise<boolean> {
+    const row = await executor
+      .selectFrom('notifications')
+      .select('id')
+      .where('reference_id', '=', rentalId)
+      .where('type', '=', 'RENTAL_ACTIVE')
+      .limit(1)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /**
+   * FR-EXP-05: Tìm các hóa đơn ACTIVE có ends_at <= cutoff để chuyển EXPIRING.
+   */
+  async findExpiringRentalIds(
+    cutoff: Date,
+    batchSize: number,
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('status', '=', 'ACTIVE')
+      .where('ends_at', '<=', cutoff)
+      .orderBy('ends_at', 'asc')
+      .limit(batchSize)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * FR-EXP-05: Chuyển hóa đơn ACTIVE sang EXPIRING.
+   */
+  async transitionToExpiring(rentalId: string, now: Date, executor: Executor = this.db) {
+    return executor
+      .updateTable('slot_rentals')
+      .set({ status: 'EXPIRING', updated_at: now })
+      .where('id', '=', rentalId)
+      .where('status', '=', 'ACTIVE')
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * FR-EXP-01, FR-EXP-02, FR-EXP-03: Tìm các hóa đơn cần gửi thông báo T-7 hoặc T-3.
+   * Lấy kèm thông tin slot, máy để gộp thông báo theo thương hiệu.
+   */
+  async findDueNoticeRentals(cutoff: Date, batchSize: number, executor: Executor = this.db) {
+    return executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .innerJoin('machines as m', 'm.id', 'ms.machine_id')
+      .leftJoin('fragrance_products as fp', 'fp.id', 'sr.fragrance_product_id')
+      .select([
+        'sr.id',
+        'sr.brand_id',
+        'sr.slot_id',
+        'sr.status',
+        'sr.ends_at',
+        'sr.invoice_number',
+        'sr.non_renewal_requested_at',
+        'ms.slot_number',
+        'm.display_name as machine_display_name',
+        'fp.name as product_name',
+      ])
+      .where('sr.status', 'in', ['ACTIVE', 'EXPIRING'])
+      .where('sr.ends_at', '<=', cutoff)
+      .orderBy('sr.ends_at', 'asc')
+      .limit(batchSize)
+      .execute();
+  }
+
+  /**
+   * Chống gửi trùng thông báo (theo brandId và referenceId).
+   */
+  async hasNoticeNotification(
+    brandId: string,
+    referenceId: string,
+    executor: Executor = this.db,
+  ): Promise<boolean> {
+    const row = await executor
+      .selectFrom('notifications')
+      .select('id')
+      .where('brand_id', '=', brandId)
+      .where('reference_id', '=', referenceId)
+      .limit(1)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /**
+   * FR-EXP-06, FR-EXP-25: Tìm các hóa đơn hết hạn để chuyển GRACE hoặc RENEWED (khi ends_at <= now).
+   */
+  async findRentalsEnteringGrace(
+    now: Date,
+    batchSize: number,
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('status', 'in', ['ACTIVE', 'EXPIRING'])
+      .where('ends_at', '<=', now)
+      .orderBy('ends_at', 'asc')
+      .limit(batchSize)
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * FR-SLT-12, FR-EXP-13: Tìm hóa đơn gia hạn đã thanh toán cho một hóa đơn cũ.
+   */
+  async findPaidRenewalRental(previousRentalId: string, executor: Executor = this.db) {
+    return executor
+      .selectFrom('slot_rentals')
+      .selectAll()
+      .where('previous_rental_id', '=', previousRentalId)
+      .where('paid_at', 'is not', null)
+      .where('status', 'in', ['DRAFT', 'ACTIVE'])
+      .executeTakeFirst();
+  }
+
+  /**
+   * FR-EXP-06, FR-EXP-07: Chuyển hóa đơn sang GRACE và gán grace_ends_at mặc định.
+   */
+  async transitionToGrace(
+    rentalId: string,
+    graceEndsAt: Date,
+    now: Date,
+    executor: Executor = this.db,
+  ) {
+    return executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'GRACE',
+        grace_ends_at: graceEndsAt,
+        updated_at: now,
+      })
+      .where('id', '=', rentalId)
+      .where('status', 'in', ['ACTIVE', 'EXPIRING'])
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * FR-SLT-12, FR-EXP-13: Chuyển H1 sang RENEWED và H2 sang ACTIVE trong cùng một transaction.
+   */
+  async transitionToRenewed(
+    oldRentalId: string,
+    newRentalId: string,
+    startsAt: Date,
+    endsAt: Date,
+    now: Date,
+    executor: Executor = this.db,
+  ) {
+    const oldRental = await executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'RENEWED',
+        updated_at: now,
+      })
+      .where('id', '=', oldRentalId)
+      .returningAll()
+      .executeTakeFirst();
+
+    const newRental = await executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'ACTIVE',
+        starts_at: startsAt,
+        ends_at: endsAt,
+        updated_at: now,
+      })
+      .where('id', '=', newRentalId)
+      .returningAll()
+      .executeTakeFirst();
+
+    return { oldRental, newRental };
+  }
+
+  /**
+   * FR-EXP-07: Platform Super Admin cập nhật ngày kết thúc ân hạn cho từng hóa đơn.
+   */
+  async updateGracePeriodEndDate(
+    rentalId: string,
+    graceEndsAt: Date,
+    now: Date,
+    executor: Executor = this.db,
+  ) {
+    return executor
+      .updateTable('slot_rentals')
+      .set({
+        grace_ends_at: graceEndsAt,
+        updated_at: now,
+      })
+      .where('id', '=', rentalId)
+      .where('status', '=', 'GRACE')
+      .returningAll()
+      .executeTakeFirst();
+  }
+
+  /**
+   * FR-EXP-10: Tìm các hóa đơn đang ở GRACE (chưa báo không gia hạn) để tính phí lưu kho hằng ngày.
+   */
+  async findRentalsInGrace(batchSize: number, executor: Executor = this.db) {
+    return executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('fragrance_products as fp', 'fp.id', 'sr.fragrance_product_id')
+      .select([
+        'sr.id',
+        'sr.brand_id',
+        'sr.slot_id',
+        'sr.grace_fee_amount',
+        'fp.full_bottle_retail_price',
+        'fp.default_price',
+      ])
+      .where('sr.status', '=', 'GRACE')
+      .where('sr.non_renewal_requested_at', 'is', null)
+      .orderBy('sr.ends_at', 'asc')
+      .limit(batchSize)
+      .execute();
+  }
+
+  /**
+   * FR-EXP-10: Đếm số chai tồn của thương hiệu gán cho slot.
+   */
+  async countActiveBottlesForSlot(
+    rentalId: string,
+    slotId: string,
+    brandId: string,
+    executor: Executor = this.db,
+  ): Promise<number> {
+    const slot = await executor
+      .selectFrom('machine_slots')
+      .select('active_bottle_id')
+      .where('id', '=', slotId)
+      .executeTakeFirst();
+
+    let count = 0;
+    if (slot?.active_bottle_id) {
+      const activeBottle = await executor
+        .selectFrom('bottles')
+        .select('id')
+        .where('id', '=', slot.active_bottle_id)
+        .where('owner', '=', 'BRAND')
+        .where('status', 'not in', ['EMPTY', 'LIQUIDATED', 'RETURNED_TO_BRAND'])
+        .executeTakeFirst();
+      if (activeBottle) count++;
+    }
+
+    const assignedBottles = await executor
+      .selectFrom('bottles')
+      .select('id')
+      .where('source_rental_id', '=', rentalId)
+      .where('owner', '=', 'BRAND')
+      .where('status', 'not in', ['EMPTY', 'LIQUIDATED', 'RETURNED_TO_BRAND'])
+      .where((eb) =>
+        slot?.active_bottle_id ? eb('id', '<>', slot.active_bottle_id) : eb.val(true),
+      )
+      .execute();
+
+    return count + assignedBottles.length;
+  }
+
+  /**
+   * FR-EXP-10: Kiểm tra xem hôm nay đã tính phí ân hạn cho hóa đơn này chưa (idempotent).
+   */
+  async hasGraceFeeAuditLog(
+    rentalId: string,
+    dateStr: string,
+    executor: Executor = this.db,
+  ): Promise<boolean> {
+    const row = await executor
+      .selectFrom('audit_logs')
+      .select('id')
+      .where('target_id', '=', rentalId)
+      .where('target_type', '=', 'SlotRental')
+      .where('action', '=', 'slt.rental.grace_fee_charged')
+      .where(sql`metadata->>'date'`, '=', dateStr)
+      .limit(1)
+      .executeTakeFirst();
+    return !!row;
+  }
+
+  /**
+   * FR-EXP-10: Cộng phí ân hạn vào hóa đơn.
+   */
+  async addGraceFee(
+    rentalId: string,
+    additionalFee: string,
+    now: Date,
+    executor: Executor = this.db,
+  ) {
+    const rental = await executor
+      .updateTable('slot_rentals')
+      .set(() => ({
+        grace_fee_amount: sql<string>`COALESCE(grace_fee_amount, 0) + ${additionalFee}::numeric(19,4)`,
+        total_amount: sql<string>`COALESCE(total_amount, 0) + ${additionalFee}::numeric(19,4)`,
+        updated_at: now,
+      }))
+      .where('id', '=', rentalId)
+      .returning(['id', 'checkout_id'])
+      .executeTakeFirst();
+
+    if (rental?.checkout_id) {
+      await executor
+        .updateTable('rental_checkouts')
+        .set(() => ({
+          total_amount: sql<string>`total_amount + ${additionalFee}::numeric(19,4)`,
+          updated_at: now,
+        }))
+        .where('id', '=', rental.checkout_id)
+        .execute();
+    }
+    return rental;
+  }
+
+  /**
+   * FR-SLT-12, FR-EXP-12: Tạo checkout gia hạn liên kết với previous_rental_id.
+   */
+  async createRenewalCheckoutTx(params: {
+    readonly brandId: string;
+    readonly createdBy: string;
+    readonly holdExpiresAt: Date;
+    readonly totalAmount: string;
+    readonly agreementVersionId?: string;
+    readonly maxHeldSlots?: number;
+    readonly now: Date;
+    readonly previousRentalId: string;
+    readonly item: CheckoutCreateItemData & {
+      readonly graceFeeAmount: string;
+      readonly fragranceProductId?: string | null;
+      readonly pricePerSpray?: string | null;
+    };
+  }): Promise<
+    | { checkout: RentalCheckoutRecord; item: SlotRentalRecord }
+    | { occupied: true }
+    | { holdLimitReached: true }
+  > {
+    return this.db.transaction().execute(async (tx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${'brand_hold_slots:' + params.brandId}))`.execute(
+        tx,
+      );
+
+      if (params.maxHeldSlots !== undefined) {
+        const heldRow = await tx
+          .selectFrom('slot_rentals as sr')
+          .innerJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+          .select((eb) => eb.fn.count<string>('sr.id').as('count'))
+          .where('rc.brand_id', '=', params.brandId)
+          .where('rc.paid_at', 'is', null)
+          .where('rc.cancelled_at', 'is', null)
+          .where('rc.hold_expires_at', '>', params.now)
+          .executeTakeFirstOrThrow();
+
+        const currentHeld = Number(heldRow.count);
+        if (currentHeld + 1 > params.maxHeldSlots) {
+          return { holdLimitReached: true };
+        }
+      }
+
+      // Kiểm tra xem slot đã có phiên thanh toán DRAFT khác đang mở không
+      const draftHold = await tx
+        .selectFrom('slot_rentals as sr')
+        .innerJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
+        .select('sr.id')
+        .where('sr.slot_id', '=', params.item.slotId)
+        .where('rc.paid_at', 'is', null)
+        .where('rc.cancelled_at', 'is', null)
+        .where('rc.hold_expires_at', '>', params.now)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (draftHold) {
+        return { occupied: true };
+      }
+
+      const checkoutRow = await tx
+        .insertInto('rental_checkouts')
+        .values({
+          brand_id: params.brandId,
+          currency: 'VND',
+          total_amount: params.totalAmount,
+          hold_expires_at: params.holdExpiresAt,
+          created_by: params.createdBy,
+          agreement_version_id: params.agreementVersionId ?? null,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      const rentalRow = await tx
+        .insertInto('slot_rentals')
+        .values({
+          slot_id: params.item.slotId,
+          brand_id: params.brandId,
+          previous_rental_id: params.previousRentalId,
+          rental_package_id: params.item.rentalPackageId,
+          storage_plan_id: params.item.storagePlanId,
+          duration_months: params.item.durationMonths,
+          monthly_rent_price: params.item.monthlyRentPrice,
+          discount_percent: params.item.discountPercent,
+          storage_monthly_price: params.item.storageMonthlyPrice,
+          storage_coverage_percent: params.item.storageCoveragePercent,
+          storage_coverage_cap: params.item.storageCoverageCap,
+          rent_amount: params.item.rentAmount,
+          storage_amount: params.item.storageAmount,
+          grace_fee_amount: params.item.graceFeeAmount,
+          total_amount: params.item.totalAmount,
+          starts_at: params.item.startsAt,
+          ends_at: params.item.endsAt,
+          status: 'DRAFT',
+          currency: 'VND',
+          created_by: params.createdBy,
+          checkout_id: checkoutRow.id,
+          fragrance_product_id: params.item.fragranceProductId ?? null,
+          price_per_spray: params.item.pricePerSpray ?? null,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+      const ms = await tx
+        .selectFrom('machine_slots')
+        .select('machine_id')
+        .where('id', '=', params.item.slotId)
+        .executeTakeFirstOrThrow();
+
+      return {
+        checkout: {
+          id: checkoutRow.id,
+          brandId: checkoutRow.brand_id,
+          currency: checkoutRow.currency,
+          totalAmount: checkoutRow.total_amount,
+          holdExpiresAt: checkoutRow.hold_expires_at,
+          paidAt: checkoutRow.paid_at,
+          cancelledAt: checkoutRow.cancelled_at,
+          createdBy: checkoutRow.created_by,
+          createdAt: checkoutRow.created_at,
+          agreementVersionId: checkoutRow.agreement_version_id ?? null,
+        },
+        item: toRecord({
+          ...rentalRow,
+          machine_id: ms.machine_id,
+          hold_expires_at: checkoutRow.hold_expires_at,
+        }),
+      };
+    });
+  }
+
+  /**
+   * FR-EXP-14: Tìm các hóa đơn ở GRACE đã quá hạn ân hạn (grace_ends_at < now hoặc ends_at + 7 ngày < now).
+   */
+  async findRentalsEnteringLiquidation(
+    now: Date,
+    batchSize: number,
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals as sr')
+      .select('sr.id')
+      .where('sr.status', '=', 'GRACE')
+      .where((eb) =>
+        eb.or([
+          eb('sr.grace_ends_at', '<=', now),
+          eb.and([
+            eb('sr.grace_ends_at', 'is', null),
+            sql<boolean>`sr.ends_at + INTERVAL '7 days' <= ${now}`,
+          ]),
+        ]),
+      )
+      .orderBy('sr.ends_at', 'asc')
+      .limit(batchSize)
+      .execute();
+
+    return rows.map((r) => r.id);
+  }
+
+  /**
+   * FR-EXP-14, FR-EXP-15, FR-EXP-16: Thanh lý hóa đơn và chuyển quyền sở hữu chai sang PLATFORM.
+   */
+  async liquidateRentalTx(
+    rentalId: string,
+    now: Date,
+    executor: Executor = this.db,
+  ): Promise<{ rental: SlotRentalRecord | null; liquidatedBottles: BottleRecord[] }> {
+    // 1. Chuyển slot_rentals sang LIQUIDATED
+    const rentalRow = await executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'LIQUIDATED',
+        updated_at: now,
+      })
+      .where('id', '=', rentalId)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!rentalRow) {
+      return { rental: null, liquidatedBottles: [] };
+    }
+
+    // 2. Tìm tất cả chai của thương hiệu thuộc slot này (chai đang lắp hoặc gán source_rental_id = rentalId)
+    const slot = await executor
+      .selectFrom('machine_slots')
+      .select(['id', 'active_bottle_id'])
+      .where('id', '=', rentalRow.slot_id)
+      .executeTakeFirst();
+
+    const targetBottleIds: string[] = [];
+    if (slot?.active_bottle_id) {
+      const activeBottle = await executor
+        .selectFrom('bottles')
+        .select('id')
+        .where('id', '=', slot.active_bottle_id)
+        .where('owner', '=', 'BRAND')
+        .where('status', 'not in', ['EMPTY', 'LIQUIDATED', 'RETURNED_TO_BRAND'])
+        .executeTakeFirst();
+      if (activeBottle) targetBottleIds.push(activeBottle.id);
+    }
+
+    const assignedBottles = await executor
+      .selectFrom('bottles')
+      .select('id')
+      .where('source_rental_id', '=', rentalId)
+      .where('owner', '=', 'BRAND')
+      .where('status', 'not in', ['EMPTY', 'LIQUIDATED', 'RETURNED_TO_BRAND'])
+      .execute();
+
+    for (const b of assignedBottles) {
+      if (!targetBottleIds.includes(b.id)) {
+        targetBottleIds.push(b.id);
+      }
+    }
+
+    let liquidatedBottles: BottleRecord[] = [];
+    if (targetBottleIds.length > 0) {
+      const updatedRows = await executor
+        .updateTable('bottles')
+        .set({
+          owner: 'PLATFORM',
+          status: 'LIQUIDATED',
+          liquidated_at: now,
+          source_rental_id: rentalId,
+          updated_at: now,
+        })
+        .where('id', 'in', targetBottleIds)
+        .returningAll()
+        .execute();
+
+      liquidatedBottles = updatedRows.map((r) => ({
+        id: r.id,
+        brandId: r.brand_id,
+        owner: r.owner,
+        batchId: r.batch_id,
+        fragranceProductId: r.fragrance_product_id,
+        identifier: r.identifier,
+        status: r.status,
+        initialVolumeMl: r.initial_volume_ml,
+        currentEstimatedMl: r.current_estimated_ml,
+        installedSlotId: slot?.active_bottle_id === r.id ? slot.id : null,
+        expiresAt: r.expires_at,
+        sourceRentalId: r.source_rental_id,
+        liquidatedAt: r.liquidated_at,
+        bottleReturnId: r.bottle_return_id,
+      }));
+    }
+
+    const fullRental = await this.findById({ kind: 'UNRESTRICTED' }, rentalId, executor);
+    return { rental: fullRental, liquidatedBottles };
+  }
+
+  /**
+   * Lấy chai đang hoạt động tại slot để kiểm tra trước khi đóng hóa đơn (FR-SLT-14).
+   */
+  async getSlotActiveBottle(
+    slotId: string,
+    executor: Executor = this.db,
+  ): Promise<{ id: string; status: string; currentEstimatedMl: number } | null> {
+    const slot = await executor
+      .selectFrom('machine_slots')
+      .select(['active_bottle_id'])
+      .where('id', '=', slotId)
+      .executeTakeFirst();
+
+    if (!slot?.active_bottle_id) return null;
+
+    const bottle = await executor
+      .selectFrom('bottles')
+      .select(['id', 'status', 'current_estimated_ml'])
+      .where('id', '=', slot.active_bottle_id)
+      .executeTakeFirst();
+
+    if (!bottle) return null;
+
+    return {
+      id: bottle.id,
+      status: bottle.status,
+      currentEstimatedMl: Number(bottle.current_estimated_ml),
+    };
+  }
+
+  /**
+   * FR-SLT-14: Đóng hóa đơn LIQUIDATED và giải phóng slot nếu không còn hóa đơn nào giữ slot.
+   */
+  async closeRentalTx(
+    rentalId: string,
+    slotId: string,
+    now: Date,
+    executor: Executor = this.db,
+  ): Promise<SlotRentalRecord | null> {
+    // 1. Chuyển slot_rentals sang CLOSED
+    await executor
+      .updateTable('slot_rentals')
+      .set({
+        status: 'CLOSED',
+        updated_at: now,
+      })
+      .where('id', '=', rentalId)
+      .execute();
+
+    // 2. Kiểm tra các hóa đơn khác đang chiếm slot
+    const otherRentals = await executor
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('slot_id', '=', slotId)
+      .where('id', '<>', rentalId)
+      .where('status', 'in', ['DRAFT', 'ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'])
+      .execute();
+
+    if (otherRentals.length === 0) {
+      const slot = await executor
+        .selectFrom('machine_slots')
+        .select(['active_bottle_id', 'status'])
+        .where('id', '=', slotId)
+        .executeTakeFirst();
+
+      let clearActiveBottle = false;
+      if (slot?.active_bottle_id) {
+        const bottle = await executor
+          .selectFrom('bottles')
+          .select(['status', 'current_estimated_ml'])
+          .where('id', '=', slot.active_bottle_id)
+          .executeTakeFirst();
+        if (!bottle || bottle.status === 'EMPTY' || Number(bottle.current_estimated_ml) <= 0) {
+          clearActiveBottle = true;
+        }
+      }
+
+      await executor
+        .updateTable('machine_slots')
+        .set({
+          status: 'AVAILABLE',
+          ...(clearActiveBottle ? { active_bottle_id: null } : {}),
+          updated_at: now,
+        })
+        .where('id', '=', slotId)
+        .execute();
+    }
+
+    return this.findById({ kind: 'UNRESTRICTED' }, rentalId, executor);
+  }
+
+  private base(scope: BrandScope, executor: Executor = this.db) {
+    return executor
       .selectFrom('slot_rentals as sr')
       .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
       .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')

@@ -718,4 +718,24 @@ export const ui = {
   revenueOrderCount: '{count} đơn',
   revenuePeriod: 'Từ {from} đến {to}',
   allMachines: 'Mọi máy',
+  renew: 'Gia hạn',
+  renewModalTitle: 'Gia hạn hóa đơn thuê slot',
+  renewSuccess: 'Tạo phiên gia hạn thành công',
+  editGracePeriod: 'Sửa thời hạn ân hạn',
+  gracePeriodUpdated: 'Cập nhật thời hạn ân hạn thành công',
+  graceEndsAt: 'Hạn ân hạn',
+  selectPackagePlaceholder: 'Chọn gói thuê...',
+  selectStoragePlanPlaceholder: 'Chọn gói bảo quản...',
+  liquidate: 'Thanh lý hàng tồn',
+  liquidateModalTitle: 'Xác nhận thanh lý hàng tồn',
+  liquidateConfirmText:
+    'Thanh lý sẽ chuyển quyền sở hữu toàn bộ chai còn tồn của slot này sang Nền tảng và hóa đơn chuyển sang trạng thái LIQUIDATED. Thao tác này cần nhập mật khẩu để xác thực lại.',
+  liquidateSuccess: 'Đã thanh lý hàng tồn và chuyển quyền sở hữu thành công',
+  closeRental: 'Đóng hóa đơn',
+  closeRentalConfirmText:
+    'Bạn có chắc chắn muốn đóng hóa đơn đã thanh lý này? Thao tác này sẽ giải phóng slot để mở cho thuê mới.',
+  closeRentalSuccess: 'Đã đóng hóa đơn và giải phóng slot thành công',
+  reauthPasswordLabel: 'Mật khẩu xác thực lại',
+  reauthPasswordPlaceholder: 'Nhập mật khẩu Super Admin...',
 } as const;
+

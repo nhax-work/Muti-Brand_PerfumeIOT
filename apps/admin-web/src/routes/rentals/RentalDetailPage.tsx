@@ -4,12 +4,14 @@ import {
   Alert,
   Button,
   Card,
+  DatePicker,
   Descriptions,
   Divider,
   Empty,
   Form,
   Input,
   Modal,
+  Popconfirm,
   Radio,
   Select,
   Space,
@@ -20,8 +22,12 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined,
+  CalendarOutlined,
+  CheckCircleOutlined,
+  DeleteOutlined,
   DollarCircleOutlined,
   FileTextOutlined,
+  ReloadOutlined,
   StopOutlined,
   SwapOutlined,
   TagOutlined,
@@ -29,15 +35,21 @@ import {
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useMyBrand } from '@/routes/brand-profile/api';
+import { useRentalPackages, useStoragePlans } from '@/routes/pricing/api';
 import { errorMessage } from '@/shared/api';
+import { useAuth } from '@/shared/auth';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
 import {
   useAssignProduct,
   useAvailableSlots,
   useBrandProducts,
+  useCloseSlotRental,
+  useLiquidateSlotRental,
   useRentalInvoice,
+  useRenewSlotRental,
   useRequestNonRenewal,
+  useSetGracePeriod,
   useSetPricePerSpray,
   useSlotRental,
   useSwapSlot,
@@ -45,6 +57,7 @@ import {
   type BottleReturnMethod,
   type RentalInvoiceStage,
 } from './api';
+
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -68,11 +81,21 @@ export default function RentalDetailPage() {
   const { data: rental, refetch: refetchRental } = useSlotRental(id);
   const { data: productsData } = useBrandProducts();
   const { data: brand } = useMyBrand();
+  const { data: packages = [] } = useRentalPackages();
+  const { data: plans = [] } = useStoragePlans();
   const assignProduct = useAssignProduct();
   const setPricePerSpray = useSetPricePerSpray();
   const swapSlot = useSwapSlot();
   const requestNonRenewal = useRequestNonRenewal();
   const withdrawNonRenewal = useWithdrawNonRenewal();
+  const renewRental = useRenewSlotRental();
+  const setGracePeriod = useSetGracePeriod();
+  const liquidateRental = useLiquidateSlotRental();
+  const closeRental = useCloseSlotRental();
+
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
+  const isBrandAdmin = user?.roles.includes('BRAND_ADMIN') ?? false;
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
@@ -83,6 +106,18 @@ export default function RentalDetailPage() {
   const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
   const [priceInput, setPriceInput] = useState<string>('');
   const [selectedTargetSlotId, setSelectedTargetSlotId] = useState<string | undefined>(undefined);
+
+  const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
+  const [selectedRenewalPackageId, setSelectedRenewalPackageId] = useState<string | undefined>(
+    undefined,
+  );
+  const [selectedRenewalPlanId, setSelectedRenewalPlanId] = useState<string | undefined>(undefined);
+
+  const [isGracePeriodModalOpen, setIsGracePeriodModalOpen] = useState(false);
+  const [graceEndsAtInput, setGraceEndsAtInput] = useState<string>('');
+
+  const [isLiquidateModalOpen, setIsLiquidateModalOpen] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState<string>('');
 
   const [currentTimestamp] = useState(() => Date.now());
 
@@ -214,8 +249,78 @@ export default function RentalDetailPage() {
     }
   };
 
+  const canRenew =
+    isBrandAdmin && ['EXPIRING', 'GRACE'].includes(rental?.status ?? invoice.stage);
+  const canEditGracePeriod =
+    isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
+  const canLiquidate =
+    isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
+  const canCloseRental =
+    isSuperAdmin && (rental?.status ?? invoice.stage) === 'LIQUIDATED';
+
+  const handleRenewSubmit = async () => {
+    if (!id || !selectedRenewalPackageId || !selectedRenewalPlanId) return;
+    try {
+      const checkout = await renewRental.mutateAsync({
+        rentalId: id,
+        rentalPackageId: selectedRenewalPackageId,
+        storagePlanId: selectedRenewalPlanId,
+      });
+      message.success(t('ui.renewSuccess'));
+      setIsRenewModalOpen(false);
+      void navigate(`/rentals/checkouts/${checkout.id}`);
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
+
+  const handleSetGracePeriodSubmit = async () => {
+    if (!id || !graceEndsAtInput) return;
+    try {
+      await setGracePeriod.mutateAsync({
+        rentalId: id,
+        graceEndsAt: new Date(graceEndsAtInput).toISOString(),
+      });
+      message.success(t('ui.gracePeriodUpdated'));
+      setIsGracePeriodModalOpen(false);
+      void refetch();
+      void refetchRental();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
+
+  const handleLiquidateSubmit = async () => {
+    if (!id || !reauthPassword) return;
+    try {
+      await liquidateRental.mutateAsync({
+        rentalId: id,
+        password: reauthPassword,
+      });
+      message.success(t('ui.liquidateSuccess'));
+      setIsLiquidateModalOpen(false);
+      setReauthPassword('');
+      void refetch();
+      void refetchRental();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
+
+  const handleCloseRentalSubmit = async () => {
+    if (!id) return;
+    try {
+      await closeRental.mutateAsync(id);
+      message.success(t('ui.closeRentalSuccess'));
+      void refetch();
+      void refetchRental();
+    } catch (err: unknown) {
+      message.error(errorMessage(err, t));
+    }
+  };
+
   return (
-    <RequireRole allow={['BRAND_ADMIN']}>
+    <RequireRole allow={['BRAND_ADMIN', 'PLATFORM_SUPER_ADMIN']}>
       <div style={{ padding: '24px', maxWidth: 1000, margin: '0 auto' }}>
         <Button
           icon={<ArrowLeftOutlined />}
@@ -309,25 +414,29 @@ export default function RentalDetailPage() {
                     {t('ui.swapSlot')}
                   </Button>
                 )}
-                <Button
-                  icon={<TagOutlined />}
-                  onClick={() => {
-                    setSelectedProductId(undefined);
-                    setIsAssignModalOpen(true);
-                  }}
-                >
-                  {t('ui.assignProduct')}
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<DollarCircleOutlined />}
-                  onClick={() => {
-                    setPriceInput('');
-                    setIsPriceModalOpen(true);
-                  }}
-                >
-                  {t('ui.setPricePerSpray')}
-                </Button>
+                {isBrandAdmin && (
+                  <Button
+                    icon={<TagOutlined />}
+                    onClick={() => {
+                      setSelectedProductId(undefined);
+                      setIsAssignModalOpen(true);
+                    }}
+                  >
+                    {t('ui.assignProduct')}
+                  </Button>
+                )}
+                {isBrandAdmin && (
+                  <Button
+                    type="primary"
+                    icon={<DollarCircleOutlined />}
+                    onClick={() => {
+                      setPriceInput('');
+                      setIsPriceModalOpen(true);
+                    }}
+                  >
+                    {t('ui.setPricePerSpray')}
+                  </Button>
+                )}
                 {canRequestNonRenewal && (
                   <Button
                     danger
@@ -344,6 +453,55 @@ export default function RentalDetailPage() {
                   <Button icon={<UndoOutlined />} onClick={() => setIsWithdrawModalOpen(true)}>
                     {t('ui.withdrawNonRenewal')}
                   </Button>
+                )}
+                {canRenew && (
+                  <Button
+                    type="primary"
+                    icon={<ReloadOutlined />}
+                    onClick={() => {
+                      setSelectedRenewalPackageId(undefined);
+                      setSelectedRenewalPlanId(undefined);
+                      setIsRenewModalOpen(true);
+                    }}
+                  >
+                    {t('ui.renew')}
+                  </Button>
+                )}
+                {canEditGracePeriod && (
+                  <Button
+                    icon={<CalendarOutlined />}
+                    onClick={() => {
+                      setGraceEndsAtInput('');
+                      setIsGracePeriodModalOpen(true);
+                    }}
+                  >
+                    {t('ui.editGracePeriod')}
+                  </Button>
+                )}
+                {canLiquidate && (
+                  <Button
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={() => {
+                      setReauthPassword('');
+                      setIsLiquidateModalOpen(true);
+                    }}
+                  >
+                    {t('ui.liquidate')}
+                  </Button>
+                )}
+                {canCloseRental && (
+                  <Popconfirm
+                    title={t('ui.closeRental')}
+                    description={t('ui.closeRentalConfirmText')}
+                    onConfirm={handleCloseRentalSubmit}
+                    okText={t('ui.confirm')}
+                    cancelText={t('ui.cancel')}
+                  >
+                    <Button type="primary" icon={<CheckCircleOutlined />}>
+                      {t('ui.closeRental')}
+                    </Button>
+                  </Popconfirm>
                 )}
               </Space>
             )}
@@ -377,6 +535,17 @@ export default function RentalDetailPage() {
                 </Text>
               )}
             </Descriptions.Item>
+            {invoice.graceEndsAt && (
+              <Descriptions.Item label={t('ui.graceEndsAt')}>
+                <Text type="danger">
+                  {new Date(invoice.graceEndsAt).toLocaleDateString('vi-VN')}{' '}
+                  {new Date(invoice.graceEndsAt).toLocaleTimeString('vi-VN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </Descriptions.Item>
+            )}
           </Descriptions>
 
           <Divider />
@@ -599,6 +768,123 @@ export default function RentalDetailPage() {
           okText={t('ui.withdrawNonRenewal')}
         >
           <Paragraph>{t('ui.withdrawNonRenewalConfirmDesc')}</Paragraph>
+        </Modal>
+
+        {/* Modal Gia hạn slot (FR-SLT-12, FR-EXP-12) */}
+        <Modal
+          title={t('ui.renewModalTitle')}
+          open={isRenewModalOpen}
+          onCancel={() => setIsRenewModalOpen(false)}
+          onOk={handleRenewSubmit}
+          confirmLoading={renewRental.isPending}
+          okButtonProps={{ disabled: !selectedRenewalPackageId || !selectedRenewalPlanId }}
+          okText={t('ui.renew')}
+        >
+          <Paragraph type="secondary">
+            Gia hạn slot #{invoice.slotNumber} tại {invoice.locationName}. Sau khi chọn gói, bạn sẽ được chuyển đến trang thanh toán.
+          </Paragraph>
+          {Number(invoice.graceFeeAmount) > 0 && (
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Phí lưu kho ân hạn tạm tính: ${Number(invoice.graceFeeAmount).toLocaleString('vi-VN')} ${invoice.currency}`}
+              description="Khoản phí này được cộng vào phiên thanh toán gia hạn theo quy định."
+            />
+          )}
+          <Form layout="vertical">
+            <Form.Item label={t('ui.selectRentalPackage')} required>
+              <Select
+                placeholder={t('ui.selectPackagePlaceholder')}
+                value={selectedRenewalPackageId}
+                onChange={setSelectedRenewalPackageId}
+                options={packages
+                  .filter((p) => p.isActive)
+                  .map((p) => ({
+                    label: `${p.name} (${p.durationMonths} tháng${
+                      p.discountPercent > 0 ? ` - Giảm ${p.discountPercent}%` : ''
+                    })`,
+                    value: p.id,
+                  }))}
+              />
+            </Form.Item>
+            <Form.Item label={t('ui.selectStoragePlan')} required>
+              <Select
+                placeholder={t('ui.selectStoragePlanPlaceholder')}
+                value={selectedRenewalPlanId}
+                onChange={setSelectedRenewalPlanId}
+                options={plans
+                  .filter((p) => p.isActive)
+                  .map((p) => ({
+                    label: `${p.name} (${Number(p.monthlyPrice).toLocaleString('vi-VN')} ${
+                      p.currency
+                    }/tháng - Bồi thường ${p.coveragePercent}%)`,
+                    value: p.id,
+                  }))}
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Modal Sửa thời hạn ân hạn (FR-EXP-07) - Super Admin */}
+        <Modal
+          title={t('ui.editGracePeriod')}
+          open={isGracePeriodModalOpen}
+          onCancel={() => setIsGracePeriodModalOpen(false)}
+          onOk={handleSetGracePeriodSubmit}
+          confirmLoading={setGracePeriod.isPending}
+          okButtonProps={{ disabled: !graceEndsAtInput }}
+          okText={t('common.save')}
+        >
+          <Paragraph type="secondary">
+            Cập nhật ngày kết thúc giai đoạn ân hạn cho slot #{invoice.slotNumber}. Ngày được chọn phải ở tương lai.
+          </Paragraph>
+          {invoice.graceEndsAt && (
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>{t('ui.graceEndsAt')} hiện tại: </Text>
+              <Text>{new Date(invoice.graceEndsAt).toLocaleString('vi-VN')}</Text>
+            </div>
+          )}
+          <Form layout="vertical">
+            <Form.Item label={t('ui.graceEndsAt')} required>
+              <DatePicker
+                showTime
+                style={{ width: '100%' }}
+                onChange={(d) => setGraceEndsAtInput(d ? d.toISOString() : '')}
+              />
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* Modal Thanh lý hàng tồn (FR-EXP-14, FR-EXP-15) - Super Admin */}
+        <Modal
+          title={t('ui.liquidateModalTitle')}
+          open={isLiquidateModalOpen}
+          onCancel={() => {
+            setIsLiquidateModalOpen(false);
+            setReauthPassword('');
+          }}
+          onOk={handleLiquidateSubmit}
+          confirmLoading={liquidateRental.isPending}
+          okText={t('ui.liquidateConfirmText')}
+          okButtonProps={{ danger: true, disabled: !reauthPassword }}
+        >
+          <div style={{ marginTop: 16 }}>
+            <Paragraph type="secondary">
+              {t('slt.rentalLiquidatedContent', {
+                invoiceNumber: invoice.invoiceNumber || invoice.rentalId,
+              })}
+            </Paragraph>
+            <Form layout="vertical">
+              <Form.Item label={t('ui.reauthPasswordLabel')} required>
+                <Input.Password
+                  placeholder={t('ui.reauthPasswordPlaceholder')}
+                  value={reauthPassword}
+                  onChange={(e) => setReauthPassword(e.target.value)}
+                />
+              </Form.Item>
+            </Form>
+          </div>
         </Modal>
       </div>
     </RequireRole>
