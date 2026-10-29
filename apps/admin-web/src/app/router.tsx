@@ -172,9 +172,32 @@ export const router = createBrowserRouter([
           })),
       },
       {
+        path: '/alerts',
+        lazy: () => import('@/routes/alerts/AlertsPage').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/shipments',
         lazy: () =>
           import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/maintenance-tickets',
+        lazy: () =>
+          import('@/routes/maintenance-tickets/MaintenanceTicketsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/audit-logs',
+        lazy: () =>
+          import('@/routes/audit-logs/AuditLogsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/bottle-returns',
+        lazy: () =>
+          import('@/routes/bottle-returns/BottleReturnsPage').then((m) => ({
+            Component: m.default,
+          })),
       },
     ],
   },

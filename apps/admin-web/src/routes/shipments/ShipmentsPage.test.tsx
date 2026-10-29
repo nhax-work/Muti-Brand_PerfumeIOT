@@ -150,6 +150,23 @@ vi.mock('./api', async (importOriginal) => ({
   useSubmitAuthenticity: () => mutation(),
   useApproveAuthenticity: () => mutation(),
   useRejectAuthenticity: () => mutation(),
+  useInventoryReport: () => ({
+    data: [
+      {
+        brandId: 'brand-1',
+        fragranceProductId: 'prod-1',
+        productName: 'Aurore Matinale',
+        batchId: 'batch-1',
+        machineId: 'mch-1',
+        slotId: 'slot-1',
+        estimatedRemainingMl: 35,
+        estimatedRemainingSprays: 350,
+        lowStock: false,
+      },
+    ],
+    isLoading: false,
+    refetch: vi.fn(),
+  }),
   useOpenRefillSession: () => mutation(),
   useCloseRefillSession: () => mutation(),
 }));
@@ -228,5 +245,13 @@ describe('ShipmentsPage', () => {
     openTab(/Phiếu nạp nước hoa/);
     expect(screen.queryByText('Mở phiếu nạp')).toBeNull();
     expect(screen.queryByText('Hoàn tất nạp')).toBeNull();
+  });
+
+  it('Hiển thị tab Báo cáo tồn kho với dữ liệu tồn kho', () => {
+    renderScreen(<ShipmentsPage />);
+    openTab(/Báo cáo tồn kho/);
+    expect(screen.getByText('Tổng số mặt hàng')).toBeTruthy();
+    expect(screen.getByText('Vị trí sắp hết')).toBeTruthy();
+    expect(screen.getAllByText('Aurore Matinale').length).toBeGreaterThanOrEqual(1);
   });
 });

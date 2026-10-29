@@ -912,6 +912,19 @@ export class MchQueries {
       updatedAt: r.updated_at,
     };
   }
+
+  async hasUnfinishedPostTest(machineId: string, executor: Executor = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('maintenance_tickets')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PART', 'POST_TEST'])
+      .where((eb) =>
+        eb.or([eb('post_test_result', 'is', null), eb('post_test_result', '!=', 'PASS')]),
+      )
+      .executeTakeFirst();
+    return Boolean(row);
+  }
 }
 
 function toCredentialRecord(row: {

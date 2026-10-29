@@ -2,8 +2,9 @@
  * Nghiệp vụ báo cáo (module RPT).
  *
  * Sơ đồ máy (FR-RPT-12) — đường DUY NHẤT để Brand Admin nhìn thấy slot của mình trên một máy dùng
- * chung —, báo cáo theo slot (FR-RPT-08), xếp hạng sản phẩm (FR-RPT-06) và doanh thu bán gói
- * (FR-SLT-47, chỉ Super Admin).
+ * chung —, báo cáo theo slot (FR-RPT-08), xếp hạng sản phẩm (FR-RPT-06), doanh thu bán gói
+ * (FR-SLT-47, chỉ Super Admin), dashboard nền tảng (FR-RPT-01, 03, 04), chuỗi thời gian đơn hàng
+ * (FR-RPT-02) và báo cáo tồn kho (FR-INV-21, FR-RPT-07).
  */
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -152,5 +153,42 @@ export class RptService {
       totals,
       items,
     };
+  }
+
+  /**
+   * FR-RPT-01, FR-RPT-03, FR-RPT-04, FR-RPT-15: Dashboard nền tảng (chỉ Platform Super Admin).
+   */
+  async getPlatformDashboard(scope: BrandScope, period: ReportPeriod) {
+    if (scope.kind !== 'UNRESTRICTED') {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+    if (period.from && period.to && period.from >= period.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    return this.queries.platformDashboard(period);
+  }
+
+  /**
+   * FR-RPT-02, FR-RPT-10: Chuỗi thời gian đơn hàng và doanh thu.
+   */
+  async getOrdersTimeseries(
+    scope: BrandScope,
+    period: ReportPeriod,
+    granularity: 'DAY' | 'WEEK' | 'MONTH' = 'DAY',
+  ) {
+    if (period.from && period.to && period.from >= period.to) {
+      throw invalidField('to', 'validation.periodEndBeforeStart');
+    }
+    return this.queries.ordersTimeseries(scope, period, granularity);
+  }
+
+  /**
+   * FR-INV-21, FR-RPT-07: Báo cáo tồn kho slot và máy.
+   */
+  async getInventoryReport(
+    scope: BrandScope,
+    filter: { lowStockOnly?: boolean; machineId?: string; fragranceProductId?: string },
+  ) {
+    return this.queries.inventoryReport(scope, filter);
   }
 }

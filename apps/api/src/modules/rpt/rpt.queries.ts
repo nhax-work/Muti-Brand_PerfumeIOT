@@ -286,6 +286,278 @@ export class RptQueries {
   }
 
   /**
+   * FR-RPT-01, FR-RPT-03, FR-RPT-04, FR-RPT-15: Số liệu dashboard nền tảng.
+   */
+  async platformDashboard(period: ReportPeriod) {
+    const connRows = await this.db
+      .selectFrom('machines')
+      .select(['status', sql<string>`count(id)`.as('count')])
+      .groupBy('status')
+      .execute();
+    const machinesByConnectionStatus: Record<string, number> = {};
+    for (const r of connRows) {
+      machinesByConnectionStatus[r.status] = Number(r.count);
+    }
+
+    const modeRows = await this.db
+      .selectFrom('machines')
+      .select(['operating_mode', sql<string>`count(id)`.as('count')])
+      .groupBy('operating_mode')
+      .execute();
+    const machinesByOperatingMode: Record<string, number> = {};
+    for (const r of modeRows) {
+      machinesByOperatingMode[r.operating_mode] = Number(r.count);
+    }
+
+    let orderQuery = this.db.selectFrom('orders');
+    if (period.from) orderQuery = orderQuery.where('created_at', '>=', period.from);
+    if (period.to) orderQuery = orderQuery.where('created_at', '<', period.to);
+
+    const statusRows = await orderQuery
+      .select(['status', sql<string>`count(id)`.as('count')])
+      .groupBy('status')
+      .execute();
+    const byStatus: Record<string, number> = {};
+    let totalOrders = 0;
+    for (const r of statusRows) {
+      const c = Number(r.count);
+      byStatus[r.status] = c;
+      totalOrders += c;
+    }
+
+    let revQuery = this.db.selectFrom('orders').where('status', 'in', ['DISPENSED', 'FORFEITED']);
+    if (period.from) revQuery = revQuery.where('paid_at', '>=', period.from);
+    if (period.to) revQuery = revQuery.where('paid_at', '<', period.to);
+    const revRes = await revQuery
+      .select(sql<string>`coalesce(sum(amount), 0)::numeric(19, 4)`.as('total_revenue'))
+      .executeTakeFirst();
+    const revenueAmount = revRes?.total_revenue ?? '0';
+
+    // FR-RPT-04: Tách bạch DISPENSED, FAILED, FORFEITED (không tính FORFEITED vào lỗi kỹ thuật)
+    const successCount = byStatus['DISPENSED'] ?? 0;
+    const failureCount = byStatus['FAILED'] ?? 0;
+    const unknownCount = byStatus['EXPIRED'] ?? 0;
+    const totalTech = successCount + failureCount;
+    const successRate = totalTech > 0 ? Number((successCount / totalTech).toFixed(4)) : 1;
+
+    const alertRes = await this.db
+      .selectFrom('alerts')
+      .where('status', 'in', ['OPEN', 'ACKNOWLEDGED'])
+      .select((eb) => eb.fn.count<string>('id').as('count'))
+      .executeTakeFirst();
+    const openAlerts = Number(alertRes?.count ?? 0);
+
+    const ticketRes = await this.db
+      .selectFrom('maintenance_tickets')
+      .where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PART', 'POST_TEST'])
+      .select((eb) => eb.fn.count<string>('id').as('count'))
+      .executeTakeFirst();
+    const openTickets = Number(ticketRes?.count ?? 0);
+
+    // Bảng tỷ lệ từng máy (FR-RPT-04, ADR-0015)
+    const machineOutcomeRows = await this.db
+      .selectFrom('machines as m')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
+      .leftJoin('orders as o', (join) =>
+        join
+          .onRef('o.machine_id', '=', 'm.id')
+          .on('o.status', 'in', ['DISPENSED', 'FORFEITED', 'FAILED'])
+          .on(
+            sql<boolean>`(${period.from ?? null}::timestamptz is null or o.paid_at >= ${period.from ?? null})`,
+          )
+          .on(
+            sql<boolean>`(${period.to ?? null}::timestamptz is null or o.paid_at < ${period.to ?? null})`,
+          ),
+      )
+      .select([
+        'm.id as machine_id',
+        'm.serial_number',
+        'm.display_name',
+        'm.status as connection_status',
+        'm.operating_mode',
+        'l.name as location_name',
+        sql<string>`count(case when o.status = 'DISPENSED' then 1 end)`.as('success_count'),
+        sql<string>`count(case when o.status = 'FORFEITED' then 1 end)`.as('forfeited_count'),
+        sql<string>`count(case when o.status = 'FAILED' then 1 end)`.as('failure_count'),
+        sql<string>`count(o.id)`.as('total_paid_orders'),
+      ])
+      .groupBy([
+        'm.id',
+        'm.serial_number',
+        'm.display_name',
+        'm.status',
+        'm.operating_mode',
+        'l.name',
+      ])
+      .orderBy('m.serial_number')
+      .execute();
+
+    const machineBreakdown = machineOutcomeRows.map((r) => {
+      const sCount = Number(r.success_count);
+      const forfCount = Number(r.forfeited_count);
+      const fCount = Number(r.failure_count);
+      const totalPaid = Number(r.total_paid_orders);
+
+      const techTotal = sCount + fCount;
+      const mSuccessRate = techTotal > 0 ? Number((sCount / techTotal).toFixed(4)) : 1;
+      const mForfeitedRate = totalPaid > 0 ? Number((forfCount / totalPaid).toFixed(4)) : 0;
+      const mFailureRate = techTotal > 0 ? Number((fCount / techTotal).toFixed(4)) : 0;
+
+      return {
+        machineId: r.machine_id,
+        serialNumber: r.serial_number,
+        displayName: r.display_name,
+        locationName: r.location_name,
+        connectionStatus: r.connection_status,
+        operatingMode: r.operating_mode,
+        totalPaidOrders: totalPaid,
+        successCount: sCount,
+        forfeitedCount: forfCount,
+        failureCount: fCount,
+        successRate: mSuccessRate,
+        forfeitedRate: mForfeitedRate,
+        failureRate: mFailureRate,
+        forfeitedAlert: mForfeitedRate > 0.1, // Cảnh báo vượt ngưỡng 10%
+      };
+    });
+
+    return {
+      machinesByConnectionStatus,
+      machinesByOperatingMode,
+      orders: {
+        total: totalOrders,
+        byStatus,
+        revenue: {
+          amount: revenueAmount,
+          currency: 'VND' as const,
+        },
+        currency: 'VND' as const,
+      },
+      dispense: {
+        successCount,
+        failureCount,
+        unknownCount,
+        successRate,
+      },
+      openAlerts,
+      openTickets,
+      machineBreakdown,
+    };
+  }
+
+  /**
+   * FR-RPT-02, FR-RPT-10: Chuỗi thời gian đơn hàng và doanh thu.
+   */
+  async ordersTimeseries(
+    scope: BrandScope,
+    period: ReportPeriod,
+    granularity: 'DAY' | 'WEEK' | 'MONTH',
+  ): Promise<
+    Array<{ bucket: string; orderCount: number; revenue: { amount: string; currency: 'VND' } }>
+  > {
+    const truncUnit = granularity === 'MONTH' ? 'month' : granularity === 'WEEK' ? 'week' : 'day';
+
+    const counted = sql<boolean>`o.status in ('DISPENSED', 'FORFEITED')
+      and ${brandScopedOrders(scope, 'o')}
+      and (${scope.kind === 'BRAND' ? sql`o.revenue_owner = 'BRAND'` : sql`1=1`})
+      and (${period.from ?? null}::timestamptz is null or o.paid_at >= ${period.from ?? null})
+      and (${period.to ?? null}::timestamptz is null or o.paid_at < ${period.to ?? null})`;
+
+    const rows = await this.db
+      .selectFrom('orders as o')
+      .select([
+        sql<string>`date_trunc(${sql.val(truncUnit)}, o.paid_at)::text`.as('bucket'),
+        sql<string>`count(o.id)`.as('order_count'),
+        sql<string>`coalesce(sum(o.amount), 0)::numeric(19, 4)`.as('revenue'),
+      ])
+      .where(counted)
+      .groupBy(sql`date_trunc(${sql.val(truncUnit)}, o.paid_at)`)
+      .orderBy(sql`date_trunc(${sql.val(truncUnit)}, o.paid_at)`, 'asc')
+      .execute();
+
+    return rows.map((r) => ({
+      bucket: new Date(r.bucket).toISOString(),
+      orderCount: Number(r.order_count),
+      revenue: {
+        amount: r.revenue,
+        currency: 'VND' as const,
+      },
+    }));
+  }
+
+  /**
+   * FR-INV-21, FR-RPT-07: Báo cáo tồn kho slot và máy.
+   */
+  async inventoryReport(
+    scope: BrandScope,
+    filter: { lowStockOnly?: boolean; machineId?: string; fragranceProductId?: string },
+  ) {
+    let base = this.db
+      .selectFrom('machine_slots as s')
+      .innerJoin('machines as m', 'm.id', 's.machine_id')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
+      .leftJoin('slot_rentals as r', (join) =>
+        join.onRef('r.slot_id', '=', 's.id').on('r.status', 'in', [...HOLDING_RENTAL_STATUSES]),
+      )
+      .leftJoin('fragrance_products as fp', 'fp.id', 'r.fragrance_product_id')
+      .leftJoin('bottles as b', (join) => join.onRef('b.id', '=', 's.active_bottle_id'));
+
+    if (scope.kind === 'BRAND') {
+      base = base.where('r.brand_id', '=', scope.brandId);
+    }
+    if (filter.machineId) {
+      base = base.where('m.id', '=', filter.machineId);
+    }
+    if (filter.fragranceProductId) {
+      base = base.where('r.fragrance_product_id', '=', filter.fragranceProductId);
+    }
+
+    const rows = await base
+      .select([
+        'r.brand_id',
+        'r.fragrance_product_id',
+        'fp.name as product_name',
+        'b.batch_id',
+        's.machine_id',
+        's.id as slot_id',
+        's.slot_number',
+        's.status as slot_status',
+        's.estimated_remaining_sprays',
+        's.estimated_remaining_ml',
+        's.low_stock_threshold_ml',
+        'm.serial_number as machine_serial',
+        'l.name as location_name',
+      ])
+      .execute();
+
+    const items = rows
+      .filter((r) => r.brand_id && r.fragrance_product_id)
+      .map((r) => {
+        const sprays = r.estimated_remaining_sprays ?? 0;
+        const remainingMl = Number(r.estimated_remaining_ml ?? (sprays * 0.1).toFixed(1));
+        const threshold = Number(r.low_stock_threshold_ml ?? 10);
+        const isLow = remainingMl <= threshold || sprays < 50;
+        return {
+          brandId: r.brand_id!,
+          fragranceProductId: r.fragrance_product_id!,
+          productName: r.product_name ?? undefined,
+          batchId: r.batch_id ?? null,
+          machineId: r.machine_id,
+          slotId: r.slot_id,
+          estimatedRemainingMl: remainingMl,
+          estimatedRemainingSprays: sprays,
+          lowStock: isLow,
+        };
+      });
+
+    if (filter.lowStockOnly) {
+      return items.filter((i) => i.lowStock);
+    }
+
+    return items;
+  }
+
+  /**
    * FR-RPT-06: xếp hạng sản phẩm theo số lượt được chọn trên kiosk (`kiosk_interaction_events`), kèm số
    * đơn đã thanh toán trong cùng khoảng và bộ lọc.
    *

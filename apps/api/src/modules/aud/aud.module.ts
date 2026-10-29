@@ -10,5 +10,6 @@ import { AudService } from './aud.service.js';
   imports: [OrdModule, SltModule],
   controllers: [AuditLogsController],
   providers: [AudQueries, AudService],
+  exports: [AudService],
 })
 export class AudModule {}

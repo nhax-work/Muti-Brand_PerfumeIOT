@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { AlertsController } from './alerts.http.js';
 import { NotificationsController } from './alr.http.js';
 import { AlrQueries } from './alr.queries.js';
 import { AlrService } from './alr.service.js';
@@ -9,7 +10,7 @@ import { AlrService } from './alr.service.js';
  */
 @Global()
 @Module({
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, AlertsController],
   providers: [AlrQueries, AlrService],
   exports: [AlrService],
 })
