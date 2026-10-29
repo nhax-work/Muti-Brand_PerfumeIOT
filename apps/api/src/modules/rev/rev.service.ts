@@ -22,6 +22,7 @@ import { CLOCK, type Clock } from '../../shared/clock.js';
 import type { DB } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
+import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   RevQueries,
@@ -51,6 +52,7 @@ export class RevService {
 
   constructor(
     @Inject(RevQueries) private readonly queries: RevQueries,
+    @Inject(AlrService) private readonly alr: AlrService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -163,23 +165,17 @@ export class RevService {
         tx,
       );
       const params = { period: payout.periodMonth.slice(0, 7) };
-      for (const userId of await this.queries.activeUserIdsWithRole(
-        'PLATFORM_SUPER_ADMIN',
-        null,
+      await this.alr.notifyUsers(
         tx,
-      )) {
-        await this.queries.insertNotification(
-          {
-            brandId: payout.brandId,
-            recipientUserId: userId,
-            type: 'PAYOUT_DISPUTED',
-            subject: translate(DEFAULT_LOCALE, 'rev.payoutDisputedSubject', params),
-            content: translate(DEFAULT_LOCALE, 'rev.payoutDisputedContent', params),
-            at: now,
-          },
-          tx,
-        );
-      }
+        {
+          brandId: payout.brandId,
+          type: 'PAYOUT_DISPUTED',
+          subject: translate(DEFAULT_LOCALE, 'rev.payoutDisputedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'rev.payoutDisputedContent', params),
+          at: now,
+        },
+        await this.queries.activeUserIdsWithRole('PLATFORM_SUPER_ADMIN', null, tx),
+      );
       return this.queries.lockPayout(scope, id, tx);
     });
     return toPayoutDto(updated!);
@@ -290,23 +286,17 @@ export class RevService {
     at: Date,
   ): Promise<void> {
     const params = { period: payout.periodMonth.slice(0, 7) };
-    for (const userId of await this.queries.activeUserIdsWithRole(
-      'BRAND_ADMIN',
-      payout.brandId,
+    await this.alr.notifyUsers(
       tx,
-    )) {
-      await this.queries.insertNotification(
-        {
-          brandId: payout.brandId,
-          recipientUserId: userId,
-          type,
-          subject: translate(DEFAULT_LOCALE, `${keyPrefix}Subject` as MessageKey, params),
-          content: translate(DEFAULT_LOCALE, `${keyPrefix}Content` as MessageKey, params),
-          at,
-        },
-        tx,
-      );
-    }
+      {
+        brandId: payout.brandId,
+        type,
+        subject: translate(DEFAULT_LOCALE, `${keyPrefix}Subject` as MessageKey, params),
+        content: translate(DEFAULT_LOCALE, `${keyPrefix}Content` as MessageKey, params),
+        at,
+      },
+      await this.queries.activeUserIdsWithRole('BRAND_ADMIN', payout.brandId, tx),
+    );
   }
 }
 

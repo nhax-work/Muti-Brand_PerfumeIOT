@@ -486,30 +486,6 @@ export class DspQueries {
     return { machineId: slot.machine_id, from: slot.status };
   }
 
-  /**
-   * Cảnh báo FR-ALR-04. Chống trùng bằng `uq_alert_dedup_unresolved` (FR-ALR-07): còn cảnh báo chưa
-   * xử lý cùng slot thì không tạo thêm.
-   */
-  async raiseConsecutiveFailAlert(
-    alert: {
-      readonly brandId: string | null;
-      readonly machineId: string;
-      readonly slotId: string;
-      readonly title: string;
-      readonly description: string;
-      readonly at: Date;
-    },
-    executor: Executor,
-  ): Promise<void> {
-    await sql`
-      INSERT INTO alerts (brand_id, machine_id, slot_id, type, severity, deduplication_key, title,
-                          description, first_occurred_at, last_occurred_at)
-      VALUES (${alert.brandId}, ${alert.machineId}, ${alert.slotId}, 'CONSECUTIVE_DISPENSE_FAILURES',
-              'HIGH', ${`CONSECUTIVE_DISPENSE_FAILURES:${alert.slotId}`}, ${alert.title},
-              ${alert.description}, ${alert.at}, ${alert.at})
-      ON CONFLICT DO NOTHING`.execute(executor);
-  }
-
   // -----------------------------------------------------------------------------------
   // DRAINING tự sang MAINTENANCE (FR-MNT-05, ADR-0015 mục 7)
   // -----------------------------------------------------------------------------------
@@ -593,32 +569,6 @@ export class DspQueries {
       )
       .execute();
     return rows.flatMap((r) => (r.brand_id ? [{ userId: r.id, brandId: r.brand_id }] : []));
-  }
-
-  async insertNotification(
-    notification: {
-      readonly brandId: string;
-      readonly recipientUserId: string;
-      readonly type: string;
-      readonly subject: string;
-      readonly content: string;
-      readonly at: Date;
-    },
-    executor: Executor,
-  ): Promise<void> {
-    await executor
-      .insertInto('notifications')
-      .values({
-        brand_id: notification.brandId,
-        recipient_user_id: notification.recipientUserId,
-        type: notification.type,
-        channel: 'IN_APP',
-        subject: notification.subject,
-        content: notification.content,
-        status: 'PENDING',
-        created_at: notification.at,
-      })
-      .execute();
   }
   // -----------------------------------------------------------------------------------
   // Lượt xịt chẩn đoán và tra cứu lệnh (FR-MNT-09, FR-DSP-20)

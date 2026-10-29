@@ -832,32 +832,6 @@ export class InvQueries {
       .execute();
   }
 
-  /**
-   * Cảnh báo FR-ALR-02. Chống trùng bằng `uq_alert_dedup_unresolved` (FR-ALR-07): còn cảnh báo cùng
-   * loại chưa xử lý trên slot thì không tạo thêm.
-   */
-  async raiseStockAlert(
-    alert: {
-      readonly type: 'LOW_STOCK' | 'SLOT_EMPTY';
-      readonly brandId: string;
-      readonly machineId: string;
-      readonly slotId: string;
-      readonly title: string;
-      readonly description: string;
-      readonly at: Date;
-    },
-    tx: Executor,
-  ): Promise<void> {
-    const severity = alert.type === 'SLOT_EMPTY' ? 'HIGH' : 'WARNING';
-    await sql`
-      INSERT INTO alerts (brand_id, machine_id, slot_id, type, severity, deduplication_key, title,
-                          description, first_occurred_at, last_occurred_at)
-      VALUES (${alert.brandId}, ${alert.machineId}, ${alert.slotId}, ${alert.type},
-              ${severity}::alert_severity, ${`${alert.type}:${alert.slotId}`}, ${alert.title},
-              ${alert.description}, ${alert.at}, ${alert.at})
-      ON CONFLICT DO NOTHING`.execute(tx);
-  }
-
   // -----------------------------------------------------------------------------------
   // Phiếu nạp
   // -----------------------------------------------------------------------------------
@@ -1119,38 +1093,6 @@ export class InvQueries {
       )
       .execute();
     return rows.map((r) => r.id);
-  }
-
-  async insertInAppNotifications(
-    data: {
-      readonly brandId: string;
-      readonly recipients: readonly string[];
-      readonly type: string;
-      readonly subject: string;
-      readonly content: string;
-      readonly referenceId: string;
-      readonly at: Date;
-    },
-    executor: Executor,
-  ): Promise<void> {
-    if (data.recipients.length === 0) return;
-    await executor
-      .insertInto('notifications')
-      .values(
-        data.recipients.map((recipient) => ({
-          brand_id: data.brandId,
-          recipient_user_id: recipient,
-          type: data.type,
-          channel: 'IN_APP',
-          subject: data.subject,
-          content: data.content,
-          status: 'SENT' as const,
-          sent_at: data.at,
-          reference_id: data.referenceId,
-          created_at: data.at,
-        })),
-      )
-      .execute();
   }
 }
 

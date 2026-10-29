@@ -1,6 +1,5 @@
 /** Nhận dữ liệu thiết bị vào các bảng IOT đã có; thời gian kết nối dùng đồng hồ server. */
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
@@ -10,6 +9,7 @@ import type {
   MachineOperatingMode,
 } from '../../shared/db/types.generated.js';
 import type { Transaction } from 'kysely';
+import { AlrService } from '../alr/index.js';
 import type { DeviceEvent, Heartbeat, Telemetry } from './iot.messages.js';
 
 export interface DeviceConfiguration {
@@ -41,6 +41,7 @@ export class IotService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(AlrService) private readonly alr: AlrService,
   ) {}
 
   async heartbeat(message: Heartbeat): Promise<boolean> {
@@ -189,27 +190,17 @@ export class IotService {
           .execute();
         await this.history(tx, machine.id, machine.status, next, now);
         if (next === 'OFFLINE') {
-          await tx
-            .insertInto('alerts')
-            .values({
-              machine_id: machine.id,
+          await this.alr.raiseAlert(
+            {
+              machineId: machine.id,
               type: 'MACHINE_OFFLINE',
               severity: 'HIGH',
-              deduplication_key: `machine-offline:${machine.id}`,
+              deduplicationKey: `machine-offline:${machine.id}`,
               title: 'Machine offline',
-              first_occurred_at: now,
-              last_occurred_at: now,
-            })
-            .onConflict((oc) =>
-              oc
-                .column('deduplication_key')
-                .where('status', 'in', ['OPEN', 'ACKNOWLEDGED', 'IN_PROGRESS'])
-                .doUpdateSet({
-                  last_occurred_at: now,
-                  occurrence_count: sql`alerts.occurrence_count + 1`,
-                }),
-            )
-            .execute();
+              at: now,
+            },
+            tx,
+          );
         }
         count++;
       }

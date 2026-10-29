@@ -129,17 +129,17 @@ export class RfqService {
           brand: created.brandName,
           product: created.productName,
         };
-        await this.queries.insertInAppNotifications(
+        await this.alr.notifyUsers(
+          tx,
           {
             brandId: rental.brandId,
-            recipients: await this.queries.staffRecipients(tx),
             type: 'REFILL_REQUEST_SUBMITTED',
             subject: translate(DEFAULT_LOCALE, 'rfq.newRequestSubject', params),
             content: translate(DEFAULT_LOCALE, 'rfq.newRequestContent', params),
             referenceId: requestId,
             at: now,
           },
-          tx,
+          await this.queries.staffRecipients(tx),
         );
         return requestId;
       })

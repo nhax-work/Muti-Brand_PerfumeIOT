@@ -23,6 +23,7 @@ import { hasPermission } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   AlrQueries,
+  type AlertDuplicatePolicy,
   type AlertFilter,
   type AlertRecord,
   type AlertViewer,
@@ -31,6 +32,7 @@ import {
   type NotificationRecord,
   type NotificationViewer,
   type QueuedNotification,
+  type UserNotification,
 } from './alr.queries.js';
 
 export type Notification = Schema<'Notification'>;
@@ -72,6 +74,18 @@ export class AlrService {
     channels: readonly NotificationChannel[] = ['IN_APP', 'EMAIL'],
   ): Promise<number> {
     return this.queries.queueForBrandAdmins(notification, channels, tx);
+  }
+
+  /**
+   * Thông báo trong ứng dụng cho danh sách người nhận do nghiệp vụ chọn (Super Admin, Brand Admin của
+   * các thương hiệu trên một máy…), trong `tx` của người gọi. Không gửi email.
+   */
+  notifyUsers(
+    tx: Executor,
+    notification: UserNotification,
+    recipientUserIds: readonly string[],
+  ): Promise<void> {
+    return this.queries.insertInAppForUsers(notification, recipientUserIds, tx);
   }
 
   /**
@@ -328,6 +342,12 @@ export class AlrService {
     return this.getAlert(actor, id);
   }
 
+  /**
+   * Cửa duy nhất để sinh cảnh báo (FR-ALR-01 ÷ 05) — module khác không ghi bảng `alerts`. Chống trùng
+   * theo `deduplicationKey` (FR-ALR-07), cách xử lý bản trùng theo `onDuplicate`.
+   *
+   * @returns true nếu tạo cảnh báo mới
+   */
   async raiseAlert(
     data: {
       readonly brandId?: string | null;
@@ -341,15 +361,17 @@ export class AlrService {
       readonly at?: Date;
     },
     tx?: Executor,
-  ): Promise<void> {
+    onDuplicate: AlertDuplicatePolicy = 'COUNT',
+  ): Promise<boolean> {
     const at = data.at ?? this.clock.now();
-    await this.queries.insertOrUpdateAlert(
+    return this.queries.insertOrUpdateAlert(
       {
         ...data,
         firstOccurredAt: at,
         lastOccurredAt: at,
       },
       tx ?? this.queries.database,
+      onDuplicate,
     );
   }
 

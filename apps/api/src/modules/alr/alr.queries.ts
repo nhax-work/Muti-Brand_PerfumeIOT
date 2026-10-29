@@ -101,6 +101,22 @@ export interface QueuedNotification {
   readonly at: Date;
 }
 
+/** Thông báo trong ứng dụng gửi tới người nhận do module gọi tự chọn (không chỉ Brand Admin). */
+export interface UserNotification {
+  readonly brandId: string;
+  readonly type: string;
+  readonly subject: string;
+  readonly content: string;
+  readonly referenceId?: string | null;
+  readonly at: Date;
+}
+
+/**
+ * Khi đã có cảnh báo chưa xử lý cùng `deduplication_key` (FR-ALR-07): `COUNT` ghi nhận thêm một lần
+ * xảy ra, `IGNORE` để nguyên — cho cảnh báo chỉ sinh lúc vượt ngưỡng.
+ */
+export type AlertDuplicatePolicy = 'COUNT' | 'IGNORE';
+
 /** Email đã khóa để gửi: địa chỉ chụp lúc xếp hàng, thiếu thì lấy email hiện tại của người nhận. */
 export interface EmailToDispatch {
   readonly id: string;
@@ -575,10 +591,11 @@ export class AlrQueries {
       readonly lastOccurredAt?: Date;
     },
     executor: Executor,
-  ): Promise<void> {
+    onDuplicate: AlertDuplicatePolicy = 'COUNT',
+  ): Promise<boolean> {
     const firstAt = data.firstOccurredAt ?? new Date();
     const lastAt = data.lastOccurredAt ?? firstAt;
-    await sql`
+    const insert = sql`
       INSERT INTO alerts (
         brand_id, machine_id, slot_id, type, severity, deduplication_key,
         title, description, first_occurred_at, last_occurred_at, occurrence_count
@@ -586,12 +603,48 @@ export class AlrQueries {
         ${data.brandId ?? null}, ${data.machineId}, ${data.slotId ?? null},
         ${data.type}, ${data.severity}, ${data.deduplicationKey},
         ${data.title}, ${data.description ?? null}, ${firstAt}, ${lastAt}, 1
-      )
+      )`;
+    if (onDuplicate === 'IGNORE') {
+      const { rows } = await sql<{ id: string }>`${insert}
+        ON CONFLICT (deduplication_key) WHERE status IN ('OPEN', 'ACKNOWLEDGED')
+        DO NOTHING
+        RETURNING id`.execute(executor);
+      return rows.length > 0;
+    }
+    // xmax = 0 chỉ đúng với dòng vừa INSERT; dòng đi nhánh DO UPDATE mang xmax của transaction này.
+    const { rows } = await sql<{ inserted: boolean }>`${insert}
       ON CONFLICT (deduplication_key) WHERE status IN ('OPEN', 'ACKNOWLEDGED')
       DO UPDATE SET
         last_occurred_at = EXCLUDED.last_occurred_at,
         occurrence_count = alerts.occurrence_count + 1
-    `.execute(executor);
+      RETURNING (xmax = 0) AS inserted`.execute(executor);
+    return rows[0]?.inserted === true;
+  }
+
+  /** Thông báo trong ứng dụng cho từng người nhận — hiện ngay nên ghi SENT luôn. */
+  async insertInAppForUsers(
+    notification: UserNotification,
+    recipientUserIds: readonly string[],
+    executor: Executor,
+  ): Promise<void> {
+    if (recipientUserIds.length === 0) return;
+    await executor
+      .insertInto('notifications')
+      .values(
+        recipientUserIds.map((recipient) => ({
+          brand_id: notification.brandId,
+          recipient_user_id: recipient,
+          type: notification.type,
+          channel: 'IN_APP' as const,
+          subject: notification.subject,
+          content: notification.content,
+          status: 'SENT' as const,
+          sent_at: notification.at,
+          reference_id: notification.referenceId ?? null,
+          created_at: notification.at,
+        })),
+      )
+      .execute();
   }
 
   /**

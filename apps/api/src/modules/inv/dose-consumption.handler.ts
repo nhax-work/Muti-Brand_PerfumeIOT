@@ -10,12 +10,16 @@ import { Global, Inject, Injectable, Module } from '@nestjs/common';
 import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Transaction } from 'kysely';
 import type { DB } from '../../shared/db/index.js';
+import { AlrService } from '../alr/index.js';
 import { DOSE_CONSUMER, type DoseConsumer } from '../dsp/index.js';
 import { InvQueries } from './inv.queries.js';
 
 @Injectable()
 export class InvDoseConsumer implements DoseConsumer {
-  constructor(@Inject(InvQueries) private readonly queries: InvQueries) {}
+  constructor(
+    @Inject(InvQueries) private readonly queries: InvQueries,
+    @Inject(AlrService) private readonly alr: AlrService,
+  ) {}
 
   /**
    * Trừ một liều `calibrated_dosage_ml` khỏi chai đang lắp, khách hay chẩn đoán (FR-INV-10). Slot không
@@ -63,27 +67,34 @@ export class InvDoseConsumer implements DoseConsumer {
       thresholdMl: threshold === null ? 0 : Number(fromUnits(threshold)),
       dosageMl: Number(stock.calibratedDosageMl),
     };
+    // Còn cảnh báo chưa xử lý cùng loại trên slot thì giữ nguyên (FR-ALR-07) — 'IGNORE'.
     const target = { brandId: stock.brandId, machineId: stock.machineId, slotId: stock.slotId, at };
     if (threshold !== null && low && before >= threshold) {
-      await this.queries.raiseStockAlert(
+      await this.alr.raiseAlert(
         {
           ...target,
           type: 'LOW_STOCK',
+          severity: 'WARNING',
+          deduplicationKey: `LOW_STOCK:${stock.slotId}`,
           title: translate(DEFAULT_LOCALE, 'inv.lowStockAlertTitle', params),
           description: translate(DEFAULT_LOCALE, 'inv.lowStockAlertContent', params),
         },
         tx,
+        'IGNORE',
       );
     }
     if (empty && before >= dosage) {
-      await this.queries.raiseStockAlert(
+      await this.alr.raiseAlert(
         {
           ...target,
           type: 'SLOT_EMPTY',
+          severity: 'HIGH',
+          deduplicationKey: `SLOT_EMPTY:${stock.slotId}`,
           title: translate(DEFAULT_LOCALE, 'inv.slotEmptyAlertTitle', params),
           description: translate(DEFAULT_LOCALE, 'inv.slotEmptyAlertContent', params),
         },
         tx,
+        'IGNORE',
       );
     }
   }

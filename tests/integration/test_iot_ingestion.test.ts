@@ -3,6 +3,7 @@ import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MqttClientAdapter } from '../../apps/api/src/adapters/mqtt/index.js';
+import { AlrService } from '../../apps/api/src/modules/alr/index.js';
 import { IotMqttGateway } from '../../apps/api/src/modules/iot/iot.mqtt.js';
 import {
   IotService,
@@ -32,7 +33,12 @@ beforeAll(async () => {
   app = await createTestApp();
   config = app.get(APP_CONFIG);
   now = new Date();
-  iot = new IotService(app.get<Database>(DATABASE), { now: () => now }, config);
+  iot = new IotService(
+    app.get<Database>(DATABASE),
+    { now: () => now },
+    config,
+    app.get(AlrService),
+  );
   const adapter = app.get(MqttClientAdapter);
   vi.spyOn(adapter, 'subscribe').mockImplementation((pattern, _qos, handle) => {
     handlers.set(pattern, handle);

@@ -31,6 +31,7 @@ import type { DB } from '../../shared/db/index.js';
 import type { CommandStatus, Json } from '../../shared/db/types.generated.js';
 import { AppError } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
+import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { OrdService } from '../ord/index.js';
 import {
@@ -120,6 +121,7 @@ export class DspService {
     @Inject(DspQueries) private readonly queries: DspQueries,
     @Inject(OrdService) private readonly orders: OrdService,
     @Inject(DOSE_CONSUMER) private readonly inventory: DoseConsumer,
+    @Inject(AlrService) private readonly alr: AlrService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -463,16 +465,16 @@ export class DspService {
         await this.queries.enterMaintenance(machine.id, DRAINING_COMPLETED, now, tx);
         const params = { machine: machine.displayName };
         for (const admin of await this.queries.listAffectedBrandAdmins(machine.id, tx)) {
-          await this.queries.insertNotification(
+          await this.alr.notifyUsers(
+            tx,
             {
               brandId: admin.brandId,
-              recipientUserId: admin.userId,
               type: 'MACHINE_MAINTENANCE',
               subject: translate(DEFAULT_LOCALE, 'dsp.maintenanceSubject', params),
               content: translate(DEFAULT_LOCALE, 'dsp.maintenanceContent', params),
               at: now,
             },
-            tx,
+            [admin.userId],
           );
         }
         await this.audit.log(
@@ -531,16 +533,20 @@ export class DspService {
     const changed = await this.queries.putSlotInMaintenance(command.slotId, tx);
     if (!changed) return;
     const tokens = recent.map((c) => c.commandToken);
-    await this.queries.raiseConsecutiveFailAlert(
+    await this.alr.raiseAlert(
       {
         brandId: command.brandId,
         machineId: changed.machineId,
         slotId: command.slotId,
+        type: 'CONSECUTIVE_DISPENSE_FAILURES',
+        severity: 'HIGH',
+        deduplicationKey: `CONSECUTIVE_DISPENSE_FAILURES:${command.slotId}`,
         title: `${threshold} lượt xịt lỗi liên tiếp — slot đã tự tắt`,
         description: `Slot ${command.slotId} chuyển MAINTENANCE sau các lệnh ${tokens.join(', ')} (FR-ALR-04, FR-MCH-18).`,
         at: now,
       },
       tx,
+      'IGNORE',
     );
     await this.audit.log(
       {
