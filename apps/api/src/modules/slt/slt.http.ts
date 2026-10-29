@@ -27,7 +27,12 @@ import { z } from 'zod';
 import { originOf } from '../../shared/http/request-origin.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
-import { CurrentBrandScope, CurrentUser, type AuthenticatedUser } from '../auth/index.js';
+import {
+  CurrentBrandScope,
+  CurrentUser,
+  RequireReauth,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { SltService } from './slt.service.js';
 
 type HttpRequest = Parameters<typeof originOf>[0];
@@ -89,6 +94,15 @@ const SlotSwapBody = z.object({
 
 const NonRenewalBody = z.object({
   returnMethod: z.enum(['WAREHOUSE_PICKUP', 'SHIP_TO_BRAND'] as const),
+});
+
+const RenewRentalBody = z.object({
+  rentalPackageId: z.string().uuid(),
+  storagePlanId: z.string().uuid(),
+});
+
+const GracePeriodBody = z.object({
+  graceEndsAt: z.string().datetime({ offset: true }).or(z.string().datetime()),
 });
 
 /** openapi.yaml: AgreementAccept. */
@@ -191,6 +205,59 @@ export class SltController {
   ) {
     const { id } = parseBody(IdParam, params);
     return this.service.withdrawNonRenewal(actor, scope, id);
+  }
+
+  /** FR-SLT-12, FR-EXP-12, FR-EXP-13: Brand Admin mua gói mới gia hạn cho slot đang EXPIRING/GRACE. */
+  @Post(':id/renew')
+  @HttpCode(201)
+  renew(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const parsed = parseBody(RenewRentalBody, body);
+    return this.service.renew(actor, scope, id, parsed);
+  }
+
+  /** FR-EXP-07: Platform Super Admin ấn định ngày kết thúc ân hạn. */
+  @Put(':id/grace-period')
+  @HttpCode(200)
+  setGracePeriod(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { graceEndsAt } = parseBody(GracePeriodBody, body);
+    return this.service.setGracePeriod(actor, scope, id, new Date(graceEndsAt));
+  }
+
+  /** FR-EXP-14, FR-EXP-15, FR-EXP-16: Platform Super Admin thanh lý hóa đơn (chuyển quyền chai sang PLATFORM). */
+  @Post(':id/liquidate')
+  @RequireReauth()
+  @HttpCode(200)
+  liquidate(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.liquidate(actor, scope, id);
+  }
+
+  /** FR-SLT-14: Platform Super Admin đóng hóa đơn đã thanh lý và giải phóng slot. */
+  @Post(':id/close')
+  @HttpCode(200)
+  close(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.close(actor, scope, id);
   }
 }
 

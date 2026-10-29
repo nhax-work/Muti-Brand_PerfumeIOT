@@ -6,7 +6,6 @@ import {
   Checkbox,
   Form,
   Input,
-  InputNumber,
   Modal,
   Select,
   Space,
@@ -40,12 +39,10 @@ const STATUS_TAGS: Record<RefillStatus, { color: string; icon: React.ReactNode }
 interface OpenValues {
   machineId: string;
   slotId: string;
-  beforeWeightG?: number;
 }
 
 interface CloseValues {
   newBottleId: string;
-  afterWeightG?: number;
   checklistCompleted: boolean;
   notes?: string;
 }
@@ -89,10 +86,7 @@ export function RefillTab({
     const values = await openForm.validateFields().catch(() => null);
     if (!values) return;
     try {
-      await open.mutateAsync({
-        slotId: values.slotId,
-        ...(values.beforeWeightG !== undefined ? { beforeWeightG: values.beforeWeightG } : {}),
-      });
+      await open.mutateAsync({ slotId: values.slotId });
       void message.success(t('inv.refillSessionOpened'));
       setOpening(false);
       openForm.resetFields();
@@ -110,7 +104,6 @@ export function RefillTab({
         id: closing.id,
         newBottleId: values.newBottleId,
         checklistCompleted: true,
-        ...(values.afterWeightG !== undefined ? { afterWeightG: values.afterWeightG } : {}),
         ...(values.notes ? { notes: values.notes } : {}),
       });
       void message.success(t('inv.refillSessionClosed'));
@@ -144,13 +137,6 @@ export function RefillTab({
           {t(`refillSessionStatus.${status}` as MessageKey)}
         </Tag>
       ),
-    },
-    {
-      title: t('ui.invAfterWeight'),
-      dataIndex: 'afterWeightG',
-      key: 'afterWeightG',
-      align: 'right',
-      render: (value: number | null) => value ?? '—',
     },
     {
       title: t('ui.invNotes'),
@@ -239,9 +225,6 @@ export function RefillTab({
               }))}
             />
           </Form.Item>
-          <Form.Item name="beforeWeightG" label={t('ui.invBeforeWeight')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
         </Form>
       </Modal>
 
@@ -265,9 +248,6 @@ export function RefillTab({
               notFoundContent={t('ui.noBottleInStock')}
               options={bottleOptions}
             />
-          </Form.Item>
-          <Form.Item name="afterWeightG" label={t('ui.invAfterWeight')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
             name="checklistCompleted"

@@ -113,10 +113,7 @@ export class ExpService {
       readyAt,
       pickupDeadline,
       createdBy: actor.userId,
-      bottles: input.bottles.map((b) => ({
-        bottleId: b.bottleId,
-        measuredWeightG: b.measuredWeightG,
-      })),
+      bottles: input.bottles.map((b) => ({ bottleId: b.bottleId })),
     });
 
     // 5. Ghi Audit log (FR-AUD-07)
@@ -135,7 +132,7 @@ export class ExpService {
         pickupDeadline: created.pickupDeadline,
       },
       metadata: {
-        measuredBottles: input.bottles,
+        bottleIds: input.bottles.map((b) => b.bottleId),
       },
     });
 

@@ -24,9 +24,9 @@ export interface RentalForReturnInfo {
   readonly brandAddress: string | null;
 }
 
+/** Lượng còn lại của chai giữ theo ước tính `current_estimated_ml`, không cân (FR-INV-15, ADR-0019). */
 export interface BottleToReturnInput {
   readonly bottleId: string;
-  readonly measuredWeightG: number;
 }
 
 export interface CreateBottleReturnData {
@@ -250,14 +250,13 @@ export class ExpQueries {
       const returnId = insertedReturn.id;
 
       // 2. Cập nhật các chai trong phiếu:
-      // status = 'RETURNED_TO_BRAND', bottle_return_id = returnId, current_measured_weight_g, removed_at
+      // status = 'RETURNED_TO_BRAND', bottle_return_id = returnId, removed_at
       for (const item of data.bottles) {
         await trx
           .updateTable('bottles')
           .set({
             status: 'RETURNED_TO_BRAND' as BottleStatus,
             bottle_return_id: returnId,
-            current_measured_weight_g: String(item.measuredWeightG),
             removed_at: data.readyAt,
             updated_at: new Date(),
           })

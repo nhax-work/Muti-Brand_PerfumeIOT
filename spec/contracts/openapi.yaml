@@ -1389,11 +1389,14 @@ components:
       properties:
         id: { type: string, format: uuid }
         brandId: { type: string, format: uuid }
+        brandName: { type: string }
         bottleId: { type: string, format: uuid }
         bottleIdentifier: { type: string }
         productName: { type: string }
         slotRentalId: { type: string, format: uuid }
+        invoiceNumber: { type: [string, 'null'] }
         storagePlanName: { type: string }
+        damagedAt: { type: [string, 'null'], format: date-time }
         bottleRetailPrice: { $ref: '#/components/schemas/Money' }
         coveragePercent: { type: number, minimum: 0, maximum: 100 }
         amount: { $ref: '#/components/schemas/Money' }
@@ -1650,6 +1653,27 @@ components:
           type: [string, 'null']
           format: uuid
           description: Phiếu trả hàng chứa chai (FR-EXP-26). Có giá trị khi status = RETURNED_TO_BRAND.
+        damagedAt: { type: [string, 'null'], format: date-time }
+        damageReason: { type: [string, 'null'] }
+    BottleDamageReport:
+      type: object
+      required: [reason]
+      description: >-
+        Inventory Staff ghi nhận chai hư hỏng (FR-SLT-44, ADR-0018). Lý do là căn cứ của khoản bồi
+        thường.
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    BottleDamageResult:
+      type: object
+      required: [bottle, compensation]
+      description: >-
+        compensation là null khi không bồi thường: chai EXPIRED/LIQUIDATED, thuộc nền tảng, thương
+        hiệu không có hóa đơn hiệu lực, hóa đơn không chụp gói bảo quản, sản phẩm chưa khai giá bán
+        lẻ, hoặc hạn mức đã hết (FR-SLT-44 AC4).
+      properties:
+        bottle: { $ref: '#/components/schemas/Bottle' }
+        compensation:
+          oneOf: [{ $ref: '#/components/schemas/StorageCompensation' }, { type: 'null' }]
     BottleReturn:
       type: object
       required:
@@ -1681,9 +1705,10 @@ components:
       type: object
       required: [slotRentalId, bottles]
       description: >-
-        Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại
-        từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot →
-        UNAVAILABLE (FR-MCH-17), thông báo Brand Admin.
+        Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26). Lượng còn lại từng
+        chai lấy theo ước tính `currentEstimatedMl`, không nhập tay (FR-INV-15, ADR-0019). Cùng
+        transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17),
+        thông báo Brand Admin.
       properties:
         slotRentalId: { type: string, format: uuid }
         bottles:
@@ -1691,10 +1716,9 @@ components:
           minItems: 1
           items:
             type: object
-            required: [bottleId, measuredWeightG]
+            required: [bottleId]
             properties:
               bottleId: { type: string, format: uuid }
-              measuredWeightG: { type: number, minimum: 0 }
     BottleReturnHandover:
       type: object
       required: [recipientName]
@@ -1717,7 +1741,6 @@ components:
           maxLength: 150
           description: Mã định danh duy nhất trong phạm vi thương hiệu (FR-INV-02).
         initialVolumeMl: { type: number, exclusiveMinimum: 0 }
-        emptyWeightG: { type: number, minimum: 0 }
         expiresAt: { type: string, format: date-time }
     RefillSession:
       type: object
@@ -1736,8 +1759,6 @@ components:
         performedBy: { type: string, format: uuid }
         status: { $ref: '#/components/schemas/RefillStatus' }
         checklistCompleted: { type: boolean }
-        beforeWeightG: { type: [number, 'null'] }
-        afterWeightG: { type: [number, 'null'] }
         notes: { type: [string, 'null'] }
         startedAt: { type: string, format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
@@ -1747,7 +1768,6 @@ components:
       description: Mở phiếu nạp trước khi thao tác (FR-INV-29).
       properties:
         slotId: { type: string, format: uuid }
-        beforeWeightG: { type: number, minimum: 0 }
         refillRequestId:
           type: string
           format: uuid
@@ -1763,14 +1783,14 @@ components:
       properties:
         newBottleId: { type: string, format: uuid }
         checklistCompleted: { type: boolean, const: true }
-        afterWeightG: { type: number, minimum: 0 }
         notes: { type: string }
     BottleRemoval:
       type: object
-      required: [remainingMl]
-      description: Tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại (FR-INV-15).
+      description: >-
+        Tháo chai khỏi slot và trả về kho (FR-INV-15). Lượng còn lại lấy theo ước tính
+        `currentEstimatedMl` của chai, không nhập tay; lệch thực tế thì ghi điều chỉnh tồn kho
+        (FR-INV-16, ADR-0019).
       properties:
-        remainingMl: { type: number, minimum: 0 }
         notes: { type: string }
     InventoryAdjustment:
       type: object
@@ -1813,7 +1833,20 @@ components:
         rejectionReason: { type: [string, 'null'] }
         scheduledAt: { type: [string, 'null'], format: date-time }
         refillSessionId: { type: [string, 'null'], format: uuid }
+        note: { type: [string, 'null'] }
+        machineId: { type: string, format: uuid }
+        machineSerial: { type: string }
+        slotNumber: { type: integer }
+        productName: { type: string }
+        brandName: { type: string }
         createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    RefillRequestSchedule:
+      type: object
+      required: [scheduledAt]
+      description: Lên lịch xử lý yêu cầu đã chấp nhận (FR-RFQ-07, ADR-0018).
+      properties:
+        scheduledAt: { type: string, format: date-time }
     RefillRequestCreate:
       type: object
       required: [slotRentalId, reason]
@@ -2177,7 +2210,6 @@ components:
           type: [string, 'null']
           description: Chỉ dùng mã trong spec/errors.md mục "Lệnh xịt".
         executedAt: { type: [string, 'null'], format: date-time }
-        measuredQuantityMl: { type: [number, 'null'] }
         receivedAt: { type: string, format: date-time }
     DiagnosticDispenseCreate:
       type: object
@@ -2426,6 +2458,11 @@ components:
         slotId: { type: [string, 'null'], format: uuid }
         productName: { type: [string, 'null'] }
         estimatedRemainingSprays: { type: [integer, 'null'] }
+        lowStock:
+          type: boolean
+          description: >-
+            Chỉ có trên slot của người gọi. true khi chai đang lắp ở LOW/EMPTY hoặc lượng còn lại chạm
+            low_stock_threshold_ml của slot — màn hình gợi ý tạo yêu cầu bổ sung (FR-RFQ-03, ADR-0018).
     AuditLogEntry:
       type: object
       required: [id, actorType, action, targetType, occurredAt]
@@ -4130,14 +4167,18 @@ paths:
       operationId: listStorageCompensations
       description: >-
         FR-SLT-44, FR-SLT-46: Brand Admin chỉ thấy khoản của thương hiệu mình; Platform Super Admin
-        thấy tất cả. Khoản bồi thường do hệ thống tạo khi chai chuyển DAMAGED, không có endpoint
-        tạo tay.
+        thấy tất cả và lọc được theo brandId (Brand Admin truyền brandId thì bị bỏ qua). Khoản bồi
+        thường do hệ thống tạo khi chai chuyển DAMAGED (POST /bottles/{id}/mark-damaged), không có
+        endpoint tạo tay.
       parameters:
         - $ref: '#/components/parameters/page'
         - $ref: '#/components/parameters/pageSize'
         - name: status
           in: query
           schema: { $ref: '#/components/schemas/StorageCompensationStatus' }
+        - name: brandId
+          in: query
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Danh sách khoản bồi thường
@@ -4818,7 +4859,7 @@ paths:
       operationId: createBottle
       description: >-
         FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở
-        hữu và khối lượng ban đầu.
+        hữu và dung tích ban đầu `initialVolumeMl` (ADR-0019).
       requestBody:
         required: true
         content:
@@ -4832,6 +4873,35 @@ paths:
               schema: { $ref: '#/components/schemas/Bottle' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /bottles/{id}/mark-damaged:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - $ref: '#/components/parameters/reauthToken'
+    post:
+      tags: [INV]
+      summary: Ghi nhận chai hư hỏng
+      operationId: markBottleDamaged
+      description: >-
+        FR-SLT-44, ADR-0018: chuyển chai sang DAMAGED và, nếu chai được bảo hiểm, tạo khoản bồi
+        thường PENDING trong cùng transaction. Chai đang lắp thì máy phải rảnh (MACHINE_BUSY) và slot
+        được gỡ chai. Chai đã DAMAGED hoặc đã bàn giao trả thương hiệu trả VALIDATION_ERROR. Thao tác
+        nhạy cảm nhóm "điều chỉnh tồn kho" — cần xác thực lại (FR-AUTH-09). Ghi nhật ký.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BottleDamageReport' }
+      responses:
+        '200':
+          description: Đã ghi nhận
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BottleDamageResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /bottles/{id}/history:
@@ -4925,8 +4995,8 @@ paths:
       summary: Đóng phiếu nạp
       operationId: closeRefillSession
       description: >-
-        FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và
-        sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa
+        FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ và chai mới; lượng còn lại của chai cũ là
+        ước tính `currentEstimatedMl` lúc tháo (ADR-0019); checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa
         mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06);
         chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả
         PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE
@@ -4957,11 +5027,11 @@ paths:
       summary: Tháo chai khỏi slot và trả về kho
       operationId: removeBottleFromSlot
       description: >-
-        FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật
-        ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns`
-        (FR-EXP-26), không qua endpoint này.
+        FR-INV-15: tháo chai về kho; lượng còn lại là ước tính `currentEstimatedMl` lúc tháo
+        (ADR-0019). Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã
+        báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
       requestBody:
-        required: true
+        required: false
         content:
           application/json:
             schema: { $ref: '#/components/schemas/BottleRemoval' }
@@ -5008,7 +5078,7 @@ paths:
       operationId: createBottleReturn
       description: >-
         FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng
-        transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot
+        transaction: ghi lượng còn lại ước tính từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot
         → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi
         email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không
         ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi
@@ -5157,13 +5227,16 @@ paths:
       tags: [RFQ]
       summary: Chấp nhận yêu cầu bổ sung
       operationId: acceptRefillRequest
-      description: 'FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu.'
+      description: >-
+        FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu SUBMITTED. Trạng thái khác trả
+        VALIDATION_ERROR (FR-RFQ-04 AC4).
       responses:
         '200':
           description: Đã chấp nhận
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
 
@@ -5183,6 +5256,49 @@ paths:
       responses:
         '200':
           description: Đã từ chối
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /refill-requests/{id}/schedule:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Lên lịch xử lý yêu cầu bổ sung
+      operationId: scheduleRefillRequest
+      description: >-
+        FR-RFQ-07, ADR-0018: Inventory Staff gán mốc xử lý dự kiến cho yêu cầu ACCEPTED (hoặc dời lịch
+        yêu cầu SCHEDULED). Trạng thái khác trả VALIDATION_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillRequestSchedule' }
+      responses:
+        '200':
+          description: Đã lên lịch
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /refill-requests/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RFQ]
+      summary: Hủy yêu cầu bổ sung
+      operationId: cancelRefillRequest
+      description: >-
+        FR-RFQ-04 AC2, ADR-0018: hủy yêu cầu ACCEPTED hoặc SCHEDULED trước khi nạp. Trạng thái khác trả
+        VALIDATION_ERROR.
+      responses:
+        '200':
+          description: Đã hủy
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefillRequest' }

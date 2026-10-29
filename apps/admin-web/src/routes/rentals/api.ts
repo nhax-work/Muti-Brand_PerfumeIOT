@@ -371,3 +371,98 @@ export function useWithdrawNonRenewal() {
     },
   });
 }
+
+/** Gia hạn bằng mua gói mới (FR-SLT-12, FR-EXP-12). */
+export function useRenewSlotRental() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      rentalId,
+      rentalPackageId,
+      storagePlanId,
+    }: {
+      rentalId: string;
+      rentalPackageId: string;
+      storagePlanId: string;
+    }) =>
+      unwrap(
+        api.POST('/slot-rentals/{id}/renew', {
+          params: { path: { id: rentalId } },
+          body: { rentalPackageId, storagePlanId },
+        }),
+      ),
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}
+
+/** Ấn định ngày kết thúc ân hạn (FR-EXP-07). */
+export function useSetGracePeriod() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rentalId, graceEndsAt }: { rentalId: string; graceEndsAt: string }) =>
+      unwrap(
+        api.PUT('/slot-rentals/{id}/grace-period', {
+          params: { path: { id: rentalId } },
+          body: { graceEndsAt },
+        }),
+      ),
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}
+
+/** Thanh lý hóa đơn thuê slot (FR-EXP-14, FR-EXP-15). */
+export function useLiquidateSlotRental() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ rentalId, password }: { rentalId: string; password: string }) => {
+      // 1. Reauthenticate để lấy reauth token (FR-AUTH-09)
+      const reauthRes = await unwrap(
+        api.POST('/auth/reauth' as any, {
+          body: { password },
+        }),
+      );
+      const reauthToken = (reauthRes as { reauthToken: string }).reauthToken;
+
+      // 2. Gọi API thanh lý kèm header X-Reauth-Token
+      return unwrap(
+        api.POST('/slot-rentals/{id}/liquidate' as any, {
+          params: { path: { id: rentalId } },
+          headers: {
+            'X-Reauth-Token': reauthToken,
+          },
+        }),
+      );
+    },
+    onSuccess: (_, { rentalId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}
+
+/** Đóng hóa đơn đã thanh lý và giải phóng slot (FR-SLT-14). */
+export function useCloseSlotRental() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (rentalId: string) =>
+      unwrap(
+        api.POST('/slot-rentals/{id}/close' as any, {
+          params: { path: { id: rentalId } },
+        }),
+      ),
+    onSuccess: (_, rentalId) => {
+      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rental', rentalId] });
+      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
+    },
+  });
+}

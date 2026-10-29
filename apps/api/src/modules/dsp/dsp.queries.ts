@@ -79,7 +79,6 @@ export interface NewResult {
   readonly resultCode: string | null;
   readonly failureCode: string | null;
   readonly executedAt: Date | null;
-  readonly measuredQuantityMl: number | null;
   readonly sensorSnapshot: Json | null;
   readonly rawPayload: Json;
   readonly deviceEventId: string | null;
@@ -117,7 +116,6 @@ export interface CommandRecord {
     readonly resultCode: string | null;
     readonly failureCode: string | null;
     readonly executedAt: Date | null;
-    readonly measuredQuantityMl: string | null;
     readonly receivedAt: Date;
   } | null;
 }
@@ -342,7 +340,6 @@ export class DspQueries {
         result_code: result.resultCode,
         failure_code: result.failureCode,
         executed_at: result.executedAt,
-        measured_quantity_ml: result.measuredQuantityMl,
         sensor_snapshot:
           result.sensorSnapshot === null ? null : JSON.stringify(result.sensorSnapshot),
         raw_payload: JSON.stringify(result.rawPayload),
@@ -772,7 +769,6 @@ const COMMAND_COLUMNS = [
   'r.result_code as result_code',
   'r.failure_code as result_failure_code',
   'r.executed_at as result_executed_at',
-  'r.measured_quantity_ml as result_measured_quantity_ml',
   'r.received_at as result_received_at',
 ] as const;
 
@@ -795,7 +791,6 @@ interface CommandRow {
   readonly result_code: string | null;
   readonly result_failure_code: string | null;
   readonly result_executed_at: Date | null;
-  readonly result_measured_quantity_ml: string | null;
   readonly result_received_at: Date | null;
 }
 
@@ -824,7 +819,6 @@ function toCommandRecord(r: CommandRow): CommandRecord {
             resultCode: r.result_code,
             failureCode: r.result_failure_code,
             executedAt: r.result_executed_at,
-            measuredQuantityMl: r.result_measured_quantity_ml,
             receivedAt: r.result_received_at,
           },
   };

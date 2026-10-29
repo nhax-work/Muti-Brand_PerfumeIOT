@@ -37,17 +37,20 @@ beforeAll(() => {
 afterEach(() => {
   vi.useRealTimers();
   cleanup();
+  mockAuthRoles = ['BRAND_ADMIN'];
 });
 
-// Mock Auth context cho BRAND_ADMIN
+let mockAuthRoles = ['BRAND_ADMIN'];
+
+// Mock Auth context cho BRAND_ADMIN / PLATFORM_SUPER_ADMIN
 vi.mock('@/shared/auth', () => ({
   useAuth: () => ({
     user: {
       userId: 'user-1',
       brandId: 'brand-1',
-      roles: ['BRAND_ADMIN'],
+      roles: mockAuthRoles,
     },
-    hasRole: (role: string) => role === 'BRAND_ADMIN',
+    hasRole: (role: string) => mockAuthRoles.includes(role),
     isAuthenticated: true,
   }),
   useReauth: () => ({
@@ -78,6 +81,35 @@ vi.mock('@/routes/brand-profile/api', () => ({
   }),
 }));
 
+vi.mock('@/routes/pricing/api', () => ({
+  useRentalPackages: () => ({
+    data: [
+      {
+        id: 'pkg-1',
+        name: 'Gói 3 tháng',
+        durationMonths: 3,
+        discountPercent: 5,
+        isActive: true,
+      },
+    ],
+    isLoading: false,
+  }),
+  useStoragePlans: () => ({
+    data: [
+      {
+        id: 'plan-1',
+        name: 'Bảo quản tiêu chuẩn',
+        monthlyPrice: '100000.0000',
+        currency: 'VND',
+        coveragePercent: 30,
+        coverageCap: '3000000.0000',
+        isActive: true,
+      },
+    ],
+    isLoading: false,
+  }),
+}));
+
 // Mutable mock state for granular testing
 let mockCheckoutData: any = null;
 let mockAnnexData: any = null;
@@ -95,6 +127,10 @@ const mockResendVerificationFn = vi.fn();
 const mockAcceptAgreementFn = vi.fn();
 const mockRequestNonRenewalFn = vi.fn();
 const mockWithdrawNonRenewalFn = vi.fn();
+const mockRenewRentalFn = vi.fn();
+const mockSetGracePeriodFn = vi.fn();
+const mockLiquidateRentalFn = vi.fn();
+const mockCloseRentalFn = vi.fn();
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -251,6 +287,22 @@ vi.mock('./api', async () => {
     }),
     useResendVerification: () => ({
       mutateAsync: mockResendVerificationFn,
+      isPending: false,
+    }),
+    useRenewSlotRental: () => ({
+      mutateAsync: mockRenewRentalFn,
+      isPending: false,
+    }),
+    useSetGracePeriod: () => ({
+      mutateAsync: mockSetGracePeriodFn,
+      isPending: false,
+    }),
+    useLiquidateSlotRental: () => ({
+      mutateAsync: mockLiquidateRentalFn,
+      isPending: false,
+    }),
+    useCloseSlotRental: () => ({
+      mutateAsync: mockCloseRentalFn,
       isPending: false,
     }),
   };
@@ -1335,5 +1387,248 @@ describe('RentalDetailPage — Báo không gia hạn (Task 8, FR-EXP-23, FR-EXP-
         email: 'brand@test.vn',
       },
     };
+  });
+});
+
+describe('RentalDetailPage - Trạng thái ACTIVE và Thời hạn thuê (FR-SLT-24, FR-SLT-42)', () => {
+  const activeRentalInvoice = {
+    id: 'rental-active-1',
+    invoiceNumber: 'HD-20261001-000001',
+    checkoutId: 'chk-1',
+    stage: 'ACTIVE',
+    locationName: 'Aeon Mall Tân Phú',
+    machineId: 'mch-1',
+    machineDisplayName: 'Máy 01',
+    slotNumber: 1,
+    rentalPackage: { id: 'pkg-1', name: 'Gói 3 tháng' },
+    storagePlan: { id: 'plan-1', name: 'Gói Tiêu Chuẩn', coveragePercent: 60 },
+    durationMonths: 3,
+    rentAmount: '3000000.0000',
+    storageAmount: '300000.0000',
+    graceFeeAmount: '0.0000',
+    totalAmount: '3300000.0000',
+    currency: 'VND',
+    paidAt: '2026-10-01T10:00:00.000Z',
+    startsAt: '2026-10-05T08:00:00.000Z',
+    endsAt: '2027-01-05T08:00:00.000Z',
+  };
+
+  const draftPaidRentalInvoice = {
+    ...activeRentalInvoice,
+    stage: 'AWAITING_STOCK',
+    startsAt: null,
+    endsAt: null,
+  };
+
+  it('hiển thị nhãn Đang hiệu lực và khoảng thời gian startsAt - endsAt khi hóa đơn đã ACTIVE', () => {
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = {
+      id: 'rental-active-1',
+      status: 'ACTIVE',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    // Kiểm tra tag Đang hiệu lực
+    expect(screen.getByText('Đang hiệu lực')).toBeDefined();
+
+    // Kiểm tra hiển thị khoảng thời hạn thuê startsAt - endsAt
+    const startsFormatted = new Date('2026-10-05T08:00:00.000Z').toLocaleDateString('vi-VN');
+    const endsFormatted = new Date('2027-01-05T08:00:00.000Z').toLocaleDateString('vi-VN');
+    expect(screen.getByText(`${startsFormatted} - ${endsFormatted}`)).toBeDefined();
+  });
+
+  it('hiển thị "Bắt đầu tính khi lắp chai" khi hóa đơn chưa kích hoạt (chờ nạp hàng)', () => {
+    mockInvoiceData = draftPaidRentalInvoice;
+    mockRentalData = {
+      id: 'rental-active-1',
+      status: 'DRAFT',
+      startsAt: null,
+      endsAt: null,
+      paidAt: '2026-10-01T10:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    // Kiểm tra nhãn chờ nạp hàng
+    expect(screen.getByText('Chờ nạp hàng')).toBeDefined();
+    // Kiểm tra thời hạn ghi "Bắt đầu khi lắp chai đầu tiên"
+    expect(screen.getByText('Bắt đầu khi lắp chai đầu tiên')).toBeDefined();
+  });
+});
+
+describe('RentalDetailPage — Ân hạn và Gia hạn (Task 1, FR-SLT-12, FR-EXP-06, FR-EXP-07, FR-EXP-12)', () => {
+  const baseInvoice = {
+    id: 'rental-expiring-1',
+    invoiceNumber: 'HD-20261001-999999',
+    slotId: 'slot-1',
+    slotNumber: 1,
+    machineId: 'machine-1',
+    machineDisplayName: 'Máy Kiosk Quận 1',
+    locationName: 'Landmark 81',
+    monthlyRentPrice: '1000000.0000',
+    rentalPackage: { id: 'pkg-1', name: 'Gói 3 tháng', durationMonths: 3, discountPercent: 0 },
+    storagePlan: { id: 'plan-1', name: 'Bảo quản tiêu chuẩn', coveragePercent: 30 },
+    durationMonths: 3,
+    rentAmount: '3000000.0000',
+    storageAmount: '300000.0000',
+    graceFeeAmount: '0.0000',
+    totalAmount: '3300000.0000',
+    currency: 'VND',
+    paidAt: '2026-10-01T10:00:00.000Z',
+    startsAt: '2026-10-05T08:00:00.000Z',
+    endsAt: '2027-01-05T08:00:00.000Z',
+  };
+
+  it('hiển thị nút "Gia hạn" khi hóa đơn ở giai đoạn Sắp hết hạn (EXPIRING)', () => {
+    mockInvoiceData = {
+      ...baseInvoice,
+      stage: 'EXPIRING',
+    };
+    mockRentalData = {
+      id: 'rental-expiring-1',
+      status: 'EXPIRING',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-expiring-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('Sắp hết hạn')).toBeDefined();
+    expect(screen.getByText('Gia hạn')).toBeDefined();
+  });
+
+  it('hiển thị nút "Gia hạn", phí lưu kho ân hạn và thời hạn ân hạn khi ở giai đoạn Ân hạn (GRACE)', () => {
+    mockInvoiceData = {
+      ...baseInvoice,
+      stage: 'GRACE',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+      graceFeeAmount: '150000.0000',
+    };
+    mockRentalData = {
+      id: 'rental-expiring-1',
+      status: 'GRACE',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-expiring-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('Ân hạn')).toBeDefined();
+    expect(screen.getByText('Gia hạn')).toBeDefined();
+    expect(screen.getByText(/150.000 VND/)).toBeDefined();
+  });
+
+  it('Super Admin nhìn thấy nút "Sửa thời hạn ân hạn" khi hóa đơn ở giai đoạn GRACE', () => {
+    mockAuthRoles = ['PLATFORM_SUPER_ADMIN'];
+    mockInvoiceData = {
+      ...baseInvoice,
+      stage: 'GRACE',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+    };
+    mockRentalData = {
+      id: 'rental-expiring-1',
+      status: 'GRACE',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-expiring-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('Sửa thời hạn ân hạn')).toBeDefined();
+  });
+
+  it('Super Admin nhìn thấy nút "Thanh lý hàng tồn" khi hóa đơn ở giai đoạn GRACE và có thể mở modal thanh lý', async () => {
+    mockAuthRoles = ['PLATFORM_SUPER_ADMIN'];
+    mockInvoiceData = {
+      ...baseInvoice,
+      stage: 'GRACE',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+    };
+    mockRentalData = {
+      id: 'rental-expiring-1',
+      status: 'GRACE',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+      graceEndsAt: '2027-01-12T08:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-expiring-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    const liquidateBtn = screen.getByText('Thanh lý hàng tồn');
+    expect(liquidateBtn).toBeDefined();
+
+    fireEvent.click(liquidateBtn);
+    expect(screen.getByText('Xác nhận thanh lý hàng tồn')).toBeDefined();
+  });
+
+  it('Super Admin nhìn thấy nút "Đóng hóa đơn" khi hóa đơn ở trạng thái LIQUIDATED', () => {
+    mockAuthRoles = ['PLATFORM_SUPER_ADMIN'];
+    mockInvoiceData = {
+      ...baseInvoice,
+      stage: 'LIQUIDATED',
+    };
+    mockRentalData = {
+      id: 'rental-expiring-1',
+      status: 'LIQUIDATED',
+      startsAt: '2026-10-05T08:00:00.000Z',
+      endsAt: '2027-01-05T08:00:00.000Z',
+      paidAt: '2026-10-01T10:00:00.000Z',
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-expiring-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('Đóng hóa đơn')).toBeDefined();
   });
 });

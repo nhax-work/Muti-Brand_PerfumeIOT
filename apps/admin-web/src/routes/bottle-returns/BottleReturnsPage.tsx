@@ -13,7 +13,6 @@ import {
   Drawer,
   Form,
   Input,
-  InputNumber,
   Modal,
   Radio,
   Space,
@@ -94,15 +93,12 @@ export default function BottleReturnsPage() {
 
   const handleCreateSubmit = async (values: {
     slotRentalId: string;
-    bottles: Array<{ bottleId: string; measuredWeightG: number }>;
+    bottles: Array<{ bottleId: string }>;
   }) => {
     try {
       const payload: BottleReturnCreate = {
         slotRentalId: values.slotRentalId.trim(),
-        bottles: values.bottles.map((b) => ({
-          bottleId: b.bottleId.trim(),
-          measuredWeightG: Number(b.measuredWeightG),
-        })),
+        bottles: values.bottles.map((b) => ({ bottleId: b.bottleId.trim() })),
       };
       await createMutation.mutateAsync(payload);
       message.success(t('ui.createReturnSuccess'));
@@ -291,7 +287,7 @@ export default function BottleReturnsPage() {
                 onClick={() => {
                   createForm.resetFields();
                   createForm.setFieldsValue({
-                    bottles: [{ bottleId: '', measuredWeightG: 100 }],
+                    bottles: [{ bottleId: '' }],
                   });
                   setIsCreateModalOpen(true);
                 }}
@@ -490,13 +486,6 @@ export default function BottleReturnsPage() {
                       style={{ width: 260 }}
                     >
                       <Input placeholder="UUID chai nước hoa" />
-                    </Form.Item>
-                    <Form.Item
-                      {...restField}
-                      name={[name, 'measuredWeightG']}
-                      rules={[{ required: true, message: 'Nhập khối lượng' }]}
-                    >
-                      <InputNumber min={1} placeholder="Cân nặng (g)" addonAfter="g" />
                     </Form.Item>
                     {fields.length > 1 && (
                       <Button danger type="link" onClick={() => remove(name)}>

@@ -1,12 +1,15 @@
 /**
- * Controller HTTP cho module AUD — Tra cứu nhật ký kiểm toán (FR-AUD-08, FR-AUD-10).
+ * Cửa vào HTTP của AUD — `/audit-logs` (tag AUD): tra cứu nhật ký (FR-AUD-08, FR-AUD-10) và truy vết
+ * đơn (FR-AUD-11).
  */
 
-import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
-import { RequirePermissions } from '../auth/index.js';
+import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
 import { AUDIT_READ, AudService } from './aud.service.js';
+
+const OrderIdParam = z.object({ orderId: z.string().uuid() });
 
 const AuditLogSearchQuery = z
   .object({
@@ -22,14 +25,20 @@ const AuditLogSearchQuery = z
   .strict();
 
 @Controller('audit-logs')
-export class AudController {
-  constructor(@Inject(AudService) private readonly aud: AudService) {}
+export class AuditLogsController {
+  constructor(@Inject(AudService) private readonly service: AudService) {}
 
   /** FR-AUD-08, FR-AUD-10: Tra cứu nhật ký kiểm toán (chỉ Platform Super Admin). */
   @Get()
   @RequirePermissions(AUDIT_READ)
   searchAuditLogs(@Query() query: unknown) {
-    const filter = parseBody(AuditLogSearchQuery, query);
-    return this.aud.searchAuditLogs(filter);
+    return this.service.searchAuditLogs(parseBody(AuditLogSearchQuery, query));
+  }
+
+  /** FR-AUD-11 */
+  @Get('order-trace/:orderId')
+  @RequirePermissions(AUDIT_READ)
+  orderTrace(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
+    return this.service.orderTrace(actor, parseBody(OrderIdParam, params).orderId);
   }
 }

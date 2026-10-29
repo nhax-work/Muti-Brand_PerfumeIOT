@@ -300,6 +300,50 @@ export const en: SameKeysAs<typeof vi> = {
       'Slot rental checkout {checkout} was confirmed at {paidAt}. Invoice numbers: {invoices}. ' +
       'Next steps: declare the shipment to the warehouse, submit authenticity documents and configure the slot product. ' +
       'This notice is kept as reconciliation evidence.',
+    rentalActivatedSubject: '[ScentStation] Slot rental invoice is now active ({invoiceNumber})',
+    rentalActivatedContent:
+      'Slot rental invoice {invoiceNumber} has become active from {startsAt} to {endsAt}. ' +
+      'This notice is kept as reconciliation evidence.',
+    rentalExpiringT7Subject: '[ScentStation] Slot rental invoice expiring in 7 days',
+    rentalExpiringT7Content:
+      'The following slot rental invoices will expire on {expiryDate}: {invoices}. ' +
+      'Please access the system to renew or withdraw non-renewal: {actionLinks}',
+    rentalExpiringT3Subject: '[ScentStation] Second notice: Slot rental invoice expiring in 3 days',
+    rentalExpiringT3Content:
+      'The following slot rental invoices will expire on {expiryDate}: {invoices}. ' +
+      'If not renewed before expiry, the invoice will enter a grace period with storage fees and risk of inventory liquidation: {actionLinks}',
+    rentalGraceEnteredSubject:
+      '[ScentStation] Slot rental invoice has entered grace period ({invoiceNumber})',
+    rentalGraceEnteredContent:
+      'Rental invoice {invoiceNumber} has expired and entered grace period until {graceEndsAt}. ' +
+      'Daily grace fees apply. Please renew to maintain the slot and prevent inventory liquidation.',
+    rentalRenewedSubject:
+      '[ScentStation] Slot rental invoice renewed successfully ({invoiceNumber})',
+    rentalRenewedContent:
+      'Renewal invoice {invoiceNumber} has been activated from {startsAt} to {endsAt}. ' +
+      'The previous invoice has transitioned to RENEWED and grace fee accrual (if any) has stopped.',
+    rentalNotLiquidated: 'Rental invoice is not in liquidated status',
+    rentalBottleStillActive:
+      'Cannot close rental invoice because bottle on slot still has volume and has not been removed',
+    rentalLiquidatedSubject:
+      '[ScentStation] Slot rental invoice has been liquidated ({invoiceNumber})',
+    rentalLiquidatedContent:
+      'Rental invoice {invoiceNumber} has expired past the grace period and transitioned to liquidated. Remaining bottles on slot have transferred ownership to the platform.',
+    rentalClosedSubject: '[ScentStation] Slot rental invoice has been closed ({invoiceNumber})',
+    rentalClosedContent:
+      'Rental invoice {invoiceNumber} has been closed and the slot has been released.',
+    compensationAlreadyPaid: 'This compensation has already been recorded as paid',
+    compensationCreatedSubject: 'Bottle {bottle} damaged — compensation of {amount} VND recorded',
+    compensationCreatedContent:
+      'Bottle {bottle} was damaged while held by the platform. A compensation of {amount} VND under the storage plan has been recorded and is awaiting payout.',
+    compensationPaidSubject: 'Compensation for bottle {bottle} paid',
+    compensationPaidContent:
+      'The compensation of {amount} VND for bottle {bottle} has been transferred. Transaction reference: {reference}.',
+  },
+
+  storageCompensationStatus: {
+    PENDING: 'Awaiting payout',
+    PAID: 'Paid',
   },
 
   ord: {
@@ -327,6 +371,7 @@ export const en: SameKeysAs<typeof vi> = {
     claimFeatureDisabled: 'Refund claims are not enabled yet. Please contact technical support.',
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
+    orderRateLimited: 'This machine is receiving too many requests. Please try again shortly.',
   },
 
   dsp: {
@@ -1055,8 +1100,6 @@ export const en: SameKeysAs<typeof vi> = {
     invSlot: 'Slot',
     invStartedAt: 'Opened at',
     invNewBottle: 'New bottle',
-    invAfterWeight: 'Weight after refill (g)',
-    invBeforeWeight: 'Weight before refill (g)',
     invNotes: 'Notes',
     batchExpiresAtLabel: 'Batch expiry date',
     discrepancyNotesHelp: 'Required when the received quantity differs from the declaration.',
@@ -1130,6 +1173,138 @@ export const en: SameKeysAs<typeof vi> = {
     revenueOrderCount: '{count} orders',
     revenuePeriod: 'From {from} to {to}',
     allMachines: 'All machines',
+    renew: 'Renew',
+    renewModalTitle: 'Renew slot rental invoice',
+    renewSuccess: 'Renewal checkout created successfully',
+    editGracePeriod: 'Edit grace period',
+    gracePeriodUpdated: 'Grace period updated successfully',
+    graceEndsAt: 'Grace ends at',
+    selectPackagePlaceholder: 'Select rental package...',
+    selectStoragePlanPlaceholder: 'Select storage plan...',
+    liquidate: 'Liquidate Inventory',
+    liquidateModalTitle: 'Confirm Inventory Liquidation',
+    liquidateConfirmText:
+      'Liquidation will transfer ownership of all remaining bottles on this slot to the Platform and transition the invoice to LIQUIDATED. This action requires re-entering your password for verification.',
+    liquidateSuccess: 'Inventory liquidated and ownership transferred successfully',
+    closeRental: 'Close Rental',
+    closeRentalConfirmText:
+      'Are you sure you want to close this liquidated rental invoice? This action will release the slot for new rentals.',
+    closeRentalSuccess: 'Rental closed and slot released successfully',
+    reauthPasswordLabel: 'Re-authentication password',
+    reauthPasswordPlaceholder: 'Enter Super Admin password...',
+    storageCompensations: 'Goods compensation',
+    storageCompensationsSubtitle:
+      "Bottles damaged while held by the platform are compensated under the invoice's storage plan, within the remaining cap.",
+    compensations: 'Compensations',
+    damagedBottles: 'Record damaged bottles',
+    compensationBottle: 'Bottle',
+    compensationProduct: 'Product',
+    compensationInvoice: 'Covering invoice',
+    compensationPlan: 'Storage plan',
+    compensationRetailPrice: 'Bottle retail price',
+    compensationCoverage: 'Coverage rate',
+    compensationAmount: 'Compensation',
+    compensationFormula: '{percent}% × {price}, within the remaining cap',
+    compensationDamagedAt: 'Damaged at',
+    noCompensations: 'No compensations yet',
+    compensationPayout: 'Record payout',
+    compensationPayoutHint:
+      'Record only after the compensation has actually been transferred to the brand. You will be asked for your password again.',
+    compensationPaidDone: 'Compensation payout recorded',
+    damageHint:
+      'Record bottles damaged while held by the platform (in stock, installed, awaiting return). The compensation is computed from the storage plan; an installed bottle is removed from its slot.',
+    markDamaged: 'Record damage',
+    markDamagedTitle: 'Record bottle {bottle} as damaged',
+    markDamagedHint:
+      'This cannot be undone. The reason supports the compensation. You will be asked for your password again.',
+    damageReasonPlaceholder: 'Describe the damage',
+    damageRecordedWithCompensation: 'Damage recorded — compensation of {amount} awaiting payout',
+    damageRecordedNoCompensation:
+      'Damage recorded — this bottle is not eligible for compensation (expired, liquidated, empty or no storage plan)',
+    bottleInstalled: 'Installed',
+    bottleRemainingMl: 'Remaining',
+    bottleExpiresAt: 'Expires',
+    yes: 'Yes',
+    no: 'No',
+    refillRequests: 'Refill requests',
+    refillRequestsSubtitle:
+      'Brands request more perfume for their rented slots; the warehouse reviews, schedules and refills through a refill session.',
+    refillRequestSlot: 'Machine · slot',
+    refillRequestReason: 'Reason',
+    refillRequestNote: 'Note',
+    refillRequestInvoice: 'Invoice (slot)',
+    refillRequestInvoiceRequired: 'Choose the invoice of the slot to refill',
+    refillRequestScheduledAt: 'Scheduled for',
+    refillRequestCreatedAt: 'Submitted at',
+    refillRequestCreate: 'New refill request',
+    refillRequestSubmit: 'Submit request',
+    refillRequestCreated: 'Refill request submitted',
+    refillRequestAccept: 'Accept',
+    refillRequestAccepted: 'Request accepted',
+    refillRequestReject: 'Reject',
+    refillRequestRejected: 'Request rejected',
+    refillRequestRejectPlaceholder: 'Rejection reason (required)',
+    refillRequestSchedule: 'Schedule',
+    refillRequestScheduled: 'Request scheduled',
+    refillRequestScheduleHint:
+      'Pick when the warehouse plans to refill. The brand will be notified.',
+    refillRequestOpenSession: 'Open refill session',
+    refillRequestSessionOpened:
+      'Refill session opened for the request — close it under Warehouse to complete',
+    refillRequestCancel: 'Cancel request',
+    refillRequestCancelConfirm: 'Cancel this refill request?',
+    refillRequestCancelled: 'Request cancelled',
+    refillRequestInSession: 'Refilling',
+    noRefillRequests: 'No refill requests yet',
+    mySlotsLowStock: 'Running low',
+    mySlotsRequestRefill: 'Request refill',
+    reports: 'Reports',
+    reportsSubtitle: 'Product ranking by kiosk interest and slot package sales revenue.',
+    productRanking: 'Product ranking',
+    rankingHint:
+      'Ranked by how many times customers selected the product on the kiosk. Impressions are times it was shown; orders are paid orders in the same period.',
+    rankingSelections: 'Selections',
+    rankingImpressions: 'Impressions',
+    rankingConversion: 'Selection rate',
+    rankingOrders: 'Orders',
+    rankingEmpty: 'No kiosk interactions in this period',
+    rentalSales: 'Package sales',
+    rentalSalesHint:
+      'Rental and storage package revenue from invoices paid in the period (by payment time). Unpaid and cancelled invoices are excluded.',
+    rentalSalesByPackage: 'Rental package',
+    rentalSalesByPlan: 'Storage plan',
+    rentalSalesByMachine: 'Machine',
+    rentalSalesByLocation: 'Location',
+    rentalSalesInvoices: 'Invoices',
+    rentalSalesRent: 'Rent',
+    rentalSalesStorage: 'Storage',
+    rentalSalesGraceFee: 'Grace fee',
+    rentalSalesTotal: 'Total revenue',
+    rentalSalesEmpty: 'No paid invoices in this period',
+    orderTrace: 'Trace',
+    orderTraceRental: 'Slot rental invoice',
+    orderTracePayments: 'Payments',
+    orderTraceProvider: 'Gateway',
+    orderTraceInventory: 'Inventory changes on the slot',
+    orderTraceDifference: 'Difference',
+    orderTraceAudit: 'Audit log',
+    orderTraceNone: 'None',
+    revenueOwnerLabel: 'Revenue belongs to',
+    telemetryTitle: 'Telemetry and device events',
+    telemetryReadings: 'Sensor readings',
+    telemetryEvents: 'Device events',
+    telemetryAt: 'Time',
+    telemetryMachine: 'Whole machine',
+    telemetryType: 'Type',
+    telemetryValue: 'Value',
+    telemetryPayload: 'Details',
+    telemetryReceivedAt: 'Received at',
+    telemetryAllSlots: 'All slots',
+    telemetryAllTypes: 'All reading types',
+    telemetryEmpty: 'No readings yet',
+    telemetryEventsEmpty: 'No events yet',
+    pushConfig: 'Push configuration',
+    configPushed: 'Configuration v{version} pushed to the device',
 
     // Task 2: Dashboard, MNT, AUD, Inventory Report
     platformOverview: 'Platform Overview',
@@ -1250,7 +1425,6 @@ export const en: SameKeysAs<typeof vi> = {
     forfeitedAt: 'Forfeited At',
     handoverReturn: 'Handover Return',
     handoverReturnTitle: 'Confirm Return Handover',
-    measuredWeightG: 'Measured Weight (g)',
     bottlesToReturn: 'Bottles to Return',
     bottleCount: 'Bottle Count',
     handoverSuccess: 'Return handed over successfully',
@@ -1401,6 +1575,10 @@ export const en: SameKeysAs<typeof vi> = {
     refillSessionOpen: 'The slot already has an open refill session',
     refillSessionNotOpen: 'The refill session is already closed or cancelled',
     refillSessionNotFound: 'Refill session not found',
+    damageReasonRequired: 'A damage reason is required',
+    bottleAlreadyDamaged: 'This bottle has already been recorded as damaged',
+    bottleHandedOver:
+      'The bottle has been handed back to the brand; the platform no longer holds it, so it cannot be recorded as damaged',
 
     newShipmentSubject: 'New shipment declaration: {product}',
     newShipmentContent:
@@ -1411,6 +1589,12 @@ export const en: SameKeysAs<typeof vi> = {
     authenticityRejectedSubject: 'Batch {batch} authenticity rejected',
     authenticityRejectedContent:
       'The authenticity documents of batch {batch} ({product}) were rejected. Reason: {reason}. Please resubmit.',
+    lowStockAlertTitle: 'Slot {slot} is running low',
+    lowStockAlertContent:
+      'Slot {slot} has {remainingMl} ml left (about {sprays} sprays), below the {thresholdMl} ml threshold.',
+    slotEmptyAlertTitle: 'Slot {slot} is empty',
+    slotEmptyAlertContent:
+      'Slot {slot} has {remainingMl} ml left, not enough for one {dosageMl} ml spray — the slot has stopped selling.',
   },
 
   shipmentStatus: {
@@ -1425,6 +1609,67 @@ export const en: SameKeysAs<typeof vi> = {
     PENDING: 'Pending review',
     APPROVED: 'Approved authentic',
     REJECTED: 'Rejected',
+  },
+
+  rfq: {
+    brandAccountOnly:
+      'Only the Brand Admin of the brand renting the slot can submit a refill request',
+    rentalNotActive:
+      "The slot's invoice is unpaid or has ended, so it cannot take a refill request",
+    productNotConfigured:
+      'The slot has no product configured yet — configure it before requesting a refill',
+    requestPending: 'This slot already has an unfinished refill request',
+    rejectionReasonRequired: 'A rejection reason is required',
+    scheduleInPast: 'The scheduled time must be in the future',
+    requestNotForSlot: "The refill request does not belong to this refill session's slot",
+    requestNotLinkable:
+      'The refill request is not accepted, has ended, or is already linked to another refill session',
+    invalidTransition: 'Cannot move the request from {from} to {to}',
+    requestInProgress: 'The request is being handled by a refill session and cannot be cancelled',
+    newRequestSubject: 'New refill request: {brand} — machine {machine}, slot {slot}',
+    newRequestContent:
+      'Brand {brand} requested a refill of {product} for slot {slot} on machine {machine}. Please review and accept or reject it.',
+    acceptedSubject: 'Refill request for slot {slot} accepted',
+    acceptedContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was accepted. The warehouse will schedule it.',
+    rejectedSubject: 'Refill request for slot {slot} rejected',
+    rejectedContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was rejected. Reason: {reason}.',
+    scheduledSubject: 'Refill scheduled for slot {slot}',
+    scheduledContent:
+      'The refill of {product} for slot {slot}, machine {machine}, is scheduled at {at}.',
+    cancelledSubject: 'Refill request for slot {slot} cancelled',
+    cancelledContent:
+      'The refill request for {product} on slot {slot}, machine {machine}, was cancelled before refilling.',
+    completedSubject: 'Slot {slot} refilled',
+    completedContent:
+      'Slot {slot} on machine {machine} has been refilled with {product} as requested.',
+  },
+
+  refillRequestStatus: {
+    SUBMITTED: 'Submitted',
+    ACCEPTED: 'Accepted',
+    REJECTED: 'Rejected',
+    SCHEDULED: 'Scheduled',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  },
+
+  refillRequestReason: {
+    LOW_STOCK: 'Running low',
+    EXPIRING: 'Stock expiring',
+    PRODUCT_CHANGE: 'Product change',
+  },
+
+  bottleStatus: {
+    IN_STOCK: 'In stock',
+    INSTALLED: 'Installed',
+    LOW: 'Low',
+    EMPTY: 'Empty',
+    DAMAGED: 'Damaged',
+    EXPIRED: 'Expired',
+    LIQUIDATED: 'Liquidated',
+    RETURNED_TO_BRAND: 'Awaiting return to brand',
   },
 
   refillSessionStatus: {

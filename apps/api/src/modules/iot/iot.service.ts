@@ -128,7 +128,6 @@ export class IotService {
       for (const slot of message.slots) {
         const id = ids.get(slot.slot_number)!;
         add('ACTUATOR_STATUS', id, null, null, slot);
-        if (slot.load_cell_g !== undefined) add('LOAD_CELL_G', id, slot.load_cell_g, 'g', slot);
         if (slot.estimated_remaining_ml !== undefined) {
           add('ESTIMATED_REMAINING_ML', id, slot.estimated_remaining_ml, 'ml', slot);
         }
@@ -228,48 +227,96 @@ export class IotService {
       .where('simulator_enabled', '=', false)
       .execute();
     for (const machine of machines) {
-      const slots = await this.db
-        .selectFrom('machine_slots')
-        .select(['slot_number', 'status', 'active_bottle_id', 'calibrated_dosage_ml'])
-        .where('machine_id', '=', machine.id)
-        .orderBy('slot_number')
-        .execute();
-      const content = {
-        heartbeat_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC'),
-        telemetry_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC') * 2,
-        operating_mode: deviceOperatingMode(machine.operating_mode),
-        press_window_sec: this.config.constraint('DISPENSE_PRESS_WINDOW_SEC'),
-        slots: slots.map((s) => ({
-          slot_number: s.slot_number,
-          enabled:
-            s.status === 'AVAILABLE' &&
-            s.active_bottle_id !== null &&
-            s.calibrated_dosage_ml !== null,
-          calibrated_dosage_ml:
-            s.calibrated_dosage_ml === null ? null : Number(s.calibrated_dosage_ml),
-          actuator_run_ms: this.config.constraint('ACTUATOR_RUN_MS'),
-        })),
-      };
+      const content = await this.configurationContent(machine);
       const fingerprint = JSON.stringify(content);
       if (this.published.get(machine.id) === fingerprint) continue;
-      const row = await this.db
-        .updateTable('machines')
-        .set((eb) => ({ configuration_version: eb('configuration_version', '+', 1) }))
-        .where('id', '=', machine.id)
-        .returning('configuration_version')
-        .executeTakeFirstOrThrow();
-      await publish({
-        machineSerial: machine.serial_number,
-        payload: {
-          schema_version: 1,
-          machine_serial: machine.serial_number,
-          ts: this.clock.now().toISOString(),
-          configuration_version: row.configuration_version,
-          ...content,
-        },
-      });
-      this.published.set(machine.id, fingerprint);
+      await this.publishConfiguration(machine, content, publish);
     }
+  }
+
+  /**
+   * FR-IOT-06: đẩy lại cấu hình của một máy NGAY, kể cả khi nội dung không đổi — tăng
+   * `configuration_version` để thiết bị chắc chắn áp bản mới (mqtt.md §7). Khác `syncConfigurations`,
+   * không bỏ qua máy mô phỏng: người vận hành chủ động yêu cầu.
+   *
+   * @param publish `null` khi chưa nối broker — version vẫn tăng, và cache được xóa để nhịp đồng bộ kế
+   *   tiếp publish lại ngay khi có kết nối.
+   * @returns version mới, hoặc `null` nếu máy không tồn tại
+   */
+  async pushConfiguration(
+    machineId: string,
+    publish: ((message: DeviceConfiguration) => Promise<void>) | null,
+  ): Promise<number | null> {
+    const machine = await this.db
+      .selectFrom('machines')
+      .select(['id', 'serial_number', 'operating_mode'])
+      .where('id', '=', machineId)
+      .executeTakeFirst();
+    if (!machine) return null;
+    if (!publish) {
+      const version = await this.bumpConfigurationVersion(machine.id);
+      this.published.delete(machine.id);
+      return version;
+    }
+    return this.publishConfiguration(machine, await this.configurationContent(machine), publish);
+  }
+
+  private async configurationContent(machine: {
+    id: string;
+    operating_mode: MachineOperatingMode;
+  }) {
+    const slots = await this.db
+      .selectFrom('machine_slots')
+      .select(['slot_number', 'status', 'active_bottle_id', 'calibrated_dosage_ml'])
+      .where('machine_id', '=', machine.id)
+      .orderBy('slot_number')
+      .execute();
+    return {
+      heartbeat_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC'),
+      telemetry_interval_sec: this.config.constraint('HEARTBEAT_INTERVAL_SEC') * 2,
+      operating_mode: deviceOperatingMode(machine.operating_mode),
+      press_window_sec: this.config.constraint('DISPENSE_PRESS_WINDOW_SEC'),
+      slots: slots.map((s) => ({
+        slot_number: s.slot_number,
+        enabled:
+          s.status === 'AVAILABLE' &&
+          s.active_bottle_id !== null &&
+          s.calibrated_dosage_ml !== null,
+        calibrated_dosage_ml:
+          s.calibrated_dosage_ml === null ? null : Number(s.calibrated_dosage_ml),
+        actuator_run_ms: this.config.constraint('ACTUATOR_RUN_MS'),
+      })),
+    };
+  }
+
+  private async bumpConfigurationVersion(machineId: string): Promise<number> {
+    const row = await this.db
+      .updateTable('machines')
+      .set((eb) => ({ configuration_version: eb('configuration_version', '+', 1) }))
+      .where('id', '=', machineId)
+      .returning('configuration_version')
+      .executeTakeFirstOrThrow();
+    return row.configuration_version;
+  }
+
+  private async publishConfiguration(
+    machine: { id: string; serial_number: string },
+    content: Awaited<ReturnType<IotService['configurationContent']>>,
+    publish: (message: DeviceConfiguration) => Promise<void>,
+  ): Promise<number> {
+    const version = await this.bumpConfigurationVersion(machine.id);
+    await publish({
+      machineSerial: machine.serial_number,
+      payload: {
+        schema_version: 1,
+        machine_serial: machine.serial_number,
+        ts: this.clock.now().toISOString(),
+        configuration_version: version,
+        ...content,
+      },
+    });
+    this.published.set(machine.id, JSON.stringify(content));
+    return version;
   }
 
   private async history(

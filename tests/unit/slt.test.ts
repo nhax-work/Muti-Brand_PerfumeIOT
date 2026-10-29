@@ -632,6 +632,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       mchQueries,
       audit as never,
       paymentService as never,
+      {} as never,
       fakeClock as never,
       fakeDb as never,
       fakeConfig as never,
@@ -1425,8 +1426,10 @@ describe('SltJobs — job hủy phiên hết giờ giữ chỗ (FR-SLT-39)', () 
       queries as unknown as SltQueries,
       payments as unknown as PaymentService,
       audit as unknown as AuditService,
+      {} as never,
       clock,
       db as unknown as Database,
+      { constraint: () => 30 } as never,
     );
   });
 
@@ -1663,6 +1666,7 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
       {} as unknown as MchQueries,
       audit as never,
       {} as unknown as PaymentService,
+      {} as never,
       fakeClock as never,
       fakeDb as never,
       fakeConfig as never,
@@ -1882,5 +1886,31 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
     expect(result.status).toBe('EXPIRING');
     expect(result.nonRenewalRequestedAt).toBeTruthy();
     expect(result.returnMethod).toBe('WAREHOUSE_PICKUP');
+  });
+});
+
+describe('activatedEndsAt — kỳ hạn khi kích hoạt hóa đơn DRAFT (FR-SLT-24, FR-SLT-42)', () => {
+  it('test_FR_SLT_24_ends_at_from_package_duration — hóa đơn theo gói: starts_at + duration_months', async () => {
+    const { activatedEndsAt } = await import('../../apps/api/src/modules/slt/rental-period.js');
+    const draft = {
+      starts_at: new Date('2026-10-01T00:00:00Z'),
+      ends_at: new Date('2027-01-30T00:00:00Z'),
+      duration_months: 3,
+    };
+    const startsAt = new Date('2026-10-20T03:00:00Z');
+    expect(activatedEndsAt(draft, startsAt)).toEqual(new Date('2027-01-20T03:00:00Z'));
+  });
+
+  it('test_FR_SLT_24_ends_at_without_package — hóa đơn mô hình cũ: giữ độ dài kỳ hạn, ends_at > starts_at', async () => {
+    const { activatedEndsAt } = await import('../../apps/api/src/modules/slt/rental-period.js');
+    const draft = {
+      starts_at: new Date('2026-10-01T00:00:00Z'),
+      ends_at: new Date('2026-10-31T00:00:00Z'),
+      duration_months: null,
+    };
+    const startsAt = new Date('2026-10-20T03:00:00Z');
+    const endsAt = activatedEndsAt(draft, startsAt);
+    expect(endsAt).toEqual(new Date('2026-11-19T03:00:00Z'));
+    expect(endsAt.getTime()).toBeGreaterThan(startsAt.getTime());
   });
 });

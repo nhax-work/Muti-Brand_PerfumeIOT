@@ -188,9 +188,9 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
       await client.query(
         `INSERT INTO bottles (
            id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-           status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+           status, initial_volume_ml, current_estimated_ml,
            opened_at, installed_at, expires_at
-         ) VALUES ($1, $2, 'BRAND', $3, $4, $5, 'IN_STOCK', 100, 100, 60, null, null, $6)`,
+         ) VALUES ($1, $2, 'BRAND', $3, $4, $5, 'IN_STOCK', 100, 100, null, null, $6)`,
         [
           bottleId,
           fx.brandA,
@@ -225,7 +225,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
       expect(rentalCheck.rows[0].status).toBe('ACTIVE');
 
       const notifCheck = await client.query(
-        `SELECT type, subject FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_ACTIVATED'`,
+        `SELECT type, subject FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_ACTIVE'`,
         [fx.brandA],
       );
       expect(notifCheck.rows.length).toBeGreaterThanOrEqual(1);

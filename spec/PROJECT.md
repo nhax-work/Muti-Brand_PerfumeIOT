@@ -58,7 +58,8 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > định, chủ động không gia hạn, đổi slot, giới hạn giữ chỗ), `0015-*` (dừng bán an toàn); và `0016-*`
 > (tích hợp PayOS). Các ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
 > và mọi ghi nhớ cũ về "hợp đồng thuê", "yêu cầu thuê", "phí cố định", "ăn chia", "xịt ngay sau
-> thanh toán" đều đã lỗi thời.
+> thanh toán" đều đã lỗi thời. `0017-*`, `0018-*` hoàn thiện contract tuần 7 và tuần 8 (tồn kho, thông
+> báo, chai hư hỏng, yêu cầu bổ sung).
 
 > Cả năm file contract đã tồn tại và **đã đóng băng**: `erd.md`, `data-dictionary.md`, `schema.sql`,
 > `openapi.yaml`, `mqtt.md`. Chuẩn đặt tên và giá trị enum chốt ở
@@ -74,8 +75,8 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > Trạng thái acceptance criteria trong `spec/modules/` (cập nhật ngày 2026-10-17 sau khi hoàn thành 28 FR mới theo ADR-0013, 0014, 0015 và 12 FR của RFQ; 7 FR mức X đã bãi bỏ không tính):
 >
 > - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`, `RFQ`
-> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-18..27 — timeout, chẩn đoán, nút bấm vật lý), `RPT` (FR-RPT-04)
-> - **Còn rỗng:** `IOT`, `AUD`, `PRD`
+> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-18..27 — timeout, chẩn đoán, nút bấm vật lý), `RPT` (FR-RPT-04, 06), `IOT` (FR-IOT-04..06), `AUD` (FR-AUD-11) — ba mục sau thêm ngày 2026-10-26 theo lộ trình tuần 8
+> - **Còn rỗng:** `PRD`
 >
 > **Đã hoàn thành ngày 2026-10-17:** Viết đủ AC cho 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
 > FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16), viết đủ 12 FR cho `RFQ`

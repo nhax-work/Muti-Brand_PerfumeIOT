@@ -39,7 +39,6 @@ const BottleReturnCreateBody = z.object({
     .array(
       z.object({
         bottleId: z.string().uuid(),
-        measuredWeightG: z.number().positive(),
       }),
     )
     .min(1),

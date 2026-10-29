@@ -38,6 +38,56 @@ export interface ReportPeriod {
   readonly to?: Date | undefined;
 }
 
+/** Nhóm của báo cáo doanh thu bán gói (openapi `RentalSalesReport.groupBy`). */
+export type RentalSalesGroupBy = 'PACKAGE' | 'STORAGE_PLAN' | 'MACHINE' | 'LOCATION';
+
+export interface RentalSalesFilter {
+  /** Bao gồm, theo `paid_at`. */
+  readonly from: Date;
+  /** Không bao gồm. */
+  readonly to: Date;
+  readonly groupBy: RentalSalesGroupBy;
+  readonly machineId?: string | undefined;
+  readonly locationId?: string | undefined;
+}
+
+export interface RentalSalesAmountsRow {
+  readonly invoiceCount: number;
+  readonly rentAmount: string;
+  readonly storageAmount: string;
+  readonly graceFeeAmount: string;
+  readonly totalAmount: string;
+}
+
+export interface RentalSalesRow extends RentalSalesAmountsRow {
+  readonly key: string;
+  readonly label: string;
+}
+
+export interface ProductRankingFilter extends ReportPeriod {
+  readonly slotId?: string | undefined;
+  readonly machineId?: string | undefined;
+  readonly locationId?: string | undefined;
+}
+
+export interface ProductRankingRow {
+  readonly fragranceProductId: string;
+  readonly productName: string;
+  readonly impressionCount: number;
+  readonly selectionCount: number;
+  readonly orderCount: number;
+}
+
+/** Cột khóa và nhãn theo từng cách nhóm — chỉ chọn từ danh sách cố định này, không nối chuỗi vào SQL. */
+const RENTAL_SALES_GROUP_COLUMNS: Readonly<
+  Record<RentalSalesGroupBy, { readonly key: string; readonly label: string }>
+> = {
+  PACKAGE: { key: 'rp.id', label: 'rp.name' },
+  STORAGE_PLAN: { key: 'sp.id', label: 'sp.name' },
+  MACHINE: { key: 'm.id', label: 'm.display_name' },
+  LOCATION: { key: 'l.id', label: 'l.name' },
+};
+
 export interface MachineMapRow {
   readonly slotId: string;
   readonly slotNumber: number;
@@ -46,6 +96,11 @@ export interface MachineMapRow {
   /** Chỉ khác null khi slot thuộc phạm vi khai thác của người gọi — xem ghi chú dưới. */
   readonly productName: string | null;
   readonly estimatedRemainingSprays: number;
+  /**
+   * Chai đang lắp ở LOW/EMPTY, hoặc lượng còn lại chạm `low_stock_threshold_ml` của slot — gợi ý tạo
+   * yêu cầu bổ sung (FR-RFQ-03, ADR-0018). Chỉ được đưa ra ngoài cho slot của người gọi.
+   */
+  readonly lowStock: boolean;
 }
 
 @Injectable()
@@ -84,6 +139,12 @@ export class RptQueries {
       .selectFrom('machine_slots as s')
       .select(['s.id as slot_id', 's.slot_number', 's.status', 's.estimated_remaining_sprays'])
       .select(sql<boolean>`${brandHoldsSlotNow(scope, 's.id')}`.as('mine'))
+      .select(
+        sql<boolean>`coalesce((select b.status in ('LOW', 'EMPTY') from bottles b
+                                where b.id = s.active_bottle_id), false)
+          or (s.low_stock_threshold_ml is not null
+              and s.estimated_remaining_ml <= s.low_stock_threshold_ml)`.as('low_stock'),
+      )
       .select((eb) =>
         eb
           .selectFrom('slot_rentals as r')
@@ -108,6 +169,7 @@ export class RptQueries {
       mine: r.mine,
       productName: r.product_name ?? null,
       estimatedRemainingSprays: r.estimated_remaining_sprays,
+      lowStock: r.low_stock,
     }));
   }
 
@@ -169,6 +231,58 @@ export class RptQueries {
       orderCount: Number(r.order_count),
       revenue: r.revenue,
     }));
+  }
+
+  /**
+   * FR-SLT-47: doanh thu bán gói thuê và gói bảo quản theo `paid_at` trong `[from, to)`.
+   *
+   * Chỉ hóa đơn mua theo gói (`rental_package_id` có giá trị — ADR-0006) đã thanh toán và không bị hủy.
+   * Hóa đơn mô hình cũ không có ảnh chụp số tiền gói nên không thuộc báo cáo này. Tổng và từng nhóm tính
+   * trên cùng một tập hóa đơn, nên cộng các nhóm luôn bằng tổng.
+   */
+  async rentalSales(
+    filter: RentalSalesFilter,
+  ): Promise<{ totals: RentalSalesAmountsRow; items: RentalSalesRow[] }> {
+    const group = RENTAL_SALES_GROUP_COLUMNS[filter.groupBy];
+    const base = this.db
+      .selectFrom('slot_rentals as r')
+      .innerJoin('rental_packages as rp', 'rp.id', 'r.rental_package_id')
+      .innerJoin('storage_plans as sp', 'sp.id', 'r.storage_plan_id')
+      .innerJoin('machine_slots as s', 's.id', 'r.slot_id')
+      .innerJoin('machines as m', 'm.id', 's.machine_id')
+      .innerJoin('locations as l', 'l.id', 'm.location_id')
+      .where('r.paid_at', 'is not', null)
+      .where('r.cancelled_at', 'is', null)
+      .where('r.status', '<>', 'CANCELLED')
+      .where('r.paid_at', '>=', filter.from)
+      .where('r.paid_at', '<', filter.to)
+      .$if(filter.machineId !== undefined, (qb) => qb.where('m.id', '=', filter.machineId!))
+      .$if(filter.locationId !== undefined, (qb) => qb.where('l.id', '=', filter.locationId!));
+
+    const amounts = [
+      sql<string>`count(r.id)`.as('invoice_count'),
+      sql<string>`coalesce(sum(r.rent_amount), 0)::numeric(19, 4)`.as('rent_amount'),
+      sql<string>`coalesce(sum(r.storage_amount), 0)::numeric(19, 4)`.as('storage_amount'),
+      sql<string>`coalesce(sum(r.grace_fee_amount), 0)::numeric(19, 4)`.as('grace_fee_amount'),
+      sql<string>`coalesce(sum(r.total_amount), 0)::numeric(19, 4)`.as('total_amount'),
+    ] as const;
+    const [totals, rows] = await Promise.all([
+      base.select(amounts).executeTakeFirstOrThrow(),
+      base
+        .select([
+          sql<string>`${sql.ref(group.key)}`.as('group_key'),
+          sql<string>`${sql.ref(group.label)}`.as('group_label'),
+          ...amounts,
+        ])
+        .groupBy([sql.ref(group.key), sql.ref(group.label)])
+        .orderBy(sql`total_amount`, 'desc')
+        .orderBy(sql`group_label`, 'asc')
+        .execute(),
+    ]);
+    return {
+      totals: amountsOf(totals),
+      items: rows.map((r) => ({ key: r.group_key, label: r.group_label, ...amountsOf(r) })),
+    };
   }
 
   /**
@@ -442,4 +556,80 @@ export class RptQueries {
 
     return items;
   }
+
+  /**
+   * FR-RPT-06: xếp hạng sản phẩm theo số lượt được chọn trên kiosk (`kiosk_interaction_events`), kèm số
+   * đơn đã thanh toán trong cùng khoảng và bộ lọc.
+   *
+   * Phạm vi ở cả hai nguồn: sự kiện lọc theo `e.brand_id`, đơn lọc bằng `brandScopedOrders` (kèm
+   * `revenue_owner = BRAND`). Với tài khoản thương hiệu, sự kiện của hóa đơn đã LIQUIDATED bị loại hẳn:
+   * bảng sự kiện không ghi chủ sở hữu doanh thu, mà sau thanh lý slot bán hàng của nền tảng. Mất phần lịch
+   * sử trước thanh lý vẫn hơn để thương hiệu thấy hoạt động bán hàng của nền tảng (FR-EXP-20).
+   */
+  async productRanking(
+    scope: BrandScope,
+    filter: ProductRankingFilter,
+  ): Promise<ProductRankingRow[]> {
+    const { from, to, slotId, machineId, locationId } = filter;
+    const rows = await this.db
+      .selectFrom('kiosk_interaction_events as e')
+      .innerJoin('fragrance_products as fp', 'fp.id', 'e.fragrance_product_id')
+      .innerJoin('machines as m', 'm.id', 'e.machine_id')
+      .innerJoin('slot_rentals as r', 'r.id', 'e.slot_rental_id')
+      .where(brandScopedByColumn(scope, 'e.brand_id'))
+      .$if(scope.kind === 'BRAND', (qb) => qb.where('r.status', '<>', 'LIQUIDATED'))
+      .$if(from !== undefined, (qb) => qb.where('e.occurred_at', '>=', from!))
+      .$if(to !== undefined, (qb) => qb.where('e.occurred_at', '<', to!))
+      .$if(slotId !== undefined, (qb) => qb.where('e.slot_id', '=', slotId!))
+      .$if(machineId !== undefined, (qb) => qb.where('e.machine_id', '=', machineId!))
+      .$if(locationId !== undefined, (qb) => qb.where('m.location_id', '=', locationId!))
+      .select([
+        'e.fragrance_product_id',
+        'fp.name as product_name',
+        sql<string>`count(*) filter (where e.event_type = 'PRODUCT_IMPRESSION')`.as('impressions'),
+        sql<string>`count(*) filter (where e.event_type = 'PRODUCT_SELECTED')`.as('selections'),
+      ])
+      .select((eb) =>
+        eb
+          .selectFrom('orders as o')
+          .innerJoin('machines as om', 'om.id', 'o.machine_id')
+          .whereRef('o.fragrance_product_id', '=', 'e.fragrance_product_id')
+          .where(brandScopedOrders(scope, 'o'))
+          .where('o.paid_at', 'is not', null)
+          .$if(from !== undefined, (qb) => qb.where('o.paid_at', '>=', from!))
+          .$if(to !== undefined, (qb) => qb.where('o.paid_at', '<', to!))
+          .$if(slotId !== undefined, (qb) => qb.where('o.slot_id', '=', slotId!))
+          .$if(machineId !== undefined, (qb) => qb.where('o.machine_id', '=', machineId!))
+          .$if(locationId !== undefined, (qb) => qb.where('om.location_id', '=', locationId!))
+          .select(sql<string>`count(*)`.as('n'))
+          .as('order_count'),
+      )
+      .groupBy(['e.fragrance_product_id', 'fp.name'])
+      .orderBy(sql`selections`, 'desc')
+      .orderBy('fp.name', 'asc')
+      .execute();
+    return rows.map((r) => ({
+      fragranceProductId: r.fragrance_product_id,
+      productName: r.product_name,
+      impressionCount: Number(r.impressions),
+      selectionCount: Number(r.selections),
+      orderCount: Number(r.order_count ?? 0),
+    }));
+  }
+}
+
+function amountsOf(r: {
+  invoice_count: string;
+  rent_amount: string;
+  storage_amount: string;
+  grace_fee_amount: string;
+  total_amount: string;
+}): RentalSalesAmountsRow {
+  return {
+    invoiceCount: Number(r.invoice_count),
+    rentAmount: r.rent_amount,
+    storageAmount: r.storage_amount,
+    graceFeeAmount: r.grace_fee_amount,
+    totalAmount: r.total_amount,
+  };
 }

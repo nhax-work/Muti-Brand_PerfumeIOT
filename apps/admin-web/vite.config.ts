@@ -15,6 +15,10 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
-    testTimeout: 10000,
+    setupFiles: ['src/test-setup.ts'],
+    // Test form antd (modal + validate + select) tốn CPU: ~1 giây khi chạy riêng, ~3 giây trong cả
+    // suite, và quá 10 giây trên runner CI chậm (UsersPage, ProductsPage). Test hỏng thật vẫn báo ở
+    // assertion; ngưỡng này chỉ chặn test treo.
+    testTimeout: 30_000,
   },
 });
