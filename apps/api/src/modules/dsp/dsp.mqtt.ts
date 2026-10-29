@@ -26,7 +26,6 @@ const CommandResultMessage = z.object({
   result_code: z.string().max(100).nullish(),
   executed_at: z.string().max(64).nullish(),
   device_event_id: z.string().max(150).nullish(),
-  measured_quantity_ml: z.number().finite().nullish(),
   sensor_snapshot: z.record(z.unknown()).nullish(),
 });
 
@@ -100,7 +99,6 @@ export class DspMqttGateway {
       resultCode: message.result_code,
       executedAt: parseInstant(message.executed_at),
       deviceEventId: message.device_event_id,
-      measuredQuantityMl: message.measured_quantity_ml,
       sensorSnapshot: (message.sensor_snapshot ?? null) as Json | null,
       raw: raw as Json,
     });

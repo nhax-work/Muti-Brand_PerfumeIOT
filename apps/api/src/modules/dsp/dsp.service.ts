@@ -40,6 +40,7 @@ import {
   PRESS_TIMEOUT,
   type DeviceStage,
 } from './dispense-outcome.js';
+import { DOSE_CONSUMER, type DoseConsumer } from './dose-consumption.port.js';
 import {
   DspQueries,
   type CommandRecord,
@@ -83,7 +84,6 @@ export interface DeviceResultInput {
   readonly resultCode?: string | null | undefined;
   readonly executedAt?: Date | null | undefined;
   readonly deviceEventId?: string | null | undefined;
-  readonly measuredQuantityMl?: number | null | undefined;
   readonly sensorSnapshot?: Json | null | undefined;
   readonly raw: Json;
 }
@@ -119,6 +119,7 @@ export class DspService {
   constructor(
     @Inject(DspQueries) private readonly queries: DspQueries,
     @Inject(OrdService) private readonly orders: OrdService,
+    @Inject(DOSE_CONSUMER) private readonly inventory: DoseConsumer,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -195,7 +196,7 @@ export class DspService {
    * chờ bấm nút (ADR-0007). Lệnh chỉ được ghi ở đây — vòng publish của `DspJobs` gửi đi như mọi lệnh
    * CREATED, kể cả khi máy đang MAINTENANCE (checklist sau bảo trì, FR-MNT-11).
    *
-   * Trừ lượng còn lại sau lượt thành công (FR-INV-10) thuộc INV, chưa hiện thực.
+   * Lượt thành công trừ lượng còn lại qua `handleDeviceResult` như lượt khách (FR-INV-10 AC2).
    */
   async createDiagnostic(
     actor: AuthenticatedUser,
@@ -333,13 +334,16 @@ export class DspService {
             resultCode: input.resultCode ?? null,
             failureCode: input.failureCode ?? null,
             executedAt: input.executedAt ?? null,
-            measuredQuantityMl: input.measuredQuantityMl ?? null,
             sensorSnapshot: input.sensorSnapshot ?? null,
             rawPayload: input.raw,
             deviceEventId: input.deviceEventId ?? null,
           },
           tx,
         );
+      }
+      // FR-INV-10: lượt xịt đã thực sự diễn ra — kể cả kết quả đến trễ cho lệnh UNKNOWN.
+      if (outcome.commandStatus === 'SUCCEEDED') {
+        await this.inventory.consumeDose(tx, command.slotId, input.executedAt ?? now);
       }
       if (command.orderId) {
         await this.orders.finishDispense(tx, command.orderId, {
@@ -592,8 +596,6 @@ function toCommandDto(c: CommandRecord): DispenseCommand {
       resultCode: c.result.resultCode,
       failureCode: c.result.failureCode,
       executedAt: c.result.executedAt?.toISOString() ?? null,
-      measuredQuantityMl:
-        c.result.measuredQuantityMl === null ? null : Number(c.result.measuredQuantityMl),
       receivedAt: c.result.receivedAt.toISOString(),
     },
   };

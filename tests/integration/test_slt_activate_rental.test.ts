@@ -253,7 +253,7 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
 
     // Mở phiếu nạp
     const openRes = await staff('POST', '/refill-sessions', {
-      payload: { slotId, beforeWeightG: 50 },
+      payload: { slotId },
     });
     expect(openRes.statusCode, openRes.body).toBe(201);
     const sessionId = openRes.json<{ id: string }>().id;
@@ -263,7 +263,6 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
       payload: {
         newBottleId: bottleId,
         checklistCompleted: true,
-        afterWeightG: 120,
         notes: 'Lắp chai đầu',
       },
     });
@@ -313,7 +312,7 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
 
     // Mở phiếu nạp thành công
     const openRes = await staff('POST', '/refill-sessions', {
-      payload: { slotId, beforeWeightG: 50 },
+      payload: { slotId },
     });
     expect(openRes.statusCode, openRes.body).toBe(201);
     const sessionId = openRes.json<{ id: string }>().id;
@@ -332,7 +331,7 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
 
     // Đóng phiếu nạp -> SLT từ chối vì hóa đơn chưa thanh toán (AC2)
     const closeRes = await staff('POST', `/refill-sessions/${sessionId}/close`, {
-      payload: { newBottleId: bottleId, checklistCompleted: true, afterWeightG: 120 },
+      payload: { newBottleId: bottleId, checklistCompleted: true },
     });
     expect(closeRes.statusCode).toBe(409);
     expect(closeRes.json()).toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
@@ -375,13 +374,13 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
     const bottleId = await createSpareBottle();
 
     const openRes = await staff('POST', '/refill-sessions', {
-      payload: { slotId, beforeWeightG: 50 },
+      payload: { slotId },
     });
     expect(openRes.statusCode, openRes.body).toBe(201);
     const sessionId = openRes.json<{ id: string }>().id;
 
     const closeRes = await staff('POST', `/refill-sessions/${sessionId}/close`, {
-      payload: { newBottleId: bottleId, checklistCompleted: true, afterWeightG: 120 },
+      payload: { newBottleId: bottleId, checklistCompleted: true },
     });
     expect(closeRes.statusCode, closeRes.body).toBe(200);
 
@@ -413,13 +412,13 @@ describe('FR-SLT-24: Kích hoạt hóa đơn khi lắp chai đầu tiên', () =>
 
     const bottleId = await createSpareBottle();
     const openRes = await staff('POST', '/refill-sessions', {
-      payload: { slotId, beforeWeightG: 50 },
+      payload: { slotId },
     });
     expect(openRes.statusCode, openRes.body).toBe(201);
     const sessionId = openRes.json<{ id: string }>().id;
 
     const closeRes = await staff('POST', `/refill-sessions/${sessionId}/close`, {
-      payload: { newBottleId: bottleId, checklistCompleted: true, afterWeightG: 120 },
+      payload: { newBottleId: bottleId, checklistCompleted: true },
     });
     expect(closeRes.statusCode, closeRes.body).toBe(200);
 
@@ -541,7 +540,7 @@ describe('FR-SLT-42: Tự động kích hoạt khi chờ nạp hàng quá RENTAL
     const bottleId = await createSpareBottle();
 
     const openRes = await staff('POST', '/refill-sessions', {
-      payload: { slotId: slot, beforeWeightG: 50 },
+      payload: { slotId: slot },
     });
     expect(openRes.statusCode, openRes.body).toBe(201);
     const sessionId = openRes.json<{ id: string }>().id;
@@ -549,7 +548,7 @@ describe('FR-SLT-42: Tự động kích hoạt khi chờ nạp hàng quá RENTAL
     // Chạy song song cả đóng phiếu nạp và job tự kích hoạt
     const [closeRes] = await Promise.all([
       staff('POST', `/refill-sessions/${sessionId}/close`, {
-        payload: { newBottleId: bottleId, checklistCompleted: true, afterWeightG: 120 },
+        payload: { newBottleId: bottleId, checklistCompleted: true },
       }),
       sltJobs.autoActivateStockingOverdue(),
     ]);

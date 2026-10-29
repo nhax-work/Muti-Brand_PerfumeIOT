@@ -276,12 +276,12 @@
 ---
 
 ## FR-EXP-19 — Thông báo thanh lý cho Brand Admin
-* **Statement:** Hệ thống phải thông báo cho Brand Admin khi hàng tồn của họ bị thanh lý, kèm danh sách chai và khối lượng còn lại.
+* **Statement:** Hệ thống phải thông báo cho Brand Admin khi hàng tồn của họ bị thanh lý, kèm danh sách chai và lượng còn lại ước tính (ml, ADR-0019).
 * **Traces:** BR-013 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given hóa đơn `H` chuyển sang trạng thái `LIQUIDATED`,  
     When tiến trình thanh lý hoàn tất,  
-    Then hệ thống tự động gửi thông báo đến Brand Admin sở hữu hóa đơn, kèm danh sách chi tiết các mã chai, tên sản phẩm và khối lượng/dung tích còn lại tại thời điểm thanh lý.
+    Then hệ thống tự động gửi thông báo đến Brand Admin sở hữu hóa đơn, kèm danh sách chi tiết các mã chai, tên sản phẩm và lượng còn lại ước tính `current_estimated_ml` tại thời điểm thanh lý.
   * **AC2:** Given thông báo được gửi,  
     When kiểm tra AuditLog,  
     Then ghi nhận hành động `LIQUIDATION_NOTICE_SENT` kèm danh sách chai chi tiết.
@@ -379,15 +379,15 @@
 ---
 
 ## FR-EXP-26 — Lập phiếu trả hàng khi tháo chai
-* **Statement:** Hệ thống phải lập phiếu trả hàng khi Inventory Staff tháo chai của hóa đơn đã báo không gia hạn, ghi khối lượng còn lại của từng chai, chuyển chai sang RETURNED_TO_BRAND, chuyển hóa đơn sang CLOSED và thông báo cho Brand Admin kèm danh sách chai (ADR-0014).
+* **Statement:** Hệ thống phải lập phiếu trả hàng khi Inventory Staff tháo chai của hóa đơn đã báo không gia hạn, ghi lượng còn lại ước tính của từng chai, chuyển chai sang RETURNED_TO_BRAND, chuyển hóa đơn sang CLOSED và thông báo cho Brand Admin kèm danh sách chai (ADR-0014, ADR-0019).
 * **Traces:** BR-005, BR-013, ADR-0014 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1 (Tháo chai và lập phiếu trả hàng):** Given hóa đơn `H` đã báo không gia hạn,  
     When Inventory Staff thực hiện tháo chai tại máy hoặc kho,  
-    Then hệ thống tự động tạo bản ghi `bottle_returns` ghi nhận danh sách chai, khối lượng còn lại theo cảm biến/cân, chuyển trạng thái các chai liên quan sang `RETURNED_TO_BRAND`, chuyển hóa đơn `H` sang `CLOSED`.
+    Then hệ thống tự động tạo bản ghi `bottle_returns` ghi nhận danh sách chai, lượng còn lại ước tính `current_estimated_ml` của từng chai (không nhập tay, không cân — ADR-0019), chuyển trạng thái các chai liên quan sang `RETURNED_TO_BRAND`, chuyển hóa đơn `H` sang `CLOSED`.
   * **AC2 (Thông báo cho thương hiệu):** Given phiếu trả hàng vừa được lập,  
     When hoàn tất giao dịch trong CSDL,  
-    Then hệ thống gửi thông báo cho Brand Admin kèm danh sách chai, khối lượng còn lại và địa điểm kho hàng sẵn sàng để nhận.
+    Then hệ thống gửi thông báo cho Brand Admin kèm danh sách chai, lượng còn lại ước tính và địa điểm kho hàng sẵn sàng để nhận.
 * **Test:** `test_FR_EXP_26_create_bottle_return_record`
 
 ---

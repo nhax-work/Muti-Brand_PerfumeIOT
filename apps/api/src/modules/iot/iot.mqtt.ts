@@ -48,6 +48,25 @@ export class IotMqttGateway {
     }
   }
 
+  /**
+   * FR-IOT-06: đẩy lại cấu hình một máy theo yêu cầu người vận hành. Chưa nối broker thì chỉ tăng
+   * version — nhịp đồng bộ kế tiếp publish khi có kết nối.
+   *
+   * @returns version mới, `null` nếu máy không tồn tại
+   */
+  pushConfig(machineId: string): Promise<number | null> {
+    return this.iot.pushConfiguration(
+      machineId,
+      this.mqtt.connected
+        ? (message) =>
+            this.mqtt.publish(deviceTopic(message.machineSerial, 'config'), message.payload, {
+              qos: 1,
+              retain: true,
+            })
+        : null,
+    );
+  }
+
   private async receive(
     suffix: 'heartbeat' | 'telemetry' | 'event',
     topic: string,

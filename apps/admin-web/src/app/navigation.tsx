@@ -1,21 +1,27 @@
 import {
+  AlertOutlined,
   AppstoreOutlined,
   BankOutlined,
+  BarChartOutlined,
   DashboardOutlined,
   DollarOutlined,
   EnvironmentOutlined,
   ExperimentOutlined,
+  FileSearchOutlined,
   FundOutlined,
   IdcardOutlined,
   InboxOutlined,
+  InteractionOutlined,
   MailOutlined,
   RollbackOutlined,
+  SafetyOutlined,
   ShopOutlined,
   ShoppingCartOutlined,
   SkinOutlined,
   TagsOutlined,
   TeamOutlined,
   ThunderboltOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import type { RoleCode } from '@scentstation/contracts';
 import type { MessageKey } from '@scentstation/i18n';
@@ -64,6 +70,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     label: 'ui.brandPayouts',
     icon: <BankOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/reports',
+    label: 'ui.reports',
+    icon: <BarChartOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/storage-compensations',
+    label: 'ui.storageCompensations',
+    icon: <SafetyOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
   },
   {
     path: '/revenue',
@@ -126,9 +144,39 @@ export const NAV_ITEMS: readonly NavItem[] = [
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
   },
   {
+    path: '/refill-requests',
+    label: 'ui.refillRequests',
+    icon: <InteractionOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF', 'BRAND_ADMIN'],
+  },
+  {
+    path: '/alerts',
+    label: 'ui.alerts',
+    icon: <AlertOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN'],
+  },
+  {
     path: '/shipments',
     label: 'ui.shipments',
     icon: <InboxOutlined />,
     roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'BRAND_ADMIN', 'INVENTORY_STAFF'],
+  },
+  {
+    path: '/maintenance-tickets',
+    label: 'ui.maintenanceTickets',
+    icon: <ToolOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF'],
+  },
+  {
+    path: '/audit-logs',
+    label: 'ui.auditLogs',
+    icon: <FileSearchOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN'],
+  },
+  {
+    path: '/bottle-returns',
+    label: 'ui.bottleReturns',
+    icon: <RollbackOutlined />,
+    roles: ['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF', 'BRAND_ADMIN'],
   },
 ];

@@ -1,15 +1,29 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { Alert, Button, Card, Col, Descriptions, Row, Space, Spin, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  Descriptions,
+  Row,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import {
   ArrowLeftOutlined,
+  CloudUploadOutlined,
   EditOutlined,
   EnvironmentOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons';
 
 import { RequireRole } from '@/app/guards/RequireRole';
-import { useAuth } from '@/shared/auth';
+import { errorMessage } from '@/shared/api';
+import { ReauthCancelled, useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import {
   useBrands,
@@ -18,6 +32,7 @@ import {
   useMachineRentals,
   useMachineSlots,
   useProducts,
+  usePushMachineConfig,
   type Brand,
   type Location,
   type MachineSlot,
@@ -30,6 +45,7 @@ import { MachineModeModal } from './components/MachineModeModal';
 import { SlotCard } from './components/SlotCard';
 import { SlotConfigModal } from './components/SlotConfigModal';
 import { StatusHistoryCard } from './components/StatusHistoryCard';
+import { TelemetryCard } from './components/TelemetryCard';
 
 const STATUS_COLOR_MAP = {
   ONLINE: 'success',
@@ -64,6 +80,9 @@ export default function MachineDetailPage() {
 
   // Khóa MQTT cần quyền machine.manage + xác thực lại — chỉ Super Admin (FR-MCH-02).
   const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
+  // FR-IOT-06: đẩy lại cấu hình cần `machine.operate` + xác thực lại (Super Admin, Operations Staff).
+  const canPushConfig = user?.permissions?.includes('machine.operate') ?? false;
+  const pushConfig = usePushMachineConfig();
   const [selectedSlotForConfig, setSelectedSlotForConfig] = useState<MachineSlot | null>(null);
   // Màn này chỉ Super Admin và Operations Staff vào được — cả hai có quyền xịt chẩn đoán (FR-MNT-09).
   const [selectedSlotForDiagnostic, setSelectedSlotForDiagnostic] = useState<MachineSlot | null>(
@@ -429,6 +448,29 @@ export default function MachineDetailPage() {
             </Space>
           }
           style={{ marginBottom: 24 }}
+          extra={
+            canPushConfig && (
+              <Button
+                icon={<CloudUploadOutlined />}
+                loading={pushConfig.isPending}
+                onClick={() =>
+                  pushConfig
+                    .mutateAsync(machine.id)
+                    .then((updated) =>
+                      message.success(
+                        t('ui.configPushed', { version: updated.configurationVersion ?? '' }),
+                      ),
+                    )
+                    .catch((error: unknown) => {
+                      if (!(error instanceof ReauthCancelled))
+                        message.error(errorMessage(error, t));
+                    })
+                }
+              >
+                {t('ui.pushConfig')}
+              </Button>
+            )
+          }
         >
           <Descriptions bordered size="small" column={{ xs: 1, sm: 2, md: 3 }}>
             <Descriptions.Item label={t('ui.serialNumber')}>
@@ -506,6 +548,7 @@ export default function MachineDetailPage() {
 
         {isSuperAdmin && <MachineCredentialsCard machineId={machine.id} />}
         <StatusHistoryCard machineId={machine.id} />
+        <TelemetryCard machineId={machine.id} slots={slots ?? []} />
 
         {/* MODALS */}
         <MachineModeModal

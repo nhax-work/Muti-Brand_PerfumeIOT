@@ -98,6 +98,24 @@ export const router = createBrowserRouter([
           import('@/routes/brand-payouts/BrandPayoutsPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/reports',
+        lazy: () => import('@/routes/reports/ReportsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/refill-requests',
+        lazy: () =>
+          import('@/routes/refill-requests/RefillRequestsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/storage-compensations',
+        lazy: () =>
+          import('@/routes/storage-compensations/StorageCompensationsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
         path: '/revenue',
         lazy: () => import('@/routes/revenue/RevenuePage').then((m) => ({ Component: m.default })),
       },
@@ -154,9 +172,32 @@ export const router = createBrowserRouter([
           })),
       },
       {
+        path: '/alerts',
+        lazy: () => import('@/routes/alerts/AlertsPage').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/shipments',
         lazy: () =>
           import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/maintenance-tickets',
+        lazy: () =>
+          import('@/routes/maintenance-tickets/MaintenanceTicketsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/audit-logs',
+        lazy: () =>
+          import('@/routes/audit-logs/AuditLogsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/bottle-returns',
+        lazy: () =>
+          import('@/routes/bottle-returns/BottleReturnsPage').then((m) => ({
+            Component: m.default,
+          })),
       },
     ],
   },

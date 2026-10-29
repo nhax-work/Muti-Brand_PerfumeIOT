@@ -312,9 +312,9 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     for (let i = 0; i < bottles.length; i++) {
       await client.query(
         `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                              status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                              status, initial_volume_ml, current_estimated_ml,
                               opened_at, installed_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000,
                  $7, $7, now() + interval '18 months')`,
         [
           bottles[i],
@@ -389,7 +389,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
         await client.query(
           `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                         measured_at)
-           VALUES ($1, $2, $3, 'slot_weight_g', 120.5, 'g', $4)`,
+           VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 48.0, 'ml', $4)`,
           [randomUUID(), machineId, slots[i], measuredAt],
         );
       }
@@ -398,7 +398,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     await client.query(
       `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                     measured_at)
-       VALUES ($1, $2, $3, 'slot_weight_g', 999.9, 'g', $4)`,
+       VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 49.5, 'ml', $4)`,
       [readingBeforeRentalId, machineId, slots[0], new Date(now - days(60))],
     );
 
@@ -557,9 +557,16 @@ export async function cleanupIsolationFixture(
       `DELETE FROM notifications WHERE brand_id = ANY($1::uuid[]) OR recipient_user_id = ANY($2::uuid[])`,
       [brands, users],
     ],
+    // Tương tác kiosk (FR-RPT-06), yêu cầu bổ sung (FR-RFQ), khoản bồi thường và điều chỉnh tồn
+    // kho (FR-SLT-44, ADR-0018) do test sinh ra — trỏ tới hóa đơn, phiên nạp, chai.
+    [`DELETE FROM kiosk_interaction_events WHERE machine_id = $1`, [fx.machineId]],
+    [`DELETE FROM refill_requests WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM storage_compensations WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM inventory_adjustments WHERE brand_id = ANY($1::uuid[])`, [brands]],
     // Phiếu nạp và khai báo gửi hàng do test INV sinh ra (ADR-0017) — trỏ tới chai, lô, slot.
     [`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM bottle_returns WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM brand_shipment_declarations WHERE brand_id = ANY($1::uuid[])`, [brands]],

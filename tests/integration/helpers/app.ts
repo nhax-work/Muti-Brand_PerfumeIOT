@@ -27,6 +27,12 @@ export const TEST_PAYOS_CHECKSUM_KEY = 'integration-test-payos-checksum-key';
 export interface TestAppOptions {
   /** Cổng tạo thanh toán mới. Mặc định `mock`. `payos` thì test phải giả lập `fetch` (ADR-0016). */
   readonly paymentProvider?: 'mock' | 'payos';
+  /**
+   * Giới hạn tạo đơn kiosk mỗi máy mỗi phút (NFR-SEC-06). Mặc định nâng lên 1000: các file test tạo
+   * hàng chục đơn trên CÙNG một máy fixture trong vài giây, ngưỡng thật (10) sẽ chặn chúng. Test của
+   * chính giới hạn này truyền ngưỡng nhỏ.
+   */
+  readonly orderRateLimitPerMin?: number;
 }
 
 export async function createTestApp(options: TestAppOptions = {}): Promise<NestFastifyApplication> {
@@ -36,6 +42,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestF
   process.env['JWT_SECRET'] ??= 'integration-test-secret-khong-dung-o-that';
   // Gán đè, không `??=`: test tự ký webhook bằng đúng bí mật này, bất kể .env của máy đang có gì.
   process.env['PAYMENT_PROVIDER'] = options.paymentProvider ?? 'mock';
+  process.env['ORDER_RATE_LIMIT_PER_MIN'] = String(options.orderRateLimitPerMin ?? 1000);
   process.env['PAYMENT_WEBHOOK_SECRET'] = TEST_PAYMENT_WEBHOOK_SECRET;
   // PayOS luôn được cấu hình trong test để webhook /payos xử lý được; chỉ gọi API khi là cổng hiện tại.
   process.env['PAYOS_BASE_URL'] = 'https://payos.test.invalid';

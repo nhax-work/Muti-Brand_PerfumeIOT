@@ -1772,6 +1772,8 @@ export class SltQueries {
         sourceRentalId: r.source_rental_id,
         liquidatedAt: r.liquidated_at,
         bottleReturnId: r.bottle_return_id,
+        damagedAt: r.damaged_at,
+        damageReason: r.damage_reason,
       }));
     }
 

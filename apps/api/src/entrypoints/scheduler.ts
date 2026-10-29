@@ -185,8 +185,40 @@ export function startScheduler(
   dispatchEmails();
   timers.push(setInterval(dispatchEmails, EMAIL_TICK_MS));
 
+  let sweepingAlerts = false;
+  const sweepAlerts = () => {
+    if (sweepingAlerts) return;
+    sweepingAlerts = true;
+    Promise.all([alr.sweepDoorOpenAlerts(), alr.sweepLowStockAlerts()])
+      .then(([doors, stocks]) => {
+        if (doors + stocks > 0)
+          logger.log(`Cảnh báo: ${doors} cửa mở quá hạn, ${stocks} slot cạn/hết`);
+      })
+      .catch((e: unknown) => logger.error(`Quét cảnh báo lỗi: ${String(e)}`))
+      .finally(() => (sweepingAlerts = false));
+  };
+  sweepAlerts();
+  timers.push(setInterval(sweepAlerts, 60_000));
+
+  let sweepingExpiry = false;
+  const sweepExpiry = () => {
+    if (sweepingExpiry) return;
+    sweepingExpiry = true;
+    alr
+      .sweepExpiringRentals()
+      .then(({ notified7, notified3 }) => {
+        if (notified7 + notified3 > 0) {
+          logger.log(`Nhắc hạn hợp đồng: ${notified7} mốc 7 ngày, ${notified3} mốc 3 ngày`);
+        }
+      })
+      .catch((e: unknown) => logger.error(`Quét hết hạn hợp đồng lỗi: ${String(e)}`))
+      .finally(() => (sweepingExpiry = false));
+  };
+  sweepExpiry();
+  timers.push(setInterval(sweepExpiry, 5 * 60_000));
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email, quét cảnh báo, nhắc hết hạn hợp đồng${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }

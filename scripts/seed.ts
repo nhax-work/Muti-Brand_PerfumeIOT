@@ -112,7 +112,10 @@ const PERMISSIONS = [
   ['rental.request', 'Gửi yêu cầu thuê slot trống (FR-SLT-20)'],
   ['product.manage', 'Quản lý danh mục sản phẩm của thương hiệu mình (FR-PRD-01..05)'],
   ['inventory.manage', 'Nhập lô, đăng ký chai, nạp và tháo chai (FR-INV-01..17)'],
-  ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
+  [
+    'inventory.adjust',
+    'Điều chỉnh tồn kho kèm lý do, ghi nhận chai hư hỏng (FR-INV-16, FR-SLT-44)',
+  ],
   [
     'inventory.declare',
     'Khai báo lô hàng gửi kho và nộp giấy tờ chính hãng của thương hiệu mình (FR-INV-22, 33)',
@@ -136,7 +139,7 @@ const PERMISSIONS = [
   ['report.platform', 'Xem báo cáo tổng hợp toàn nền tảng (FR-RPT-15)'],
   [
     'revenue.manage',
-    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, xem doanh thu tách hai nguồn (FR-SLT-53, 54, FR-REV-04)',
+    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, chi trả bồi thường, xem doanh thu tách hai nguồn và doanh thu bán gói (FR-SLT-45, 47, 53, 54, FR-REV-04)',
   ],
   ['audit.read', 'Tra cứu nhật ký kiểm toán (FR-AUD-10)'],
 ] as const;
@@ -585,10 +588,10 @@ async function seedInventory(client: pg.Client): Promise<void> {
   // Chai dự phòng trong kho sẵn sàng nạp máy (status = IN_STOCK)
   await client.query(
     `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                          status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                          status, initial_volume_ml, current_estimated_ml,
                           opened_at, installed_at, expires_at)
      VALUES ('99999999-9999-4999-8999-000000000009', $1, 'BRAND', $2, $3, 'BTL-MA-SPARE-01',
-             'IN_STOCK', 50.0000, 50.0000, 62.5000, NULL, NULL, now() + interval '18 months')
+             'IN_STOCK', 50.0000, 50.0000, NULL, NULL, now() + interval '18 months')
      ON CONFLICT (id) DO NOTHING`,
     [ID.brandA, ID.batches[0], ID.products[0]],
   );
@@ -728,9 +731,9 @@ async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
 
     await client.query(
       `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                            status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                            status, initial_volume_ml, current_estimated_ml,
                             opened_at, installed_at, expires_at)
-       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000,
                now() - interval '30 days', now() - interval '30 days',
                now() + interval '18 months')
        ON CONFLICT (id) DO NOTHING`,

@@ -466,10 +466,10 @@ describe('Expiring & Grace Period Integration Tests (Task 1 / ADR-0014)', () => 
     const bottleId = randomUUID();
     await raw.query(
       `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                            status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                            status, initial_volume_ml, current_estimated_ml,
                             opened_at, installed_at, expires_at)
        VALUES ($1, $2, 'BRAND', (SELECT id FROM inventory_batches WHERE brand_id = $2 LIMIT 1),
-               $3, $4, 'INSTALLED', 50, 45, 60, NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days', NOW() + INTERVAL '1 year')`,
+               $3, $4, 'INSTALLED', 50, 45, NOW() - INTERVAL '10 days', NOW() - INTERVAL '10 days', NOW() + INTERVAL '1 year')`,
       [bottleId, fx.brandA, fx.products[0], `BTL-TEST-${randomUUID().slice(0, 8)}`],
     );
 

@@ -31,6 +31,12 @@
 --                  tờ chính hãng trên inventory_batches, uq_slot_open_refill_session,
 --                  fk_shipment_product_same_brand, cột bằng chứng gửi email trên notifications; áp
 --                  bằng migrations/1791200000000_*.
+--                  ADR-0018 (hoàn thiện contract tuần 8) — bottles.damaged_at/damage_reason,
+--                  refill_requests.note, chk_refill_request_completed_has_session; áp bằng
+--                  migrations/1791300000000_*.
+--                  ADR-0019 (đếm lượt xịt, bỏ load cell) — xóa cột khối lượng trên bottles,
+--                  refill_sessions và dispense_results.measured_quantity_ml; áp bằng
+--                  migrations/1791400000000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -814,9 +820,6 @@ CREATE TABLE bottles (
     status                    bottle_status      NOT NULL DEFAULT 'IN_STOCK',
     initial_volume_ml         numeric(14,4)      NOT NULL,
     current_estimated_ml      numeric(14,4)      NOT NULL,
-    empty_weight_g            numeric(14,4),
-    initial_measured_weight_g numeric(14,4),
-    current_measured_weight_g numeric(14,4),
     opened_at                 timestamptz,
     installed_at              timestamptz,
     removed_at                timestamptz,
@@ -834,7 +837,11 @@ CREATE TABLE bottles (
     -- ADR-0014: phiếu trả hàng chứa chai. FK kép khai ở §10g (bottle_returns tạo sau).
     bottle_return_id          uuid,
     CONSTRAINT chk_bottle_returned_has_return
-        CHECK (status::text <> 'RETURNED_TO_BRAND' OR bottle_return_id IS NOT NULL)
+        CHECK (status::text <> 'RETURNED_TO_BRAND' OR bottle_return_id IS NOT NULL),
+
+    -- ADR-0018: ghi nhận chai hư hỏng — căn cứ khoản bồi thường (FR-SLT-44).
+    damaged_at                timestamptz,
+    damage_reason             text
 );
 
 CREATE UNIQUE INDEX uq_bottle_brand_identifier ON bottles (brand_id, identifier);
@@ -850,6 +857,10 @@ COMMENT ON COLUMN bottles.source_rental_id IS
     'Hóa đơn mà chai đang phục vụ tại thời điểm thanh lý (FR-EXP-16).';
 COMMENT ON COLUMN bottles.bottle_return_id IS
     'Phiếu trả hàng chứa chai này (FR-EXP-26). Bắt buộc khi status = RETURNED_TO_BRAND.';
+COMMENT ON COLUMN bottles.damaged_at IS
+    'Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018).';
+COMMENT ON COLUMN bottles.damage_reason IS
+    'Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44).';
 
 CREATE TABLE refill_sessions (
     id                   uuid          PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -861,8 +872,6 @@ CREATE TABLE refill_sessions (
     performed_by         uuid          NOT NULL REFERENCES users (id),
     status               refill_status NOT NULL DEFAULT 'STARTED',
     checklist_completed  boolean       NOT NULL DEFAULT false,
-    before_weight_g      numeric(14,4),
-    after_weight_g       numeric(14,4),
     notes                text,
     started_at           timestamptz   NOT NULL DEFAULT now(),
     completed_at         timestamptz
@@ -1124,7 +1133,6 @@ CREATE TABLE dispense_results (
     failure_code         varchar(100),
     executed_at          timestamptz,
     received_at          timestamptz   NOT NULL DEFAULT now(),
-    measured_quantity_ml numeric(10,4),
     sensor_snapshot      jsonb,
     raw_payload          jsonb,
     device_event_id      varchar(150)
@@ -1179,7 +1187,12 @@ CREATE TABLE refill_requests (
     scheduled_at         timestamptz,
     refill_session_id    uuid                  REFERENCES refill_sessions (id),
     created_at           timestamptz           NOT NULL DEFAULT now(),
-    updated_at           timestamptz           NOT NULL DEFAULT now()
+    updated_at           timestamptz           NOT NULL DEFAULT now(),
+
+    -- ADR-0018: ghi chú khi tạo (RefillRequestCreate.note); COMPLETED phải có phiên nạp (FR-RFQ-09).
+    note                 text,
+    CONSTRAINT chk_refill_request_completed_has_session
+        CHECK (status::text <> 'COMPLETED' OR refill_session_id IS NOT NULL)
 );
 
 CREATE INDEX idx_refill_requests_brand ON refill_requests (brand_id, status, created_at);
@@ -1187,7 +1200,9 @@ CREATE INDEX idx_refill_requests_slot  ON refill_requests (slot_id, status);
 
 COMMENT ON COLUMN refill_requests.refill_session_id IS
     'Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị '
-    '(FR-RFQ-09) — xem §13.';
+    '(FR-RFQ-09) — chk_refill_request_completed_has_session.';
+COMMENT ON COLUMN refill_requests.note IS
+    'Ghi chú của Brand Admin khi tạo yêu cầu (RefillRequestCreate.note).';
 
 CREATE TABLE alerts (
     id                uuid           PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2231,7 +2246,8 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 --     (FR-SLT-29). Hai cột để nullable chỉ để phục vụ cửa sổ giữa lúc thanh toán và lúc cấu hình
 --     slot (ADR-0006).
 --
---  4. refill_requests chỉ được đặt COMPLETED khi refill_session_id có giá trị (FR-RFQ-09).
+--  4. (Đã chuyển xuống CSDL theo ADR-0018: chk_refill_request_completed_has_session — yêu cầu bổ
+--     sung chỉ COMPLETED khi refill_session_id có giá trị, FR-RFQ-09.)
 --
 --  5. FR-ALR-03 (cửa mở quá DOOR_OPEN_ALERT_MIN) phải tạm ngưng khi tồn tại refill_sessions
 --     với status = STARTED cho cùng máy/slot (FR-INV-30), BỔ SUNG cho ngoại lệ chế độ

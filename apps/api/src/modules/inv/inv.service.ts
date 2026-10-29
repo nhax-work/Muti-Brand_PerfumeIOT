@@ -12,6 +12,9 @@
  *
  * Phiếu nạp mở thì cả máy dừng nhận đơn — chốt chặn nằm ở ORD/DSP (`openRefillSessionOn`), module
  * này chỉ ghi phiếu.
+ *
+ *   chai hư hỏng ─tx─▶ khóa chai (+ máy, slot nếu đang lắp) → DAMAGED → SLT tính bồi thường cùng tx
+ *                      (FR-SLT-44, ADR-0018)
  */
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -32,7 +35,8 @@ import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.j
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
-import { SltService } from '../slt/index.js';
+import { RfqService } from '../rfq/index.js';
+import { CompensationService, SltService, type StorageCompensation } from '../slt/index.js';
 import {
   InvQueries,
   type BatchRecord,
@@ -45,6 +49,7 @@ export type ShipmentDeclaration = Schema<'ShipmentDeclaration'>;
 export type InventoryBatch = Schema<'InventoryBatch'>;
 export type Bottle = Schema<'Bottle'>;
 export type RefillSession = Schema<'RefillSession'>;
+export type BottleDamageResult = Schema<'BottleDamageResult'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
@@ -67,18 +72,17 @@ export interface RegisterBottleInput {
   readonly batchId: string;
   readonly identifier: string;
   readonly initialVolumeMl: number;
-  readonly emptyWeightG?: number | undefined;
   readonly expiresAt?: Date | undefined;
 }
 
 export interface OpenRefillInput {
   readonly slotId: string;
-  readonly beforeWeightG?: number | undefined;
+  /** Yêu cầu bổ sung mà phiếu này xử lý (FR-RFQ-08). */
+  readonly refillRequestId?: string | undefined;
 }
 
 export interface CloseRefillInput {
   readonly newBottleId: string;
-  readonly afterWeightG?: number | undefined;
   readonly notes?: string | undefined;
 }
 
@@ -90,6 +94,8 @@ export class InvService {
     @Inject(InvQueries) private readonly queries: InvQueries,
     @Inject(SltService) private readonly slt: SltService,
     @Inject(AlrService) private readonly alr: AlrService,
+    @Inject(CompensationService) private readonly compensation: CompensationService,
+    @Inject(RfqService) private readonly refillRequests: RfqService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -449,7 +455,6 @@ export class InvService {
             fragranceProductId: batch.fragranceProductId,
             identifier: input.identifier.trim(),
             initialVolumeMl: input.initialVolumeMl,
-            emptyWeightG: input.emptyWeightG ?? null,
             expiresAt: input.expiresAt ?? batch.expiresAt,
           },
           tx,
@@ -475,6 +480,82 @@ export class InvService {
       return bottleId;
     });
     return toBottleDto((await this.queries.findBottle(id))!);
+  }
+
+  /**
+   * FR-SLT-44, ADR-0018: Inventory Staff ghi nhận chai hư hỏng; khoản bồi thường (nếu có) sinh trong
+   * cùng transaction. Xác thực lại kiểm ở controller (nhóm "điều chỉnh tồn kho", FR-AUTH-09).
+   *
+   * Chai đang lắp: máy phải rảnh như lúc mở phiếu nạp (MACHINE_BUSY) — gỡ chai khỏi slot đang có lượt
+   * xịt chờ khách bấm là làm hỏng lượt đó. Slot được gỡ chai và về 0 lượt còn lại.
+   */
+  async markBottleDamaged(
+    actor: AuthenticatedUser,
+    bottleId: string,
+    reason: string,
+  ): Promise<BottleDamageResult> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw invalidField('reason', 'inv.damageReasonRequired');
+
+    const compensation = await this.queries.transaction(async (tx) => {
+      // Khóa máy → slot trước, chai sau: cùng thứ tự với đóng phiếu nạp, không khóa chéo.
+      const installedSlotId = await this.queries.slotHoldingBottle(bottleId, tx);
+      const slot = installedSlotId
+        ? await this.queries.lockSlotAndMachine(installedSlotId, tx)
+        : null;
+      const bottle = await this.queries.lockBottleForDamage(bottleId, tx);
+      if (!bottle) throw notFoundFor(actor);
+      if (bottle.status === 'DAMAGED') {
+        throw new AppError('VALIDATION_ERROR', 'inv.bottleAlreadyDamaged');
+      }
+      if (bottle.status === 'RETURNED_TO_BRAND' && bottle.returnHandedOver) {
+        throw new AppError('VALIDATION_ERROR', 'inv.bottleHandedOver');
+      }
+      // Chai đã rời slot giữa lúc đọc và lúc khóa: coi như không lắp.
+      const stillInstalled = slot !== null && slot.activeBottleId === bottle.id;
+      if (stillInstalled && (await this.queries.machineIsBusy(slot.machineId, tx))) {
+        throw new AppError('MACHINE_BUSY', 'inv.machineBusy');
+      }
+
+      const now = this.clock.now();
+      if (stillInstalled) await this.queries.clearSlotBottle(slot.id, tx);
+      await this.queries.markBottleDamaged(
+        bottle.id,
+        { at: now, reason: trimmed, wasInstalled: stillInstalled },
+        tx,
+      );
+      const created: StorageCompensation | null = await this.compensation.compensateDamagedBottle(
+        tx,
+        {
+          id: bottle.id,
+          brandId: bottle.brandId,
+          owner: bottle.owner,
+          previousStatus: bottle.status,
+          expiresAt: bottle.expiresAt,
+          fragranceProductId: bottle.fragranceProductId,
+          installedSlotId: stillInstalled ? slot.id : null,
+          bottleReturnId: bottle.bottleReturnId,
+        },
+        now,
+      );
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: bottle.brandId,
+          action: 'inv.bottle.damaged',
+          targetType: 'Bottle',
+          targetId: bottle.id,
+          severity: 'WARNING',
+          before: { status: bottle.status, installedSlotId: stillInstalled ? slot.id : null },
+          after: { status: 'DAMAGED', reason: trimmed },
+          metadata: { compensationId: created?.id ?? null, amount: created?.amount ?? null },
+        },
+        tx,
+      );
+      return created;
+    });
+    return { bottle: toBottleDto((await this.queries.findBottle(bottleId))!), compensation };
   }
 
   // -----------------------------------------------------------------------------------
@@ -523,11 +604,17 @@ export class InvService {
             slotId: slot.id,
             oldBottleId: slot.activeBottleId,
             performedBy: actor.userId,
-            beforeWeightG: input.beforeWeightG ?? null,
             startedAt: now,
           },
           tx,
         );
+        if (input.refillRequestId) {
+          await this.refillRequests.linkToSession(tx, {
+            requestId: input.refillRequestId,
+            slotId: slot.id,
+            sessionId,
+          });
+        }
         await this.audit.log(
           {
             actorType: 'USER',
@@ -536,7 +623,12 @@ export class InvService {
             action: 'inv.refill.opened',
             targetType: 'RefillSession',
             targetId: sessionId,
-            after: { machineId: slot.machineId, slotId: slot.id, rentalId: rental.id },
+            after: {
+              machineId: slot.machineId,
+              slotId: slot.id,
+              rentalId: rental.id,
+              refillRequestId: input.refillRequestId ?? null,
+            },
           },
           tx,
         );
@@ -581,23 +673,20 @@ export class InvService {
       if (oldBottleId && oldBottleId !== bottle.id) {
         await this.queries.removeBottle(oldBottleId, now, tx);
       }
-      await this.queries.installBottle(
-        bottle.id,
-        { at: now, measuredWeightG: input.afterWeightG ?? null },
-        tx,
-      );
+      await this.queries.installBottle(bottle.id, now, tx);
       await this.queries.setSlotBottle(slot, bottle, tx);
       await this.queries.completeRefillSession(
         session.id,
         {
           oldBottleId,
           newBottleId: bottle.id,
-          afterWeightG: input.afterWeightG ?? null,
           notes: input.notes?.trim() || null,
           completedAt: now,
         },
         tx,
       );
+      // FR-RFQ-09: yêu cầu bổ sung liên kết với phiếu này hoàn tất cùng lúc.
+      await this.refillRequests.completeForSession(tx, session.id, actor.userId);
       // FR-SLT-24: kích hoạt hóa đơn khi lắp chai đầu tiên trong cùng tx với việc đóng phiếu nạp.
       await this.slt.activateOnFirstBottleInstall(rental.id, now, actor, tx);
       await this.audit.log(
@@ -709,6 +798,8 @@ export function toBottleDto(r: BottleRecord): Bottle {
     sourceRentalId: r.sourceRentalId,
     liquidatedAt: iso(r.liquidatedAt),
     bottleReturnId: r.bottleReturnId,
+    damagedAt: iso(r.damagedAt),
+    damageReason: r.damageReason,
   };
 }
 
@@ -723,8 +814,6 @@ export function toRefillDto(r: RefillSessionRecord): RefillSession {
     performedBy: r.performedBy,
     status: r.status,
     checklistCompleted: r.checklistCompleted,
-    beforeWeightG: r.beforeWeightG === null ? null : Number(r.beforeWeightG),
-    afterWeightG: r.afterWeightG === null ? null : Number(r.afterWeightG),
     notes: r.notes,
     startedAt: r.startedAt.toISOString(),
     completedAt: iso(r.completedAt),

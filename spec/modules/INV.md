@@ -1,14 +1,15 @@
 # FR-INV — Tồn kho và nạp nước hoa
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 35 FR  
-> Trạng thái AC: **hoàn thành** (FR-INV-04, 30, 31 soát lại và FR-INV-32÷35 thêm ngày 2026-10-17 theo ADR-0013, ADR-0014, ADR-0015)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 35 mục = 33 FR hiệu lực + 2 FR bãi bỏ (mức X)  
+> Trạng thái AC: **hoàn thành** (FR-INV-04, 30, 31 soát lại và FR-INV-32÷35 thêm ngày 2026-10-17 theo ADR-0013, ADR-0014, ADR-0015; FR-INV-05, 13, 15 sửa và FR-INV-18, 19 bãi bỏ ngày 2026-10-28 theo ADR-0019 — máy không có load cell)  
 > Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`,
 `spec/decisions/0013-brand-tu-dang-ky-hop-dong-hai-lop-va-chi-tra-doanh-thu.md`,
 `spec/decisions/0014-an-han-chu-dong-khong-gia-han-va-doi-slot.md`,
-`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`
+`spec/decisions/0015-dung-ban-an-toan-va-bao-ve-khach-tai-may.md`,
+`spec/decisions/0019-dem-luot-xit-thay-load-cell.md`
 
 ## FR-INV-01 — Tạo lô nước hoa
 
@@ -63,18 +64,20 @@
 
 **Kiểm tra:** `test_FR_INV_04_bottle_status`
 
-## FR-INV-05 — Khối lượng ban đầu
+## FR-INV-05 — Dung tích ban đầu
 
-**Tuyên bố:** Hệ thống phải ghi nhận khối lượng ban đầu của chai tại thời điểm lắp vào slot.
+**Tuyên bố:** Hệ thống phải ghi nhận dung tích ban đầu của chai khi đăng ký chai (ADR-0019).
 
-**Dấu vết:** BR-005 · **Ưu tiên:** M
+**Dấu vết:** BR-005 · **Ưu tiên:** M · **API:** `POST /bottles`
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho chai được lắp vào slot, Khi Inventory Staff hoàn tất thao tác lắp và cung cấp số đo khối lượng, Thì hệ thống lưu khối lượng ban đầu của chai.
-- AC2: Cho thao tác lắp chai không có số đo khối lượng ban đầu, Khi Inventory Staff hoàn tất thao tác, Thì hệ thống không ghi nhận phiên lắp thành công.
+- AC1: Cho Inventory Staff đăng ký chai với `initialVolumeMl`, Khi hệ thống lưu chai, Thì `initial_volume_ml` bằng giá trị đó và `current_estimated_ml` được đặt bằng chính giá trị đó.
+- AC2: Cho yêu cầu đăng ký chai thiếu `initialVolumeMl` hoặc giá trị không lớn hơn 0, Khi gửi yêu cầu, Thì hệ thống từ chối với `VALIDATION_ERROR`.
 
-**Kiểm tra:** `test_FR_INV_05_initial_weight`
+> Máy không có load cell (ADR-0019): lượng còn lại theo dõi bằng số lượt xịt thành công × liều hiệu chuẩn (FR-INV-09, FR-INV-10), không cân chai.
+
+**Kiểm tra:** `test_FR_INV_05_initial_volume`
 
 ## FR-INV-06 — Kiểm tra quyền sở hữu khi gán slot
 
@@ -169,13 +172,13 @@
 
 ## FR-INV-13 — Ghi nhận phiên nạp
 
-**Tuyên bố:** Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ, chai mới và khối lượng đo được trước và sau.
+**Tuyên bố:** Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ và chai mới. Lượng còn lại của chai cũ lấy từ ước tính `current_estimated_ml` lúc tháo (ADR-0019).
 
 **Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho một phiên nạp hoàn tất, Khi Inventory Staff lưu phiên nạp, Thì hệ thống ghi nhận đầy đủ người thực hiện, thời điểm, máy, slot, chai cũ, chai mới và số đo trước/sau.
+- AC1: Cho một phiên nạp hoàn tất, Khi Inventory Staff lưu phiên nạp, Thì hệ thống ghi nhận đầy đủ người thực hiện, thời điểm, máy, slot, chai cũ và chai mới.
 - AC2: Cho phiên nạp thiếu một trường thông tin bắt buộc, Khi Inventory Staff kết thúc phiên, Thì hệ thống không ghi nhận phiên hoàn tất.
 
 **Kiểm tra:** `test_FR_INV_13_refill_session`
@@ -195,14 +198,14 @@
 
 ## FR-INV-15 — Tháo chai về kho
 
-**Tuyên bố:** Hệ thống phải cung cấp quy trình tháo chai khỏi slot và trả về kho, ghi nhận khối lượng còn lại.
+**Tuyên bố:** Hệ thống phải cung cấp quy trình tháo chai khỏi slot và trả về kho; lượng còn lại là ước tính `current_estimated_ml` tại thời điểm tháo, không nhập tay (ADR-0019).
 
 **Dấu vết:** BR-005, BR-013 · **Ưu tiên:** M
 
 **Tiêu chí xét tuyển**
 
-- AC1: Cho chai đang INSTALLED, Khi Inventory Staff thực hiện quy trình tháo chai và cung cấp số đo còn lại, Thì hệ thống ghi nhận chai đã tháo và lượng còn lại.
-- AC2: Cho thao tác tháo chai không có số đo còn lại, Khi Inventory Staff hoàn tất, Thì hệ thống không ghi nhận thao tác tháo hoàn chỉnh.
+- AC1: Cho chai đang INSTALLED, Khi Inventory Staff thực hiện quy trình tháo chai, Thì hệ thống ghi nhận chai đã tháo; chai còn lượng thì về `IN_STOCK`, hết thì `EMPTY`, giữ nguyên `current_estimated_ml`.
+- AC2: Cho lượng thực tế lệch với ước tính, Khi Inventory Staff muốn sửa, Thì sửa bằng điều chỉnh tồn kho kèm lý do (FR-INV-16), không qua thao tác tháo.
 
 **Kiểm tra:** `test_FR_INV_15_remove_to_stock`
 
@@ -232,31 +235,21 @@
 
 **Kiểm tra:** `test_FR_INV_17_bottle_history`
 
-## FR-INV-18 — Đối chiếu tiêu thụ và load cell
+## FR-INV-18 — ~~Đối chiếu tiêu thụ và load cell~~ (bãi bỏ)
 
-**Tuyên bố:** Hệ thống phải so sánh lượng tiêu thụ tính theo số lượt xịt với số đo từ load cell của cùng slot.
+**Tuyên bố:** ~~Hệ thống phải so sánh lượng tiêu thụ tính theo số lượt xịt với số đo từ load cell của cùng slot.~~
 
-**Dấu vết:** BR-005 · **Ưu tiên:** S
+**Dấu vết:** BR-005 · **Ưu tiên:** X (bãi bỏ theo ADR-0019)
 
-**Tiêu chí xét tuyển**
+**Lý do:** máy không có load cell; lượng còn lại chỉ có một nguồn là số lượt xịt thành công × liều hiệu chuẩn (FR-INV-09), nên không còn gì để đối chiếu. Lệch thực tế được sửa bằng điều chỉnh tồn kho (FR-INV-16).
 
-- AC1: Cho slot có số lượt xịt và dữ liệu load cell trong cùng khoảng thời gian, Khi hệ thống thực hiện đối chiếu, Thì hệ thống tính và hiển thị chênh lệch giữa hai nguồn.
-- AC2: Cho slot thiếu một trong hai nguồn dữ liệu, Khi thực hiện đối chiếu, Thì hệ thống không kết luận chênh lệch đầy đủ như khi có đủ hai nguồn.
+## FR-INV-19 — ~~Cảnh báo nghi ngờ rò rỉ~~ (bãi bỏ)
 
-**Kiểm tra:** `test_FR_INV_18_load_cell_reconciliation`
+**Tuyên bố:** ~~Hệ thống phải sinh cảnh báo nghi ngờ rò rỉ khi khối lượng đo được giảm quá 20% so với lượng tiêu thụ tính theo số lượt xịt trong cùng khoảng thời gian.~~
 
-## FR-INV-19 — Cảnh báo nghi ngờ rò rỉ
+**Dấu vết:** BR-005 · **Ưu tiên:** X (bãi bỏ theo ADR-0019)
 
-**Tuyên bố:** Hệ thống phải sinh cảnh báo nghi ngờ rò rỉ khi khối lượng đo được giảm quá 20% so với lượng tiêu thụ tính theo số lượt xịt trong cùng khoảng thời gian.
-
-**Dấu vết:** BR-005 · **Ưu tiên:** S
-
-**Tiêu chí xét tuyển**
-
-- AC1: Cho cùng một khoảng thời gian có đủ số liệu load cell và số lượt xịt, Khi mức giảm khối lượng vượt quá 20% so với lượng tiêu thụ tính theo lượt xịt, Thì hệ thống sinh cảnh báo nghi ngờ rò rỉ.
-- AC2: Cho mức chênh lệch không vượt quá 20%, Khi hệ thống đối chiếu, Thì hệ thống không sinh cảnh báo nghi ngờ rò rỉ theo điều kiện này.
-
-**Kiểm tra:** `test_FR_INV_19_leak_suspected`
+**Lý do:** không có số đo khối lượng để so với lượng tiêu thụ tính theo lượt xịt. Hằng số `LEAK_DETECT_THRESHOLD_PCT` bị xóa cùng. Rò rỉ chỉ lộ ra khi Inventory Staff kiểm tra lúc nạp hoặc khi chai hết sớm hơn ước tính (ADR-0019, rủi ro chấp nhận).
 
 ## FR-INV-20 — Lô sắp hết hạn
 

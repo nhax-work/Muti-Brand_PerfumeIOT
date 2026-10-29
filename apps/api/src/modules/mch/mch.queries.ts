@@ -4,7 +4,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { Kysely, Transaction } from 'kysely';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
   CredentialStatus,
@@ -701,6 +701,12 @@ export class MchQueries {
                 data.calibratedDosageMl !== null ? String(data.calibratedDosageMl) : null,
             }
           : {}),
+        // Đổi liều thì quy lại số lượt từ lượng còn lại; không tính lại lịch sử (ADR-0019 mục 2).
+        ...(data.calibratedDosageMl
+          ? {
+              estimated_remaining_sprays: sql<number>`floor(estimated_remaining_ml / ${String(data.calibratedDosageMl)}::numeric)::int`,
+            }
+          : {}),
         ...(data.lowStockThresholdMl !== undefined
           ? {
               low_stock_threshold_ml:
@@ -905,6 +911,19 @@ export class MchQueries {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
+  }
+
+  async hasUnfinishedPostTest(machineId: string, executor: Executor = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('maintenance_tickets')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PART', 'POST_TEST'])
+      .where((eb) =>
+        eb.or([eb('post_test_result', 'is', null), eb('post_test_result', '!=', 'PASS')]),
+      )
+      .executeTakeFirst();
+    return Boolean(row);
   }
 }
 

@@ -1318,7 +1318,7 @@ export interface paths {
         };
         /**
          * Danh sách khoản bồi thường hàng hóa
-         * @description FR-SLT-44, FR-SLT-46: Brand Admin chỉ thấy khoản của thương hiệu mình; Platform Super Admin thấy tất cả. Khoản bồi thường do hệ thống tạo khi chai chuyển DAMAGED, không có endpoint tạo tay.
+         * @description FR-SLT-44, FR-SLT-46: Brand Admin chỉ thấy khoản của thương hiệu mình; Platform Super Admin thấy tất cả và lọc được theo brandId (Brand Admin truyền brandId thì bị bỏ qua). Khoản bồi thường do hệ thống tạo khi chai chuyển DAMAGED (POST /bottles/{id}/mark-damaged), không có endpoint tạo tay.
          */
         get: operations["listStorageCompensations"];
         put?: never;
@@ -1804,9 +1804,37 @@ export interface paths {
         put?: never;
         /**
          * Đăng ký chai
-         * @description FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở hữu và khối lượng ban đầu.
+         * @description FR-INV-02, FR-INV-03, FR-INV-05: đăng ký chai với mã định danh duy nhất, ghi nhận chủ sở hữu và dung tích ban đầu `initialVolumeMl` (ADR-0019).
          */
         post: operations["createBottle"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/bottles/{id}/mark-damaged": {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ghi nhận chai hư hỏng
+         * @description FR-SLT-44, ADR-0018: chuyển chai sang DAMAGED và, nếu chai được bảo hiểm, tạo khoản bồi thường PENDING trong cùng transaction. Chai đang lắp thì máy phải rảnh (MACHINE_BUSY) và slot được gỡ chai. Chai đã DAMAGED hoặc đã bàn giao trả thương hiệu trả VALIDATION_ERROR. Thao tác nhạy cảm nhóm "điều chỉnh tồn kho" — cần xác thực lại (FR-AUTH-09). Ghi nhật ký.
+         */
+        post: operations["markBottleDamaged"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1877,7 +1905,7 @@ export interface paths {
         put?: never;
         /**
          * Đóng phiếu nạp
-         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ, chai mới và khối lượng đo được trước và sau; checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35); chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
+         * @description FR-INV-13, FR-INV-14, FR-INV-31: ghi nhận chai cũ và chai mới; lượng còn lại của chai cũ là ước tính `currentEstimatedMl` lúc tháo (ADR-0019); checklist phải hoàn tất trước khi đóng. Đóng phiếu thì khôi phục giám sát cảnh báo cửa mở cho slot đó. Chai không thuộc thương hiệu thuê slot trả BOTTLE_NOT_OWNED (FR-INV-06); chai quá hạn trả BOTTLE_EXPIRED (FR-INV-08); chai lệch sản phẩm cấu hình cho slot trả PRODUCT_MISMATCH (FR-INV-07); slot đã có chai hoạt động trả SLOT_HAS_ACTIVE_BOTTLE (FR-MCH-07). Chai thuộc lô chưa duyệt giấy tờ chính hãng trả BATCH_NOT_APPROVED (FR-INV-35); chai không ở IN_STOCK trả BOTTLE_NOT_IN_STOCK; phiếu không ở STARTED trả REFILL_SESSION_NOT_OPEN (ADR-0017). Yêu cầu bổ sung liên kết chuyển COMPLETED (FR-RFQ-09). Ghi nhật ký (FR-AUD-07).
          */
         post: operations["closeRefillSession"];
         delete?: never;
@@ -1900,7 +1928,7 @@ export interface paths {
         post?: never;
         /**
          * Tháo chai khỏi slot và trả về kho
-         * @description FR-INV-15: ghi nhận lượng còn lại khi tháo. Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
+         * @description FR-INV-15: tháo chai về kho; lượng còn lại là ước tính `currentEstimatedMl` lúc tháo (ADR-0019). Slot chuyển UNAVAILABLE (FR-MCH-17). Ghi nhật ký (FR-AUD-07). Chai của hóa đơn đã báo không gia hạn tháo qua `POST /bottle-returns` (FR-EXP-26), không qua endpoint này.
          */
         delete: operations["removeBottleFromSlot"];
         options?: never;
@@ -1923,7 +1951,7 @@ export interface paths {
         put?: never;
         /**
          * Tháo chai và lập phiếu trả hàng
-         * @description FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng transaction: ghi khối lượng còn lại từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi nhật ký (FR-AUD-07).
+         * @description FR-EXP-26 (ADR-0014): Inventory Staff tháo chai của hóa đơn đã báo không gia hạn. Cùng transaction: ghi lượng còn lại ước tính từng chai, chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE, lập phiếu với pickupDeadline = readyAt + RETURN_PICKUP_MAX_DAYS, thông báo và gửi email cho Brand Admin kèm danh sách chai (FR-ALR-16). Hóa đơn chưa báo không gia hạn hoặc không ở ACTIVE/EXPIRING trả RENTAL_NOT_ACTIVE; chai không thuộc hóa đơn trả BOTTLE_NOT_OWNED. Ghi nhật ký (FR-AUD-07).
          */
         post: operations["createBottleReturn"];
         delete?: never;
@@ -2033,7 +2061,7 @@ export interface paths {
         put?: never;
         /**
          * Chấp nhận yêu cầu bổ sung
-         * @description FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu.
+         * @description FR-RFQ-06: Platform Super Admin chấp nhận yêu cầu SUBMITTED. Trạng thái khác trả VALIDATION_ERROR (FR-RFQ-04 AC4).
          */
         post: operations["acceptRefillRequest"];
         delete?: never;
@@ -2058,6 +2086,50 @@ export interface paths {
          * @description FR-RFQ-06: lý do bắt buộc khi từ chối.
          */
         post: operations["rejectRefillRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refill-requests/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lên lịch xử lý yêu cầu bổ sung
+         * @description FR-RFQ-07, ADR-0018: Inventory Staff gán mốc xử lý dự kiến cho yêu cầu ACCEPTED (hoặc dời lịch yêu cầu SCHEDULED). Trạng thái khác trả VALIDATION_ERROR.
+         */
+        post: operations["scheduleRefillRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refill-requests/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hủy yêu cầu bổ sung
+         * @description FR-RFQ-04 AC2, ADR-0018: hủy yêu cầu ACCEPTED hoặc SCHEDULED trước khi nạp. Trạng thái khác trả VALIDATION_ERROR.
+         */
+        post: operations["cancelRefillRequest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4115,13 +4187,17 @@ export interface components {
             id: string;
             /** Format: uuid */
             brandId: string;
+            brandName?: string;
             /** Format: uuid */
             bottleId: string;
             bottleIdentifier?: string;
             productName?: string;
             /** Format: uuid */
             slotRentalId: string;
+            invoiceNumber?: string | null;
             storagePlanName?: string;
+            /** Format: date-time */
+            damagedAt?: string | null;
             bottleRetailPrice: components["schemas"]["Money"];
             coveragePercent: number;
             amount: components["schemas"]["Money"];
@@ -4366,6 +4442,18 @@ export interface components {
              * @description Phiếu trả hàng chứa chai (FR-EXP-26). Có giá trị khi status = RETURNED_TO_BRAND.
              */
             bottleReturnId?: string | null;
+            /** Format: date-time */
+            damagedAt?: string | null;
+            damageReason?: string | null;
+        };
+        /** @description Inventory Staff ghi nhận chai hư hỏng (FR-SLT-44, ADR-0018). Lý do là căn cứ của khoản bồi thường. */
+        BottleDamageReport: {
+            reason: string;
+        };
+        /** @description compensation là null khi không bồi thường: chai EXPIRED/LIQUIDATED, thuộc nền tảng, thương hiệu không có hóa đơn hiệu lực, hóa đơn không chụp gói bảo quản, sản phẩm chưa khai giá bán lẻ, hoặc hạn mức đã hết (FR-SLT-44 AC4). */
+        BottleDamageResult: {
+            bottle: components["schemas"]["Bottle"];
+            compensation: components["schemas"]["StorageCompensation"] | null;
         };
         /** @description Phiếu trả hàng khi thương hiệu chủ động không gia hạn (FR-EXP-26 ÷ 28, ADR-0014). Đóng bằng bàn giao (handedOverAt) hoặc quá pickupDeadline mà chưa nhận — hàng chuyển sở hữu về nền tảng như thanh lý (forfeitedAt). */
         BottleReturn: {
@@ -4394,14 +4482,13 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        /** @description Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26): cân khối lượng còn lại từng chai (FR-INV-15). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17), thông báo Brand Admin. */
+        /** @description Inventory Staff tháo chai của hóa đơn đã báo không gia hạn (FR-EXP-26). Lượng còn lại từng chai lấy theo ước tính `currentEstimatedMl`, không nhập tay (FR-INV-15, ADR-0019). Cùng transaction: chai → RETURNED_TO_BRAND, hóa đơn → CLOSED, slot → UNAVAILABLE (FR-MCH-17), thông báo Brand Admin. */
         BottleReturnCreate: {
             /** Format: uuid */
             slotRentalId: string;
             bottles: {
                 /** Format: uuid */
                 bottleId: string;
-                measuredWeightG: number;
             }[];
         };
         /** @description Bàn giao hàng trả về (FR-EXP-27). SHIP_TO_BRAND bắt buộc trackingNumber. */
@@ -4420,7 +4507,6 @@ export interface components {
             /** @description Mã định danh duy nhất trong phạm vi thương hiệu (FR-INV-02). */
             identifier: string;
             initialVolumeMl: number;
-            emptyWeightG?: number;
             /** Format: date-time */
             expiresAt?: string;
         };
@@ -4442,8 +4528,6 @@ export interface components {
             performedBy: string;
             status: components["schemas"]["RefillStatus"];
             checklistCompleted?: boolean;
-            beforeWeightG?: number | null;
-            afterWeightG?: number | null;
             notes?: string | null;
             /** Format: date-time */
             startedAt: string;
@@ -4454,7 +4538,6 @@ export interface components {
         RefillSessionOpen: {
             /** Format: uuid */
             slotId: string;
-            beforeWeightG?: number;
             /**
              * Format: uuid
              * @description Yêu cầu bổ sung được xử lý bởi phiên này, nếu có (FR-RFQ-08).
@@ -4467,12 +4550,10 @@ export interface components {
             newBottleId: string;
             /** @constant */
             checklistCompleted: true;
-            afterWeightG?: number;
             notes?: string;
         };
-        /** @description Tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại (FR-INV-15). */
+        /** @description Tháo chai khỏi slot và trả về kho (FR-INV-15). Lượng còn lại lấy theo ước tính `currentEstimatedMl` của chai, không nhập tay; lệch thực tế thì ghi điều chỉnh tồn kho (FR-INV-16, ADR-0019). */
         BottleRemoval: {
-            remainingMl: number;
             notes?: string;
         };
         InventoryAdjustment: {
@@ -4524,8 +4605,22 @@ export interface components {
             scheduledAt?: string | null;
             /** Format: uuid */
             refillSessionId?: string | null;
+            note?: string | null;
+            /** Format: uuid */
+            machineId?: string;
+            machineSerial?: string;
+            slotNumber?: number;
+            productName?: string;
+            brandName?: string;
             /** Format: date-time */
             createdAt: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        /** @description Lên lịch xử lý yêu cầu đã chấp nhận (FR-RFQ-07, ADR-0018). */
+        RefillRequestSchedule: {
+            /** Format: date-time */
+            scheduledAt: string;
         };
         /** @description Slot đã có yêu cầu chưa hoàn tất thì bị từ chối với REFILL_REQUEST_PENDING (FR-RFQ-12). */
         RefillRequestCreate: {
@@ -4817,7 +4912,6 @@ export interface components {
             failureCode?: string | null;
             /** Format: date-time */
             executedAt?: string | null;
-            measuredQuantityMl?: number | null;
             /** Format: date-time */
             receivedAt: string;
         };
@@ -5051,6 +5145,8 @@ export interface components {
             slotId?: string | null;
             productName?: string | null;
             estimatedRemainingSprays?: number | null;
+            /** @description Chỉ có trên slot của người gọi. true khi chai đang lắp ở LOW/EMPTY hoặc lượng còn lại chạm low_stock_threshold_ml của slot — màn hình gợi ý tạo yêu cầu bổ sung (FR-RFQ-03, ADR-0018). */
+            lowStock?: boolean;
         };
         /** @description Chỉ thêm mới; không có endpoint sửa hay xóa (FR-AUD-09, NFR-SEC-08). */
         AuditLogEntry: {
@@ -7104,6 +7200,7 @@ export interface operations {
                 /** @description Số bản ghi mỗi trang */
                 pageSize?: components["parameters"]["pageSize"];
                 status?: components["schemas"]["StorageCompensationStatus"];
+                brandId?: string;
             };
             header?: never;
             path?: never;
@@ -7860,6 +7957,42 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    markBottleDamaged: {
+        parameters: {
+            query?: never;
+            header: {
+                /**
+                 * @description Token xác thực lại lấy từ `POST /auth/reauth`. Bắt buộc với mọi thao tác nhạy cảm
+                 *     (FR-AUTH-09). Thiếu hoặc hết hạn trả `REAUTH_REQUIRED`.
+                 */
+                "X-Reauth-Token": components["parameters"]["reauthToken"];
+            };
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BottleDamageReport"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi nhận */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BottleDamageResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     getBottleHistory: {
         parameters: {
             query?: {
@@ -7988,7 +8121,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["BottleRemoval"];
             };
@@ -8228,6 +8361,7 @@ export interface operations {
                     "application/json": components["schemas"]["RefillRequest"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
@@ -8248,6 +8382,58 @@ export interface operations {
         };
         responses: {
             /** @description Đã từ chối */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefillRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    scheduleRefillRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefillRequestSchedule"];
+            };
+        };
+        responses: {
+            /** @description Đã lên lịch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefillRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    cancelRefillRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã hủy */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -39,6 +39,10 @@ export const inv = {
   refillSessionOpen: 'Slot đang có phiếu nạp mở',
   refillSessionNotOpen: 'Phiếu nạp đã đóng hoặc đã hủy',
   refillSessionNotFound: 'Không tìm thấy phiếu nạp',
+  damageReasonRequired: 'Bắt buộc nhập lý do hư hỏng',
+  bottleAlreadyDamaged: 'Chai này đã được ghi nhận hư hỏng',
+  bottleHandedOver:
+    'Chai đã bàn giao trả thương hiệu, nền tảng không còn giữ nên không ghi nhận hư hỏng được',
 
   newShipmentSubject: 'Khai báo gửi hàng mới: {product}',
   newShipmentContent: 'Thương hiệu vừa khai báo gửi {quantity} chai {product} đến kho.',
@@ -48,6 +52,12 @@ export const inv = {
   authenticityRejectedSubject: 'Lô {batch} bị từ chối giấy tờ chính hãng',
   authenticityRejectedContent:
     'Giấy tờ chính hãng của lô {batch} ({product}) bị từ chối. Lý do: {reason}. Vui lòng nộp lại.',
+  lowStockAlertTitle: 'Slot {slot} sắp hết nước hoa',
+  lowStockAlertContent:
+    'Slot {slot} còn {remainingMl} ml (khoảng {sprays} lượt), dưới ngưỡng {thresholdMl} ml.',
+  slotEmptyAlertTitle: 'Slot {slot} đã hết nước hoa',
+  slotEmptyAlertContent:
+    'Slot {slot} còn {remainingMl} ml, không đủ một lượt {dosageMl} ml — slot đã ngừng bán.',
 } as const;
 
 export const shipmentStatus = {
@@ -62,6 +72,17 @@ export const authenticityStatus = {
   PENDING: 'Chờ duyệt',
   APPROVED: 'Chính hãng (Đã duyệt)',
   REJECTED: 'Từ chối duyệt',
+} as const;
+
+export const bottleStatus = {
+  IN_STOCK: 'Trong kho',
+  INSTALLED: 'Đang lắp',
+  LOW: 'Sắp hết',
+  EMPTY: 'Đã hết',
+  DAMAGED: 'Hư hỏng',
+  EXPIRED: 'Hết hạn',
+  LIQUIDATED: 'Đã thanh lý',
+  RETURNED_TO_BRAND: 'Chờ trả thương hiệu',
 } as const;
 
 export const refillSessionStatus = {

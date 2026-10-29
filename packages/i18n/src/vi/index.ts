@@ -6,7 +6,7 @@
  * ở `en/` trong cùng commit (spec/PROJECT.md Mục 3).
  */
 
-import { alr, notificationChannel, notificationStatus } from './alr.js';
+import { alr, alertSeverity, alertStatus, notificationChannel, notificationStatus } from './alr.js';
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import {
@@ -20,14 +20,23 @@ import {
   statusSource,
 } from './codes.js';
 import { common } from './common.js';
-import { authenticityStatus, inv, refillSessionStatus, shipmentStatus } from './inv.js';
+import {
+  authenticityStatus,
+  bottleStatus,
+  inv,
+  refillSessionStatus,
+  shipmentStatus,
+} from './inv.js';
 import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import { bottleReturnMethod, exp } from './exp.js';
+import { mnt, ticketPriority, ticketStatus } from './mnt.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { rev } from './rev.js';
-import { slt } from './slt.js';
+import { refillRequestReason, refillRequestStatus, rfq } from './rfq.js';
+import { slt, storageCompensationStatus } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
 import { validation } from './validation.js';
@@ -38,6 +47,8 @@ export const vi = {
   auth,
   mch,
   alr,
+  alertSeverity,
+  alertStatus,
   notificationStatus,
   notificationChannel,
   slotStatus,
@@ -55,6 +66,7 @@ export const vi = {
   bnd,
   prd,
   slt,
+  storageCompensationStatus,
   ord,
   dsp,
   rev,
@@ -65,4 +77,13 @@ export const vi = {
   shipmentStatus,
   authenticityStatus,
   refillSessionStatus,
+  bottleStatus,
+  rfq,
+  refillRequestStatus,
+  refillRequestReason,
+  mnt,
+  ticketStatus,
+  ticketPriority,
+  exp,
+  bottleReturnMethod,
 } as const;

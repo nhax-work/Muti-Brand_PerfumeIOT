@@ -236,12 +236,13 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
     Then hệ thống trả HTTP 401 và không cấp reauth token.
   * **AC4 (Danh sách endpoint):** Given tập endpoint nhạy cảm,  
     When rà soát `spec/contracts/openapi.yaml`,  
-    Then **đúng 9 endpoint** khai báo `X-Reauth-Token`, phủ đủ 5 nhóm thao tác trong tuyên bố:
-    * hoàn tiền — `POST /orders/{id}/refund`
-    * điều chỉnh tồn kho — `POST /inventory-adjustments`
+    Then **đúng 16 endpoint** khai báo `X-Reauth-Token` (cập nhật 2026-10-26 theo ADR-0012, 0013, 0018), phủ đủ 5 nhóm thao tác trong tuyên bố:
+    * hoàn tiền và chi trả — `POST /orders/{id}/refund`, `POST /refund-claims/{id}/refund`, `POST /refund-claims/{id}/refund-account`, `POST /storage-compensations/{id}/payout`, `POST /brand-payouts/{id}/pay`
+    * điều chỉnh tồn kho — `POST /inventory-adjustments`, `POST /bottles/{id}/mark-damaged`
     * xịt chẩn đoán — `POST /machines/{id}/diagnostic-dispense`
     * thanh lý hàng tồn — `POST /slot-rentals/{id}/liquidate`
     * đổi cấu hình máy — `PUT /machines/{id}/mode`, `PUT /slots/{id}/config`, `POST /machines/{id}/config/push`, `POST /machines/{id}/credentials`, `POST /machines/{id}/credentials/revoke`
+    * pháp lý thương hiệu (ADR-0013) — `POST /brands/{id}/legal-verification`, `POST /agreements/{version}/publish`
   * **AC5 (Ca biên - Reauth token hết hạn):** Given reauth token đã quá thời hạn ngắn của nó,  
     When gọi endpoint nhạy cảm,  
     Then hệ thống trả `REAUTH_REQUIRED` — không chấp nhận token cũ.

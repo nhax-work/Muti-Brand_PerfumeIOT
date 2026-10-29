@@ -69,4 +69,17 @@ export const slt = {
     'Hóa đơn {invoiceNumber} đã quá thời hạn ân hạn và được chuyển sang thanh lý. Toàn bộ chai tồn tại slot đã chuyển quyền sở hữu sang nền tảng.',
   rentalClosedSubject: '[ScentStation] Hóa đơn thuê slot đã đóng ({invoiceNumber})',
   rentalClosedContent: 'Hóa đơn {invoiceNumber} đã được đóng và slot đã được giải phóng.',
+  // Bảo hiểm hàng hóa (FR-SLT-44 ÷ 46, ADR-0018)
+  compensationAlreadyPaid: 'Khoản bồi thường này đã được ghi nhận chi trả',
+  compensationCreatedSubject: 'Chai {bottle} hư hỏng — đã ghi nhận khoản bồi thường {amount} đ',
+  compensationCreatedContent:
+    'Chai {bottle} bị hư hỏng khi nền tảng đang giữ. Khoản bồi thường {amount} đ theo gói bảo quản đã được ghi nhận và chờ chi trả.',
+  compensationPaidSubject: 'Đã chi trả bồi thường chai {bottle}',
+  compensationPaidContent:
+    'Khoản bồi thường {amount} đ cho chai {bottle} đã được chuyển khoản. Mã giao dịch: {reference}.',
+} as const;
+
+export const storageCompensationStatus = {
+  PENDING: 'Chờ chi trả',
+  PAID: 'Đã chi trả',
 } as const;

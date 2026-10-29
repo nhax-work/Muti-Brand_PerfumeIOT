@@ -38,11 +38,11 @@ chỗ slot đồng thời (lộ trình 13 tuần, ADR-0006). Agent **được** 
 |---|---|---|
 | Idempotency webhook | `tests/integration/test_webhook_idempotency.test.ts` | có |
 | Cô lập mức slot | `tests/integration/test_slot_isolation.test.ts` | có |
-| `revenue_owner` | `tests/integration/test_revenue_attribution.test.ts` | có — chụp lúc tạo đơn, đơn sau thanh lý thuộc PLATFORM mà đơn cũ giữ BRAND, UPDATE `revenue_owner`/`brand_id`/`slot_rental_id` bị trigger chặn (FR-REV-01..03, ADR-0009) |
+| `revenue_owner` | `tests/integration/test_revenue_attribution.test.ts` | có — chụp lúc tạo đơn, đơn sau thanh lý thuộc PLATFORM mà đơn cũ giữ BRAND, UPDATE `revenue_owner`/`brand_id`/`slot_rental_id` bị trigger chặn (FR-REV-01..03, ADR-0009); biên quanh mốc thanh lý: EXPIRING/GRACE vẫn BRAND, đơn tạo lúc GRACE trả tiền sau thanh lý vẫn BRAND, Brand Admin không thấy đơn PLATFORM, hóa đơn CLOSED không bán (tuần 8) |
 | Unique constraint slot | `tests/integration/test_slot_constraint.test.ts` | có |
 | TTL lệnh xịt | `tests/e2e/test_command_ttl.test.ts` | có |
 | Hard timeout firmware | kiểm thử trên phần cứng thật, ghi vào Test Report | — |
-| Job chuyển trạng thái | `tests/integration/test_slt_job_expiry.test.ts` | một phần — hủy phiên hết giờ giữ chỗ, có bù sau downtime (FR-SLT-39); tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` (FR-SLT-42) chưa có |
+| Job chuyển trạng thái | `tests/integration/test_slt_job_expiry.test.ts`, `tests/integration/test_rental_scheduler.test.ts` | một phần — hủy phiên hết giờ giữ chỗ, có bù sau downtime (FR-SLT-39). Tự kích hoạt (FR-SLT-42), ân hạn (FR-EXP-06, 07), quá hạn nhận hàng (FR-EXP-28) đã viết sẵn ca dạng `it.todo` trong `test_rental_scheduler` — chờ job của TV3 tuần 8 |
 | Giữ chỗ slot đồng thời | `tests/integration/test_slt_concurrent_hold.test.ts` | có — hai thương hiệu cùng slot, giỏ có slot đã bị giữ, hai giỏ chồng nhau (FR-SLT-35, ADR-0006, ADR-0008) |
 
 ## Cổng CI

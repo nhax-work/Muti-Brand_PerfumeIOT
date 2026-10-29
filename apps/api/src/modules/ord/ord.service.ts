@@ -14,6 +14,7 @@ import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type { KioskInteractionType, RevenueOwnerType } from '../../shared/db/types.generated.js';
 import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { PerMinuteRateLimiter } from '../../shared/http/rate-limiter.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { canCreateDispenseCommand, canTransition } from './order-status.js';
@@ -86,6 +87,8 @@ export type OrderPaymentOutcome =
 @Injectable()
 export class OrdService {
   private readonly logger = new Logger('OrdService');
+  /** NFR-SEC-06: số lần tạo đơn mới mỗi máy mỗi phút — chống spam làm nghẽn cổng thanh toán. */
+  private readonly orderLimiter: PerMinuteRateLimiter;
 
   constructor(
     @Inject(OrdQueries) private readonly queries: OrdQueries,
@@ -94,7 +97,12 @@ export class OrdService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
-  ) {}
+  ) {
+    // Ngưỡng đọc lười: hằng có thể bị ghi đè qua biến môi trường (app-config.ts).
+    this.orderLimiter = new PerMinuteRateLimiter(clock, () =>
+      config.constraint('ORDER_RATE_LIMIT_PER_MIN'),
+    );
+  }
 
   // -----------------------------------------------------------------------------------
   // Kiosk
@@ -177,6 +185,11 @@ export class OrdService {
   async createOrder(input: CreateOrderInput): Promise<{ replayed: boolean; body: OrderCreated }> {
     const existing = await this.queries.findByIdempotencyKey(input.idempotencyKey);
     if (existing) return { replayed: true, body: await this.replay(existing, input) };
+    // Gửi lại cùng Idempotency-Key (ở trên) không tính — đó là cùng một đơn. Mọi lần tạo mới đều tính,
+    // kể cả lần bị từ chối vì máy bận: đếm theo yêu cầu tới cổng, không theo đơn thành công.
+    if (!this.orderLimiter.tryAcquire(input.machineSerial)) {
+      throw new AppError('RATE_LIMITED', 'ord.orderRateLimited');
+    }
 
     for (let attempt = 1; ; attempt++) {
       try {

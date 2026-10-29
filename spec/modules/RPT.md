@@ -29,6 +29,24 @@
 
 ---
 
+## FR-RPT-06 — Xếp hạng sản phẩm theo mức độ quan tâm
+* **Statement:** Hệ thống phải hiển thị xếp hạng sản phẩm theo số lượt được chọn, lọc theo slot, máy, địa điểm và khoảng thời gian.
+* **Traces:** BR-007 · **Priority:** M · Phụ trách hiện thực: TV1 (lộ trình tuần 8)
+* **API:** `GET /reports/product-ranking`
+* **Acceptance criteria:**
+  * **AC1 (Xếp hạng):** Given trong `[from, to)` kiosk ghi cho sản phẩm `P1` 5 lượt `PRODUCT_SELECTED`, 12 lượt `PRODUCT_IMPRESSION`, và cho `P2` 2 lượt `PRODUCT_SELECTED`; `P1` có 3 đơn đã thanh toán trong khoảng đó,  
+    When Platform Super Admin xem xếp hạng,  
+    Then `P1` đứng trước `P2`, mỗi mục có `selectionCount`, `impressionCount` và `orderCount` (đơn có `paid_at` trong khoảng, `revenue_owner = BRAND`). Nguồn xếp hạng là `kiosk_interaction_events`, không phải `orders`; hòa thì xếp theo tên sản phẩm.
+  * **AC2 (Bộ lọc):** Given sự kiện trên nhiều slot, máy, địa điểm,  
+    When lọc `slotId`, `machineId` hoặc `locationId`,  
+    Then chỉ tính sự kiện thỏa bộ lọc; `from ≥ to` trả HTTP 400 `VALIDATION_ERROR`.
+  * **AC3 (Cô lập dữ liệu):** Given thương hiệu `B1` và `B2` cùng máy,  
+    When Brand Admin của `B1` xem xếp hạng (kể cả lọc theo máy dùng chung),  
+    Then kết quả chỉ có sản phẩm của `B1`; không mục nào, không số đếm nào gồm sự kiện của `B2` (BR-007, BR-012).
+* **Test:** `test_FR_RPT_06_product_ranking`
+
+---
+
 ## Các FR Báo cáo khác — FR-RPT-01..03, 05..15 (Dashboard / Thống kê)
 
 Các báo cáo thống kê, dashboard trạng thái kết nối, doanh thu theo thời gian, tồn kho và xuất file CSV tuân theo các quy tắc lọc dữ liệu cô lập thương hiệu ở FR-RPT-10, FR-RPT-11, FR-BND-05 và phân quyền Platform Super Admin ở FR-RPT-15.

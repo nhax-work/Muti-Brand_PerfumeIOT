@@ -56,7 +56,7 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 ## FR-RFQ-04 — Quản lý trạng thái yêu cầu bổ sung
 * **Statement:** Hệ thống phải quản lý trạng thái yêu cầu theo tập: SUBMITTED, ACCEPTED, REJECTED, SCHEDULED, COMPLETED, CANCELLED.
 * **Traces:** BR-005 · **Priority:** M
-* **API:** `GET /refill-requests`
+* **API:** `GET /refill-requests`, `POST /refill-requests/{id}/schedule`, `POST /refill-requests/{id}/cancel` (ADR-0018)
 * **Acceptance criteria:**
   * **AC1 (Duyệt/Từ chối ban đầu):** Given yêu cầu ở trạng thái `SUBMITTED`,  
     When Platform Super Admin xử lý,  
@@ -94,9 +94,9 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
     When Platform Super Admin gọi endpoint accept,  
     Then yêu cầu chuyển sang `ACCEPTED`, ghi `reviewed_by = actor.userId`, cập nhật `updated_at`, và ghi AuditLog.
   * **AC2 (Từ chối hợp lệ):** Given yêu cầu `R` ở trạng thái `SUBMITTED`,  
-    When Platform Super Admin gọi endpoint reject kèm `{ rejectionReason: "Kho tạm hết chai dự phòng cho sản phẩm này" }`,  
+    When Platform Super Admin gọi endpoint reject kèm `{ reason: "Kho tạm hết chai dự phòng cho sản phẩm này" }` (`RejectRequest` trong contract),  
     Then yêu cầu chuyển sang `REJECTED`, lưu `rejection_reason`, ghi `reviewed_by = actor.userId`, và ghi AuditLog.
-  * **AC3 (Từ chối thiếu lý do):** Given Platform Super Admin gọi endpoint reject nhưng `rejectionReason` bị bỏ trống hoặc chỉ chứa khoảng trắng,  
+  * **AC3 (Từ chối thiếu lý do):** Given Platform Super Admin gọi endpoint reject nhưng `reason` bị bỏ trống hoặc chỉ chứa khoảng trắng,  
     When gửi yêu cầu,  
     Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR`.
   * **AC4 (Phân quyền):** Given người gọi không mang vai trò Platform Super Admin (ví dụ Brand Admin),  
@@ -109,6 +109,7 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 ## FR-RFQ-07 — Lên lịch xử lý yêu cầu bổ sung
 * **Statement:** Hệ thống phải cho phép Inventory Staff lên lịch xử lý yêu cầu đã được chấp nhận.
 * **Traces:** BR-005 · **Priority:** S
+* **API:** `POST /refill-requests/{id}/schedule` (ADR-0018)
 * **Acceptance criteria:**
   * **AC1:** Given yêu cầu `R` ở trạng thái `ACCEPTED`,  
     When Inventory Staff gán mốc thời gian xử lý dự kiến `scheduledAt`,  
