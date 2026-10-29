@@ -55,6 +55,14 @@ export class MachineModeService {
     if (force) return this.forceMaintenance(actor, id, reason!);
 
     const requested = input.operatingMode;
+    // FR-MNT-12: Chặn NORMAL khi checklist sau bảo trì chưa hoàn thành
+    if (requested === 'NORMAL') {
+      const hasUnfinished = await this.queries.hasUnfinishedPostTest(id);
+      if (hasUnfinished) {
+        throw new AppError('MACHINE_IN_MAINTENANCE', 'mnt.postTestIncomplete');
+      }
+    }
+
     const change = await this.queries.transaction(async (tx) => {
       // Yêu cầu MAINTENANCE đi qua DRAINING; máy đã MAINTENANCE (hoặc đang DRAINING) thì giữ nguyên.
       const changed = await this.queries.changeMode(

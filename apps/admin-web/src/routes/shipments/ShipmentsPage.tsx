@@ -1,15 +1,21 @@
-import { InboxOutlined, SafetyCertificateOutlined, ToolOutlined } from '@ant-design/icons';
+import {
+  BarChartOutlined,
+  InboxOutlined,
+  SafetyCertificateOutlined,
+  ToolOutlined,
+} from '@ant-design/icons';
 import { Card, Space, Tabs, Typography } from 'antd';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { BatchesTab } from './BatchesTab';
+import { InventoryReportTab } from './InventoryReportTab';
 import { RefillTab } from './RefillTab';
 import { ShipmentsTab } from './ShipmentsTab';
 
 /**
  * Kho: khai báo gửi hàng (FR-INV-22 ÷ 28), lô và giấy tờ chính hãng (FR-INV-33 ÷ 35), phiếu nạp
- * (FR-INV-29 ÷ 32). Nút thao tác hiện theo quyền mà máy chủ cũng kiểm (ADR-0017 mục 7) — máy chủ
+ * (FR-INV-29 ÷ 32), và báo cáo tồn kho (FR-INV-21). Nút thao tác hiện theo quyền mà máy chủ cũng kiểm (ADR-0017 mục 7) — máy chủ
  * mới là nơi chặn (FE5).
  */
 export default function ShipmentsPage() {
@@ -73,6 +79,15 @@ export default function ShipmentsPage() {
                     canSeeMachines={can('machine.view')}
                   />
                 ),
+              },
+              {
+                key: 'inventoryReport',
+                label: (
+                  <span>
+                    <BarChartOutlined /> {t('ui.inventoryReport')}
+                  </span>
+                ),
+                children: <InventoryReportTab />,
               },
             ]}
           />

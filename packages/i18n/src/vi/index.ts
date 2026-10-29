@@ -6,7 +6,7 @@
  * ở `en/` trong cùng commit (spec/PROJECT.md Mục 3).
  */
 
-import { alr, notificationChannel, notificationStatus } from './alr.js';
+import { alr, alertSeverity, alertStatus, notificationChannel, notificationStatus } from './alr.js';
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
 import {
@@ -24,6 +24,8 @@ import { authenticityStatus, inv, refillSessionStatus, shipmentStatus } from './
 import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import { bottleReturnMethod, exp } from './exp.js';
+import { mnt, ticketPriority, ticketStatus } from './mnt.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
 import { rev } from './rev.js';
@@ -38,6 +40,8 @@ export const vi = {
   auth,
   mch,
   alr,
+  alertSeverity,
+  alertStatus,
   notificationStatus,
   notificationChannel,
   slotStatus,
@@ -65,4 +69,9 @@ export const vi = {
   shipmentStatus,
   authenticityStatus,
   refillSessionStatus,
+  mnt,
+  ticketStatus,
+  ticketPriority,
+  exp,
+  bottleReturnMethod,
 } as const;

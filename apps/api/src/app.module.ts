@@ -10,6 +10,9 @@ import { DspModule } from './modules/dsp/index.js';
 import { MchModule } from './modules/mch/index.js';
 import { InvModule } from './modules/inv/index.js';
 import { IotModule } from './modules/iot/iot.module.js';
+import { AudModule } from './modules/aud/index.js';
+import { ExpModule } from './modules/exp/index.js';
+import { MntModule } from './modules/mnt/index.js';
 import { OrdModule, PaymentModule } from './modules/ord/index.js';
 import { PrdModule } from './modules/prd/index.js';
 import { RevModule } from './modules/rev/index.js';
@@ -31,6 +34,9 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     RptModule,
     RevModule,
     SltModule,
+    MntModule,
+    AudModule,
+    ExpModule,
     // Thanh toán dùng chung (@Global) + handler phiên thuê slot của SLT (@Global) — ADR-0008.
     PaymentModule,
     SltCheckoutPaymentModule,

@@ -191,3 +191,21 @@ export function useMachineSlots(machineId: string | undefined) {
       unwrap(api.GET('/machines/{id}/slots', { params: { path: { id: machineId! } } })),
   });
 }
+
+export type InventoryReportItem = components['schemas']['InventoryReportItem'];
+
+export function useInventoryReport(params?: {
+  lowStockOnly?: boolean;
+  machineId?: string;
+  fragranceProductId?: string;
+}) {
+  return useQuery({
+    queryKey: ['inventory-report', params],
+    queryFn: () =>
+      unwrap(
+        api.GET('/reports/inventory', {
+          params: { query: params },
+        }),
+      ),
+  });
+}

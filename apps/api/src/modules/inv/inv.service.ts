@@ -596,7 +596,52 @@ export class InvService {
         },
         tx,
       );
-      // FR-SLT-24 (tuần 8): kích hoạt hóa đơn khi lắp chai đầu tiên sẽ gọi SLT trong `tx` này.
+      // FR-SLT-24 & FR-ALR-16: kích hoạt hóa đơn DRAFT khi lắp chai đầu tiên
+      if (rental.status === 'DRAFT' && rental.previousRentalId === null) {
+        const durationMs = rental.endsAt.getTime() - rental.startsAt.getTime();
+        const newEndsAt = new Date(now.getTime() + durationMs);
+        const activated = await this.queries.activateRentalOnFirstInstall(
+          rental.id,
+          now,
+          newEndsAt,
+          tx,
+        );
+        if (activated) {
+          await this.audit.log(
+            {
+              actorType: 'USER',
+              actorId: actor.userId,
+              brandId: session.brandId,
+              action: 'slt.rental.activated_first_bottle',
+              targetType: 'SlotRental',
+              targetId: rental.id,
+              before: {
+                status: 'DRAFT',
+                startsAt: rental.startsAt.toISOString(),
+                endsAt: rental.endsAt.toISOString(),
+              },
+              after: {
+                status: 'ACTIVE',
+                startsAt: now.toISOString(),
+                endsAt: newEndsAt.toISOString(),
+              },
+            },
+            tx,
+          );
+          await this.alr.notifyBrandAdmins(
+            tx,
+            {
+              brandId: session.brandId,
+              type: 'RENTAL_ACTIVATED',
+              subject: 'Hóa đơn thuê slot đã có hiệu lực sau khi lắp chai',
+              content: `Hóa đơn ${rental.id} trên slot đã được kích hoạt thành công vào lúc ${now.toISOString()} sau khi nhân viên hoàn tất lắp chai đầu tiên. Thời hạn có hiệu lực đến ${newEndsAt.toISOString()}.`,
+              referenceId: rental.id,
+              at: now,
+            },
+            ['IN_APP', 'EMAIL'],
+          );
+        }
+      }
       await this.audit.log(
         {
           actorType: 'USER',
