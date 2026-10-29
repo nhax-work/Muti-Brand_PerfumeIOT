@@ -41,6 +41,41 @@ export default tseslint.config(
     },
   },
   {
+    // QT3 (ADR-0003): module gọi nhau qua mặt tiền index.ts, không import file nội bộ của module khác.
+    // Từ modules/<a>/file.ts, '../<b>/x.js' là module khác; từ thư mục con modules/<a>/<sub>/,
+    // '../../<b>/x.js'. Đường đi vào shared/ hay adapters/ có thêm '../' nên không khớp.
+    files: ['apps/api/src/modules/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^\\.\\./[a-z]+/(?!index\\.js$).+$',
+              message: 'QT3 (ADR-0003): import module khác qua index.js của nó.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['apps/api/src/modules/*/*/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^\\.\\./\\.\\./[a-z]+/(?!index\\.js$).+$',
+              message: 'QT3 (ADR-0003): import module khác qua index.js của nó.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: WEB_APPS,
     ...reactHooks.configs.flat['recommended-latest'],
     languageOptions: { globals: globals.browser },
