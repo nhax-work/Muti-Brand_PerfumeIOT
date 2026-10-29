@@ -13,6 +13,7 @@ import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AlrService } from '../alr/index.js';
 import { PaymentService } from '../ord/index.js';
+import { activatedEndsAt } from './rental-period.js';
 import { SltQueries } from './slt.queries.js';
 
 @Injectable()
@@ -119,8 +120,7 @@ export class SltJobs {
           }
 
           const startsAt = now;
-          const endsAt = new Date(startsAt);
-          endsAt.setMonth(endsAt.getMonth() + (rental.duration_months ?? 0));
+          const endsAt = activatedEndsAt(rental, startsAt);
 
           await this.queries.activateRental(rentalId, startsAt, endsAt, now, tx);
 

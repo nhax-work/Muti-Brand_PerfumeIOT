@@ -1888,3 +1888,29 @@ describe('FR-EXP-23 ÷ 25 — Báo không gia hạn và rút lại (ADR-0014)', 
     expect(result.returnMethod).toBe('WAREHOUSE_PICKUP');
   });
 });
+
+describe('activatedEndsAt — kỳ hạn khi kích hoạt hóa đơn DRAFT (FR-SLT-24, FR-SLT-42)', () => {
+  it('test_FR_SLT_24_ends_at_from_package_duration — hóa đơn theo gói: starts_at + duration_months', async () => {
+    const { activatedEndsAt } = await import('../../apps/api/src/modules/slt/rental-period.js');
+    const draft = {
+      starts_at: new Date('2026-10-01T00:00:00Z'),
+      ends_at: new Date('2027-01-30T00:00:00Z'),
+      duration_months: 3,
+    };
+    const startsAt = new Date('2026-10-20T03:00:00Z');
+    expect(activatedEndsAt(draft, startsAt)).toEqual(new Date('2027-01-20T03:00:00Z'));
+  });
+
+  it('test_FR_SLT_24_ends_at_without_package — hóa đơn mô hình cũ: giữ độ dài kỳ hạn, ends_at > starts_at', async () => {
+    const { activatedEndsAt } = await import('../../apps/api/src/modules/slt/rental-period.js');
+    const draft = {
+      starts_at: new Date('2026-10-01T00:00:00Z'),
+      ends_at: new Date('2026-10-31T00:00:00Z'),
+      duration_months: null,
+    };
+    const startsAt = new Date('2026-10-20T03:00:00Z');
+    const endsAt = activatedEndsAt(draft, startsAt);
+    expect(endsAt).toEqual(new Date('2026-11-19T03:00:00Z'));
+    expect(endsAt.getTime()).toBeGreaterThan(startsAt.getTime());
+  });
+});

@@ -21,6 +21,7 @@ import { MchQueries } from '../mch/index.js';
 import { newPaymentReference, PaymentService, type PaymentIntent } from '../ord/index.js';
 import { CatalogQueries } from './catalog.queries.js';
 import { toPlanDto } from './catalog.service.js';
+import { activatedEndsAt } from './rental-period.js';
 import {
   SltQueries,
   stageOf,
@@ -932,8 +933,7 @@ export class SltService {
     }
 
     const startsAt = installedAt;
-    const endsAt = new Date(startsAt);
-    endsAt.setMonth(endsAt.getMonth() + (rental.duration_months ?? 0));
+    const endsAt = activatedEndsAt(rental, startsAt);
 
     await this.queries.activateRental(rentalId, startsAt, endsAt, installedAt, tx);
 
