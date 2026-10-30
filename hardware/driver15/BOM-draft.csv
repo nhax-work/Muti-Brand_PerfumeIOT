@@ -1,7 +1,8 @@
 Reference,Quantity,Part,Package_or_interface,Status,Notes
 Q1-Q15,15,AOD4184A,TO-252 DPAK,CANDIDATE,Requires 5 V gate buffer and thermal/transient verification
 U1-U2,2,SN74AHCT541,To be selected,CANDIDATE,5 V buffer; confirm power sequencing and OE default OFF
-U3,1,MCP23017,To be selected,PROPOSED,3.3 V I2C valve expansion; firmware not implemented
+U3,1,PCF8575,To be confirmed,USER_SELECTED,3.3 V I2C; P00-P04 active LOW through U5; P05 inverted ready; firmware not implemented
+U5,1,SN74AHCT04,To be selected,CANDIDATE,5 V hex inverter; PCF boot HIGH becomes OFF; inputs pulled up to 3V3
 U4,1,12 V to 5 V regulator,To be selected,TBD,ESP supply current and USB backfeed protection required
 RG1-RG15,15,Gate series resistor,To be selected,TBD,Value selected from gate charge and switching tests
 RPD1-RPD15,15,Gate to source pulldown,To be selected,TBD,Required default OFF independently of GPIO

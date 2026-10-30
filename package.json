@@ -43,7 +43,9 @@
     "kiosk:dev": "npm run dev -w @scentstation/kiosk",
     "contracts:generate": "npm run generate -w @scentstation/contracts",
     "spec:generate": "tsx scripts/gen-spec-constants.ts && prettier --write apps/api/src/shared/config/constraints.generated.ts apps/kiosk/src/shared/config/constraints.generated.ts apps/admin-web/src/shared/constraints.generated.ts apps/api/src/shared/errors/codes.generated.ts",
-    "db:types": "kysely-codegen --dialect postgres --out-file apps/api/src/shared/db/types.generated.ts --exclude-pattern pgmigrations"
+    "db:types": "kysely-codegen --dialect postgres --out-file apps/api/src/shared/db/types.generated.ts --exclude-pattern pgmigrations",
+    "device:test:wifi": "tsx scripts/device-test-wifi.ts",
+    "device:test": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/device-test.ps1"
   },
   "dependencies": {
     "argon2": "^0.41.1",

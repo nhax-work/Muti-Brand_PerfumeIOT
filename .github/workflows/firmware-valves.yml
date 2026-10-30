@@ -1,0 +1,40 @@
+name: Firmware van Rev B
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'arduino/**'
+      - 'tests/firmware/**'
+      - '.github/workflows/firmware-valves.yml'
+  push:
+    branches: [dev]
+    paths:
+      - 'arduino/**'
+      - 'tests/firmware/**'
+      - '.github/workflows/firmware-valves.yml'
+
+jobs:
+  valve-driver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Kiểm thử driver với bus và khóa tải giả lập
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -pedantic tests/firmware/valve_driver_test.cpp -o /tmp/valve-driver-test
+          /tmp/valve-driver-test
+
+  esp32-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Cài toolchain và thư viện của firmware
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.12 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install 'ArduinoJson@7.4.3' 'ArduinoMqttClient@0.1.8' 'Crypto@0.4.0'
+      - name: Biên dịch với cấu hình mẫu không có thông tin đăng nhập
+        run: |
+          cp arduino/ScentStationValveDevice/config.example.h arduino/ScentStationValveDevice/config.h
+          arduino-cli compile --fqbn esp32:esp32:esp32 arduino/ScentStationValveDevice
