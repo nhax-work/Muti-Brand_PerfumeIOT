@@ -22,3 +22,6 @@ infra/
 # Sinh tự động từ spec/contracts/openapi.yaml — không format, không sửa tay
 packages/contracts/src/openapi.ts
 **/*.generated.ts
+
+# Hồ sơ điện/PCB và dữ liệu xuất từ KiCad: giữ nguyên nội dung xuất để đối chiếu.
+hardware/driver15/

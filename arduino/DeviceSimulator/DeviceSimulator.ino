@@ -31,7 +31,7 @@ constexpr uint8_t LIGHT_PINS[SLOT_COUNT] = {26, 23, 32, 33, 13};
 constexpr uint8_t PUMP_OFF_LEVEL = PUMP_ON_LEVEL == HIGH ? LOW : HIGH;
 constexpr uint8_t LIGHT_OFF_LEVEL = LIGHT_ON_LEVEL == HIGH ? LOW : HIGH;
 constexpr unsigned long DEBOUNCE_MS = 30;
-constexpr unsigned long ACTUATOR_MAX_MS = 800;
+constexpr unsigned long ACTUATOR_MAX_MS = 3500;
 constexpr unsigned long RESTART_GAP_MS = 500;
 constexpr uint16_t HISTORY_SIZE = 500;
 constexpr uint16_t OUTBOX_SIZE = 500;

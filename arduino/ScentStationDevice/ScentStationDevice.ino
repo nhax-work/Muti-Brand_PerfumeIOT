@@ -31,7 +31,11 @@ constexpr uint8_t LIGHT_PINS[SLOT_COUNT] = {26, 23, 32, 33, 13};
 constexpr uint8_t PUMP_OFF_LEVEL = PUMP_ON_LEVEL == HIGH ? LOW : HIGH;
 constexpr uint8_t LIGHT_OFF_LEVEL = LIGHT_ON_LEVEL == HIGH ? LOW : HIGH;
 constexpr unsigned long DEBOUNCE_MS = 30;
-constexpr unsigned long ACTUATOR_MAX_MS = 800;
+// Thời gian bơm cố định trên ESP; MQTT vẫn quyết định slot được phép chạy.
+constexpr unsigned long PUMP_RUN_MS = 2000;
+constexpr unsigned long ACTUATOR_MAX_MS = 3500;
+static_assert(PUMP_RUN_MS > 0 && PUMP_RUN_MS < ACTUATOR_MAX_MS,
+              "Pump duration must be below the hardware cutoff");
 constexpr unsigned long RESTART_GAP_MS = 500;
 constexpr uint16_t HISTORY_SIZE = 500;
 constexpr uint16_t OUTBOX_SIZE = 500;
@@ -64,11 +68,26 @@ String executedAt;
 String pressedAt;
 String incomingCommand;
 String incomingConfig;
+String incomingTest;
+String incomingTestResponse;
+unsigned long testActivityMs = 0;
+bool wifiTestSession = false;
 int activeSlot = -1;
 unsigned long armedAtMs = 0;
 unsigned long pumpStartedAtMs = 0;
 unsigned long lastStoppedAtMs = 0;
 bool resting = false;
+bool testMode = false;
+bool testPumpRunning = false;
+int testSlot = -1;
+bool primeActive = false;
+uint8_t primeSlot = 0;
+unsigned long primeRemainingMs = 0;
+unsigned long testTargetMs = 0;
+unsigned long testStartedAtMs = 0;
+unsigned long testRunMs[SLOT_COUNT];
+String serialLine;
+bool serialOverflow = false;
 unsigned long heartbeatMs = 30000;
 unsigned long telemetryMs = 60000;
 unsigned long pressWindowMs = 60000;
@@ -298,12 +317,16 @@ void startPump(bool customer) {
   state = DeviceState::DISPENSING;
   customerArmed = false;
   digitalWrite(PUMP_PINS[activeSlot], PUMP_ON_LEVEL);
-  Serial.printf("Slot %d: pump ON\n", activeSlot + 1);
+  Serial.printf("Slot %d: pump ON; target=%lu ms; cutoff=%lu ms; config=%lu\n",
+                activeSlot + 1, slots[activeSlot].runMs, ACTUATOR_MAX_MS,
+                static_cast<unsigned long>(configurationVersion));
 }
 
 void finishPump() {
   stopOutputs();
   timerStop(cutoffTimer);
+  Serial.printf("Slot %d: pump stopped after %lu ms; hardTimeout=%s\n",
+                activeSlot + 1, millis() - pumpStartedAtMs, hardTimeout ? "true" : "false");
   JsonDocument doc;
   commonFields(doc);
   doc["command_token"] = commandToken;
@@ -326,6 +349,7 @@ void finishPump() {
 }
 
 void acceptCommand(JsonDocument& doc) {
+  if (testMode) return;
   const String token = doc["command_token"] | "";
   if (token.isEmpty() || token.length() > 255) return;
   if (!verifyCommand(doc)) { rejectCommand(token, "CMD_INVALID_SIGNATURE"); return; }
@@ -388,7 +412,7 @@ void applyConfiguration(JsonDocument& doc) {
     const unsigned long duration = slot["actuator_run_ms"] | 0UL;
     if (index < 0 || index >= SLOT_COUNT || seen[index] || !duration || duration >= ACTUATOR_MAX_MS) return;
     seen[index] = true;
-    next[index] = {slot["enabled"] | false, duration};
+    next[index] = {slot["enabled"] | false, PUMP_RUN_MS};
   }
   for (uint8_t i = 0; i < SLOT_COUNT; ++i) if (!seen[i]) return;
   if (preferences.putUInt("cfgVersion", version) != sizeof(uint32_t)) { storageReady = false; return; }
@@ -400,7 +424,8 @@ void applyConfiguration(JsonDocument& doc) {
   if (state == DeviceState::WAITING) {
     if (const char* reason = safetyCheck(activeSlot)) { rejectCommand(commandToken, reason); clearCommand(); }
   }
-  Serial.printf("Configuration applied: version %lu\n", static_cast<unsigned long>(version));
+  Serial.printf("Configuration applied: version %lu; fixed pump duration=%lu ms\n",
+                static_cast<unsigned long>(version), PUMP_RUN_MS);
 }
 
 void readIncoming(int messageSize) {
@@ -412,8 +437,163 @@ void readIncoming(int messageSize) {
   while (mqtt.available()) { const char ch = mqtt.read(); if (acceptable) payload += ch; }
   if (!acceptable) return;
   // Callbacks can run inside QoS 1 publish waits: defer all business logic to loop().
+  if (destination == topic("test/command") && !retained && incomingTest.isEmpty()) incomingTest = payload;
   if (destination == topic("config")) incomingConfig = payload;
-  if (destination == topic("command") && !retained && incomingCommand.isEmpty()) incomingCommand = payload;
+  if (destination == topic("command") && !testMode && !retained && incomingCommand.isEmpty()) incomingCommand = payload;
+}
+
+// Maintenance commands via USB or signed MQTT: never create customer dispense results.
+void cancelPrime() {
+  primeActive = false;
+  primeRemainingMs = 0;
+}
+
+void stopTestPump() {
+  stopOutputs();
+  if (cutoffTimer) timerStop(cutoffTimer);
+  testPumpRunning = false;
+  testSlot = -1;
+  resting = true;
+  lastStoppedAtMs = millis();
+  Serial.println("TEST pump stopped");
+}
+
+void startTestPump(uint8_t slot) {
+  if (slot >= SLOT_COUNT || !testMode || testPumpRunning || state != DeviceState::IDLE || resting || !cutoffTimer) return;
+  if (DOOR_SENSOR_PIN >= 0 && digitalRead(DOOR_SENSOR_PIN) == HIGH) {
+    Serial.println("TEST blocked: door open"); return;
+  }
+  stopOutputs();
+  testSlot = slot;
+  testTargetMs = primeActive ? std::min(primeRemainingMs, PUMP_RUN_MS) : testRunMs[slot];
+  hardTimeout = false;
+  timerWrite(cutoffTimer, 0);
+  timerStart(cutoffTimer);
+  testStartedAtMs = millis();
+  testPumpRunning = true;
+  digitalWrite(PUMP_PINS[slot], PUMP_ON_LEVEL);
+  Serial.printf("TEST slot %u ON for %lu ms\n", slot + 1, testTargetMs);
+}
+
+bool processTestCommand(String line) {
+  line.trim();
+  if (line == "TEST OFF") {
+    if (testMode) { cancelPrime(); stopTestPump(); testMode = false; wifiTestSession = false; }
+    Serial.println("TEST OFF");
+  } else if (line == "STOP") {
+    if (testMode) { cancelPrime(); stopTestPump(); }
+  } else if (line == "TEST ON") {
+    if (state != DeviceState::IDLE || testPumpRunning || primeActive || resting || !cutoffTimer) {
+      Serial.println("TEST blocked: device busy or timer unavailable"); return false;
+    }
+    testMode = true;
+    incomingCommand = "";
+    stopOutputs();
+    // Require release before accepting any button after entering test mode.
+    for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+      buttons[i] = {static_cast<uint8_t>(digitalRead(BUTTON_PINS[i])), LOW, millis(), false};
+    }
+    Serial.println("TEST ON: SET <slot 1-5> <ms 1-3499>, PRIME <slot 1-5> <ms 1-60000>, SHOW, STOP, TEST OFF; press a physical button to test");
+  } else if (line.startsWith("PRIME ")) {
+    if (!testMode || testPumpRunning || primeActive || resting) {
+      Serial.println("PRIME requires idle TEST mode"); return false;
+    }
+    // Parse decimal digits only, reject signs, overflow and extra arguments.
+    unsigned int slot = 0;
+    unsigned long duration = 0;
+    char slotText[3] = {}, durationText[7] = {}, extra;
+    if (sscanf(line.c_str(), "PRIME %2s %6s %c", slotText, durationText, &extra) != 2) {
+      Serial.println("Use PRIME <slot 1-5> <ms 1-60000>"); return false;
+    }
+    bool digits = true;
+    for (const char* c = slotText; *c; ++c) if (*c < '0' || *c > '9') digits = false;
+    for (const char* c = durationText; *c; ++c) if (*c < '0' || *c > '9') digits = false;
+    slot = strtoul(slotText, nullptr, 10);
+    duration = strtoul(durationText, nullptr, 10);
+    if (!digits || slot < 1 || slot > SLOT_COUNT || duration == 0 || duration > 60000) {
+      Serial.println("Use PRIME <slot 1-5> <ms 1-60000>"); return false;
+    }
+    primeSlot = slot - 1;
+    primeRemainingMs = duration;
+    primeActive = true;
+    Serial.println("PRIME: keep outlet unobstructed; use STOP to cancel");
+    startTestPump(primeSlot);
+    if (!testPumpRunning) { cancelPrime(); return false; }
+  } else if (line.startsWith("RUN ")) {
+    if (line.length() != 5 || line[4] < '1' || line[4] > '5' || !testMode || primeActive) return false;
+    startTestPump(line[4] - '1');
+    if (!testPumpRunning) return false;
+  } else if (line == "SHOW") {
+    Serial.printf("TEST %s; PRIME %s; remaining commanded ON time=%lu ms\n",
+                  testMode ? "ON" : "OFF", primeActive ? "ON" : "OFF", primeRemainingMs);
+    for (uint8_t i = 0; i < SLOT_COUNT; ++i) Serial.printf("Slot %u: %lu ms\n", i + 1, testRunMs[i]);
+  } else if (line.startsWith("SET ")) {
+    if (!testMode || testPumpRunning || primeActive || resting) { Serial.println("SET requires idle TEST mode"); return false; }
+    unsigned int slot = 0;
+    unsigned long duration = 0;
+    char extra;
+    if (sscanf(line.c_str(), "SET %u %lu %c", &slot, &duration, &extra) != 2 ||
+        slot < 1 || slot > SLOT_COUNT || duration == 0 || duration >= ACTUATOR_MAX_MS) {
+      Serial.println("Use SET <slot 1-5> <ms 1-3499>"); return false;
+    }
+    const String key = "testMs" + String(slot);
+    if (preferences.putULong(key.c_str(), duration) != sizeof(unsigned long)) {
+      Serial.println("TEST duration save failed"); return false;
+    }
+    testRunMs[slot - 1] = duration;
+    Serial.printf("TEST slot %u saved: %lu ms\n", slot, duration);
+  } else return false;
+  testActivityMs = millis();
+  return true;
+}
+
+void handleTestSerial() {
+  // Bound work and input size so serial traffic cannot delay actuator cutoff.
+  for (uint8_t count = 0; count < 64 && Serial.available(); ++count) {
+    const char ch = Serial.read();
+    if (ch == '\r') continue;
+    if (ch != '\n') {
+      if (serialLine.length() < 63 && !serialOverflow) serialLine += ch;
+      else serialOverflow = true;
+      continue;
+    }
+    String line = serialLine;
+    serialLine = "";
+    if (serialOverflow) { serialOverflow = false; Serial.println("TEST input too long"); continue; }
+    processTestCommand(line);
+  }
+}
+
+void handleWifiTest() {
+  if (incomingTest.isEmpty()) return;
+  JsonDocument doc;
+  const String payload = incomingTest;
+  incomingTest = "";
+  if (deserializeJson(doc, payload)) return;
+  const String token = doc["command_token"] | "";
+  if (token.isEmpty() || token.length() > 255 || !verifyCommand(doc)) return;
+  if (doc["schema_version"] != 1 || String(doc["command_type"] | "") != "TEST" ||
+      String(doc["machine_serial"] | "") != MACHINE_SERIAL) return;
+  time_t expiry = 0;
+  if (!clockReady || !commandExpiry(doc["expires_at"] | "", expiry) || expiry <= time(nullptr) ||
+      expiry > time(nullptr) + 30) return;
+  if (!storageReady || tokenSeen(token) || !rememberToken(token)) return;
+  const String action = doc["action"] | "";
+  const bool accepted = processTestCommand(action);
+  if (accepted && action == "TEST ON") wifiTestSession = true;
+  if (accepted && action == "TEST OFF") wifiTestSession = false;
+  JsonDocument response;
+  commonFields(response);
+  response["command_token"] = token;
+  response["accepted"] = accepted;
+  response["test_mode"] = testMode;
+  response["prime_active"] = primeActive;
+  response["remaining_ms"] = primeRemainingMs;
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) response["durations_ms"].add(testRunMs[i]);
+  String encoded;
+  serializeJson(response, encoded);
+  // Never block on MQTT publishing with a pump ON: response is sent between pulses.
+  incomingTestResponse = encoded;
 }
 
 void updateButtons() {
@@ -427,6 +607,7 @@ void updateButtons() {
     if (button.stable == HIGH) { button.released = true; continue; }
     if (!button.released) continue;
     button.released = false;
+    if (testMode) { if (!primeActive) startTestPump(i); continue; }
     if (state == DeviceState::WAITING && activeSlot == i && now - armedAtMs < pressWindowMs) startPump(true);
     else Serial.printf("Button %u ignored: no matching armed command\n", i + 1);
   }
@@ -474,6 +655,7 @@ void connectNetwork() {
   }
   mqtt.subscribe(topic("command"), 1);
   mqtt.subscribe(topic("config"), 1);
+  mqtt.subscribe(topic("test/command"), 1);
   lastHeartbeat = now - heartbeatMs;
   lastTelemetry = now - telemetryMs;
   JsonDocument event;
@@ -501,6 +683,11 @@ void setup() {
   storageReady = nvsReady && LittleFS.begin(INITIALIZE_DEVICE_STORAGE);
   if (storageReady) storageReady = LittleFS.exists("/outbox") || LittleFS.mkdir("/outbox");
   if (storageReady) storageReady = LittleFS.exists("/history") || LittleFS.mkdir("/history");
+  for (uint8_t i = 0; i < SLOT_COUNT; ++i) {
+    const String key = "testMs" + String(i + 1);
+    const unsigned long saved = preferences.getULong(key.c_str(), PUMP_RUN_MS);
+    testRunMs[i] = saved > 0 && saved < ACTUATOR_MAX_MS ? saved : PUMP_RUN_MS;
+  }
   queueHead = preferences.getUInt("qHead", 0);
   queueTail = preferences.getUInt("qTail", 0);
   // Recover an append written just before power loss, without generating a new event ID.
@@ -536,13 +723,67 @@ void setup() {
 #endif
 }
 
+// Publish maintenance responses only with outputs OFF.
+void flushTestResponse() {
+  if (testPumpRunning || incomingTestResponse.isEmpty()) return;
+  publishPayload("test/result", incomingTestResponse, 0);
+  incomingTestResponse = "";
+}
+
+void exitTestMode() {
+  cancelPrime();
+  stopTestPump();
+  testMode = false;
+  wifiTestSession = false;
+  incomingCommand = "";
+}
+
 void loop() {
-  // Prioritize pump cutoff; never enter a blocking network/flash operation while pumping.
+  // Customer cycle keeps its original priority and never polls the network while pumping.
   if (state == DeviceState::DISPENSING) {
     if (hardTimeout || millis() - pumpStartedAtMs >= slots[activeSlot].runMs) finishPump();
     else delay(1);
     return;
   }
+  if (resting && millis() - lastStoppedAtMs >= RESTART_GAP_MS) resting = false;
+  handleTestSerial();
+  if (testMode) {
+    if (wifiTestSession && (millis() - testActivityMs >= 120000 || WiFi.status() != WL_CONNECTED)) {
+      exitTestMode();
+      return;
+    }
+    if (testPumpRunning) {
+      const bool doorOpen = DOOR_SENSOR_PIN >= 0 && digitalRead(DOOR_SENSOR_PIN) == HIGH;
+      if (hardTimeout || doorOpen) {
+        cancelPrime(); stopTestPump();
+        Serial.println("TEST aborted: hardware cutoff or door open");
+      } else if (millis() - testStartedAtMs >= testTargetMs) {
+        if (primeActive) {
+          primeRemainingMs -= testTargetMs;
+          if (primeRemainingMs == 0) cancelPrime();
+        }
+        stopTestPump();
+      } else delay(1);
+      return;
+    }
+    clockReady = time(nullptr) >= 1700000000;
+    if (wifiTestSession && !mqtt.connected()) { exitTestMode(); return; }
+    connectNetwork();
+    mqtt.poll();
+    handleWifiTest();
+    flushTestResponse();
+    if (testPumpRunning || !testMode) return;
+    if (wifiTestSession && !mqtt.connected()) { exitTestMode(); return; }
+    if (primeActive && !resting) {
+      startTestPump(primeSlot);
+      if (!testPumpRunning) cancelPrime();
+    }
+    updateButtons();
+    delay(1);
+    return;
+  }
+
+  // Original payment/button flow: timeout -> physical press -> network -> config -> paid command.
   clockReady = time(nullptr) >= 1700000000;
   if (resting && millis() - lastStoppedAtMs >= RESTART_GAP_MS) resting = false;
   if (state == DeviceState::WAITING && millis() - armedAtMs >= pressWindowMs) {
@@ -563,6 +804,10 @@ void loop() {
     if (!deserializeJson(doc, payload)) acceptCommand(doc);
   }
   if (state == DeviceState::DISPENSING) return;
+  // Paid commands above reserve their slot before TEST ON can be considered.
+  handleWifiTest();
+  flushTestResponse();
+  if (testMode || testPumpRunning) return;
   flushOutbox();
   publishHealth();
 }

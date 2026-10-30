@@ -34,8 +34,8 @@ thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 
 | Hằng | Giá trị | FR |
 |---|---|---|
-| `ACTUATOR_MAX_MS` | 800 | NFR-SAF-01 |
-| `ACTUATOR_RUN_MS` | 500 | hiệu chuẩn theo từng slot |
+| `ACTUATOR_MAX_MS` | 3500 | NFR-SAF-01; ADR-0020, cần đo trên phần cứng |
+| `ACTUATOR_RUN_MS` | 2000 | mặc định đồng bộ firmware workspace; hiệu chuẩn theo từng slot |
 
 `ACTUATOR_MAX_MS` là hard timeout ở firmware, nằm ngoài mọi logic nghiệp vụ.
 

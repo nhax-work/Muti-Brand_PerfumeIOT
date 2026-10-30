@@ -36,7 +36,7 @@ The device boots with all outputs off and stays DISABLED until it receives retai
 
 In CUSTOMER mode, payment leads to COMMAND → ACK → illuminated target button → fresh press → one pump → RESULT. Wrong buttons cannot trigger a pump. A missed press window produces PRESS_TIMEOUT. DIAGNOSTIC commands intentionally run without a customer press; use only through authorized maintenance operations.
 
-Only one pump runs at a time. The normal backend duration is 500 ms; an independent hardware timer cuts pumps at 800 ms. There is a 500 ms rest between activations. The device stores 500 replay tokens and buffers up to 500 event/result/reject messages in LittleFS, removing a pending message only after MQTT QoS 1 acknowledgment. Storage failures inhibit new commands.
+Only one pump runs at a time. The normal backend duration is 3000 ms; an independent hardware timer cuts pumps at 3500 ms. There is a 500 ms rest between activations. The device stores 500 replay tokens and buffers up to 500 event/result/reject messages in LittleFS, removing a pending message only after MQTT QoS 1 acknowledgment. Storage failures inhibit new commands.
 
 ## What the data means
 

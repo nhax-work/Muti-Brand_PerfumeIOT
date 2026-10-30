@@ -1,5 +1,23 @@
 # Bo điều khiển 15 tải cho ScentStation
 
+## Biến thể Rev B đồng 1 oz — 26/10/2026
+
+Theo lựa chọn người dùng, đã tạo riêng [Gerber Rev B 1 oz](rev-b-1oz/ScentStation_RevB_1oz_Gerber_THU_NGHIEM.zip), [hồ sơ KiCad 1 oz](rev-b-1oz/ScentStation_RevB_1oz_HO_SO_DAY_DU.zip) và [hướng dẫn](rev-b-1oz/HUONG_DAN_REV_B_1OZ.md). Đồng 35 µm mỗi mặt, tổng dày bo 1,6 mm; giữ nguyên đường mạch/via. DRC mới: 0 vi phạm, 0 kết nối thiếu; đã đọc lại Gerber/khoan và đối chiếu lệnh hình học với bản 2 oz. Đây vẫn là mẫu thử cho chế độ một bơm + một van; chưa kiểm chứng dòng khởi động, nhiệt và mạ lỗ. Bản 2 oz bên dưới được giữ để tham chiếu.
+
+## Rev B — khoảng cách socket ESP32 25 mm — 20/10/2026
+
+Cập nhật theo phép đo người dùng: tâm hai hàng socket 25 mm, thay 27,5 mm của Rev A. Đã đi lại đường tín hiệu và kiểm tra DRC/ERC: 0 vi phạm, 0 kết nối thiếu; 381 chân khớp sơ đồ/PCB. Dùng [Gerber Rev B](rev-b/ScentStation_RevB_Gerber_THU_NGHIEM.zip), [hồ sơ KiCad Rev B](rev-b/ScentStation_RevB_HO_SO_DAY_DU.zip), [hướng dẫn](rev-b/HUONG_DAN_REV_B.md) và [mô hình GLB xem trên web](rev-b/3d/scentstation-web.glb). Đây vẫn là bản thử nghiệm; pinout ESP và linh kiện thực cần đối chiếu trước khi đặt in. Rev A bên dưới là bản cũ.
+
+## Rev A đã đi dây và xuất Gerber — 19/10/2026
+
+Xem [hướng dẫn Rev A](rev-a/HUONG_DAN_REV_A.md), [Gerber thử nghiệm](rev-a/ScentStation_RevA_Gerber_THU_NGHIEM.zip), [hồ sơ KiCad đầy đủ](rev-a/ScentStation_RevA_HO_SO_DAY_DU.zip) và [kết quả kiểm tra](rev-a/KIEM_TRA.json). Rev A là bo hai lớp 240 × 190 mm, đồng 70 µm mỗi mặt, giữ socket ESP tạm 27,5 mm. Không dùng các bản nháp phía dưới để đặt in. Rev A vẫn cần đối chiếu linh kiện/cơ khí và thử phần cứng trước khi duyệt sản xuất.
+
+## Bản thiết kế không dùng load cell — 19/10/2026
+
+Bổ sung [bố trí PCB nháp](pcb-nhap/README.md) theo yêu cầu người dùng: bo tạm 180 × 140 mm, socket ESP tạm 27,5 mm. Có file KiCad và ảnh bố trí; chưa có net điện hoặc đường đồng, không dùng đặt in.
+
+Xem [thiết kế V1](THIET_KE_V1.md), [sơ đồ chức năng](so-do-v1.svg) và [bảng 15 kênh](kenh-v1.csv). Bản V1 giữ chân bơm/nút/đèn hiện tại, dùng PCF8575 + SN74AHCT04 cho van và bổ sung tín hiệu cho phép tải (đã cập nhật theo lựa chọn người dùng). Đây là tài liệu rà soát nguyên lý, chưa có PCB đi dây hoặc Gerber; các phần chưa chốt được ghi rõ trong tài liệu V1. Nội dung dưới đây là dữ liệu nền của bản dự thảo trước đó.
+
 Trạng thái: thiết kế nguyên lý dự thảo ngày 15/10/2026, chưa đủ điều kiện xuất Gerber để sản xuất. Không thay đổi firmware đã thử ổn định; Report 3 đang tạm dừng theo yêu cầu.
 
 ## Dữ liệu đã xác nhận
