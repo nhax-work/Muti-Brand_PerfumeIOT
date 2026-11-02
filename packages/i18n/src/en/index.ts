@@ -1433,6 +1433,10 @@ export const en: SameKeysAs<typeof vi> = {
     statusForfeited: 'Forfeited / Liquidated',
     statusWaitingPickup: 'Waiting for Pickup',
     inventoryOverview: 'Inventory Overview',
+    actionFailed: 'The action could not be completed',
+    slotEnableReason: 'Admin enabled slot {slotNumber}',
+    slotDisableReason: 'Admin paused slot {slotNumber}',
+    bottleIdTooltip: 'Bottle ID: {bottleId}',
   },
 
   kiosk: {

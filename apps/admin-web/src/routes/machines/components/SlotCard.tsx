@@ -83,8 +83,8 @@ export function SlotCard({
         id: slot.id,
         enabled: nextEnabled,
         reason: nextEnabled
-          ? `Admin kích hoạt slot ${slot.slotNumber}`
-          : `Admin tạm dừng slot ${slot.slotNumber}`,
+          ? t('ui.slotEnableReason', { slotNumber: slot.slotNumber })
+          : t('ui.slotDisableReason', { slotNumber: slot.slotNumber }),
       });
       setToggleModalOpen(false);
 
@@ -119,7 +119,7 @@ export function SlotCard({
       });
     } catch (err) {
       notification.error({
-        message: 'Thao tác không thành công',
+        message: t('ui.actionFailed'),
         description: errorMessage(err, t),
         placement: 'topRight',
       });
@@ -162,7 +162,7 @@ export function SlotCard({
           </div>
         }
         extra={
-          <Space size={6} style={{ flexShrink: 0 }}>
+          <Space size={6} wrap style={{ flexShrink: 0 }}>
             <Button size="small" icon={<SettingOutlined />} onClick={() => onOpenConfig(slot)}>
               {t('ui.configSlot')}
             </Button>
@@ -415,7 +415,7 @@ export function SlotCard({
                   </Tag>
                 )}
                 {slot.activeBottleId && (
-                  <Tooltip title={`Mã định danh chai: ${slot.activeBottleId}`}>
+                  <Tooltip title={t('ui.bottleIdTooltip', { bottleId: slot.activeBottleId })}>
                     <Tag
                       style={{
                         fontSize: 10,

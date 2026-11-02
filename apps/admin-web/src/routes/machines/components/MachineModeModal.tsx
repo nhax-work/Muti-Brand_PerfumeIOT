@@ -168,7 +168,7 @@ export function MachineModeModal({
         return;
       }
       notification.error({
-        message: 'Thao tác không thành công',
+        message: t('ui.actionFailed'),
         description: errorMessage(err, t),
         placement: 'topRight',
       });

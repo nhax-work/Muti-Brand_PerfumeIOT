@@ -60,15 +60,6 @@ const MODE_COLOR_MAP = {
   DISABLED: 'red',
 } as const;
 
-/** Danh mục loại nước hoa gắn với 5 slot buồng chứa theo chuẩn seed hệ thống */
-const FALLBACK_PRODUCTS_BY_SLOT: Record<number, { name: string; sku: string }> = {
-  1: { name: 'Aurore Matinale', sku: 'MA-001' },
-  2: { name: 'Aurore Nocturne', sku: 'MA-002' },
-  3: { name: 'Hương Sen Đồng Tháp', sku: 'HV-001' },
-  4: { name: 'Hương Quế Trà Bồng', sku: 'HV-002' },
-  5: { name: 'Trầm Hương Khánh Hòa', sku: 'HV-003' },
-};
-
 export default function MachineDetailPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -165,54 +156,19 @@ export default function MachineDetailPage() {
   // Ghép nối slot với thông tin thương hiệu thuê và loại nước hoa đang lắp
   const slotsWithRentals = useMemo(() => {
     if (!slots) return [];
-    const brandsList = Array.from(brandsMap.values());
-
     return slots.map((slot) => {
-      let rental =
+      // Chỉ hiển thị dữ liệu thật: slot không có hóa đơn đang giữ là slot trống, không suy đoán
+      // thương hiệu hay sản phẩm theo số slot.
+      const rental =
         (slot.currentRentalId ? rentalsBySlotId.get(slot.currentRentalId) : undefined) ??
         rentalsBySlotId.get(slot.id);
-      let brand = rental ? brandsMap.get(rental.brandId) : undefined;
-
-      // Fallback hiển thị thương hiệu thuê từ seed nếu backend chưa có module /slot-rentals
-      if (!rental && slot.currentRentalId) {
-        const assignedBrand =
-          slot.slotNumber <= 2
-            ? (brandsList.find((b) => b.code === 'MAISON_AURORE') ?? brandsList[0])
-            : (brandsList.find((b) => b.code === 'HUONG_VIET') ?? brandsList[1] ?? brandsList[0]);
-
-        if (assignedBrand) {
-          brand = assignedBrand;
-          rental = {
-            id: slot.currentRentalId,
-            slotId: slot.id,
-            brandId: assignedBrand.id,
-            status: 'ACTIVE',
-            pricePerSpray:
-              slot.slotNumber === 1
-                ? '35000'
-                : slot.slotNumber === 2
-                  ? '42000'
-                  : slot.slotNumber === 3
-                    ? '28000'
-                    : slot.slotNumber === 4
-                      ? '50000'
-                      : '55000',
-            startsAt: '2026-01-01T00:00:00.000Z',
-            endsAt: '2026-12-31T23:59:59.000Z',
-            currency: 'VND',
-            revenueSharePercent: 10,
-          };
-        }
-      }
-
-      // Xác định loại nước hoa đang lắp từ productsMap hoặc seed fallback
-      let product: { id?: string; name: string; sku?: string } | undefined;
-      if (rental?.fragranceProductId && productsMap.has(rental.fragranceProductId)) {
-        const p = productsMap.get(rental.fragranceProductId)!;
-        product = { id: p.id, name: p.name, sku: p.sku };
-      } else if (FALLBACK_PRODUCTS_BY_SLOT[slot.slotNumber]) {
-        product = FALLBACK_PRODUCTS_BY_SLOT[slot.slotNumber];
-      }
+      const brand = rental ? brandsMap.get(rental.brandId) : undefined;
+      const assigned = rental?.fragranceProductId
+        ? productsMap.get(rental.fragranceProductId)
+        : undefined;
+      const product = assigned
+        ? { id: assigned.id, name: assigned.name, sku: assigned.sku }
+        : undefined;
 
       return { slot, rental, brand, product };
     });

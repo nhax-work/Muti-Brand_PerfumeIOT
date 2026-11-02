@@ -1022,4 +1022,8 @@ export const ui = {
   statusForfeited: 'Đã tịch thu / thanh lý',
   statusWaitingPickup: 'Chờ nhận hàng',
   inventoryOverview: 'Tổng quan tồn kho',
+  actionFailed: 'Thao tác không thành công',
+  slotEnableReason: 'Admin kích hoạt slot {slotNumber}',
+  slotDisableReason: 'Admin tạm dừng slot {slotNumber}',
+  bottleIdTooltip: 'Mã định danh chai: {bottleId}',
 } as const;
