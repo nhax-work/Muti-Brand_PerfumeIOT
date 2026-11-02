@@ -38,10 +38,39 @@ import {
   useCheckout,
   useCheckoutAnnex,
   usePayCheckout,
+  useRentalInvoice,
   type RentalPaymentIntent,
 } from './api';
 
 const { Title, Text, Paragraph } = Typography;
+
+/**
+ * Một dòng hóa đơn trong phiên: tên máy và số slot lấy từ hóa đơn của chính slot đó, vì phiên thanh
+ * toán chỉ mang slotId (SlotRental) — trước đây màn hình in nguyên UUID của slot.
+ */
+function CheckoutInvoiceLine({
+  rentalId,
+  totalAmount,
+  currency,
+}: {
+  rentalId: string;
+  totalAmount: string | null | undefined;
+  currency: string;
+}) {
+  const { t } = useI18n();
+  const { data: invoice } = useRentalInvoice(rentalId);
+  const slot = invoice
+    ? `${invoice.machineDisplayName ?? ''} · Slot #${invoice.slotNumber}`
+    : t('ui.slot');
+  return (
+    <>
+      {t('ui.checkoutInvoiceLine', {
+        slot,
+        amount: `${Number(totalAmount || 0).toLocaleString('vi-VN')} ${currency}`,
+      })}
+    </>
+  );
+}
 const { Countdown } = Statistic;
 
 function isValidHttpsUrl(url?: string | null): boolean {
@@ -254,9 +283,13 @@ export default function CheckoutDetailPage() {
                             {item.invoiceNumber || t('ui.unpaid')}
                           </Text>
                         }
-                        description={`Slot #${item.slotId} • Tổng tiền: ${Number(
-                          item.totalAmount || 0,
-                        ).toLocaleString('vi-VN')} ${item.currency}`}
+                        description={
+                          <CheckoutInvoiceLine
+                            rentalId={item.id}
+                            totalAmount={item.totalAmount}
+                            currency={item.currency}
+                          />
+                        }
                       />
                     </List.Item>
                   )}
@@ -269,7 +302,7 @@ export default function CheckoutDetailPage() {
             <Result
               status="warning"
               title={t('ui.checkoutCancelled')}
-              subTitle="Phiên thanh toán đã hết hạn hoặc bị hủy. Toàn bộ slot đã được giải phóng."
+              subTitle={t('ui.checkoutCancelledDesc')}
               extra={[
                 <Button
                   type="primary"
@@ -368,7 +401,9 @@ export default function CheckoutDetailPage() {
                       <Alert
                         type="success"
                         message={t('ui.checkoutAnnexAccepted')}
-                        description={`Đồng ý lúc: ${new Date(annex.acceptance.acceptedAt).toLocaleString('vi-VN')}`}
+                        description={t('ui.annexAcceptedAt', {
+                          time: new Date(annex.acceptance.acceptedAt).toLocaleString('vi-VN'),
+                        })}
                         showIcon
                       />
                     ) : (
@@ -546,7 +581,7 @@ export default function CheckoutDetailPage() {
               }}
             >
               <Spin size="small" />
-              <Text type="secondary">Đang chờ xác nhận từ cổng thanh toán...</Text>
+              <Text type="secondary">{t('ui.waitingGatewayConfirmation')}</Text>
             </div>
           </div>
         </Modal>

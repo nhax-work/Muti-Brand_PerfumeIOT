@@ -1072,4 +1072,9 @@ export const ui = {
   graceFeeEstimate: 'Phí lưu kho ân hạn tạm tính: {amount}',
   graceFeeEstimateDesc: 'Khoản phí này được cộng vào phiên thanh toán gia hạn theo quy định.',
   rentalBrandColumn: 'Thương hiệu',
+  checkoutInvoiceLine: '{slot} • Tổng tiền: {amount}',
+  checkoutCancelledDesc:
+    'Phiên thanh toán đã hết hạn hoặc bị hủy. Toàn bộ slot đã được giải phóng.',
+  annexAcceptedAt: 'Đồng ý lúc: {time}',
+  waitingGatewayConfirmation: 'Đang chờ xác nhận từ cổng thanh toán...',
 } as const;

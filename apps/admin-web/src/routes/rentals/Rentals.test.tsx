@@ -570,6 +570,34 @@ describe('CheckoutDetailPage Component (Task 5, FR-SLT-50)', () => {
     expect(screen.getByText('Cấu hình slot')).toBeDefined();
   });
 
+  it('test_FR_SLT_36_paid_checkout_lists_machine_and_slot_number_not_uuid', () => {
+    mockInvoiceData = { machineDisplayName: 'Máy Kiosk 01', slotNumber: 7 };
+    mockCheckoutData = {
+      ...pendingCheckout,
+      stage: 'PAID',
+      invoices: [
+        {
+          id: 'rental-invoice-1',
+          slotId: 'slot-available-1',
+          invoiceNumber: 'HD-20261009-ABC123',
+          totalAmount: '3150000.0000',
+          currency: 'VND',
+        },
+      ],
+    };
+
+    render(
+      <TestWrapper initialEntries={['/rentals/checkouts/chk-pending-1']}>
+        <Routes>
+          <Route path="/rentals/checkouts/:id" element={<CheckoutDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText(/Máy Kiosk 01 · Slot #7/)).toBeDefined();
+    expect(screen.queryByText(/slot-available-1/)).toBeNull();
+  });
+
   it('hiển thị nút Mở trang thanh toán PayOS khi checkoutUrl là https hợp lệ, mở tab mới với noopener,noreferrer', async () => {
     const windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     mockAnnexData = {

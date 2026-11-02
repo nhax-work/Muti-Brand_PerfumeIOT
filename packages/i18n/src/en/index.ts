@@ -1483,6 +1483,11 @@ export const en: SameKeysAs<typeof vi> = {
     graceFeeEstimate: 'Estimated grace-period storage fee: {amount}',
     graceFeeEstimateDesc: 'This fee is added to the renewal checkout as required.',
     rentalBrandColumn: 'Brand',
+    checkoutInvoiceLine: '{slot} • Total: {amount}',
+    checkoutCancelledDesc:
+      'The checkout session expired or was cancelled. All its slots have been released.',
+    annexAcceptedAt: 'Accepted at: {time}',
+    waitingGatewayConfirmation: 'Waiting for confirmation from the payment gateway...',
   },
 
   kiosk: {
