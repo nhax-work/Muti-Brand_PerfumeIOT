@@ -10,6 +10,7 @@ import type { BrandScope } from '../../shared/scoping/index.js';
 import {
   CurrentBrandScope,
   CurrentUser,
+  RequireAnyPermission,
   RequirePermissions,
   type AuthenticatedUser,
 } from '../auth/index.js';
@@ -18,6 +19,7 @@ import { RptService } from './rpt.service.js';
 const REPORT_BRAND = 'report.brand';
 const REPORT_PLATFORM = 'report.platform';
 const REVENUE_MANAGE = 'revenue.manage';
+const INVENTORY_MANAGE = 'inventory.manage';
 
 const IdParam = z.string().uuid();
 
@@ -81,9 +83,10 @@ export class RptController {
 
   /**
    * FR-RPT-02, FR-RPT-10: Chuỗi thời gian số giao dịch và doanh thu.
+   * Brand Admin xem trong phạm vi hóa đơn của mình; Operations Staff xem toàn nền tảng trên dashboard.
    */
   @Get('orders-timeseries')
-  @RequirePermissions(REPORT_BRAND)
+  @RequireAnyPermission(REPORT_BRAND, REPORT_PLATFORM)
   getOrdersTimeseries(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
     const q = parseBody(TimeseriesQuery, query);
     return this.reports.getOrdersTimeseries(scope, { from: q.from, to: q.to }, q.granularity);
@@ -91,9 +94,11 @@ export class RptController {
 
   /**
    * FR-INV-21, FR-RPT-07: Báo cáo tồn kho.
+   * Brand Admin (report.brand) chỉ thấy slot mình thuê; Inventory Staff (inventory.manage) và
+   * Operations Staff (report.platform) thấy toàn bộ — đây là màn hình làm việc hằng ngày của họ.
    */
   @Get('inventory')
-  @RequirePermissions(REPORT_BRAND)
+  @RequireAnyPermission(REPORT_BRAND, REPORT_PLATFORM, INVENTORY_MANAGE)
   getInventoryReport(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
     const q = parseBody(InventoryReportQuery, query);
     return this.reports.getInventoryReport(scope, q);

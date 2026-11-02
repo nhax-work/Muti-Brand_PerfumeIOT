@@ -4,7 +4,8 @@
  *   1. Xác thực   — Bearer token hợp lệ, tài khoản còn ACTIVE, phiên chưa thu hồi
  *                   (FR-AUTH-02, FR-AUTH-04, FR-AUTH-10). Tài khoản INVITED chỉ qua được các
  *                   endpoint gắn @AllowPendingPasswordChange (ADR-0004).
- *   2. Phân quyền — có đủ quyền mà @RequirePermissions đòi (FR-AUTH-06, FR-AUTH-08)
+ *   2. Phân quyền — có đủ quyền mà @RequirePermissions đòi, và ít nhất một quyền mà
+ *                   @RequireAnyPermission liệt kê (FR-AUTH-06, FR-AUTH-08)
  *   3. Xác thực lại — có X-Reauth-Token hợp lệ nếu endpoint gắn @RequireReauth (FR-AUTH-09)
  *
  * Gộp ba bước vào một guard thay vì ba guard riêng để thứ tự không phụ thuộc vào thứ tự đăng ký
@@ -21,6 +22,7 @@ import { hasPermission } from '../../shared/scoping/index.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
 import {
   ALLOWS_PENDING_PASSWORD,
+  ANY_PERMISSIONS,
   IS_PUBLIC,
   REQUIRED_PERMISSIONS,
   REQUIRES_REAUTH,
@@ -63,8 +65,16 @@ export class AccessGuard implements CanActivate {
     }
 
     // 2. Phân quyền
-    const required = this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets);
+    // @RequireAnyPermission gắn ở hàm thay cho @RequirePermissions của controller (decorators.ts).
+    const anyOf = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS, targets);
+    const anyOnHandler = this.reflector.get<string[]>(ANY_PERMISSIONS, context.getHandler());
+    const required = anyOnHandler
+      ? this.reflector.get<string[]>(REQUIRED_PERMISSIONS, context.getHandler())
+      : this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS, targets);
     if (required?.some((code) => !hasPermission(user, code))) {
+      throw new AppError('FORBIDDEN_SCOPE', 'auth.missingPermission');
+    }
+    if (anyOf && !anyOf.some((code) => hasPermission(user, code))) {
       throw new AppError('FORBIDDEN_SCOPE', 'auth.missingPermission');
     }
 

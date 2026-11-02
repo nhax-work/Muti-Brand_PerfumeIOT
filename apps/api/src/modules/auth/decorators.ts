@@ -21,6 +21,7 @@ import type { AuthenticatedUser } from './principal.loader.js';
 
 export const IS_PUBLIC = 'scentstation:isPublic';
 export const REQUIRED_PERMISSIONS = 'scentstation:requiredPermissions';
+export const ANY_PERMISSIONS = 'scentstation:anyPermissions';
 export const REQUIRES_REAUTH = 'scentstation:requiresReauth';
 export const ALLOWS_PENDING_PASSWORD = 'scentstation:allowsPendingPassword';
 
@@ -33,6 +34,16 @@ export const Public = () => SetMetadata(IS_PUBLIC, true);
  * Thiếu quyền trả 403 FORBIDDEN_SCOPE (FR-AUTH-08 AC3).
  */
 export const RequirePermissions = (...codes: string[]) => SetMetadata(REQUIRED_PERMISSIONS, codes);
+
+/**
+ * Chỉ cần MỘT trong các quyền liệt kê. Dùng cho endpoint chỉ đọc mà nhiều vai trò cùng cần, mỗi vai
+ * trò đi bằng quyền của mình (vd báo cáo tồn kho: Brand Admin qua report.brand, Inventory Staff qua
+ * inventory.manage). Phạm vi dữ liệu vẫn do truy vấn quyết định, không do quyền nào được dùng.
+ *
+ * Gắn ở hàm xử lý thì THAY cho @RequirePermissions của controller — hàm đọc dùng chung không bị quyền
+ * ghi của cả lớp chặn. @RequirePermissions gắn ở chính hàm đó vẫn được kiểm thêm.
+ */
+export const RequireAnyPermission = (...codes: string[]) => SetMetadata(ANY_PERMISSIONS, codes);
 
 /**
  * Thao tác nhạy cảm cần header X-Reauth-Token lấy từ POST /auth/reauth (FR-AUTH-09).

@@ -16,6 +16,7 @@ import { AccessGuard } from '../../apps/api/src/modules/auth/access.guard.js';
 import {
   AllowPendingPasswordChange,
   Public,
+  RequireAnyPermission,
   RequirePermissions,
   RequireReauth,
 } from '../../apps/api/src/modules/auth/decorators.js';
@@ -100,6 +101,33 @@ describe('AccessGuard', () => {
 
   it('requires ALL listed permissions, not any one of them', async () => {
     const target = endpoint(RequirePermissions('alert.handle', 'user.manage'));
+    await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
+  });
+
+  it('test_FR_AUTH_06_guard_any_permission_passes_with_one_of_them', async () => {
+    const target = endpoint(RequireAnyPermission('report.brand', 'alert.handle'));
+    await expect(guardFor(user()).canActivate(context(target, bearer()))).resolves.toBe(true);
+  });
+
+  it('test_FR_AUTH_06_guard_any_permission_rejects_when_none_present', async () => {
+    const target = endpoint(RequireAnyPermission('report.brand', 'user.manage'));
+    await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
+  });
+
+  it('test_FR_AUTH_06_guard_handler_any_permission_replaces_controller_requirement', async () => {
+    const handler = function handler() {};
+    class Controller {}
+    RequirePermissions('product.manage')(Controller);
+    RequireAnyPermission('product.manage', 'alert.handle')(handler);
+    const target = { handler, Controller };
+    await expect(guardFor(user()).canActivate(context(target, bearer()))).resolves.toBe(true);
+  });
+
+  it('test_FR_AUTH_06_guard_controller_requirement_still_applies_without_handler_override', async () => {
+    const handler = function handler() {};
+    class Controller {}
+    RequirePermissions('product.manage')(Controller);
+    const target = { handler, Controller };
     await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
   });
 

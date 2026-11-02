@@ -11,12 +11,14 @@ import type { BrandScope } from '../../shared/scoping/index.js';
 import {
   CurrentBrandScope,
   CurrentUser,
+  RequireAnyPermission,
   RequirePermissions,
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { PrdService } from './prd.service.js';
 
 const PRODUCT_MANAGE = 'product.manage';
+const MACHINE_VIEW = 'machine.view';
 const PRODUCT_STATUSES = ['ACTIVE', 'DISCONTINUED'] as const;
 
 /** openapi.yaml: components.parameters page/pageSize (tối đa 200). */
@@ -60,8 +62,13 @@ const IdParam = z.string().uuid();
 export class PrdController {
   constructor(@Inject(PrdService) private readonly products: PrdService) {}
 
-  /** FR-PRD-03: Brand Admin xem sản phẩm thương hiệu mình; Platform Super Admin xem tất cả. */
+  /**
+   * FR-PRD-03: Brand Admin xem sản phẩm thương hiệu mình; nhân sự nền tảng xem tất cả — Operations
+   * Staff và Inventory Staff cần tên sản phẩm đang lắp trên máy (machine.view). Phạm vi do truy vấn
+   * quyết định, không do quyền nào được dùng.
+   */
   @Get()
+  @RequireAnyPermission(PRODUCT_MANAGE, MACHINE_VIEW)
   async list(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
     const filter = parseBody(ListQuery, query);
     const { items, total } = await this.products.list(scope, filter);
