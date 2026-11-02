@@ -1,4 +1,4 @@
-import { PlusOutlined } from '@ant-design/icons';
+import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Button,
   Col,
@@ -25,16 +25,18 @@ import { useI18n } from '@/shared/i18n';
 import {
   type Product,
   type ProductStatus,
+  useDeleteProductImage,
   useDiscontinueProduct,
   useProducts,
   useSaveProduct,
+  useUploadProductImage,
 } from './api';
+import { ProductImageField, type ImageChange } from './ProductImageField';
 
 interface ProductForm {
   sku: string;
   name: string;
   description?: string;
-  imageUrl?: string;
   defaultPrice: number;
   fullBottleRetailPrice?: number | null;
   fullBottleVolumeMl?: number | null;
@@ -56,16 +58,19 @@ export default function ProductsPage() {
   const discontinue = useDiscontinueProduct();
   const [editing, setEditing] = useState<Product | 'new' | null>(null);
   const [form] = Form.useForm<ProductForm>();
+  const uploadImage = useUploadProductImage();
+  const deleteImage = useDeleteProductImage();
+  const [imageChange, setImageChange] = useState<ImageChange>({ kind: 'keep' });
 
   const open = (product: Product | 'new') => {
     setEditing(product);
+    setImageChange({ kind: 'keep' });
     form.resetFields();
     if (product !== 'new') {
       form.setFieldsValue({
         sku: product.sku,
         name: product.name,
         description: product.description ?? undefined,
-        imageUrl: product.imageUrl ?? undefined,
         defaultPrice: Number(product.defaultPrice),
         fullBottleRetailPrice: product.fullBottleRetailPrice
           ? Number(product.fullBottleRetailPrice)
@@ -79,14 +84,15 @@ export default function ProductsPage() {
     // Form sai: antd đã hiện lỗi cạnh từng ô — không ném tiếp thành lỗi promise không ai bắt.
     const v = await form.validateFields().catch(() => null);
     if (!v) return;
+    let saved: Product;
     try {
-      await save.mutateAsync({
+      // imageUrl không gửi kèm: ảnh đổi qua endpoint riêng bên dưới, gửi lại URL cũ là thừa.
+      saved = await save.mutateAsync({
         id: editing === 'new' ? undefined : (editing as Product).id,
         body: {
           sku: v.sku,
           name: v.name,
           description: v.description || undefined,
-          imageUrl: v.imageUrl || undefined,
           defaultPrice: String(v.defaultPrice),
           currency: 'VND',
           fullBottleRetailPrice:
@@ -94,11 +100,25 @@ export default function ProductsPage() {
           fullBottleVolumeMl: v.fullBottleVolumeMl ?? undefined,
         },
       });
-      message.success(t('ui.productSaved'));
-      setEditing(null);
     } catch (error) {
       message.error(errorMessage(error, t));
+      return;
     }
+    // Sản phẩm mới phải có id trước mới upload ảnh được (ADR-0020). Ảnh lỗi thì sản phẩm vẫn đã lưu:
+    // giữ pop-up mở ở chế độ sửa để người dùng thử lại ảnh mà không tạo trùng sản phẩm.
+    try {
+      if (imageChange.kind === 'upload') {
+        await uploadImage.mutateAsync({ id: saved.id, file: imageChange.file });
+      } else if (imageChange.kind === 'remove') {
+        await deleteImage.mutateAsync(saved.id);
+      }
+    } catch (error) {
+      message.error(t('ui.productImageSaveFailed', { reason: errorMessage(error, t) }));
+      setEditing(saved);
+      return;
+    }
+    message.success(t('ui.productSaved'));
+    setEditing(null);
   };
 
   const columns: ColumnsType<Product> = [
@@ -108,14 +128,30 @@ export default function ProductsPage() {
       key: 'name',
       render: (_, p) => (
         <Space>
-          {p.imageUrl && (
+          {/* Khung 4:5 như trên kiosk; chưa có ảnh thì hiện biểu tượng, không để trống lệch hàng. */}
+          {p.imageUrl ? (
             <img
               src={p.imageUrl}
               alt=""
-              width={32}
-              height={32}
-              style={{ objectFit: 'cover', borderRadius: 4 }}
+              width={40}
+              height={50}
+              style={{ objectFit: 'cover', borderRadius: 4, display: 'block' }}
             />
+          ) : (
+            <div
+              aria-label={t('ui.productNoImage')}
+              style={{
+                width: 40,
+                height: 50,
+                borderRadius: 4,
+                background: '#f1f5f9',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <PictureOutlined style={{ color: '#94a3b8' }} />
+            </div>
           )}
           <Typography.Text strong>{p.name}</Typography.Text>
         </Space>
@@ -217,7 +253,7 @@ export default function ProductsPage() {
           title={editing === 'new' ? t('ui.productAdd') : t('ui.productEdit')}
           okText={t('ui.save')}
           cancelText={t('ui.cancel')}
-          confirmLoading={save.isPending}
+          confirmLoading={save.isPending || uploadImage.isPending || deleteImage.isPending}
           onOk={() => void submit()}
           onCancel={() => setEditing(null)}
           destroyOnHidden
@@ -240,8 +276,12 @@ export default function ProductsPage() {
             <Form.Item name="description" label={t('ui.pricingDescription')}>
               <Input.TextArea rows={3} />
             </Form.Item>
-            <Form.Item name="imageUrl" label={t('ui.productImageUrl')} rules={[{ type: 'url' }]}>
-              <Input placeholder="https://" />
+            <Form.Item label={t('ui.productImage')}>
+              <ProductImageField
+                currentUrl={editing && editing !== 'new' ? editing.imageUrl : null}
+                value={imageChange}
+                onChange={setImageChange}
+              />
             </Form.Item>
             <Form.Item
               name="defaultPrice"

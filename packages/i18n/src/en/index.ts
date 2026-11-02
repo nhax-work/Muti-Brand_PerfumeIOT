@@ -1501,6 +1501,16 @@ export const en: SameKeysAs<typeof vi> = {
     notDeclared: 'Not declared',
     accountNumberPlaceholder: 'Enter the account number',
     loadingFrameworkAgreement: 'Loading the current framework agreement...',
+    productImage: 'Product image',
+    productImageChoose: 'Choose image',
+    productImageChange: 'Change image',
+    productImageRemove: 'Remove image',
+    productImageHint:
+      'JPEG, PNG or WebP, up to {maxMb} MB. Portrait 4:5 images look best on the kiosk.',
+    productImageInvalidType: 'Only JPEG, PNG or WebP images are accepted',
+    productImageTooLarge: 'The image is larger than {maxMb} MB',
+    productImageSaveFailed: 'The product was saved but its image was not updated: {reason}',
+    productNoImage: 'No image',
   },
 
   kiosk: {
