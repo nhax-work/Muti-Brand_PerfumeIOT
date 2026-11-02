@@ -1,6 +1,6 @@
 # ADR-0020 — Upload ảnh sản phẩm qua API, lưu trên Cloudflare R2
 
-**Ngày:** 2026-11-02 · **Trạng thái:** đề xuất, chờ duyệt · **Người quyết:** TV1
+**Ngày:** 2026-11-02 · **Trạng thái:** đã duyệt (2026-11-02) · **Người quyết:** TV1
 
 ## Bối cảnh
 
@@ -109,8 +109,8 @@ Linux và macOS.
 | `FILE_TOO_LARGE` | 413 | Tệp vượt `PRODUCT_IMAGE_MAX_BYTES` |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải JPEG, PNG hay WebP hợp lệ |
 
-Thiếu trường `file` vẫn là `VALIDATION_ERROR`; sản phẩm của thương hiệu khác vẫn là `NOT_FOUND`
-như các endpoint sản phẩm khác.
+Thiếu trường `file` vẫn là `VALIDATION_ERROR`; sản phẩm không tồn tại hoặc của thương hiệu khác trả
+đúng mã như `GET /products/{id}` (FR-AUTH-08 AC2).
 
 ### 7. Không đổi
 

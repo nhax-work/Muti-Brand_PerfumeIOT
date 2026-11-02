@@ -622,7 +622,11 @@ components:
         name: { type: string, maxLength: 200 }
         description: { type: [string, 'null'] }
         fragranceNotes: { type: [object, 'null'], additionalProperties: true }
-        imageUrl: { type: [string, 'null'] }
+        imageUrl:
+          type: [string, 'null']
+          description: >-
+            URL tuyệt đối của ảnh sản phẩm. Ảnh upload qua `POST /products/{id}/image` nằm trên kho
+            ảnh công khai (Cloudflare R2), khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0020).
         defaultPrice: { $ref: '#/components/schemas/Money' }
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice:
@@ -638,7 +642,11 @@ components:
         name: { type: string, maxLength: 200 }
         description: { type: string }
         fragranceNotes: { type: object, additionalProperties: true }
-        imageUrl: { type: string }
+        imageUrl:
+          type: string
+          description: >-
+            URL tuyệt đối do người dùng tự nhập. Muốn đưa ảnh lên kho của nền tảng thì dùng
+            `POST /products/{id}/image` (ADR-0020).
         defaultPrice: { $ref: '#/components/schemas/Money' }
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice: { $ref: '#/components/schemas/Money' }
@@ -1882,7 +1890,9 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         description: { type: [string, 'null'] }
-        imageUrl: { type: [string, 'null'] }
+        imageUrl:
+          type: [string, 'null']
+          description: Cùng giá trị với `Product.imageUrl` (ADR-0020).
         fragranceNotes: { type: [object, 'null'], additionalProperties: true }
     KioskCatalog:
       type: object
@@ -3104,6 +3114,60 @@ paths:
       responses:
         '200':
           description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /products/{id}/image:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [PRD]
+      summary: Upload ảnh sản phẩm
+      operationId: uploadProductImage
+      description: >-
+        FR-PRD-01, ADR-0020: Brand Admin đưa ảnh cho sản phẩm của thương hiệu mình. Chỉ nhận JPEG,
+        PNG, WebP (kiểm theo nội dung tệp), tối đa `PRODUCT_IMAGE_MAX_BYTES`. Máy chủ mã hóa lại sang
+        WebP, cạnh dài nhất tối đa `PRODUCT_IMAGE_MAX_EDGE_PX`, bỏ metadata, rồi lưu lên kho ảnh và
+        đặt `imageUrl`. Thay ảnh cũ nếu có.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Đã cập nhật ảnh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Product' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '413':
+          description: Tệp vượt `PRODUCT_IMAGE_MAX_BYTES` (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [PRD]
+      summary: Xóa ảnh sản phẩm
+      operationId: deleteProductImage
+      description: 'FR-PRD-01, ADR-0020: xóa ảnh khỏi kho ảnh và đặt imageUrl = null.'
+      responses:
+        '200':
+          description: Đã xóa ảnh
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Product' }

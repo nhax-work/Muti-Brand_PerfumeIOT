@@ -468,6 +468,32 @@ export interface paths {
         patch: operations["updateProduct"];
         trace?: never;
     };
+    "/products/{id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload ảnh sản phẩm
+         * @description FR-PRD-01, ADR-0020: Brand Admin đưa ảnh cho sản phẩm của thương hiệu mình. Chỉ nhận JPEG, PNG, WebP (kiểm theo nội dung tệp), tối đa `PRODUCT_IMAGE_MAX_BYTES`. Máy chủ mã hóa lại sang WebP, cạnh dài nhất tối đa `PRODUCT_IMAGE_MAX_EDGE_PX`, bỏ metadata, rồi lưu lên kho ảnh và đặt `imageUrl`. Thay ảnh cũ nếu có.
+         */
+        post: operations["uploadProductImage"];
+        /**
+         * Xóa ảnh sản phẩm
+         * @description FR-PRD-01, ADR-0020: xóa ảnh khỏi kho ảnh và đặt imageUrl = null.
+         */
+        delete: operations["deleteProductImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/products/{id}/discontinue": {
         parameters: {
             query?: never;
@@ -3541,6 +3567,7 @@ export interface components {
             fragranceNotes?: {
                 [key: string]: unknown;
             } | null;
+            /** @description URL tuyệt đối của ảnh sản phẩm. Ảnh upload qua `POST /products/{id}/image` nằm trên kho ảnh công khai (Cloudflare R2), khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0020). */
             imageUrl?: string | null;
             defaultPrice: components["schemas"]["Money"];
             currency: components["schemas"]["Currency"];
@@ -3557,6 +3584,7 @@ export interface components {
             fragranceNotes?: {
                 [key: string]: unknown;
             };
+            /** @description URL tuyệt đối do người dùng tự nhập. Muốn đưa ảnh lên kho của nền tảng thì dùng `POST /products/{id}/image` (ADR-0020). */
             imageUrl?: string;
             defaultPrice: components["schemas"]["Money"];
             currency?: components["schemas"]["Currency"];
@@ -4645,6 +4673,7 @@ export interface components {
             id: string;
             name: string;
             description?: string | null;
+            /** @description Cùng giá trị với `Product.imageUrl` (ADR-0020). */
             imageUrl?: string | null;
             fragranceNotes?: {
                 [key: string]: unknown;
@@ -5970,6 +5999,80 @@ export interface operations {
         };
         responses: {
             /** @description Đã cập nhật */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadProductImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã cập nhật ảnh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Product"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description Tệp vượt `PRODUCT_IMAGE_MAX_BYTES` (FILE_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteProductImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa ảnh */
             200: {
                 headers: {
                     [name: string]: unknown;
