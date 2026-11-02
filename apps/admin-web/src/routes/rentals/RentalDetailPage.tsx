@@ -77,9 +77,14 @@ export default function RentalDetailPage() {
   const navigate = useNavigate();
 
   const { data: invoice, isLoading, error, refetch } = useRentalInvoice(id);
+  const { user } = useAuth();
+  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
+  const isBrandAdmin = user?.roles.includes('BRAND_ADMIN') ?? false;
+
   const { data: rental, refetch: refetchRental } = useSlotRental(id);
   const { data: productsData } = useBrandProducts();
-  const { data: brand } = useMyBrand();
+  // Địa chỉ nhận hàng chỉ có ở hồ sơ của Brand Admin; Super Admin không có /brands/me.
+  const { data: brand } = useMyBrand(isBrandAdmin);
   const { data: packages = [] } = useRentalPackages();
   const { data: plans = [] } = useStoragePlans();
   const assignProduct = useAssignProduct();
@@ -91,10 +96,6 @@ export default function RentalDetailPage() {
   const setGracePeriod = useSetGracePeriod();
   const liquidateRental = useLiquidateSlotRental();
   const closeRental = useCloseSlotRental();
-
-  const { user } = useAuth();
-  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
-  const isBrandAdmin = user?.roles.includes('BRAND_ADMIN') ?? false;
 
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);

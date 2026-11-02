@@ -281,7 +281,7 @@ export default function BrandProfilePage() {
               label={t('ui.brandAccountNumber')}
               rules={[{ required: true, message: t('validation.required') }]}
             >
-              <Input placeholder="Nhập số tài khoản" maxLength={30} />
+              <Input placeholder={t('ui.accountNumberPlaceholder')} maxLength={30} />
             </Form.Item>
             <Form.Item
               name="accountHolder"

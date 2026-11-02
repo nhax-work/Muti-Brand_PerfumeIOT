@@ -1040,7 +1040,7 @@ export const ui = {
   returnBottleStatus: 'Trạng thái chai',
   returnCreateNoteTitle: 'Lưu ý tháo chai',
   returnCreateNoteDesc:
-    'Sau khi lập phiếu, các chai sẽ chuyển trạng thái RETURNED_TO_BRAND, slot máy sẽ chuyển sang UNAVAILABLE và hóa đơn thuê sẽ CLOSED.',
+    'Sau khi lập phiếu, chai được ghi nhận là đã trả thương hiệu, slot máy ngừng nhận đơn và hóa đơn thuê được đóng.',
   returnSlotRentalRequired: 'Bắt buộc nhập mã hóa đơn thuê slot',
   returnSlotRentalPlaceholder: 'Mã hóa đơn thuê đã báo không gia hạn',
   returnBottleIdRequired: 'Nhập mã chai',
@@ -1083,4 +1083,8 @@ export const ui = {
   ticketDescriptionPlaceholder: 'Mô tả sự cố hoặc yêu cầu bảo trì...',
   ticketDiagnosisPlaceholder: 'Nguyên nhân gây ra sự cố...',
   ticketCorrectiveActionPlaceholder: 'Các thao tác đã xử lý, sửa chữa...',
+  ticketPartsPlaceholder: 'Cụm van xịt, Bơm áp lực...',
+  notDeclared: 'Chưa khai báo',
+  accountNumberPlaceholder: 'Nhập số tài khoản',
+  loadingFrameworkAgreement: 'Đang tải hợp đồng khung hiện hành...',
 } as const;

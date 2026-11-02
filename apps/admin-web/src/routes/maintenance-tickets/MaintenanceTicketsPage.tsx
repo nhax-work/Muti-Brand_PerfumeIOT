@@ -574,7 +574,7 @@ export default function MaintenanceTicketsPage() {
               name="replacementParts"
               label={t('ui.ticketReplacementParts') ?? 'Linh kiện thay thế (cách nhau dấu phẩy)'}
             >
-              <Input placeholder="Cụm van xịt, Bơm áp lực..." />
+              <Input placeholder={t('ui.ticketPartsPlaceholder')} />
             </Form.Item>
             <Form.Item name="costAmount" label={t('ui.ticketCost') ?? 'Chi phí sửa chữa (VND)'}>
               <Input placeholder="350000" />

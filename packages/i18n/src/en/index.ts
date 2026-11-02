@@ -1451,7 +1451,7 @@ export const en: SameKeysAs<typeof vi> = {
     returnBottleStatus: 'Bottle status',
     returnCreateNoteTitle: 'Before uninstalling',
     returnCreateNoteDesc:
-      'Once the ticket is created, the bottles become RETURNED_TO_BRAND, the machine slot becomes UNAVAILABLE and the rental invoice is CLOSED.',
+      'Once the ticket is created, the bottles are recorded as returned to the brand, the machine slot stops taking orders and the rental invoice is closed.',
     returnSlotRentalRequired: 'Enter the slot rental invoice ID',
     returnSlotRentalPlaceholder: 'ID of the invoice that requested non-renewal',
     returnBottleIdRequired: 'Enter the bottle ID',
@@ -1494,6 +1494,10 @@ export const en: SameKeysAs<typeof vi> = {
     ticketDescriptionPlaceholder: 'Describe the fault or maintenance request...',
     ticketDiagnosisPlaceholder: 'What caused the fault...',
     ticketCorrectiveActionPlaceholder: 'What was done to fix it...',
+    ticketPartsPlaceholder: 'Spray valve, Pressure pump...',
+    notDeclared: 'Not declared',
+    accountNumberPlaceholder: 'Enter the account number',
+    loadingFrameworkAgreement: 'Loading the current framework agreement...',
   },
 
   kiosk: {

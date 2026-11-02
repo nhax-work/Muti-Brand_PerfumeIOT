@@ -7,9 +7,11 @@ export type BrandSelfUpdate = components['schemas']['BrandSelfUpdate'];
 export type BrandLegalProfileUpdate = components['schemas']['BrandLegalProfileUpdate'];
 
 /** Thương hiệu của người dùng hiện tại (FR-BND-06). */
-export function useMyBrand() {
+/** Chỉ tài khoản thuộc thương hiệu có hồ sơ riêng; màn dùng chung truyền `enabled = false` cho nhân sự nền tảng. */
+export function useMyBrand(enabled = true) {
   return useQuery({
     queryKey: ['brands', 'me'],
+    enabled,
     queryFn: () => unwrap(api.GET('/brands/me')),
   });
 }
