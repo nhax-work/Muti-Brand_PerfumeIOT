@@ -31,7 +31,8 @@ import {
   useSaveProduct,
   useUploadProductImage,
 } from './api';
-import { ProductImageField, type ImageChange } from './ProductImageField';
+import { type ImageChange } from './product-image';
+import { ProductImageField } from './ProductImageField';
 
 interface ProductForm {
   sku: string;
