@@ -1021,4 +1021,5 @@ export const ui = {
   statusHandedOver: 'Đã bàn giao',
   statusForfeited: 'Đã tịch thu / thanh lý',
   statusWaitingPickup: 'Chờ nhận hàng',
+  inventoryOverview: 'Tổng quan tồn kho',
 } as const;

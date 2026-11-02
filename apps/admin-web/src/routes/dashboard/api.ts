@@ -23,9 +23,11 @@ export type PlatformDashboard = components['schemas']['PlatformDashboard'] & {
 
 export type TimeSeriesPoint = components['schemas']['TimeSeriesPoint'];
 
-export function usePlatformDashboard(from?: string, to?: string) {
+/** `enabled = false` với vai trò không có report.platform — tránh gọi API chắc chắn trả 403. */
+export function usePlatformDashboard(from?: string, to?: string, enabled = true) {
   return useQuery({
     queryKey: ['platform-dashboard', { from, to }],
+    enabled,
     queryFn: () =>
       unwrap(
         api.GET('/reports/platform-dashboard', {
@@ -39,9 +41,11 @@ export function useOrdersTimeseries(
   from?: string,
   to?: string,
   granularity: 'DAY' | 'WEEK' | 'MONTH' = 'DAY',
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ['orders-timeseries', { from, to, granularity }],
+    enabled,
     queryFn: () =>
       unwrap(
         api.GET('/reports/orders-timeseries', {

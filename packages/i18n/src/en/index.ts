@@ -1432,6 +1432,7 @@ export const en: SameKeysAs<typeof vi> = {
     statusHandedOver: 'Handed Over',
     statusForfeited: 'Forfeited / Liquidated',
     statusWaitingPickup: 'Waiting for Pickup',
+    inventoryOverview: 'Inventory Overview',
   },
 
   kiosk: {

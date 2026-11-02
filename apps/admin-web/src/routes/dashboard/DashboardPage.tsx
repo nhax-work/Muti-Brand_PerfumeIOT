@@ -32,6 +32,7 @@ import { Link } from 'react-router';
 import { useAuth } from '@/shared/auth';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { InventoryReportTab } from '@/routes/shipments/InventoryReportTab';
 import { type TimeSeriesPoint, useOrdersTimeseries, usePlatformDashboard } from './api';
 
 const { RangePicker } = DatePicker;
@@ -40,9 +41,12 @@ export default function DashboardPage() {
   const { t } = useI18n();
   const { user } = useAuth();
 
-  const isSuperAdmin = user?.roles.includes('PLATFORM_SUPER_ADMIN') ?? false;
-  const isOpsStaff = user?.roles.includes('OPERATIONS_STAFF') ?? false;
-  const isPlatformUser = isSuperAdmin || isOpsStaff;
+  // Chọn khối hiển thị theo QUYỀN báo cáo chứ không theo tên vai trò — đúng với cái máy chủ kiểm.
+  const can = (code: string) => user?.permissions?.includes(code) ?? false;
+  const isPlatformUser = can('report.platform');
+  const canSeeTimeseries = isPlatformUser || can('report.brand');
+  // Inventory Staff không có quyền báo cáo doanh thu: dashboard của họ là báo cáo tồn kho.
+  const isInventoryUser = !canSeeTimeseries && can('inventory.manage');
 
   const [dateRange, setDateRange] = useState<[string | undefined, string | undefined]>([
     dayjs().subtract(29, 'day').format('YYYY-MM-DD'),
@@ -54,16 +58,13 @@ export default function DashboardPage() {
     data: platformData,
     isLoading: loadingPlatform,
     refetch: refetchPlatform,
-  } = usePlatformDashboard(
-    isPlatformUser ? dateRange[0] : undefined,
-    isPlatformUser ? dateRange[1] : undefined,
-  );
+  } = usePlatformDashboard(dateRange[0], dateRange[1], isPlatformUser);
 
   const {
     data: timeseriesData,
     isLoading: loadingTimeseries,
     refetch: refetchTimeseries,
-  } = useOrdersTimeseries(dateRange[0], dateRange[1], granularity);
+  } = useOrdersTimeseries(dateRange[0], dateRange[1], granularity, canSeeTimeseries);
 
   const orders = platformData?.orders;
   const dispense = platformData?.dispense;
@@ -99,7 +100,9 @@ export default function DashboardPage() {
       title: t('ui.period') ?? 'Thời gian',
       dataIndex: 'bucket',
       key: 'bucket',
-      render: (bucket: string) => <strong>{bucket}</strong>,
+      render: (bucket: string) => (
+        <strong>{dayjs(bucket).format(granularity === 'MONTH' ? 'MM/YYYY' : 'DD/MM/YYYY')}</strong>
+      ),
     },
     {
       title: t('ui.totalOrders') ?? 'Số đơn hàng',
@@ -251,50 +254,54 @@ export default function DashboardPage() {
           <Col>
             <Typography.Title level={4} style={{ margin: 0 }}>
               {isPlatformUser
-                ? (t('ui.platformOverview') ?? 'Tổng quan nền tảng')
-                : (t('ui.brandOverview') ?? 'Tổng quan thương hiệu')}
+                ? t('ui.platformOverview')
+                : isInventoryUser
+                  ? t('ui.inventoryOverview')
+                  : t('ui.brandOverview')}
             </Typography.Title>
             <Typography.Text type="secondary">
               {t('ui.dashboardWelcome', { fullName: user?.fullName ?? '' })}
             </Typography.Text>
           </Col>
-          <Col>
-            <Space wrap>
-              <Radio.Group
-                defaultValue="30"
-                onChange={(e) =>
-                  handleDatePreset(e.target.value === 'all' ? 'all' : Number(e.target.value))
-                }
-              >
-                <Radio.Button value="0">{t('ui.today') ?? 'Hôm nay'}</Radio.Button>
-                <Radio.Button value="7">{t('ui.last7Days') ?? '7 ngày'}</Radio.Button>
-                <Radio.Button value="30">{t('ui.last30Days') ?? '30 ngày'}</Radio.Button>
-                <Radio.Button value="all">{t('ui.allTime') ?? 'Tất cả'}</Radio.Button>
-              </Radio.Group>
-              <RangePicker
-                value={
-                  dateRange[0] && dateRange[1] ? [dayjs(dateRange[0]), dayjs(dateRange[1])] : null
-                }
-                onChange={(dates) => {
-                  if (dates && dates[0] && dates[1]) {
-                    setDateRange([dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')]);
-                  } else {
-                    setDateRange([undefined, undefined]);
+          {canSeeTimeseries && (
+            <Col>
+              <Space wrap>
+                <Radio.Group
+                  defaultValue="30"
+                  onChange={(e) =>
+                    handleDatePreset(e.target.value === 'all' ? 'all' : Number(e.target.value))
                   }
-                }}
-              />
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  void refetchPlatform();
-                  void refetchTimeseries();
-                }}
-                loading={loadingPlatform || loadingTimeseries}
-              >
-                {t('ui.refresh') ?? 'Làm mới'}
-              </Button>
-            </Space>
-          </Col>
+                >
+                  <Radio.Button value="0">{t('ui.today') ?? 'Hôm nay'}</Radio.Button>
+                  <Radio.Button value="7">{t('ui.last7Days') ?? '7 ngày'}</Radio.Button>
+                  <Radio.Button value="30">{t('ui.last30Days') ?? '30 ngày'}</Radio.Button>
+                  <Radio.Button value="all">{t('ui.allTime') ?? 'Tất cả'}</Radio.Button>
+                </Radio.Group>
+                <RangePicker
+                  value={
+                    dateRange[0] && dateRange[1] ? [dayjs(dateRange[0]), dayjs(dateRange[1])] : null
+                  }
+                  onChange={(dates) => {
+                    if (dates && dates[0] && dates[1]) {
+                      setDateRange([dates[0].format('YYYY-MM-DD'), dates[1].format('YYYY-MM-DD')]);
+                    } else {
+                      setDateRange([undefined, undefined]);
+                    }
+                  }}
+                />
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={() => {
+                    void refetchPlatform();
+                    void refetchTimeseries();
+                  }}
+                  loading={loadingPlatform || loadingTimeseries}
+                >
+                  {t('ui.refresh') ?? 'Làm mới'}
+                </Button>
+              </Space>
+            </Col>
+          )}
         </Row>
       </Card>
 
@@ -421,40 +428,48 @@ export default function DashboardPage() {
         </>
       )}
 
+      {isInventoryUser && (
+        <Card>
+          <InventoryReportTab />
+        </Card>
+      )}
+
       {/* Orders Timeseries Table for both Platform & Brand Admin */}
-      <Card
-        title={
-          <Row justify="space-between" align="middle" style={{ width: '100%' }}>
-            <Col>
-              <Space>
-                <LineChartOutlined />
-                <span>
-                  {t('ui.revenueTimeseries') ?? 'Diễn biến doanh thu & đơn hàng theo thời gian'}
-                </span>
-              </Space>
-            </Col>
-            <Col>
-              <Radio.Group
-                value={granularity}
-                onChange={(e) => setGranularity(e.target.value)}
-                size="small"
-              >
-                <Radio.Button value="DAY">{t('ui.day') ?? 'Ngày'}</Radio.Button>
-                <Radio.Button value="WEEK">{t('ui.week') ?? 'Tuần'}</Radio.Button>
-                <Radio.Button value="MONTH">{t('ui.month') ?? 'Tháng'}</Radio.Button>
-              </Radio.Group>
-            </Col>
-          </Row>
-        }
-      >
-        <Table<TimeSeriesPoint>
-          rowKey="bucket"
-          columns={timeseriesColumns}
-          dataSource={timeseriesPoints}
-          loading={loadingTimeseries}
-          pagination={{ pageSize: 15, showSizeChanger: true }}
-        />
-      </Card>
+      {canSeeTimeseries && (
+        <Card
+          title={
+            <Row justify="space-between" align="middle" style={{ width: '100%' }}>
+              <Col>
+                <Space>
+                  <LineChartOutlined />
+                  <span>
+                    {t('ui.revenueTimeseries') ?? 'Diễn biến doanh thu & đơn hàng theo thời gian'}
+                  </span>
+                </Space>
+              </Col>
+              <Col>
+                <Radio.Group
+                  value={granularity}
+                  onChange={(e) => setGranularity(e.target.value)}
+                  size="small"
+                >
+                  <Radio.Button value="DAY">{t('ui.day') ?? 'Ngày'}</Radio.Button>
+                  <Radio.Button value="WEEK">{t('ui.week') ?? 'Tuần'}</Radio.Button>
+                  <Radio.Button value="MONTH">{t('ui.month') ?? 'Tháng'}</Radio.Button>
+                </Radio.Group>
+              </Col>
+            </Row>
+          }
+        >
+          <Table<TimeSeriesPoint>
+            rowKey="bucket"
+            columns={timeseriesColumns}
+            dataSource={timeseriesPoints}
+            loading={loadingTimeseries}
+            pagination={{ pageSize: 15, showSizeChanger: true }}
+          />
+        </Card>
+      )}
     </Space>
   );
 }
