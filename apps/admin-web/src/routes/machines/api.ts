@@ -121,10 +121,14 @@ export function useMachineRentals(machineId: string | undefined) {
   });
 }
 
-/** Danh sách thương hiệu để tra cứu tên thương hiệu đang thuê slot (FR-BND-07). */
-export function useBrands() {
+/**
+ * Danh sách thương hiệu để tra cứu tên thương hiệu đang thuê slot (FR-BND-07). Chỉ nhân sự nền tảng
+ * đọc được; màn hình dùng chung với Brand Admin truyền `enabled = false` cho họ.
+ */
+export function useBrands(enabled = true) {
   return useQuery({
     queryKey: ['brands'],
+    enabled,
     queryFn: async () => {
       try {
         return await unwrap(

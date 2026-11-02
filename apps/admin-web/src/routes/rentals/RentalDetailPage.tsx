@@ -163,16 +163,25 @@ export default function RentalDetailPage() {
     invoice.paidAt &&
     currentTimestamp - new Date(invoice.paidAt).getTime() <= swapWindowHours * 3600 * 1000,
   );
-  const canSwap = isPaid && isAwaitingStock && hasNotSwapped && withinSwapWindow;
+  // Đổi slot, báo/rút không gia hạn là quyết định của thương hiệu (bảng 3.1.3) — Super Admin chỉ xem.
+  const canSwap = isBrandAdmin && isPaid && isAwaitingStock && hasNotSwapped && withinSwapWindow;
 
   const isRentalActiveOrExpiring = ['ACTIVE', 'EXPIRING'].includes(rental?.status ?? invoice.stage);
   const isBeforeEndsAt = invoice.endsAt
     ? new Date(invoice.endsAt).getTime() > currentTimestamp
     : true;
   const canRequestNonRenewal =
-    isPaid && isRentalActiveOrExpiring && isBeforeEndsAt && !rental?.nonRenewalRequestedAt;
+    isBrandAdmin &&
+    isPaid &&
+    isRentalActiveOrExpiring &&
+    isBeforeEndsAt &&
+    !rental?.nonRenewalRequestedAt;
   const canWithdrawNonRenewal =
-    isPaid && isRentalActiveOrExpiring && isBeforeEndsAt && Boolean(rental?.nonRenewalRequestedAt);
+    isBrandAdmin &&
+    isPaid &&
+    isRentalActiveOrExpiring &&
+    isBeforeEndsAt &&
+    Boolean(rental?.nonRenewalRequestedAt);
 
   const brandContact = (brand?.contactInfo ?? {}) as Record<string, unknown>;
   const brandAddress =
@@ -392,7 +401,11 @@ export default function RentalDetailPage() {
                 {rental?.nonRenewalRequestedAt && (
                   <Tag color="orange">{t('ui.nonRenewingTag')}</Tag>
                 )}
-                {invoice.checkoutId && <Text type="secondary">Mã phiên: {invoice.checkoutId}</Text>}
+                {invoice.checkoutId && (
+                  <Text type="secondary">
+                    {t('ui.checkoutSessionLabel', { id: invoice.checkoutId })}
+                  </Text>
+                )}
               </Space>
             </div>
 
@@ -509,15 +522,19 @@ export default function RentalDetailPage() {
             <Descriptions.Item label={t('ui.machineInfo')}>
               {invoice.machineDisplayName || invoice.machineId}
             </Descriptions.Item>
-            <Descriptions.Item label={t('ui.slotNumber')}>
-              Slot #{invoice.slotNumber}
-            </Descriptions.Item>
+            <Descriptions.Item label={t('ui.slot')}>#{invoice.slotNumber}</Descriptions.Item>
 
             <Descriptions.Item label={t('ui.rentalPeriod')}>
-              {invoice.rentalPackage.name} ({invoice.durationMonths} tháng)
+              {t('ui.packageWithMonths', {
+                name: invoice.rentalPackage.name,
+                months: invoice.durationMonths,
+              })}
             </Descriptions.Item>
-            <Descriptions.Item label={t('ui.selectStoragePlan')}>
-              {invoice.storagePlan.name} (Bồi thường {invoice.storagePlan.coveragePercent}%)
+            <Descriptions.Item label={t('ui.storagePlanLabel')}>
+              {t('ui.storagePlanWithCoverage', {
+                name: invoice.storagePlan.name,
+                percent: invoice.storagePlan.coveragePercent,
+              })}
             </Descriptions.Item>
             <Descriptions.Item label={t('ui.validUntil')}>
               {invoice.startsAt && invoice.endsAt ? (
@@ -636,8 +653,10 @@ export default function RentalDetailPage() {
           >
             <Text strong>{t('ui.currentSlotInfo')}: </Text>
             <Text>
-              Slot #{invoice.slotNumber} • Giá niêm yết:{' '}
-              {Number(invoice.monthlyRentPrice).toLocaleString('vi-VN')} {invoice.currency}/tháng
+              Slot #{invoice.slotNumber} •{' '}
+              {t('ui.listedPricePerMonth', {
+                price: `${Number(invoice.monthlyRentPrice).toLocaleString('vi-VN')} ${invoice.currency}`,
+              })}
             </Text>
           </div>
 
@@ -666,7 +685,10 @@ export default function RentalDetailPage() {
                   }}
                 >
                   <Text strong>Slot #{slot.slotNumber}</Text> • {slot.locationName} (
-                  {Number(slot.monthlyRentPrice).toLocaleString('vi-VN')} {invoice.currency}/tháng)
+                  {t('ui.pricePerMonth', {
+                    price: `${Number(slot.monthlyRentPrice).toLocaleString('vi-VN')} ${invoice.currency}`,
+                  })}
+                  )
                 </Radio>
               ))}
             </Radio.Group>
@@ -744,7 +766,10 @@ export default function RentalDetailPage() {
               )}
               {(brandPhone || brandEmail) && (
                 <Text type="secondary" style={{ fontSize: 12 }}>
-                  {[brandPhone && `SĐT: ${brandPhone}`, brandEmail && `Email: ${brandEmail}`]
+                  {[
+                    brandPhone && t('ui.phoneValue', { phone: brandPhone }),
+                    brandEmail && t('ui.emailValue', { email: brandEmail }),
+                  ]
                     .filter(Boolean)
                     .join(' • ')}
                 </Text>
@@ -776,16 +801,20 @@ export default function RentalDetailPage() {
           okText={t('ui.renew')}
         >
           <Paragraph type="secondary">
-            Gia hạn slot #{invoice.slotNumber} tại {invoice.locationName}. Sau khi chọn gói, bạn sẽ
-            được chuyển đến trang thanh toán.
+            {t('ui.renewIntro', {
+              slotNumber: invoice.slotNumber,
+              location: invoice.locationName,
+            })}
           </Paragraph>
           {Number(invoice.graceFeeAmount) > 0 && (
             <Alert
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
-              message={`Phí lưu kho ân hạn tạm tính: ${Number(invoice.graceFeeAmount).toLocaleString('vi-VN')} ${invoice.currency}`}
-              description="Khoản phí này được cộng vào phiên thanh toán gia hạn theo quy định."
+              message={t('ui.graceFeeEstimate', {
+                amount: `${Number(invoice.graceFeeAmount).toLocaleString('vi-VN')} ${invoice.currency}`,
+              })}
+              description={t('ui.graceFeeEstimateDesc')}
             />
           )}
           <Form layout="vertical">
@@ -797,9 +826,14 @@ export default function RentalDetailPage() {
                 options={packages
                   .filter((p) => p.isActive)
                   .map((p) => ({
-                    label: `${p.name} (${p.durationMonths} tháng${
-                      p.discountPercent > 0 ? ` - Giảm ${p.discountPercent}%` : ''
-                    })`,
+                    label:
+                      p.discountPercent > 0
+                        ? t('ui.packageWithMonthsDiscount', {
+                            name: p.name,
+                            months: p.durationMonths,
+                            discount: p.discountPercent,
+                          })
+                        : t('ui.packageWithMonths', { name: p.name, months: p.durationMonths }),
                     value: p.id,
                   }))}
               />
@@ -812,9 +846,11 @@ export default function RentalDetailPage() {
                 options={plans
                   .filter((p) => p.isActive)
                   .map((p) => ({
-                    label: `${p.name} (${Number(p.monthlyPrice).toLocaleString('vi-VN')} ${
-                      p.currency
-                    }/tháng - Bồi thường ${p.coveragePercent}%)`,
+                    label: t('ui.storagePlanOption', {
+                      name: p.name,
+                      price: `${Number(p.monthlyPrice).toLocaleString('vi-VN')} ${p.currency}`,
+                      percent: p.coveragePercent,
+                    }),
                     value: p.id,
                   }))}
               />

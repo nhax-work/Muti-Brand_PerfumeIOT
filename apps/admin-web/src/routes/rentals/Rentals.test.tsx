@@ -58,6 +58,12 @@ vi.mock('@/shared/auth', () => ({
   }),
 }));
 
+vi.mock('@/routes/machines/api', () => ({
+  useBrands: (enabled = true) => ({
+    data: enabled ? { items: [{ id: 'brand-1', name: 'Maison Test' }] } : undefined,
+  }),
+}));
+
 vi.mock('@/app/guards/RequireRole', () => ({
   RequireRole: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -338,6 +344,21 @@ describe('RentalsPage Component', () => {
     expect(screen.getByText('HD-20261001-234567')).toBeDefined();
     expect(screen.getByText(/3[.,]300[.,]000/)).toBeDefined();
     expect(screen.getByText('Đang hiệu lực')).toBeDefined();
+    expect(screen.getByText('Thuê thêm slot')).toBeDefined();
+    expect(screen.queryByText('Maison Test')).toBeNull();
+  });
+
+  it('test_FR_SLT_14_super_admin_lists_invoices_with_brand_and_no_rent_button', () => {
+    mockAuthRoles = ['PLATFORM_SUPER_ADMIN'];
+    render(
+      <TestWrapper>
+        <RentalsPage />
+      </TestWrapper>,
+    );
+
+    expect(screen.getByText('HD-20261001-234567')).toBeDefined();
+    expect(screen.getByText('Maison Test')).toBeDefined();
+    expect(screen.queryByText('Thuê thêm slot')).toBeNull();
   });
 });
 
@@ -1169,6 +1190,25 @@ describe('RentalDetailPage — Báo không gia hạn (Task 8, FR-EXP-23, FR-EXP-
     );
 
     expect(screen.getByText('Không gia hạn')).toBeDefined();
+  });
+
+  it('test_FR_EXP_23_super_admin_does_not_see_non_renewal_button', () => {
+    mockAuthRoles = ['PLATFORM_SUPER_ADMIN'];
+    mockInvoiceData = activeRentalInvoice;
+    mockRentalData = activeSlotRental;
+
+    render(
+      <TestWrapper initialEntries={['/rentals/rental-active-1']}>
+        <Routes>
+          <Route path="/rentals/:id" element={<RentalDetailPage />} />
+        </Routes>
+      </TestWrapper>,
+    );
+
+    expect(screen.queryByText('Không gia hạn')).toBeNull();
+    // Nhãn slot hiện số thật, không hiện nguyên chỗ giữ {slotNumber}.
+    expect(screen.queryByText(/\{slotNumber\}/)).toBeNull();
+    expect(screen.getByText('#5')).toBeDefined();
   });
 
   it('bấm "Không gia hạn" mở modal xác nhận, đổi hình thức và hiển thị địa chỉ từ brand profile', async () => {
