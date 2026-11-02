@@ -85,6 +85,13 @@ vi.mock('./api', () => ({
   useSubmitPostTest: () => mockMutation(),
 }));
 
+vi.mock('@/shared/lookups', () => ({
+  useAssignableStaff: () => ({
+    options: [{ value: 'ops-1', label: 'Trần Vận Hành' }],
+    loading: false,
+  }),
+}));
+
 vi.mock('@/routes/machines/api', () => ({
   useMachines: () => ({
     data: {

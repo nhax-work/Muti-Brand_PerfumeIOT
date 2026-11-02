@@ -1488,6 +1488,12 @@ export const en: SameKeysAs<typeof vi> = {
       'The checkout session expired or was cancelled. All its slots have been released.',
     annexAcceptedAt: 'Accepted at: {time}',
     waitingGatewayConfirmation: 'Waiting for confirmation from the payment gateway...',
+    selectStaffPlaceholder: 'Select an operations staff member',
+    assignStaffLabel: 'Assigned staff',
+    ticketCategoryPlaceholder: 'Nozzle, Screen, Case lock, Sensor...',
+    ticketDescriptionPlaceholder: 'Describe the fault or maintenance request...',
+    ticketDiagnosisPlaceholder: 'What caused the fault...',
+    ticketCorrectiveActionPlaceholder: 'What was done to fix it...',
   },
 
   kiosk: {

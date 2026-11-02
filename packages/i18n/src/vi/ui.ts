@@ -1077,4 +1077,10 @@ export const ui = {
     'Phiên thanh toán đã hết hạn hoặc bị hủy. Toàn bộ slot đã được giải phóng.',
   annexAcceptedAt: 'Đồng ý lúc: {time}',
   waitingGatewayConfirmation: 'Đang chờ xác nhận từ cổng thanh toán...',
+  selectStaffPlaceholder: 'Chọn nhân viên vận hành',
+  assignStaffLabel: 'Nhân sự thực hiện',
+  ticketCategoryPlaceholder: 'Vòi xịt, Màn hình, Khóa vỏ, Cảm biến...',
+  ticketDescriptionPlaceholder: 'Mô tả sự cố hoặc yêu cầu bảo trì...',
+  ticketDiagnosisPlaceholder: 'Nguyên nhân gây ra sự cố...',
+  ticketCorrectiveActionPlaceholder: 'Các thao tác đã xử lý, sửa chữa...',
 } as const;

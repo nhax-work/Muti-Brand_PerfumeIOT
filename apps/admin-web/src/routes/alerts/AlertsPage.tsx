@@ -32,6 +32,7 @@ import { errorMessage } from '@/shared/api';
 import { useAuth } from '@/shared/auth';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { useAssignableStaff, useNameLookups } from '@/shared/lookups';
 import {
   type Alert,
   type AlertSeverity,
@@ -103,6 +104,8 @@ export default function AlertsPage() {
   const [resolveForm] = Form.useForm<{ resolution: string }>();
 
   const list = useAlerts({ page, pageSize, severity, status });
+  const names = useNameLookups();
+  const staff = useAssignableStaff();
   const detail = useAlert(selectedId);
 
   const ackMutation = useAcknowledgeAlert();
@@ -336,7 +339,13 @@ export default function AlertsPage() {
               label={t('ui.alertAssignSelectStaff')}
               rules={[{ required: true, message: t('validation.required') }]}
             >
-              <Input placeholder="uuid-nhan-vien-van-hanh" />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={staff.loading}
+                options={staff.options}
+                placeholder={t('ui.selectStaffPlaceholder')}
+              />
             </Form.Item>
           </Form>
         </Modal>
@@ -388,11 +397,11 @@ export default function AlertsPage() {
                 {detail.data.description || '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertMachineLabel')}>
-                {detail.data.machineId}
+                {names.machineName(detail.data.machineId)}
               </Descriptions.Item>
               {detail.data.slotId && (
                 <Descriptions.Item label={t('ui.alertSlotLabel')}>
-                  {detail.data.slotId}
+                  {names.slotLabel(detail.data.slotId)}
                 </Descriptions.Item>
               )}
               <Descriptions.Item label={t('ui.alertOccurrenceCount')}>
@@ -406,15 +415,15 @@ export default function AlertsPage() {
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertAcknowledgedBy')}>
                 {detail.data.acknowledgedBy
-                  ? `${detail.data.acknowledgedBy} (${formatDateTime(detail.data.acknowledgedAt)})`
+                  ? `${names.userName(detail.data.acknowledgedBy)} (${formatDateTime(detail.data.acknowledgedAt)})`
                   : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertAssignedTo')}>
-                {detail.data.assignedTo || '—'}
+                {names.userName(detail.data.assignedTo)}
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertResolvedBy')}>
                 {detail.data.resolvedBy
-                  ? `${detail.data.resolvedBy} (${formatDateTime(detail.data.resolvedAt)})`
+                  ? `${names.userName(detail.data.resolvedBy)} (${formatDateTime(detail.data.resolvedAt)})`
                   : '—'}
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.alertResolution')}>
@@ -424,7 +433,7 @@ export default function AlertsPage() {
                 <Descriptions.Item label={t('ui.alertAffectedBrands')}>
                   <Space wrap>
                     {detail.data.affectedBrandIds.map((bId) => (
-                      <Tag key={bId}>{bId}</Tag>
+                      <Tag key={bId}>{names.brandName(bId)}</Tag>
                     ))}
                   </Space>
                 </Descriptions.Item>

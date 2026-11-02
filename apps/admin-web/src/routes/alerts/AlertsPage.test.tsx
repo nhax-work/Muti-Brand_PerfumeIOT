@@ -32,6 +32,20 @@ vi.mock('@/shared/auth', async (importOriginal) => ({
   useAuth: () => ({ user: mockUser }),
 }));
 
+vi.mock('@/shared/lookups', () => ({
+  useNameLookups: () => ({
+    machineName: (id: string | null | undefined) => (id === 'm-01' ? 'Kiosk Vincom' : (id ?? '—')),
+    slotLabel: (id: string | null | undefined) => (id ? 'Kiosk Vincom · Slot #1' : '—'),
+    brandName: (id: string | null | undefined) =>
+      ({ 'b-1': 'Maison Aurore', 'b-2': 'Hương Việt' })[id ?? ''] ?? id ?? '—',
+    userName: (id: string | null | undefined) => (id ? 'Trần Vận Hành' : '—'),
+  }),
+  useAssignableStaff: () => ({
+    options: [{ value: 'ops-1', label: 'Trần Vận Hành' }],
+    loading: false,
+  }),
+}));
+
 const openAlert: Alert = {
   id: 'alr-open-1',
   brandId: 'b-1',
@@ -135,8 +149,12 @@ describe('AlertsPage', () => {
     renderScreen(<AlertsPage />);
     fireEvent.click(screen.getAllByText('Xem chi tiết')[0]!);
     expect(screen.getByText('Dung tích còn dưới 10%')).toBeTruthy();
-    expect(screen.getByText('b-1')).toBeTruthy();
-    expect(screen.getByText('b-2')).toBeTruthy();
+    // Tên thương hiệu và máy thay cho UUID thô.
+    expect(screen.getByText('Maison Aurore')).toBeTruthy();
+    expect(screen.getByText('Hương Việt')).toBeTruthy();
+    expect(screen.getByText('Kiosk Vincom')).toBeTruthy();
+    expect(screen.queryByText('b-1')).toBeNull();
+    expect(screen.queryByText('m-01')).toBeNull();
   });
 
   it('Đóng cảnh báo đã giải quyết gọi close API', async () => {
