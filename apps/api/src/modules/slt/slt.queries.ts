@@ -13,7 +13,7 @@ import { sql, type Expression, type Kysely, type SqlBool, type Transaction } fro
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { BottleReturnMethod, SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
-import type { BottleRecord } from '../inv/inv.queries.js';
+import type { BottleRecord } from '../inv/index.js';
 
 export type { BottleRecord, BottleReturnMethod, SlotRentalStatus };
 export type Executor = Kysely<DB> | Transaction<DB>;

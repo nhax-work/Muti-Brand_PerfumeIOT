@@ -148,17 +148,17 @@ export class InvService {
       );
       const shipment = (await this.queries.findShipment(shipmentId, tx))!;
       const params = { product: shipment.productName, quantity: shipment.declaredQuantity };
-      await this.queries.insertInAppNotifications(
+      await this.alr.notifyUsers(
+        tx,
         {
           brandId: scope.brandId,
-          recipients: await this.queries.findActiveInventoryStaff(tx),
           type: 'SHIPMENT_DECLARED',
           subject: translate(DEFAULT_LOCALE, 'inv.newShipmentSubject', params),
           content: translate(DEFAULT_LOCALE, 'inv.newShipmentContent', params),
           referenceId: shipmentId,
           at: now,
         },
-        tx,
+        await this.queries.findActiveInventoryStaff(tx),
       );
       await this.audit.log(
         {

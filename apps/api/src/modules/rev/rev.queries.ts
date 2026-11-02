@@ -289,32 +289,6 @@ export class RevQueries {
     return (await query.execute()).map((r) => r.id);
   }
 
-  async insertNotification(
-    notification: {
-      readonly brandId: string;
-      readonly recipientUserId: string;
-      readonly type: string;
-      readonly subject: string;
-      readonly content: string;
-      readonly at: Date;
-    },
-    executor: Executor,
-  ): Promise<void> {
-    await executor
-      .insertInto('notifications')
-      .values({
-        brand_id: notification.brandId,
-        recipient_user_id: notification.recipientUserId,
-        type: notification.type,
-        channel: 'IN_APP',
-        subject: notification.subject,
-        content: notification.content,
-        status: 'PENDING',
-        created_at: notification.at,
-      })
-      .execute();
-  }
-
   // -----------------------------------------------------------------------------------
   // Bảng đối soát (FR-SLT-17, 18, FR-REV-05) và doanh thu tách hai nguồn (FR-REV-04)
   // -----------------------------------------------------------------------------------

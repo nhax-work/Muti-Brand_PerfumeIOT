@@ -128,9 +128,13 @@ export class MachineModeService {
       const failed = await this.orders.failQueuedOrdersOnMachine(tx, id);
       const machine = await this.machines.getMachine(id);
       const now = this.clock.now();
-      await this.queries.insertForcedMaintenanceAlert(
-        id,
+      // FR-MNT-17 AC2: mỗi lần ép là một cảnh báo riêng — khóa chống trùng mang thời điểm ép.
+      await this.alr.raiseAlert(
         {
+          machineId: id,
+          type: 'FORCED_MAINTENANCE',
+          severity: 'HIGH',
+          deduplicationKey: `forced-maintenance:${id}:${now.getTime()}`,
           title: translate(DEFAULT_LOCALE, 'mch.forcedMaintenanceAlertTitle', {
             machine: machine.displayName,
           }),

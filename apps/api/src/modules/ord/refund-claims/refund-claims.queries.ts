@@ -293,26 +293,6 @@ export class RefundClaimsQueries {
       createdAt: r.created_at,
     }));
   }
-
-  /**
-   * Cảnh báo phiếu quá SLA (FR-ORD-32). Chống trùng bằng uq_alert_dedup_unresolved (FR-ALR-07):
-   * đã có cảnh báo chưa xử lý cùng khóa thì không tạo thêm.
-   */
-  async raiseSlaAlert(
-    claim: { id: string; brandId: string; machineId: string; createdAt: Date },
-    at: Date,
-  ): Promise<boolean> {
-    const result = await sql<{ id: string }>`
-      INSERT INTO alerts (brand_id, machine_id, type, severity, deduplication_key, title, description,
-                          first_occurred_at, last_occurred_at)
-      VALUES (${claim.brandId}, ${claim.machineId}, 'REFUND_CLAIM_SLA_BREACHED', 'HIGH',
-              ${`REFUND_CLAIM_SLA:${claim.id}`}, ${'Phiếu khiếu nại hoàn tiền quá hạn xử lý'},
-              ${`Phiếu ${claim.id} mở từ ${claim.createdAt.toISOString()} chưa được xử lý (BR-002).`},
-              ${at}, ${at})
-      ON CONFLICT DO NOTHING
-      RETURNING id`.execute(this.db);
-    return result.rows.length > 0;
-  }
 }
 
 const PUBLIC_COLUMNS = [

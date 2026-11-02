@@ -537,27 +537,6 @@ export class MchQueries {
     return Number(row.orders) + Number(row.commands);
   }
 
-  /** FR-MNT-17 AC2: cảnh báo mức máy khi bị ép bảo trì — mỗi lần ép là một cảnh báo riêng. */
-  async insertForcedMaintenanceAlert(
-    machineId: string,
-    data: { readonly title: string; readonly description: string; readonly at: Date },
-    tx: Executor,
-  ): Promise<void> {
-    await tx
-      .insertInto('alerts')
-      .values({
-        machine_id: machineId,
-        type: 'FORCED_MAINTENANCE',
-        severity: 'HIGH',
-        deduplication_key: `forced-maintenance:${machineId}:${data.at.getTime()}`,
-        title: data.title,
-        description: data.description,
-        first_occurred_at: data.at,
-        last_occurred_at: data.at,
-      })
-      .execute();
-  }
-
   /** Thương hiệu đang thuê slot trên máy — nhận thông báo máy vào bảo trì (FR-MNT-07). */
   async listBrandsOnMachine(machineId: string, executor: Executor): Promise<string[]> {
     const rows = await executor

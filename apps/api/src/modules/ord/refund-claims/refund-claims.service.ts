@@ -20,6 +20,7 @@ import { AppError, invalidField } from '../../../shared/errors/index.js';
 import type { RequestOrigin } from '../../../shared/http/request-origin.js';
 import { PerMinuteRateLimiter } from '../../../shared/http/rate-limiter.js';
 import type { RefundClaimStatus } from '../../../shared/db/types.generated.js';
+import { AlrService } from '../../alr/index.js';
 import type { AuthenticatedUser } from '../../auth/index.js';
 import { OrdService } from '../ord.service.js';
 import { claimTokenFor, isValidClaimToken, refundablePartsOf } from './claimability.js';
@@ -56,6 +57,7 @@ export class RefundClaimsService {
   constructor(
     @Inject(RefundClaimsQueries) private readonly queries: RefundClaimsQueries,
     @Inject(OrdService) private readonly orders: OrdService,
+    @Inject(AlrService) private readonly alr: AlrService,
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -310,8 +312,23 @@ export class RefundClaimsService {
     const slaBefore = new Date(
       now.getTime() - this.config.constraint('REFUND_CLAIM_SLA_HOURS') * 60 * 60 * 1000,
     );
+    // Chống trùng bằng uq_alert_dedup_unresolved (FR-ALR-07): còn cảnh báo chưa xử lý thì không tạo thêm.
     for (const breach of await this.queries.listSlaBreaches(slaBefore)) {
-      if (await this.queries.raiseSlaAlert(breach, now)) alerted += 1;
+      const raised = await this.alr.raiseAlert(
+        {
+          brandId: breach.brandId,
+          machineId: breach.machineId,
+          type: 'REFUND_CLAIM_SLA_BREACHED',
+          severity: 'HIGH',
+          deduplicationKey: `REFUND_CLAIM_SLA:${breach.id}`,
+          title: 'Phiếu khiếu nại hoàn tiền quá hạn xử lý',
+          description: `Phiếu ${breach.id} mở từ ${breach.createdAt.toISOString()} chưa được xử lý (BR-002).`,
+          at: now,
+        },
+        undefined,
+        'IGNORE',
+      );
+      if (raised) alerted += 1;
     }
 
     const closedBefore = new Date(

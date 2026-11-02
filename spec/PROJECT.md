@@ -147,6 +147,40 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - **Migration thêm giá trị enum** phải nằm ở file riêng, và file sau **không** được ép chuỗi thành giá
   trị enum mới (so sánh qua `::text`): node-pg-migrate chạy mọi migration đang chờ trong **một**
   transaction. Kiểm cả DB trống lẫn DB đã có lược đồ cũ (`docs/MIGRATIONS.md`).
+- **Ranh giới module (QT3, ADR-0003).** Module khác chỉ import từ `index.ts` của module đó; ESLint
+  (`no-restricted-imports` trong `eslint.config.js`) chặn import thẳng vào file nội bộ. Mỗi bảng có
+  đúng một module sở hữu. Chỉ module sở hữu được INSERT/UPDATE/DELETE bảng đó; module khác muốn ghi
+  thì gọi service mà module sở hữu export. Đọc chéo trong `*.queries.ts` (JOIN, truy vấn con) thì được.
+
+  | Module | Bảng sở hữu |
+  |---|---|
+  | AUTH | `refresh_sessions`, `email_verifications` |
+  | BND | `brands` |
+  | USR | `users`, `user_roles` (`roles`, `permissions`, `role_permissions` chỉ nạp bằng migration) |
+  | PRD | `fragrance_products` |
+  | MCH | `locations`, `machines`, `machine_slots`, `machine_status_histories`, `device_credentials` |
+  | SLT | `rental_packages`, `storage_plans`, `rental_checkouts`, `slot_rentals`, `agreement_versions`, `agreement_acceptances`, `storage_compensations` (`slot_rental_requests` DEPRECATED) |
+  | EXP | `bottle_returns` |
+  | INV | `brand_shipment_declarations`, `inventory_batches`, `bottles`, `refill_sessions`, `inventory_adjustments` |
+  | RFQ | `refill_requests` |
+  | ORD | `orders`, `order_status_histories`, `payments`, `payment_events`, `kiosk_interaction_events`, `refund_claims` |
+  | DSP | `dispense_commands`, `dispense_results` |
+  | IOT | `device_events`, `sensor_readings` |
+  | ALR | `alerts`, `notifications` — chỉ ghi qua `AlrService.raiseAlert`, `notifyBrandAdmins`, `notifyUsers` |
+  | MNT | `maintenance_tickets`, `maintenance_activities` |
+  | REV | `brand_payouts` |
+  | `shared/audit` | `audit_logs` — chỉ thêm, qua `AuditService` |
+
+  Các chỗ ghi chéo còn tồn tại (nợ kỹ thuật, ghi nhận 2026-10-29). Code mới không thêm chỗ ghi chéo
+  nào; khi sửa vào các chỗ này thì chuyển sang gọi service của module sở hữu:
+
+  | Bảng | Module đang ghi chéo |
+  |---|---|
+  | `brands`, `users` | AUTH (thương hiệu tự đăng ký, khóa đăng nhập) |
+  | `machines`, `machine_status_histories` | DSP (DRAINING → MAINTENANCE), IOT (trạng thái kết nối) |
+  | `machine_slots` | DSP, EXP, INV, SLT |
+  | `slot_rentals` | EXP (đóng hóa đơn khi trả hàng) |
+  | `bottles` | EXP (trả hàng), SLT (thanh lý) |
 
 ## 4. Không bao giờ tự quyết
 

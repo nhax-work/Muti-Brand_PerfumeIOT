@@ -270,38 +270,6 @@ export class RfqQueries {
     return rows.map((r) => r.id);
   }
 
-  async insertInAppNotifications(
-    data: {
-      readonly brandId: string;
-      readonly recipients: readonly string[];
-      readonly type: string;
-      readonly subject: string;
-      readonly content: string;
-      readonly referenceId: string;
-      readonly at: Date;
-    },
-    executor: Executor,
-  ): Promise<void> {
-    if (data.recipients.length === 0) return;
-    await executor
-      .insertInto('notifications')
-      .values(
-        data.recipients.map((recipient) => ({
-          brand_id: data.brandId,
-          recipient_user_id: recipient,
-          type: data.type,
-          channel: 'IN_APP',
-          subject: data.subject,
-          content: data.content,
-          status: 'SENT' as const,
-          sent_at: data.at,
-          reference_id: data.referenceId,
-          created_at: data.at,
-        })),
-      )
-      .execute();
-  }
-
   /** Một yêu cầu kèm tên hiển thị (ADR-0018). Bọc truy vấn con để lọc, sắp xếp theo tên cột phẳng. */
   private base(executor: Executor) {
     return executor.selectFrom((eb) =>
