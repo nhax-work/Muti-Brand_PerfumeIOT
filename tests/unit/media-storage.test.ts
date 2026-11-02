@@ -15,6 +15,7 @@ import {
 import { loadConfig } from '../../apps/api/src/shared/config/index.js';
 
 const BASE = 'https://pub-abc123.r2.dev';
+const ACCOUNT = '0123456789abcdef0123456789abcdef';
 
 function fakeClient() {
   const sent: (PutObjectCommand | DeleteObjectCommand)[] = [];
@@ -88,7 +89,7 @@ describe('Cấu hình kho ảnh (MEDIA_STORAGE_DRIVER)', () => {
 
   it('test_FR_PRD_01_r2_driver_requires_all_credentials', () => {
     expect(() =>
-      loadConfig({ ...BASE_ENV, MEDIA_STORAGE_DRIVER: 'r2', R2_ACCOUNT_ID: 'acc' }),
+      loadConfig({ ...BASE_ENV, MEDIA_STORAGE_DRIVER: 'r2', R2_ACCOUNT_ID: ACCOUNT }),
     ).toThrow(/R2_ACCESS_KEY_ID/);
   });
 
@@ -96,7 +97,7 @@ describe('Cấu hình kho ảnh (MEDIA_STORAGE_DRIVER)', () => {
     const env = {
       ...BASE_ENV,
       MEDIA_STORAGE_DRIVER: 'r2',
-      R2_ACCOUNT_ID: 'acc',
+      R2_ACCOUNT_ID: ACCOUNT,
       R2_ACCESS_KEY_ID: 'key',
       R2_SECRET_ACCESS_KEY: 'secret',
       R2_BUCKET: 'bucket',
@@ -105,7 +106,36 @@ describe('Cấu hình kho ảnh (MEDIA_STORAGE_DRIVER)', () => {
     expect(() => loadConfig(env)).toThrow(/https/);
     const media = loadConfig({ ...env, MEDIA_PUBLIC_BASE_URL: `${BASE}/` }).media;
     expect(media).toMatchObject({ driver: 'r2', publicBaseUrl: BASE });
-    expect(media.r2).toMatchObject({ accountId: 'acc', bucket: 'bucket' });
+    expect(media.r2).toMatchObject({ accountId: ACCOUNT, bucket: 'bucket' });
+  });
+
+  it('test_FR_PRD_01_r2_account_id_accepts_pasted_endpoint_url', () => {
+    // Trang tạo token của Cloudflare hiện nguyên endpoint; dán cả URL vẫn phải ra đúng Account ID —
+    // trước đây S3 client dựng tên miền "<bucket>.https" và upload hỏng với ENOTFOUND.
+    const media = loadConfig({
+      ...BASE_ENV,
+      MEDIA_STORAGE_DRIVER: 'r2',
+      R2_ACCOUNT_ID: `https://${ACCOUNT.toUpperCase()}.r2.cloudflarestorage.com/`,
+      R2_ACCESS_KEY_ID: 'key',
+      R2_SECRET_ACCESS_KEY: 'secret',
+      R2_BUCKET: 'bucket',
+      MEDIA_PUBLIC_BASE_URL: BASE,
+    }).media;
+    expect(media.r2?.accountId).toBe(ACCOUNT);
+  });
+
+  it('test_FR_PRD_01_r2_account_id_rejects_malformed_value_at_startup', () => {
+    expect(() =>
+      loadConfig({
+        ...BASE_ENV,
+        MEDIA_STORAGE_DRIVER: 'r2',
+        R2_ACCOUNT_ID: 'https://example.com',
+        R2_ACCESS_KEY_ID: 'key',
+        R2_SECRET_ACCESS_KEY: 'secret',
+        R2_BUCKET: 'bucket',
+        MEDIA_PUBLIC_BASE_URL: BASE,
+      }),
+    ).toThrow(/32 ký tự hex/);
   });
 
   it('test_FR_PRD_01_unknown_driver_rejected', () => {

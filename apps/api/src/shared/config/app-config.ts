@@ -296,7 +296,7 @@ function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
     const value = env[name];
     return value && value !== PLACEHOLDER_SECRET ? value : null;
   };
-  const accountId = read('R2_ACCOUNT_ID');
+  const accountId = parseR2AccountId(read('R2_ACCOUNT_ID'));
   const accessKeyId = read('R2_ACCESS_KEY_ID');
   const secretAccessKey = read('R2_SECRET_ACCESS_KEY');
   const bucket = read('R2_BUCKET');
@@ -320,6 +320,25 @@ function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
     localDir,
     r2: { accountId, accessKeyId, secretAccessKey, bucket },
   };
+}
+
+/**
+ * Account ID của Cloudflare là 32 ký tự hex. Trang tạo token hiện cả endpoint
+ * `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, nên người cấu hình hay dán nguyên URL đó — nhận cả
+ * hai dạng. Sai định dạng thì báo ngay lúc khởi động thay vì để S3 client dựng một tên miền vô nghĩa
+ * (`<bucket>.https`) rồi hỏng ở lần upload đầu tiên.
+ */
+function parseR2AccountId(raw: string | null): string | null {
+  if (!raw) return null;
+  const value = raw.trim();
+  const fromEndpoint = /^https?:\/\/([0-9a-f]{32})\.r2\.cloudflarestorage\.com\/?$/i.exec(value);
+  const id = (fromEndpoint ? fromEndpoint[1]! : value).toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(id)) {
+    throw new Error(
+      'R2_ACCOUNT_ID phải là Account ID 32 ký tự hex (phần đầu của https://<ACCOUNT_ID>.r2.cloudflarestorage.com) (ADR-0020).',
+    );
+  }
+  return id;
 }
 
 /** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */
