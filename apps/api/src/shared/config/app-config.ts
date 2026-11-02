@@ -71,6 +71,8 @@ export interface AppConfig {
   readonly devLogEmailVerificationToken: boolean;
   /** Cấu hình máy chủ gửi thư SMTP thật (FR-USR-07, FR-ALR-16). `null` khi chạy ở chế độ console log. */
   readonly smtp: SmtpConfig | null;
+  /** Nơi lưu ảnh sản phẩm (ADR-0020). */
+  readonly media: MediaConfig;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
 }
 
@@ -81,6 +83,26 @@ export interface SmtpConfig {
   readonly user: string | null;
   readonly pass: string | null;
   readonly from: string;
+}
+
+/**
+ * Kho ảnh sản phẩm (ADR-0020). `local` ghi vào thư mục MEDIA_DIR và API tự phục vụ tại
+ * /api/v1/media — cho máy dev chưa có khóa R2, test và CI. `r2` ghi lên Cloudflare R2 qua S3 API.
+ */
+export interface MediaConfig {
+  readonly driver: 'local' | 'r2';
+  /** Tiền tố URL công khai của ảnh, không có dấu `/` cuối (MEDIA_PUBLIC_BASE_URL). */
+  readonly publicBaseUrl: string;
+  /** Thư mục lưu khi driver `local` (MEDIA_DIR). */
+  readonly localDir: string;
+  readonly r2: R2Config | null;
+}
+
+export interface R2Config {
+  readonly accountId: string;
+  readonly accessKeyId: string;
+  readonly secretAccessKey: string;
+  readonly bucket: string;
 }
 
 export interface PayosConfig {
@@ -202,6 +224,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     );
   }
 
+  const port = Number(env['PORT'] ?? 3000);
+  const media = loadMediaConfig(env, port);
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -216,7 +241,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     env: appEnv,
-    port: Number(env['PORT'] ?? 3000),
+    port,
     databaseUrl,
     jwtSecret,
     paymentProvider,
@@ -230,6 +255,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     adminWebBaseUrl,
     devLogEmailVerificationToken,
     smtp,
+    media,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
@@ -248,6 +274,52 @@ function loadSmtpConfig(env: NodeJS.ProcessEnv): SmtpConfig | null {
     env['SMTP_FROM'] ||
     (user ? `"ScentStation" <${user}>` : '"ScentStation" <no-reply@scentstation.vn>');
   return { host, port, secure, user, pass, from };
+}
+
+/**
+ * Kho ảnh sản phẩm (ADR-0020). Mặc định `local` để máy dev chạy được ngay; chọn `r2` mà thiếu biến
+ * R2_* thì API không khởi động — khóa R2 là bí mật, không có giá trị mặc định (NFR-SEC-05).
+ */
+function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
+  const driver = env['MEDIA_STORAGE_DRIVER'] || 'local';
+  if (driver !== 'local' && driver !== 'r2') {
+    throw new Error(`MEDIA_STORAGE_DRIVER phải là local hoặc r2, nhận được: ${driver}`);
+  }
+  const localDir = env['MEDIA_DIR'] || 'storage/media';
+  const rawBase = env['MEDIA_PUBLIC_BASE_URL'];
+  if (driver === 'local') {
+    const publicBaseUrl = (rawBase || `http://localhost:${port}/api/v1/media`).replace(/\/+$/, '');
+    return { driver, publicBaseUrl, localDir, r2: null };
+  }
+
+  const read = (name: string) => {
+    const value = env[name];
+    return value && value !== PLACEHOLDER_SECRET ? value : null;
+  };
+  const accountId = read('R2_ACCOUNT_ID');
+  const accessKeyId = read('R2_ACCESS_KEY_ID');
+  const secretAccessKey = read('R2_SECRET_ACCESS_KEY');
+  const bucket = read('R2_BUCKET');
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !rawBase) {
+    throw new Error(
+      'MEDIA_STORAGE_DRIVER=r2 cần đủ R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, MEDIA_PUBLIC_BASE_URL (ADR-0020).',
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(rawBase);
+  } catch {
+    throw new Error(`MEDIA_PUBLIC_BASE_URL phải là URL tuyệt đối, nhận được: ${rawBase}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('MEDIA_PUBLIC_BASE_URL của R2 phải dùng https (NFR-SEC-01).');
+  }
+  return {
+    driver,
+    publicBaseUrl: rawBase.replace(/\/+$/, ''),
+    localDir,
+    r2: { accountId, accessKeyId, secretAccessKey, bucket },
+  };
 }
 
 /** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */

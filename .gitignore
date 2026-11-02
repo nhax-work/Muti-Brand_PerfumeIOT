@@ -75,3 +75,6 @@ harness.config.json
 AGENTS.md
 CLAUDE.md
 .cursorrules
+
+# Ảnh sản phẩm của driver kho ảnh local (ADR-0020)
+storage/

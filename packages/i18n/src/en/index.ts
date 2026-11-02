@@ -255,6 +255,9 @@ export const en: SameKeysAs<typeof vi> = {
   prd: {
     brandAccountOnly: 'Only brand-scoped accounts can create products',
     skuTaken: 'This SKU already exists within the brand',
+    imageFileRequired: 'Choose an image file to upload',
+    imageTooLarge: 'The image is larger than {maxMb} MB',
+    imageUnsupported: 'Only valid JPEG, PNG or WebP images are accepted',
   },
 
   slt: {

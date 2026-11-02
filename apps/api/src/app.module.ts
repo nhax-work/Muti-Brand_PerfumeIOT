@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { EmailModule } from './adapters/email/index.js';
+import { MediaModule } from './adapters/media/index.js';
 import { MqttModule } from './adapters/mqtt/index.js';
 import { CoreModule } from './core.module.js';
 import { AlrModule } from './modules/alr/index.js';
@@ -46,6 +47,8 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     MqttModule,
     // Kênh gửi email dùng chung (@Global) — ALR và AUTH (ADR-0017 mục 4).
     EmailModule,
+    // Kho ảnh sản phẩm dùng chung (@Global) — local hoặc Cloudflare R2 (ADR-0020).
+    MediaModule,
     // Trừ lượng sau lượt xịt thành công (@Global) — DSP gọi qua cổng DOSE_CONSUMER (ADR-0019).
     InvDoseConsumptionModule,
     DspModule,
