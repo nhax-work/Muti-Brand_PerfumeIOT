@@ -148,14 +148,14 @@ export default function BottleReturnsPage() {
     return (
       <Tag color={isOverdue ? 'error' : 'processing'}>
         {t('ui.statusWaitingPickup')}
-        {isOverdue ? ' (Quá hạn)' : ''}
+        {isOverdue ? t('ui.returnOverdueSuffix') : ''}
       </Tag>
     );
   };
 
   const columns: ColumnsType<BottleReturn> = [
     {
-      title: 'Mã phiếu',
+      title: t('ui.returnTicketId'),
       dataIndex: 'id',
       key: 'id',
       width: 140,
@@ -183,7 +183,7 @@ export default function BottleReturnsPage() {
       width: 160,
       render: (m: string) => (
         <Tag color={m === 'SHIP_TO_BRAND' ? 'blue' : 'orange'}>
-          {m === 'SHIP_TO_BRAND' ? 'Giao tận nơi' : 'Nhận tại kho'}
+          {m === 'SHIP_TO_BRAND' ? t('ui.returnMethodShip') : t('ui.returnMethodPickup')}
         </Tag>
       ),
     },
@@ -216,13 +216,13 @@ export default function BottleReturnsPage() {
       },
     },
     {
-      title: 'Trạng thái',
+      title: t('ui.returnStatus'),
       key: 'status',
       width: 150,
       render: (_, record) => renderStatusTag(record),
     },
     {
-      title: 'Hành động',
+      title: t('ui.actions'),
       key: 'action',
       width: 180,
       fixed: 'right',
@@ -239,7 +239,7 @@ export default function BottleReturnsPage() {
               {t('ui.details')}
             </Button>
             {!isClosed && (
-              <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']}>
+              <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']} fallback={null}>
                 <Button
                   type="primary"
                   size="small"
@@ -280,7 +280,7 @@ export default function BottleReturnsPage() {
             <Button icon={<ReloadOutlined />} onClick={() => void refetch()}>
               {t('ui.refresh')}
             </Button>
-            <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']}>
+            <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']} fallback={null}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -339,24 +339,24 @@ export default function BottleReturnsPage() {
         onClose={() => setIsDetailDrawerOpen(false)}
       >
         {isDetailLoading || !detailData ? (
-          <Typography.Text>Đang tải...</Typography.Text>
+          <Typography.Text>{t('ui.loading')}</Typography.Text>
         ) : (
           <div>
             <Descriptions bordered size="small" column={1} style={{ marginBottom: 20 }}>
-              <Descriptions.Item label="Mã phiếu trả hàng">
+              <Descriptions.Item label={t('ui.returnTicketIdFull')}>
                 <Typography.Text copyable>{detailData.id}</Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.slotRentalId')}>
                 <Typography.Text copyable>{detailData.slotRentalId}</Typography.Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Mã thương hiệu">
+              <Descriptions.Item label={t('ui.returnBrandId')}>
                 <Typography.Text copyable>{detailData.brandId}</Typography.Text>
               </Descriptions.Item>
               <Descriptions.Item label={t('ui.returnMethod')}>
                 <Tag color={detailData.returnMethod === 'SHIP_TO_BRAND' ? 'blue' : 'orange'}>
                   {detailData.returnMethod === 'SHIP_TO_BRAND'
-                    ? 'Giao tận nơi cho thương hiệu'
-                    : 'Nhận tại kho / trạm'}
+                    ? t('ui.returnMethodShipLong')
+                    : t('ui.returnMethodPickupLong')}
                 </Tag>
               </Descriptions.Item>
               {detailData.shippingAddress && (
@@ -374,7 +374,7 @@ export default function BottleReturnsPage() {
                   {formatDateTime(detailData.pickupDeadline)}
                 </Typography.Text>
               </Descriptions.Item>
-              <Descriptions.Item label="Trạng thái">
+              <Descriptions.Item label={t('ui.returnStatus')}>
                 {renderStatusTag(detailData)}
               </Descriptions.Item>
               {detailData.handedOverAt && (
@@ -407,17 +407,17 @@ export default function BottleReturnsPage() {
               dataSource={detailData.bottles}
               columns={[
                 {
-                  title: 'Mã định danh',
+                  title: t('ui.returnBottleIdentifier'),
                   dataIndex: 'identifier',
                   key: 'identifier',
                 },
                 {
-                  title: 'Dung tích còn (ml)',
+                  title: t('ui.returnBottleRemainingMl'),
                   dataIndex: 'currentEstimatedMl',
                   key: 'currentEstimatedMl',
                 },
                 {
-                  title: 'Trạng thái chai',
+                  title: t('ui.returnBottleStatus'),
                   dataIndex: 'status',
                   key: 'status',
                   render: (s: string) => <Tag color="cyan">{s}</Tag>,
@@ -427,7 +427,7 @@ export default function BottleReturnsPage() {
 
             {!detailData.handedOverAt && !detailData.forfeitedAt && (
               <div style={{ marginTop: 24, textAlign: 'right' }}>
-                <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']}>
+                <RequireRole allow={['PLATFORM_SUPER_ADMIN', 'INVENTORY_STAFF']} fallback={null}>
                   <Button
                     type="primary"
                     icon={<SendOutlined />}
@@ -456,8 +456,8 @@ export default function BottleReturnsPage() {
           onFinish={(values) => void handleCreateSubmit(values)}
         >
           <Alert
-            message="Lưu ý tháo chai"
-            description="Sau khi lập phiếu, các chai sẽ chuyển trạng thái RETURNED_TO_BRAND, slot máy sẽ chuyển sang UNAVAILABLE và hóa đơn thuê sẽ CLOSED."
+            message={t('ui.returnCreateNoteTitle')}
+            description={t('ui.returnCreateNoteDesc')}
             type="info"
             showIcon
             style={{ marginBottom: 16 }}
@@ -466,9 +466,9 @@ export default function BottleReturnsPage() {
           <Form.Item
             name="slotRentalId"
             label={t('ui.slotRentalId')}
-            rules={[{ required: true, message: 'Bắt buộc nhập mã hóa đơn thuê slot' }]}
+            rules={[{ required: true, message: t('ui.returnSlotRentalRequired') }]}
           >
-            <Input placeholder="UUID của slot_rentals đã báo không gia hạn" />
+            <Input placeholder={t('ui.returnSlotRentalPlaceholder')} />
           </Form.Item>
 
           <Form.List name="bottles">
@@ -482,21 +482,21 @@ export default function BottleReturnsPage() {
                     <Form.Item
                       {...restField}
                       name={[name, 'bottleId']}
-                      rules={[{ required: true, message: 'Nhập ID chai' }]}
+                      rules={[{ required: true, message: t('ui.returnBottleIdRequired') }]}
                       style={{ width: 260 }}
                     >
-                      <Input placeholder="UUID chai nước hoa" />
+                      <Input placeholder={t('ui.returnBottleIdPlaceholder')} />
                     </Form.Item>
                     {fields.length > 1 && (
                       <Button danger type="link" onClick={() => remove(name)}>
-                        Xóa
+                        {t('ui.returnRemoveBottle')}
                       </Button>
                     )}
                   </Space>
                 ))}
                 <Form.Item>
                   <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                    Thêm chai
+                    {t('ui.returnAddBottle')}
                   </Button>
                 </Form.Item>
               </>
@@ -529,8 +529,8 @@ export default function BottleReturnsPage() {
         >
           {handoverTarget?.returnMethod === 'SHIP_TO_BRAND' && (
             <Alert
-              message="Yêu cầu mã vận đơn"
-              description="Phiếu này có phương thức trả hàng là giao hàng tận nơi. Bắt buộc nhập mã vận đơn để đối soát."
+              message={t('ui.returnTrackingRequiredTitle')}
+              description={t('ui.returnTrackingRequiredDesc')}
               type="warning"
               showIcon
               style={{ marginBottom: 16 }}
@@ -540,9 +540,9 @@ export default function BottleReturnsPage() {
           <Form.Item
             name="recipientName"
             label={t('ui.recipientName')}
-            rules={[{ required: true, message: 'Vui lòng nhập tên người nhận bàn giao' }]}
+            rules={[{ required: true, message: t('ui.returnRecipientRequired') }]}
           >
-            <Input placeholder="Tên đại diện thương hiệu hoặc đơn vị vận chuyển" />
+            <Input placeholder={t('ui.returnRecipientPlaceholder')} />
           </Form.Item>
 
           <Form.Item
@@ -551,11 +551,11 @@ export default function BottleReturnsPage() {
             rules={[
               {
                 required: handoverTarget?.returnMethod === 'SHIP_TO_BRAND',
-                message: 'Bắt buộc nhập mã vận đơn khi giao hàng tận nơi',
+                message: t('ui.returnTrackingRequired'),
               },
             ]}
           >
-            <Input placeholder="Mã vận đơn (bắt buộc nếu SHIP_TO_BRAND)" />
+            <Input placeholder={t('ui.returnTrackingPlaceholder')} />
           </Form.Item>
 
           <div style={{ textAlign: 'right', marginTop: 16 }}>

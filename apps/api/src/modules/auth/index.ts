@@ -7,6 +7,7 @@ export type { AuthenticatedUser } from './principal.loader.js';
 export {
   Public,
   RequirePermissions,
+  RequireAnyPermission,
   RequireReauth,
   CurrentUser,
   CurrentBrandScope,

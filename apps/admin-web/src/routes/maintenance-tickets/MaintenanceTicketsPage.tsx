@@ -36,6 +36,7 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { useMachines } from '@/routes/machines/api';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { useAssignableStaff } from '@/shared/lookups';
 import {
   type AlertSeverity,
   type MaintenanceTicket,
@@ -95,6 +96,7 @@ export default function MaintenanceTicketsPage() {
   // Forms
   const [createForm] = Form.useForm<MaintenanceTicketCreate & { dueAtDate?: dayjs.Dayjs }>();
   const [assignForm] = Form.useForm<{ assignedTo: string; notes?: string }>();
+  const staff = useAssignableStaff();
   const [resolveForm] = Form.useForm<MaintenanceTicketResolve & { costAmount?: string }>();
   const [postTestForm] = Form.useForm<PostTestSubmit>();
 
@@ -470,7 +472,7 @@ export default function MaintenanceTicketsPage() {
               label={t('ui.ticketCategory') ?? 'Hạng mục'}
               rules={[{ required: true }]}
             >
-              <Input placeholder="Vòi xịt, Màn hình, Khóa vỏ, Cảm biến..." />
+              <Input placeholder={t('ui.ticketCategoryPlaceholder')} />
             </Form.Item>
             <Row gutter={16}>
               <Col span={12}>
@@ -512,7 +514,7 @@ export default function MaintenanceTicketsPage() {
               <DatePicker showTime style={{ width: '100%' }} />
             </Form.Item>
             <Form.Item name="description" label={t('ui.description') ?? 'Mô tả chi tiết'}>
-              <Input.TextArea rows={3} placeholder="Mô tả sự cố hoặc yêu cầu bảo trì..." />
+              <Input.TextArea rows={3} placeholder={t('ui.ticketDescriptionPlaceholder')} />
             </Form.Item>
           </Form>
         </Modal>
@@ -528,10 +530,16 @@ export default function MaintenanceTicketsPage() {
           <Form form={assignForm} layout="vertical">
             <Form.Item
               name="assignedTo"
-              label={t('ui.assignedStaffId') ?? 'User ID nhân sự thực hiện'}
+              label={t('ui.assignStaffLabel')}
               rules={[{ required: true }]}
             >
-              <Input placeholder="Nhập ID nhân viên kỹ thuật" />
+              <Select
+                showSearch
+                optionFilterProp="label"
+                loading={staff.loading}
+                options={staff.options}
+                placeholder={t('ui.selectStaffPlaceholder')}
+              />
             </Form.Item>
             <Form.Item name="notes" label={t('ui.notes') ?? 'Ghi chú phân công'}>
               <Input.TextArea rows={2} />
@@ -553,20 +561,20 @@ export default function MaintenanceTicketsPage() {
               label={t('ui.ticketDiagnosis') ?? 'Chẩn đoán sự cố'}
               rules={[{ required: true }]}
             >
-              <Input.TextArea rows={2} placeholder="Nguyên nhân gây ra sự cố..." />
+              <Input.TextArea rows={2} placeholder={t('ui.ticketDiagnosisPlaceholder')} />
             </Form.Item>
             <Form.Item
               name="correctiveAction"
               label={t('ui.ticketCorrectiveAction') ?? 'Biện pháp khắc phục'}
               rules={[{ required: true }]}
             >
-              <Input.TextArea rows={2} placeholder="Các thao tác đã xử lý, sửa chữa..." />
+              <Input.TextArea rows={2} placeholder={t('ui.ticketCorrectiveActionPlaceholder')} />
             </Form.Item>
             <Form.Item
               name="replacementParts"
               label={t('ui.ticketReplacementParts') ?? 'Linh kiện thay thế (cách nhau dấu phẩy)'}
             >
-              <Input placeholder="Cụm van xịt, Bơm áp lực..." />
+              <Input placeholder={t('ui.ticketPartsPlaceholder')} />
             </Form.Item>
             <Form.Item name="costAmount" label={t('ui.ticketCost') ?? 'Chi phí sửa chữa (VND)'}>
               <Input placeholder="350000" />

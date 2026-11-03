@@ -510,7 +510,7 @@ export default function AvailableSlotsPage() {
               currentAgreement.content
             ) : (
               <div style={{ textAlign: 'center', padding: '30px 0' }}>
-                <Spin tip="Đang tải hợp đồng khung hiện hành..." />
+                <Spin tip={t('ui.loadingFrameworkAgreement')} />
               </div>
             )}
           </div>

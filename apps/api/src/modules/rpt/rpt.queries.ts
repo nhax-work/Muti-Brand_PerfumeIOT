@@ -427,10 +427,8 @@ export class RptQueries {
       orders: {
         total: totalOrders,
         byStatus,
-        revenue: {
-          amount: revenueAmount,
-          currency: 'VND' as const,
-        },
+        // Money trong contract là chuỗi thập phân, không phải object (openapi.yaml, OrderStats).
+        revenue: revenueAmount,
         currency: 'VND' as const,
       },
       dispense: {
@@ -452,9 +450,7 @@ export class RptQueries {
     scope: BrandScope,
     period: ReportPeriod,
     granularity: 'DAY' | 'WEEK' | 'MONTH',
-  ): Promise<
-    Array<{ bucket: string; orderCount: number; revenue: { amount: string; currency: 'VND' } }>
-  > {
+  ): Promise<Array<{ bucket: string; orderCount: number; revenue: string }>> {
     const truncUnit = granularity === 'MONTH' ? 'month' : granularity === 'WEEK' ? 'week' : 'day';
 
     const counted = sql<boolean>`o.status in ('DISPENSED', 'FORFEITED')
@@ -466,22 +462,19 @@ export class RptQueries {
     const rows = await this.db
       .selectFrom('orders as o')
       .select([
-        sql<string>`date_trunc(${sql.val(truncUnit)}, o.paid_at)::text`.as('bucket'),
+        sql<string>`date_trunc(${sql.lit(truncUnit)}, o.paid_at)::text`.as('bucket'),
         sql<string>`count(o.id)`.as('order_count'),
         sql<string>`coalesce(sum(o.amount), 0)::numeric(19, 4)`.as('revenue'),
       ])
       .where(counted)
-      .groupBy(sql`date_trunc(${sql.val(truncUnit)}, o.paid_at)`)
-      .orderBy(sql`date_trunc(${sql.val(truncUnit)}, o.paid_at)`, 'asc')
+      .groupBy(sql`date_trunc(${sql.lit(truncUnit)}, o.paid_at)`)
+      .orderBy(sql`date_trunc(${sql.lit(truncUnit)}, o.paid_at)`, 'asc')
       .execute();
 
     return rows.map((r) => ({
       bucket: new Date(r.bucket).toISOString(),
       orderCount: Number(r.order_count),
-      revenue: {
-        amount: r.revenue,
-        currency: 'VND' as const,
-      },
+      revenue: r.revenue,
     }));
   }
 

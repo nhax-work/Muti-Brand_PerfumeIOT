@@ -2,15 +2,30 @@ import { AlertOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/
 import { Button, Card, Col, Row, Select, Space, Statistic, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useMemo, useState } from 'react';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
-import { type InventoryReportItem, useInventoryReport, useMachinesForRefill } from './api';
+import { useNameLookups } from '@/shared/lookups';
+import {
+  type InventoryReportItem,
+  useInventoryBatches,
+  useInventoryReport,
+  useMachinesForRefill,
+} from './api';
 
 export function InventoryReportTab() {
   const { t } = useI18n();
+  const { user } = useAuth();
+  // Brand Admin không đọc được danh sách máy toàn nền tảng: không lọc theo máy, tên máy/slot lấy
+  // từ hóa đơn của chính họ (useNameLookups).
+  const canListMachines = user?.permissions?.includes('machine.view') ?? false;
+  const names = useNameLookups();
+  const { data: batchesRes } = useInventoryBatches();
+  const batchNumber = (batchId: string) =>
+    batchesRes?.items.find((b) => b.id === batchId)?.batchNumber ?? `${batchId.slice(0, 8)}…`;
   const [lowStockOnly, setLowStockOnly] = useState<boolean>(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string | undefined>(undefined);
 
-  const { data: machinesRes } = useMachinesForRefill(true);
+  const { data: machinesRes } = useMachinesForRefill(canListMachines);
   const { data, isLoading, refetch } = useInventoryReport({
     lowStockOnly: lowStockOnly || undefined,
     machineId: selectedMachineId || undefined,
@@ -44,11 +59,6 @@ export function InventoryReportTab() {
       render: (name: string | undefined, record) => (
         <div>
           <span style={{ fontWeight: 600 }}>{name || record.fragranceProductId}</span>
-          {record.fragranceProductId && (
-            <div style={{ fontSize: 12, color: '#888' }}>
-              ID: {record.fragranceProductId.slice(0, 8)}...
-            </div>
-          )}
         </div>
       ),
     },
@@ -58,8 +68,7 @@ export function InventoryReportTab() {
       key: 'machineId',
       render: (mId: string | null) => {
         if (!mId) return <span style={{ color: '#aaa' }}>-</span>;
-        const found = machinesRes?.items?.find((m) => m.id === mId);
-        return <span>{found?.displayName ?? mId.slice(0, 8)}</span>;
+        return <span>{names.machineName(mId)}</span>;
       },
     },
     {
@@ -67,14 +76,18 @@ export function InventoryReportTab() {
       dataIndex: 'slotId',
       key: 'slotId',
       render: (sId: string | null) =>
-        sId ? <code>{sId.slice(0, 8)}</code> : <span style={{ color: '#aaa' }}>-</span>,
+        sId ? (
+          <span>{names.slotLabel(sId).split(' · ').pop()}</span>
+        ) : (
+          <span style={{ color: '#aaa' }}>-</span>
+        ),
     },
     {
       title: t('ui.batch') ?? 'Lô',
       dataIndex: 'batchId',
       key: 'batchId',
       render: (bId: string | null) =>
-        bId ? <code>{bId.slice(0, 8)}</code> : <span style={{ color: '#aaa' }}>-</span>,
+        bId ? <span>{batchNumber(bId)}</span> : <span style={{ color: '#aaa' }}>-</span>,
     },
     {
       title: t('ui.estimatedRemainingMl') ?? 'Dung tích còn (ml)',
@@ -151,16 +164,18 @@ export function InventoryReportTab() {
         <Row justify="space-between" align="middle" gutter={[16, 16]}>
           <Col>
             <Space wrap size="middle">
-              <Space>
-                <span>{t('ui.machine') ?? 'Máy'}:</span>
-                <Select
-                  style={{ width: 220 }}
-                  options={machineOptions}
-                  value={selectedMachineId ?? ''}
-                  onChange={(val) => setSelectedMachineId(val ? val : undefined)}
-                  placeholder={t('ui.selectMachine') ?? 'Chọn máy'}
-                />
-              </Space>
+              {canListMachines && (
+                <Space>
+                  <span>{t('ui.machine') ?? 'Máy'}:</span>
+                  <Select
+                    style={{ width: 220 }}
+                    options={machineOptions}
+                    value={selectedMachineId ?? ''}
+                    onChange={(val) => setSelectedMachineId(val ? val : undefined)}
+                    placeholder={t('ui.selectMachine') ?? 'Chọn máy'}
+                  />
+                </Space>
+              )}
               <Space>
                 <span>{t('ui.lowStockOnly') ?? 'Chỉ hiện sắp hết'}:</span>
                 <Switch checked={lowStockOnly} onChange={setLowStockOnly} />

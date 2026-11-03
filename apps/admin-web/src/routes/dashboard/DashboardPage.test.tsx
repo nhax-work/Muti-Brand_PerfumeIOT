@@ -81,15 +81,20 @@ const mockTimeseries: TimeSeriesPoint[] = [
   },
 ];
 
+const SUPER_ADMIN = {
+  id: 'admin-1',
+  fullName: 'Super Admin Test',
+  roles: ['PLATFORM_SUPER_ADMIN'],
+  permissions: ['report.platform', 'report.brand', 'maintenance.handle', 'inventory.manage'],
+};
+let mockUser: Record<string, unknown> = SUPER_ADMIN;
+
 vi.mock('@/shared/auth', () => ({
-  useAuth: () => ({
-    user: {
-      id: 'admin-1',
-      fullName: 'Super Admin Test',
-      roles: ['PLATFORM_SUPER_ADMIN'],
-      permissions: ['report.view', 'maintenance.manage'],
-    },
-  }),
+  useAuth: () => ({ user: mockUser }),
+}));
+
+vi.mock('@/routes/shipments/InventoryReportTab', () => ({
+  InventoryReportTab: () => <div>inventory-report-tab</div>,
 }));
 
 vi.mock('./api', () => ({
@@ -106,7 +111,10 @@ vi.mock('./api', () => ({
 }));
 
 beforeAll(installDomStubs);
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mockUser = SUPER_ADMIN;
+});
 
 describe('DashboardPage (FR-RPT-01, 02, 04, ADR-0015)', () => {
   it('hiển thị đầy đủ KPI, tỉ lệ xịt và cảnh báo bảo trì', () => {
@@ -122,8 +130,43 @@ describe('DashboardPage (FR-RPT-01, 02, 04, ADR-0015)', () => {
   it('hiển thị bảng diễn biến doanh thu theo thời gian', () => {
     renderScreen(<DashboardPage />);
 
-    expect(screen.getByText('2026-10-25')).toBeTruthy();
-    expect(screen.getByText('2026-10-26')).toBeTruthy();
+    expect(screen.getByText('25/10/2026')).toBeTruthy();
+    expect(screen.getByText('26/10/2026')).toBeTruthy();
     expect(screen.getByText('120')).toBeTruthy();
+  });
+
+  it('test_FR_RPT_01_dashboard_revenue_formats_money_string', () => {
+    renderScreen(<DashboardPage />);
+
+    expect(screen.queryByText(/NaN/)).toBeNull();
+  });
+
+  it('test_FR_RPT_07_inventory_staff_dashboard_shows_inventory_report', () => {
+    mockUser = {
+      id: 'inv-1',
+      fullName: 'Inventory Test',
+      roles: ['INVENTORY_STAFF'],
+      permissions: ['inventory.manage', 'machine.view'],
+    };
+    renderScreen(<DashboardPage />);
+
+    expect(screen.getByText('Tổng quan tồn kho')).toBeTruthy();
+    expect(screen.getByText('inventory-report-tab')).toBeTruthy();
+    expect(screen.queryByText('Tổng quan thương hiệu')).toBeNull();
+    expect(screen.queryByText('Tổng quan nền tảng')).toBeNull();
+  });
+
+  it('test_FR_RPT_02_brand_admin_dashboard_shows_timeseries_only', () => {
+    mockUser = {
+      id: 'brand-1',
+      fullName: 'Brand Test',
+      roles: ['BRAND_ADMIN'],
+      permissions: ['report.brand'],
+    };
+    renderScreen(<DashboardPage />);
+
+    expect(screen.getByText('Tổng quan thương hiệu')).toBeTruthy();
+    expect(screen.getByText('25/10/2026')).toBeTruthy();
+    expect(screen.queryByText('Kiosk Vincom')).toBeNull();
   });
 });

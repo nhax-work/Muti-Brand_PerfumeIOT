@@ -123,7 +123,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     path: '/rentals',
     label: 'ui.rentals',
     icon: <ShopOutlined />,
-    roles: ['BRAND_ADMIN'],
+    // Super Admin vào đây để tới Chi tiết hóa đơn (sửa ân hạn, thanh lý, đóng hóa đơn — bảng 3.1.3).
+    roles: ['BRAND_ADMIN', 'PLATFORM_SUPER_ADMIN'],
   },
   {
     path: '/products',

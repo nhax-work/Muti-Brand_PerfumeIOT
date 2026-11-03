@@ -285,7 +285,7 @@ export default function BrandsPage() {
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.brandTaxCode')}>
                   {verifyingBrand.taxCode ?? (
-                    <Typography.Text type="danger">Chưa khai báo</Typography.Text>
+                    <Typography.Text type="danger">{t('ui.notDeclared')}</Typography.Text>
                   )}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.brandBusinessLicense')}>
