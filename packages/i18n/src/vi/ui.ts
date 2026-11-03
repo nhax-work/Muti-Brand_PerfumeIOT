@@ -1087,4 +1087,14 @@ export const ui = {
   notDeclared: 'Chưa khai báo',
   accountNumberPlaceholder: 'Nhập số tài khoản',
   loadingFrameworkAgreement: 'Đang tải hợp đồng khung hiện hành...',
+  productImage: 'Ảnh sản phẩm',
+  productImageChoose: 'Chọn ảnh',
+  productImageChange: 'Đổi ảnh',
+  productImageRemove: 'Xóa ảnh',
+  productImageHint:
+    'JPEG, PNG hoặc WebP, tối đa {maxMb} MB. Ảnh dọc tỉ lệ 4:5 hiển thị đẹp nhất trên kiosk.',
+  productImageInvalidType: 'Chỉ nhận ảnh JPEG, PNG hoặc WebP',
+  productImageTooLarge: 'Ảnh vượt quá {maxMb} MB',
+  productImageSaveFailed: 'Đã lưu sản phẩm nhưng chưa cập nhật được ảnh: {reason}',
+  productNoImage: 'Chưa có ảnh',
 } as const;

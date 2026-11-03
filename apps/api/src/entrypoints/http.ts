@@ -7,6 +7,7 @@ import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { registerMediaRoutes } from '../adapters/media/index.js';
 import { AppModule } from '../app.module.js';
 import { APP_CONFIG, type AppConfig } from '../shared/config/index.js';
 import { loadEnvFile } from '../shared/config/env-file.js';
@@ -29,6 +30,7 @@ async function bootstrap(): Promise<void> {
   const config = app.get<AppConfig>(APP_CONFIG);
   // Plugin Fastify phải đăng ký TRƯỚC listen.
   if (config.swaggerEnabled) await registerSwagger(app);
+  await registerMediaRoutes(app, config);
   await app.listen(config.port, '0.0.0.0');
 
   if (config.mqttUrl) {

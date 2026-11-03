@@ -10,6 +10,8 @@
  */
 
 import 'reflect-metadata';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { resolveTestDatabaseUrl } from './db.js';
 
@@ -22,6 +24,10 @@ export const TEST_REFUND_ACCOUNT_ENC_KEY = Buffer.alloc(32, 0x11).toString('base
 export const TEST_REFUND_CLAIM_TOKEN_SECRET = 'integration-test-refund-claim-secret';
 
 /** Khóa checksum PayOS trong test — test tự ký webhook bằng `payosSignatureOf` với giá trị này. */
+/** Thư mục và URL công khai của driver local trong test tích hợp (ADR-0020). */
+export const TEST_MEDIA_DIR = join(tmpdir(), 'scentstation-test-media');
+export const TEST_MEDIA_PUBLIC_BASE_URL = 'http://localhost/api/v1/media';
+
 export const TEST_PAYOS_CHECKSUM_KEY = 'integration-test-payos-checksum-key';
 
 export interface TestAppOptions {
@@ -45,6 +51,11 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestF
   process.env['ORDER_RATE_LIMIT_PER_MIN'] = String(options.orderRateLimitPerMin ?? 1000);
   process.env['PAYMENT_WEBHOOK_SECRET'] = TEST_PAYMENT_WEBHOOK_SECRET;
   // PayOS luôn được cấu hình trong test để webhook /payos xử lý được; chỉ gọi API khi là cổng hiện tại.
+  // Kho ảnh (ADR-0020): luôn driver local vào thư mục tạm — test không bao giờ ghi lên bucket R2 thật,
+  // kể cả khi .env của máy đang chọn r2.
+  process.env['MEDIA_STORAGE_DRIVER'] = 'local';
+  process.env['MEDIA_DIR'] = TEST_MEDIA_DIR;
+  process.env['MEDIA_PUBLIC_BASE_URL'] = TEST_MEDIA_PUBLIC_BASE_URL;
   process.env['PAYOS_BASE_URL'] = 'https://payos.test.invalid';
   process.env['PAYOS_CLIENT_ID'] = 'test-client-id';
   process.env['PAYOS_API_KEY'] = 'test-api-key';
@@ -65,6 +76,10 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestF
     rawBody: true,
   });
   app.setGlobalPrefix('api/v1');
+  // Khớp entrypoints/http.ts: multipart cho upload ảnh và phục vụ ảnh của driver local (ADR-0020).
+  const { registerMediaRoutes } = await import('../../../apps/api/src/adapters/media/index.js');
+  const { APP_CONFIG } = await import('../../../apps/api/src/shared/config/index.js');
+  await registerMediaRoutes(app, app.get(APP_CONFIG));
   await app.init();
   await app.getHttpAdapter().getInstance().ready();
   return app;

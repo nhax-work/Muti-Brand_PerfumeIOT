@@ -40,3 +40,34 @@ export function useDiscontinueProduct() {
     onSuccess: invalidate,
   });
 }
+
+/**
+ * Upload ảnh sản phẩm (FR-PRD-01, ADR-0020). Gửi FormData nguyên trạng — openapi-fetch để trình duyệt
+ * tự đặt Content-Type kèm boundary.
+ */
+export function useUploadProductImage() {
+  const invalidate = useInvalidateProducts();
+  return useMutation({
+    mutationFn: ({ id, file }: { id: string; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.POST('/products/{id}/image', {
+          params: { path: { id } },
+          body: form as unknown as { file: string },
+        }),
+      );
+    },
+    onSuccess: invalidate,
+  });
+}
+
+/** Xóa ảnh sản phẩm (ADR-0020). */
+export function useDeleteProductImage() {
+  const invalidate = useInvalidateProducts();
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.DELETE('/products/{id}/image', { params: { path: { id } } })),
+    onSuccess: invalidate,
+  });
+}
