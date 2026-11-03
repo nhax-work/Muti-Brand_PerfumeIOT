@@ -55,14 +55,19 @@ beforeAll(() => {
   // jsdom không có URL.createObjectURL — ô xem trước ảnh cần nó.
   URL.createObjectURL = vi.fn(() => 'blob:preview');
   URL.revokeObjectURL = vi.fn();
-  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as any;
+  // Mock message tĩnh để antd không dựng root React riêng cho hộp thông báo. Root đó không bao giờ
+  // unmount và cập nhật trễ qua Promise: khi runner CI chậm, nhịp render rơi sau lúc jsdom bị gỡ
+  // → "window is not defined" ngoài test, vitest báo unhandled error và thoát mã 1.
+  // Vì thế cũng KHÔNG gọi message.destroy() — chính lời gọi đó dựng root kia.
+  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as unknown as ReturnType<
+    typeof message.success
+  >;
   vi.spyOn(message, 'success').mockReturnValue(dummyMessage);
   vi.spyOn(message, 'error').mockReturnValue(dummyMessage);
 });
 
 afterEach(() => {
   cleanup();
-  message.destroy();
   mockSave.mockClear();
   mockUpload.mockClear();
   mockDeleteImage.mockClear();
