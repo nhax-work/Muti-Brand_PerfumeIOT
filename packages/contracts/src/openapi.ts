@@ -3432,6 +3432,8 @@ export interface components {
             permissions: string[];
             /** @description true khi tài khoản đang ở INVITED — vừa được tạo hoặc vừa bị đặt lại mật khẩu. Giao diện phải chuyển thẳng sang màn hình đổi mật khẩu; mọi endpoint ngoài /auth/me, /auth/logout và /auth/change-password đều trả FORBIDDEN_SCOPE cho tới khi đổi xong (ADR-0004). */
             mustChangePassword: boolean;
+            /** @description true khi tài khoản có bản ghi email_verifications mà verified_at còn NULL — đúng điều kiện POST /rental-checkouts trả EMAIL_NOT_VERIFIED (FR-USR-07, ADR-0013). Tài khoản do Super Admin tạo, tài khoản mức nền tảng và tài khoản đã xác minh đều là false. Giao diện dùng trường này để nhắc xác minh trên mọi trang (ADR-0021). */
+            emailVerificationPending: boolean;
         };
         ChangePasswordRequest: {
             /** Format: password */

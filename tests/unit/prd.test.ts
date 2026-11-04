@@ -123,6 +123,7 @@ const admin: AuthenticatedUser = {
   fullName: 'Admin',
   sessionId: 'session-1',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 const brandAdminA: AuthenticatedUser = {
@@ -136,6 +137,7 @@ const brandAdminA: AuthenticatedUser = {
   fullName: 'Brand Admin A',
   sessionId: 'session-2',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 const brandAdminB: AuthenticatedUser = {
@@ -149,6 +151,7 @@ const brandAdminB: AuthenticatedUser = {
   fullName: 'Brand Admin B',
   sessionId: 'session-3',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 const scopeA: BrandScope = { kind: 'BRAND', brandId: BRAND_A };

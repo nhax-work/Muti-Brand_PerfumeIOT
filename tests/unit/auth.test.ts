@@ -105,6 +105,8 @@ class FakeQueries {
       roles: u.roles,
       permissions: u.permissions,
       scopes: u.brandId ? [{ type: 'BRAND', id: null }] : [{ type: 'PLATFORM', id: null }],
+      // Như truy vấn thật: có dòng xác minh mà verified_at còn null (ADR-0021).
+      emailVerificationPending: this.verifications.get(userId)?.verifiedAt === null,
     };
   }
   async createSession(input: { userId: string; tokenHash: string; expiresAt: Date }) {
@@ -710,6 +712,34 @@ describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
 
       // Gọi lại với mã đã dùng của email đã xác minh vẫn thành công
       await expect(auth.verifyEmail(rawToken)).resolves.toBeUndefined();
+    });
+
+    it('test_FR_USR_07_current_user_reports_pending_verification_until_verified', async () => {
+      // ADR-0021: CurrentUser báo chưa xác minh để giao diện nhắc trên mọi trang.
+      const user = addUser({ email: 'pending@test.local', roles: ['BRAND_ADMIN'] });
+      const rawToken = 'pending-verification-token';
+      queries.addVerification(
+        user.id,
+        'pending@test.local',
+        hashVerificationToken(rawToken),
+        new Date(clock.now().getTime() + 24 * 3600_000),
+      );
+
+      const pair = await auth.login('pending@test.local', PASSWORD, origin);
+      expect(pair.user.emailVerificationPending).toBe(true);
+      const claims = tokens.verifyAccess(pair.accessToken);
+      expect(auth.toCurrentUser(await loader.load(claims)).emailVerificationPending).toBe(true);
+
+      await auth.verifyEmail(rawToken);
+      // Không đợi hết SESSION_REVOKE_MAX_SEC: xác minh xong là xóa nhớ đệm của tài khoản.
+      expect(auth.toCurrentUser(await loader.load(claims)).emailVerificationPending).toBe(false);
+    });
+
+    it('test_FR_USR_07_current_user_not_pending_without_verification_record', async () => {
+      // Tài khoản do Super Admin tạo không có dòng xác minh, nên không cần xác minh.
+      addUser({ email: 'created-by-admin@test.local', roles: ['BRAND_ADMIN'] });
+      const pair = await auth.login('created-by-admin@test.local', PASSWORD, origin);
+      expect(pair.user.emailVerificationPending).toBe(false);
     });
 
     it('test_FR_USR_07_verify_email_invalid_token_rejected', async () => {

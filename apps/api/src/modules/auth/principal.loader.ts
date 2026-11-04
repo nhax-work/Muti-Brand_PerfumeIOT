@@ -33,6 +33,8 @@ export interface AuthenticatedUser extends Principal {
   readonly sessionId: string;
   /** Tài khoản ở INVITED: chỉ được đổi mật khẩu, mọi thao tác khác bị chặn (ADR-0004). */
   readonly mustChangePassword: boolean;
+  /** Tài khoản tự đăng ký chưa xác minh email: chưa tạo được phiên thanh toán thuê slot (ADR-0021). */
+  readonly emailVerificationPending: boolean;
 }
 
 /** Trạng thái được phép giữ phiên đăng nhập. DISABLED và LOCKED thì không. */
@@ -107,6 +109,7 @@ export function toAuthenticatedUser(row: PrincipalRow, sessionId: string): Authe
     fullName: row.fullName,
     sessionId,
     mustChangePassword: row.status === 'INVITED',
+    emailVerificationPending: row.emailVerificationPending,
   };
 }
 

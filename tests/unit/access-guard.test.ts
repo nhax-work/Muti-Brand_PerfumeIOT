@@ -40,6 +40,7 @@ function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
     fullName: 'Ops',
     sessionId: 'session-1',
     mustChangePassword: false,
+    emailVerificationPending: false,
     ...overrides,
   };
 }
