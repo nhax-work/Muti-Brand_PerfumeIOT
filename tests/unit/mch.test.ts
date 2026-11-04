@@ -276,6 +276,7 @@ const SUPER_ADMIN: AuthenticatedUser = {
   permissionVersion: 1,
   sessionId: 'ses-1',
   mustChangePassword: false,
+  emailVerificationPending: false,
   scope: { type: 'PLATFORM' },
 };
 

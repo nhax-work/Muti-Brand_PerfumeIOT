@@ -340,6 +340,7 @@ export class AuthService {
       roles: [...user.roles],
       permissions: [...user.permissions].sort(),
       mustChangePassword: user.mustChangePassword,
+      emailVerificationPending: user.emailVerificationPending,
     };
   }
 
@@ -420,6 +421,8 @@ export class AuthService {
     }
 
     await this.queries.markEmailVerified(record.id, now);
+    // Phiên đang mở của tài khoản phải thấy ngay emailVerificationPending = false (ADR-0021).
+    this.loader.invalidateUser(record.userId);
     await this.audit.log({
       actorType: 'USER',
       actorId: record.userId,

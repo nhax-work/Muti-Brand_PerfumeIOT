@@ -444,6 +444,52 @@ export const en: SameKeysAs<typeof vi> = {
     reauthDescription: 'Re-enter your password to continue with this action.',
     networkError: 'Cannot reach the server. Check your connection and try again.',
     loading: 'Loading...',
+    // Nhóm menu bên trái và nút thu gọn menu
+    navGroupOperations: 'Machine Operations',
+    navGroupSales: 'Sales',
+    navGroupRental: 'Slot Rental',
+    navGroupInventory: 'Stock & Refill',
+    navGroupFinance: 'Finance',
+    navGroupAdministration: 'Administration',
+    collapseMenu: 'Collapse menu',
+    expandMenu: 'Expand menu',
+    // Hướng dẫn lần đầu cho Brand Admin (nút "Next"/"Finish" do antd dịch)
+    onboardingReplay: 'Show guide',
+    onboardingWelcomeTitle: 'Welcome to ScentStation',
+    onboardingWelcomeDesc:
+      'A few short steps on what to do to sell your perfume on the platform machines. Click Next to start.',
+    onboardingRentalTitle: 'Step 1 – Rent slots and assign products',
+    onboardingRentalDesc:
+      'Create your products under Products. Open Rentals & Invoices to pick free slots, a rental package and a storage plan, then pay. After that, open My slots to assign a product and set the price per spray. Before paying you need to verify your email and accept the framework agreement.',
+    onboardingInventoryTitle: 'Step 2 – Send stock and refill',
+    onboardingInventoryDesc:
+      'Declare the shipment you send to the warehouse and upload proof that the goods are genuine; bottles are installed only after the proof is approved. The rental term starts when the first bottle is installed. Send a refill request when a slot runs low, and follow bottle returns here when a rental ends.',
+    onboardingOrdersTitle: 'Orders',
+    onboardingOrdersDesc:
+      'Every spray customers buy on your slots shows here, with its payment status and spray result.',
+    onboardingAlertsTitle: 'Alerts',
+    onboardingAlertsDesc: 'You are told here when your slot runs low or has a problem.',
+    onboardingFinanceTitle: 'Finance',
+    onboardingFinanceDesc:
+      'The platform collects the spray money and pays you every month. See payouts, goods compensation and sales reports here.',
+    onboardingProfileTitle: 'Brand Profile',
+    onboardingProfileDesc:
+      'Enter your tax code and payout bank account. The platform must verify this profile before your first revenue payout.',
+    onboardingHelpTitle: 'Show this guide again',
+    onboardingHelpDesc: 'Click this button at any time to see these steps again.',
+    onboardingAgreementTitle: 'Last step – Framework agreement',
+    onboardingAgreementDesc:
+      'Click Finish to read and accept the framework agreement. You accept it only once; each slot rental payment adds its own annex for that rental.',
+    onboardingReadyTitle: 'You are ready',
+    onboardingReadyDesc:
+      'You have accepted the framework agreement. Start by renting a slot under Slot Rental.',
+    agreementLater: 'Later',
+    // Thanh nhắc xác minh email trên mọi trang (ADR-0021)
+    emailVerificationBanner:
+      'Your email {email} is not verified yet. You must verify it before renting a slot — check your inbox (and spam folder) or resend the verification email.',
+    onboardingEmailTitle: 'First – Verify your email',
+    onboardingEmailDesc:
+      'Open the email we sent and click the verification link. You cannot pay for a slot rental until it is verified. Cannot find it? Click Resend verification email.',
     // Quản lý máy và slot
     machines: 'Machines',
     machineList: 'Machine List',

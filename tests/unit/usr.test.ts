@@ -90,6 +90,7 @@ const admin: AuthenticatedUser = {
   fullName: 'Admin',
   sessionId: 'session-1',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 let queries: FakeUsrQueries;

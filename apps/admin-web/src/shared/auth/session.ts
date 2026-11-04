@@ -46,6 +46,13 @@ export const sessionStore = {
     emit();
   },
 
+  /** Thay hồ sơ người dùng của phiên đang mở (ví dụ sau khi xác minh email), giữ nguyên token. */
+  updateUser(user: CurrentUser): void {
+    if (!current) return;
+    current = { ...current, user };
+    emit();
+  },
+
   clear(): void {
     current = null;
     try {

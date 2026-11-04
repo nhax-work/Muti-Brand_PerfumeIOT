@@ -210,6 +210,7 @@ describe('EXP Expiry Notifications & Rental Activation Integration Tests', () =>
         brandId: null,
         sessionId: randomUUID(),
         mustChangePassword: false,
+        emailVerificationPending: false,
         permissionVersion: 1,
         scope: { type: 'PLATFORM' },
       };

@@ -8,6 +8,8 @@ export interface AuthContextValue {
   user: CurrentUser | null;
   login: (credentials: LoginRequest) => Promise<void>;
   logout: () => Promise<void>;
+  /** Đọc lại `GET /auth/me` cho phiên đang mở; không có phiên thì không làm gì. */
+  reloadUser: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

@@ -8,7 +8,6 @@ import {
   Col,
   Empty,
   Form,
-  Modal,
   Row,
   Select,
   Spin,
@@ -24,17 +23,11 @@ import {
   ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { FrameworkAgreementModal } from '@/shared/agreement';
 import { ApiRequestError, errorMessage } from '@/shared/api';
+import { useResendVerification } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
-import {
-  useAcceptAgreement,
-  useAvailableSlots,
-  useCreateCheckout,
-  useCurrentAgreement,
-  useRentalQuote,
-  useResendVerification,
-  type AvailableSlot,
-} from './api';
+import { useAvailableSlots, useCreateCheckout, useRentalQuote, type AvailableSlot } from './api';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -175,16 +168,12 @@ export default function AvailableSlotsPage() {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useAvailableSlots({ pageSize: 50 });
   const createCheckout = useCreateCheckout();
-  const { data: agreementData } = useCurrentAgreement();
-  const currentAgreement = agreementData?.agreement;
-  const acceptAgreement = useAcceptAgreement();
   const resendVerification = useResendVerification();
 
   const [selectedConfigs, setSelectedConfigs] = useState<Map<string, SelectedSlotConfig>>(
     new Map(),
   );
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
-  const [agreementChecked, setAgreementChecked] = useState(false);
   const [unverifiedEmailAlert, setUnverifiedEmailAlert] = useState(false);
   const [holdLimitAlert, setHoldLimitAlert] = useState(false);
 
@@ -204,25 +193,6 @@ export default function AvailableSlotsPage() {
     const next = new Map(selectedConfigs);
     next.set(config.slotId, config);
     setSelectedConfigs(next);
-  };
-
-  const handleConfirmAgreement = async () => {
-    if (!currentAgreement) {
-      message.error(t('slt.agreementNotAccepted'));
-      return;
-    }
-    try {
-      await acceptAgreement.mutateAsync({
-        version: currentAgreement.version,
-        contentHash: currentAgreement.contentHash,
-      });
-      message.success(t('ui.agreementAcceptedSuccess'));
-      setIsAgreementModalOpen(false);
-      // Tự động gọi tiếp tạo phiên sau khi Brand Admin đã đồng ý hợp đồng khung
-      await handleCheckout();
-    } catch (acceptErr) {
-      message.error(errorMessage(acceptErr, t));
-    }
   };
 
   const handleResendVerification = async () => {
@@ -466,62 +436,13 @@ export default function AvailableSlotsPage() {
           </Row>
         )}
 
-        <Modal
-          title={
-            currentAgreement
-              ? `${currentAgreement.title} (${t('ui.agreementVersion', { version: currentAgreement.version })})`
-              : t('ui.frameworkAgreementTitle')
-          }
+        <FrameworkAgreementModal
           open={isAgreementModalOpen}
-          onCancel={() => setIsAgreementModalOpen(false)}
-          footer={[
-            <Button key="cancel" onClick={() => setIsAgreementModalOpen(false)}>
-              {t('ui.cancel')}
-            </Button>,
-            <Button
-              key="accept"
-              type="primary"
-              disabled={!agreementChecked || !currentAgreement}
-              loading={acceptAgreement.isPending || createCheckout.isPending}
-              onClick={handleConfirmAgreement}
-            >
-              {t('ui.agreementAcceptBtn')}
-            </Button>,
-          ]}
-          width={700}
-        >
-          <Paragraph type="secondary">{t('ui.frameworkAgreementDesc')}</Paragraph>
-          <div
-            style={{
-              maxHeight: 350,
-              minHeight: 120,
-              overflowY: 'auto',
-              padding: '16px',
-              background: '#f9f9f9',
-              border: '1px solid #e8e8e8',
-              borderRadius: '6px',
-              marginBottom: '16px',
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'monospace',
-              fontSize: 13,
-            }}
-          >
-            {currentAgreement ? (
-              currentAgreement.content
-            ) : (
-              <div style={{ textAlign: 'center', padding: '30px 0' }}>
-                <Spin tip={t('ui.loadingFrameworkAgreement')} />
-              </div>
-            )}
-          </div>
-          <Checkbox
-            checked={agreementChecked}
-            disabled={!currentAgreement}
-            onChange={(e) => setAgreementChecked(e.target.checked)}
-          >
-            {t('ui.agreementCheckbox')}
-          </Checkbox>
-        </Modal>
+          onClose={() => setIsAgreementModalOpen(false)}
+          // Đồng ý xong thì tạo tiếp phiên thanh toán đang dở.
+          onAccepted={handleCheckout}
+          busy={createCheckout.isPending}
+        />
       </div>
     </RequireRole>
   );

@@ -39,6 +39,8 @@ export interface PrincipalRow {
   readonly roles: RoleCode[];
   readonly permissions: string[];
   readonly scopes: PrincipalScopeRow[];
+  /** Có dòng email_verifications chưa xác minh — điều kiện của EMAIL_NOT_VERIFIED (ADR-0021). */
+  readonly emailVerificationPending: boolean;
 }
 
 export interface SessionRow {
@@ -118,7 +120,7 @@ export class AuthQueries {
       .leftJoin('roles as r', 'r.id', 'ur.role_id')
       .leftJoin('role_permissions as rp', 'rp.role_id', 'r.id')
       .leftJoin('permissions as p', 'p.id', 'rp.permission_id')
-      .select([
+      .select((eb) => [
         'u.id',
         'u.brand_id',
         'u.email',
@@ -129,6 +131,16 @@ export class AuthQueries {
         'p.code as permission_code',
         'ur.scope_type',
         'ur.scope_id',
+        // Cùng điều kiện chặn tạo phiên thanh toán thuê slot (FR-USR-07); không có dòng = không cần xác minh.
+        eb
+          .exists(
+            eb
+              .selectFrom('email_verifications as ev')
+              .select('ev.id')
+              .whereRef('ev.user_id', '=', 'u.id')
+              .where('ev.verified_at', 'is', null),
+          )
+          .as('email_verification_pending'),
       ])
       .where('u.id', '=', userId)
       .execute();
@@ -158,6 +170,7 @@ export class AuthQueries {
       roles: [...roles],
       permissions: [...permissions],
       scopes: [...scopes.values()],
+      emailVerificationPending: Boolean(first.email_verification_pending),
     };
   }
 

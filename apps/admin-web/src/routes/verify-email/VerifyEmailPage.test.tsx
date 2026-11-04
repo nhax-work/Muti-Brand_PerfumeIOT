@@ -6,6 +6,11 @@ import { I18nProvider } from '@/shared/i18n';
 import VerifyEmailPage from './VerifyEmailPage';
 
 const mockPost = vi.fn();
+const mockReloadUser = vi.fn().mockResolvedValue(undefined);
+
+vi.mock('@/shared/auth', () => ({
+  useAuth: () => ({ reloadUser: mockReloadUser }),
+}));
 
 vi.mock('@/shared/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/shared/api')>();
@@ -35,6 +40,7 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   mockPost.mockReset();
+  mockReloadUser.mockClear();
 });
 
 function renderPage(url: string) {
@@ -73,6 +79,8 @@ describe('Màn hình xác minh email (FR-USR-07)', () => {
     expect(
       screen.getByText('Email đã được xác minh. Bạn có thể tạo phiên thuê slot.'),
     ).toBeTruthy();
+    // ADR-0021: phiên đang mở ở tab này đọc lại hồ sơ để tắt thanh nhắc xác minh.
+    expect(mockReloadUser).toHaveBeenCalledTimes(1);
   });
 
   it('test_FR_USR_07_verify_email_page_handles_failure', async () => {
@@ -85,5 +93,6 @@ describe('Màn hình xác minh email (FR-USR-07)', () => {
 
     await waitFor(() => expect(mockPost).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('Xác minh email thất bại')).toBeTruthy();
+    expect(mockReloadUser).not.toHaveBeenCalled();
   });
 });

@@ -146,6 +146,7 @@ const admin: AuthenticatedUser = {
   fullName: 'Admin',
   sessionId: 'session-1',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 const brandAdmin: AuthenticatedUser = {
@@ -159,6 +160,7 @@ const brandAdmin: AuthenticatedUser = {
   fullName: 'Brand Admin',
   sessionId: 'session-2',
   mustChangePassword: false,
+  emailVerificationPending: false,
 };
 
 let queries: FakeBndQueries;
