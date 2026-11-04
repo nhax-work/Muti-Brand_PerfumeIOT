@@ -56,6 +56,10 @@ vi.mock('@/shared/auth', () => ({
   useReauth: () => ({
     withReauth: async (fn: () => Promise<unknown>) => fn(),
   }),
+  useResendVerification: () => ({
+    mutateAsync: mockResendVerificationFn,
+    isPending: false,
+  }),
 }));
 
 vi.mock('@/routes/machines/api', () => ({
@@ -137,6 +141,29 @@ const mockRenewRentalFn = vi.fn();
 const mockSetGracePeriodFn = vi.fn();
 const mockLiquidateRentalFn = vi.fn();
 const mockCloseRentalFn = vi.fn();
+
+vi.mock('@/shared/agreement/api', () => ({
+  useCurrentAgreement: () => ({
+    data: {
+      agreement: {
+        id: 'agreement-1',
+        version: '1.0',
+        title: 'Hợp đồng khung dịch vụ',
+        content: 'Nội dung hợp đồng khung mẫu',
+        contentHash: 'a'.repeat(64),
+        isCurrent: true,
+        publishedAt: '2026-10-01T00:00:00.000Z',
+        createdAt: '2026-10-01T00:00:00.000Z',
+      },
+      acceptance: null,
+    },
+    isLoading: false,
+  }),
+  useAcceptAgreement: () => ({
+    mutateAsync: mockAcceptAgreementFn,
+    isPending: false,
+  }),
+}));
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
@@ -269,30 +296,6 @@ vi.mock('./api', async () => {
     }),
     useSetPricePerSpray: () => ({
       mutateAsync: vi.fn().mockResolvedValue({}),
-      isPending: false,
-    }),
-    useCurrentAgreement: () => ({
-      data: {
-        agreement: {
-          id: 'agreement-1',
-          version: '1.0',
-          title: 'Hợp đồng khung dịch vụ',
-          content: 'Nội dung hợp đồng khung mẫu',
-          contentHash: 'a'.repeat(64),
-          isCurrent: true,
-          publishedAt: '2026-10-01T00:00:00.000Z',
-          createdAt: '2026-10-01T00:00:00.000Z',
-        },
-        acceptance: null,
-      },
-      isLoading: false,
-    }),
-    useAcceptAgreement: () => ({
-      mutateAsync: mockAcceptAgreementFn,
-      isPending: false,
-    }),
-    useResendVerification: () => ({
-      mutateAsync: mockResendVerificationFn,
       isPending: false,
     }),
     useRenewSlotRental: () => ({

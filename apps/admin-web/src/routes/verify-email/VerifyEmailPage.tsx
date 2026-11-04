@@ -2,6 +2,7 @@ import { Button, Card, Result, Spin } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { api, errorMessage, unwrap } from '@/shared/api';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 
 export default function VerifyEmailPage() {
@@ -9,6 +10,7 @@ export default function VerifyEmailPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const token = searchParams.get('token');
+  const { reloadUser } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -24,6 +26,8 @@ export default function VerifyEmailPage() {
     unwrap(api.POST('/auth/verify-email', { body: { token } }))
       .then(() => {
         setSuccess(true);
+        // Tab này đang đăng nhập thì thanh nhắc xác minh tắt ngay (ADR-0021); không có phiên thì bỏ qua.
+        void reloadUser().catch(() => undefined);
       })
       .catch((err) => {
         setError(err);
@@ -31,7 +35,7 @@ export default function VerifyEmailPage() {
       .finally(() => {
         setLoading(false);
       });
-  }, [token]);
+  }, [token, reloadUser]);
 
   if (!token) {
     return (

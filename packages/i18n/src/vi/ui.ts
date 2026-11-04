@@ -27,6 +27,52 @@ export const ui = {
   reauthDescription: 'Thao tác này cần nhập lại mật khẩu để tiếp tục.',
   networkError: 'Không kết nối được máy chủ. Kiểm tra mạng rồi thử lại.',
   loading: 'Đang tải...',
+  // Nhóm menu bên trái và nút thu gọn menu
+  navGroupOperations: 'Vận hành máy',
+  navGroupSales: 'Bán hàng',
+  navGroupRental: 'Thuê slot',
+  navGroupInventory: 'Kho & bổ sung',
+  navGroupFinance: 'Tài chính',
+  navGroupAdministration: 'Quản trị hệ thống',
+  collapseMenu: 'Thu gọn menu',
+  expandMenu: 'Mở rộng menu',
+  // Hướng dẫn lần đầu cho Brand Admin (nút "Tiếp"/"Hoàn thành" do antd dịch)
+  onboardingReplay: 'Xem hướng dẫn',
+  onboardingWelcomeTitle: 'Chào mừng tới ScentStation',
+  onboardingWelcomeDesc:
+    'Vài bước ngắn giới thiệu những việc cần làm để bán nước hoa của bạn trên máy của nền tảng. Bấm Tiếp để bắt đầu.',
+  onboardingRentalTitle: 'Bước 1 – Thuê slot và gắn sản phẩm',
+  onboardingRentalDesc:
+    'Tạo sản phẩm ở mục Sản phẩm. Vào Gói thuê & Hóa đơn để chọn slot trống, gói thuê và gói bảo quản rồi thanh toán. Thuê xong, vào Slot của tôi để gắn sản phẩm và đặt giá mỗi lượt xịt. Trước khi thanh toán, bạn cần xác minh email và đồng ý hợp đồng khung.',
+  onboardingInventoryTitle: 'Bước 2 – Gửi hàng và bổ sung',
+  onboardingInventoryDesc:
+    'Khai báo lô hàng gửi tới kho và nộp giấy tờ chứng minh hàng chính hãng; giấy tờ được duyệt thì chai mới được lắp vào slot. Thời hạn thuê tính từ lúc lắp chai đầu tiên. Slot sắp hết thì gửi yêu cầu bổ sung; hết hạn thuê thì theo dõi phiếu trả hàng tại đây.',
+  onboardingOrdersTitle: 'Đơn hàng',
+  onboardingOrdersDesc:
+    'Mỗi lượt xịt khách mua trên slot của bạn hiện ở đây, kèm trạng thái thanh toán và kết quả xịt.',
+  onboardingAlertsTitle: 'Cảnh báo',
+  onboardingAlertsDesc: 'Slot của bạn sắp hết hàng hoặc gặp sự cố sẽ được báo tại đây.',
+  onboardingFinanceTitle: 'Tài chính',
+  onboardingFinanceDesc:
+    'Nền tảng thu hộ tiền lượt xịt và chi trả cho bạn theo kỳ tháng. Xem kỳ chi trả, bồi thường hàng hóa và báo cáo bán hàng tại đây.',
+  onboardingProfileTitle: 'Hồ sơ thương hiệu',
+  onboardingProfileDesc:
+    'Khai mã số thuế và tài khoản nhận tiền. Nền tảng phải xác minh hồ sơ này trước lần chi trả doanh thu đầu tiên.',
+  onboardingHelpTitle: 'Xem lại hướng dẫn',
+  onboardingHelpDesc: 'Bấm nút này bất cứ lúc nào để xem lại các bước trên.',
+  onboardingAgreementTitle: 'Bước cuối – Hợp đồng khung',
+  onboardingAgreementDesc:
+    'Bấm Hoàn thành để đọc và đồng ý hợp đồng khung. Bạn chỉ cần đồng ý một lần; mỗi lần thanh toán thuê slot sẽ có thêm một phụ lục riêng cho lượt thuê đó.',
+  onboardingReadyTitle: 'Bạn đã sẵn sàng',
+  onboardingReadyDesc:
+    'Bạn đã đồng ý hợp đồng khung. Hãy bắt đầu bằng việc thuê slot ở mục Thuê slot.',
+  agreementLater: 'Để sau',
+  // Thanh nhắc xác minh email trên mọi trang (ADR-0021)
+  emailVerificationBanner:
+    'Email {email} chưa được xác minh. Bạn cần xác minh trước khi thuê slot — hãy kiểm tra hộp thư (cả mục thư rác) hoặc gửi lại email xác minh.',
+  onboardingEmailTitle: 'Trước tiên – Xác minh email',
+  onboardingEmailDesc:
+    'Mở email chúng tôi đã gửi và bấm vào liên kết xác minh. Chưa xác minh thì chưa thanh toán thuê slot được. Không thấy email thì bấm Gửi lại email xác minh.',
   // Quản lý máy và slot
   machines: 'Quản lý máy',
   machineList: 'Danh sách máy',
