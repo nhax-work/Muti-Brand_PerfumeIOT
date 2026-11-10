@@ -1,0 +1,54 @@
+# Tên miền lấy từ biến môi trường của service `web` (infra/staging/docker-compose.yml).
+{
+	email {$ACME_EMAIL}
+	# Chỉ dùng Let's Encrypt: ESP32 kiểm chứng chỉ MQTT bằng một root CA cố định (ISRG Root X1),
+	# không được để Caddy tự chuyển sang nhà cấp khác khi gia hạn.
+	cert_issuer acme
+}
+
+# Web tĩnh một trang + /api chuyển sang backend. {args[0]} là thư mục bản build.
+(spa) {
+	encode zstd gzip
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+	handle {
+		root * {args[0]}
+		# File trong /assets có hash trong tên nên cache lâu; index.html phải luôn lấy bản mới
+		# để bản deploy sau có hiệu lực ngay.
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		@notAssets not path /assets/*
+		header @notAssets Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+{$ADMIN_HOST} {
+	import spa /srv/admin
+}
+
+{$KIOSK_HOST} {
+	import spa /srv/kiosk
+}
+
+# Webhook PayOS, ảnh sản phẩm (MEDIA_PUBLIC_BASE_URL) và Swagger.
+{$API_HOST} {
+	encode zstd gzip
+	reverse_proxy api:3000
+}
+
+{$APEX_HOST} {
+	redir https://{$ADMIN_HOST}{uri}
+}
+
+# Site này chỉ để Caddy xin và gia hạn chứng chỉ cho broker. Mosquitto đọc chứng chỉ từ volume
+# dữ liệu của Caddy (infra/staging/mosquitto/start.sh). Khóa RSA để chuỗi chứng chỉ đi về
+# ISRG Root X1 — đúng root CA nạp vào firmware.
+{$MQTT_HOST} {
+	tls {
+		key_type rsa2048
+	}
+	respond "ScentStation MQTT broker: MQTT over TLS o cong 8883." 200
+}

@@ -19,6 +19,20 @@ export interface PublishOptions {
   readonly retain?: boolean;
 }
 
+/**
+ * URL broker để ghi log: thay mật khẩu bằng `***`. Ở staging/production MQTT_URL mang credential
+ * của backend (`mqtt://user:pass@host`), log không được lộ bí mật (NFR-SEC-05).
+ */
+export function redactBrokerUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) parsed.password = '***';
+    return parsed.toString();
+  } catch {
+    return '<MQTT_URL không hợp lệ>';
+  }
+}
+
 interface Subscription {
   readonly pattern: string;
   readonly qos: 0 | 1;
@@ -41,7 +55,7 @@ export class MqttClientAdapter implements OnApplicationShutdown {
       connectTimeout: 5000,
     });
     client.on('connect', () => {
-      this.logger.log(`Đã kết nối broker ${url} (clientId=${clientId})`);
+      this.logger.log(`Đã kết nối broker ${redactBrokerUrl(url)} (clientId=${clientId})`);
       for (const s of this.subscriptions) this.sendSubscribe(s);
     });
     // MQTT.js chỉ gửi PUBACK sau callback: commit DB trước khi xác nhận QoS 1 với broker.
