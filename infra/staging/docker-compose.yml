@@ -17,7 +17,10 @@ services:
       TZ: UTC
     volumes:
       - db_data:/var/lib/postgresql/data
-    # Không publish cổng: CSDL chỉ mở trong mạng Docker. Cần xem dữ liệu thì dùng SSH tunnel.
+    # Chỉ nghe trên 127.0.0.1 của VM — internet không tới được. DBeaver/pgAdmin trên laptop vào qua
+    # đường hầm SSH (docs/DEPLOY_STAGING.md mục 5).
+    ports:
+      - '127.0.0.1:5432:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
       interval: 5s

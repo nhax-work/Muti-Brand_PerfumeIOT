@@ -10,7 +10,7 @@ VM. Toàn bộ hệ thống chạy bằng một file docker compose (NFR-MTN-03)
 | https://kiosk.scentstation.id.vn/?serial=M001 | Màn hình kiosk của máy `M001` |
 | https://api.scentstation.id.vn | API: webhook PayOS, ảnh sản phẩm, Swagger tại `/api/docs` |
 | `mqtt.scentstation.id.vn:8883` | Broker MQTT có TLS cho ESP32 và Device Simulator |
-| https://scentstation.id.vn | Chuyển hướng sang web quản trị |
+| https://scentstation.id.vn | Landing page ([`apps/landing`](../apps/landing)); `/login`, `/register` chuyển sang web quản trị |
 
 ```
 VM Azure (Ubuntu 24.04, 2 vCPU / 4GB)
@@ -150,7 +150,19 @@ Mọi lệnh chạy trên VM, trong `/opt/scentstation/app`:
 | Sao lưu CSDL | `bash infra/staging/run.sh exec -T db pg_dump -U scent scentstation \| gzip > ~/backup-$(date +%F).sql.gz` |
 | Thêm máy mới | `bash infra/staging/mqtt-device.sh M002` |
 
-CSDL không mở cổng ra internet; xem dữ liệu bằng `run.sh psql`.
+**Xem CSDL bằng DBeaver.** CSDL chỉ nghe trên `127.0.0.1` của VM, internet không tới được; DBeaver
+tự mở đường hầm SSH. *New Database Connection → PostgreSQL*:
+
+| Tab | Ô | Giá trị |
+|---|---|---|
+| Main | Host / Port | `localhost` / `5432` |
+| Main | Database / Username | `scentstation` / `scent` |
+| Main | Password | `grep DB_PASSWORD /opt/scentstation/secrets/compose.env` (chạy trên VM) |
+| SSH | Use SSH Tunnel | Bật |
+| SSH | Host / Port / User | `104.208.90.228` / `22` / `azureuser` |
+| SSH | Authentication | Public Key, chọn file `.pem` dùng để SSH vào VM |
+
+Không cài DBeaver thì dùng `run.sh psql`.
 
 ## 6. Thanh toán và email
 
