@@ -82,14 +82,17 @@ SEED_DEFAULT_PASSWORD=Scent-$(hex 6)!
 
 # --- Thanh toán ---
 # mock: kiosk hiện QR giả, xác nhận trả tiền bằng: bash infra/staging/run.sh pay-mock <mã-tham-chiếu>
-# payos: điền 5 biến PAYOS_* rồi đăng ký webhook https://api.$domain/api/v1/webhooks/payments
+# payos: điền 3 khóa PAYOS_* của kênh thanh toán rồi đăng ký webhook
+#        https://api.$domain/api/v1/webhooks/payments/payos (docs/PAYOS.md)
 PAYMENT_PROVIDER=mock
 PAYMENT_WEBHOOK_SECRET=$(hex 32)
 PAYOS_CLIENT_ID=
 PAYOS_API_KEY=
 PAYOS_CHECKSUM_KEY=
-PAYOS_RETURN_URL=https://kiosk.$domain
-PAYOS_CANCEL_URL=https://kiosk.$domain
+# PayOS bắt buộc khi tạo link; kiosk không dùng, phiên thuê slot tự trỏ về trang phiên (FR-SLT-37).
+PAYOS_RETURN_URL=https://admin.$domain/rentals
+PAYOS_CANCEL_URL=https://admin.$domain/rentals
+PAYOS_BASE_URL=
 
 # --- Email (xác minh email thương hiệu, thông báo) ---
 # Để trống SMTP_HOST thì email chỉ ghi log; bật DEV_LOG_EMAIL_VERIFICATION_TOKEN để lấy token từ log.

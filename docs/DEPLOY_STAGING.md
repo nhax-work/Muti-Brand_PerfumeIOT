@@ -161,10 +161,11 @@ CSDL không mở cổng ra internet; xem dữ liệu bằng `run.sh psql`.
 bash infra/staging/run.sh pay-mock ORD-20261110-XXXXXX
 ```
 
-Chuyển sang PayOS thật: trong `/opt/scentstation/secrets/api.env` đặt `PAYMENT_PROVIDER=payos`,
-điền `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`; trong trang quản trị PayOS đặt
-webhook `https://api.scentstation.id.vn/api/v1/webhooks/payments`; rồi
-`bash infra/staging/run.sh up -d api`.
+Chuyển sang PayOS thật (tiền thật — PayOS không có sandbox, xem [PAYOS.md](PAYOS.md)): trong
+`/opt/scentstation/secrets/api.env` đặt `PAYMENT_PROVIDER=payos`, điền `PAYOS_CLIENT_ID`,
+`PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`; chạy `bash infra/staging/run.sh up -d api`; rồi trên
+my.payos.vn đặt Webhook URL `https://api.scentstation.id.vn/api/v1/webhooks/payments/payos`.
+PayOS gửi giao dịch mẫu để kiểm URL — backend trả 200 (`UNKNOWN_REFERENCE`) là đúng.
 
 **Email.** Để trống `SMTP_HOST` thì email chỉ ghi log. Muốn test luồng đăng ký thương hiệu mà
 chưa có SMTP, đặt `DEV_LOG_EMAIL_VERIFICATION_TOKEN=true` rồi lấy token bằng
@@ -181,24 +182,32 @@ khai kiểm chữ ký lệnh. Chép các dòng đó vào `arduino/<sketch>/confi
 `.gitignore`).
 
 `MQTT_ROOT_CA` là chứng chỉ gốc **ISRG Root X1** của Let's Encrypt
-(https://letsencrypt.org/certs/isrgrootx1.pem). Chuyển file PEM thành chuỗi C:
+(https://letsencrypt.org/certs/isrgrootx1.pem). Lệnh sau in sẵn cả dòng `#define MQTT_ROOT_CA`
+dạng chuỗi C; dùng nó **thay** dòng `#define MQTT_ROOT_CA ""` trong `config.h`:
 
 ```bash
-curl -fsSL https://letsencrypt.org/certs/isrgrootx1.pem | tr -d '\r' | sed 's/.*/"&\\n" \\/'
+echo '#define MQTT_ROOT_CA \'
+curl -fsSL https://letsencrypt.org/certs/isrgrootx1.pem | tr -d '\r' | sed 's/.*/"&\\n" \\/' | sed '$ s/ \\$//'
 ```
 
-rồi đặt kết quả sau `#define MQTT_ROOT_CA`. Cuối cùng chuyển máy sang thiết bị thật trong CSDL:
+Dòng cuối không được có dấu `\` — nếu có, trình biên dịch nối luôn dòng `#define` kế tiếp vào chứng
+chỉ. Cuối cùng chuyển máy sang thiết bị thật trong CSDL:
 
 ```bash
 bash infra/staging/run.sh prepare-device M001
 ```
 
-**Không có phần cứng?** Chạy Device Simulator trên máy mình, nối vào broker staging bằng tài khoản
-của máy (lấy mật khẩu trong file `devices/M001.txt`):
+**Không có phần cứng?** Máy không gửi heartbeat thì hệ thống coi là `OFFLINE` và kiosk hiện
+"Máy đang tạm ngưng phục vụ". Cho Device Simulator đóng vai máy, chạy ngay trên VM:
 
 ```bash
-npm run sim -- --broker "mqtts://machine-M001:<mật-khẩu>@mqtt.scentstation.id.vn:8883"
+bash infra/staging/run.sh sim-start M001 --press-after 5   # tự "bấm nút" 5 giây sau khi đèn sáng
+docker logs -f sim-M001                                    # xem simulator nhận lệnh, xịt
+bash infra/staging/run.sh sim-stop M001                    # dừng trước khi cắm ESP32 thật
 ```
+
+Bỏ `--press-after 5` thì simulator không tự bấm — đơn hết giờ chờ bấm sẽ `FORFEITED`. Các cờ khác
+(giả lỗi, cửa mở…) xem đầu file `scripts/device-simulator.ts`.
 
 ## Khi có sự cố
 
