@@ -179,3 +179,33 @@ jobs:
             echo "::warning::Có thể hardcode ngưỡng số, phải lấy từ constraints.md:"
             echo "$HITS"
           fi
+
+  # ============ 5.7 Deploy staging ============
+  # Chỉ chạy khi push lên dev và mọi job trên đều xanh. Hướng dẫn cài VM: docs/DEPLOY_STAGING.md.
+  # Chưa khai secret STAGING_* thì bỏ qua, không làm đỏ CI.
+  deploy-staging:
+    name: Deploy staging
+    needs: [lint, test, contract, spec]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    steps:
+      - name: Deploy lên VM qua SSH
+        env:
+          SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
+          SSH_USER: ${{ secrets.STAGING_SSH_USER }}
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.STAGING_SSH_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$SSH_HOST" ] || [ -z "$SSH_KEY" ]; then
+            echo "::warning::Chưa cấu hình secret STAGING_* — bỏ qua deploy staging"
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST" \
+            "cd /opt/scentstation/app && git fetch --quiet origin dev && git checkout --quiet --detach $GITHUB_SHA && bash infra/staging/deploy.sh"
