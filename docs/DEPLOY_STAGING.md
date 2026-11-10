@@ -197,12 +197,17 @@ chỉ. Cuối cùng chuyển máy sang thiết bị thật trong CSDL:
 bash infra/staging/run.sh prepare-device M001
 ```
 
-**Không có phần cứng?** Chạy Device Simulator trên máy mình, nối vào broker staging bằng tài khoản
-của máy (lấy mật khẩu trong file `devices/M001.txt`):
+**Không có phần cứng?** Máy không gửi heartbeat thì hệ thống coi là `OFFLINE` và kiosk hiện
+"Máy đang tạm ngưng phục vụ". Cho Device Simulator đóng vai máy, chạy ngay trên VM:
 
 ```bash
-npm run sim -- --broker "mqtts://machine-M001:<mật-khẩu>@mqtt.scentstation.id.vn:8883"
+bash infra/staging/run.sh sim-start M001 --press-after 5   # tự "bấm nút" 5 giây sau khi đèn sáng
+docker logs -f sim-M001                                    # xem simulator nhận lệnh, xịt
+bash infra/staging/run.sh sim-stop M001                    # dừng trước khi cắm ESP32 thật
 ```
+
+Bỏ `--press-after 5` thì simulator không tự bấm — đơn hết giờ chờ bấm sẽ `FORFEITED`. Các cờ khác
+(giả lỗi, cửa mở…) xem đầu file `scripts/device-simulator.ts`.
 
 ## Khi có sự cố
 
