@@ -161,10 +161,11 @@ CSDL không mở cổng ra internet; xem dữ liệu bằng `run.sh psql`.
 bash infra/staging/run.sh pay-mock ORD-20261110-XXXXXX
 ```
 
-Chuyển sang PayOS thật: trong `/opt/scentstation/secrets/api.env` đặt `PAYMENT_PROVIDER=payos`,
-điền `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`; trong trang quản trị PayOS đặt
-webhook `https://api.scentstation.id.vn/api/v1/webhooks/payments`; rồi
-`bash infra/staging/run.sh up -d api`.
+Chuyển sang PayOS thật (tiền thật — PayOS không có sandbox, xem [PAYOS.md](PAYOS.md)): trong
+`/opt/scentstation/secrets/api.env` đặt `PAYMENT_PROVIDER=payos`, điền `PAYOS_CLIENT_ID`,
+`PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`; chạy `bash infra/staging/run.sh up -d api`; rồi trên
+my.payos.vn đặt Webhook URL `https://api.scentstation.id.vn/api/v1/webhooks/payments/payos`.
+PayOS gửi giao dịch mẫu để kiểm URL — backend trả 200 (`UNKNOWN_REFERENCE`) là đúng.
 
 **Email.** Để trống `SMTP_HOST` thì email chỉ ghi log. Muốn test luồng đăng ký thương hiệu mà
 chưa có SMTP, đặt `DEV_LOG_EMAIL_VERIFICATION_TOKEN=true` rồi lấy token bằng
