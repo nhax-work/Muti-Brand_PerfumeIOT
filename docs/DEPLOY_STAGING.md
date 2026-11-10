@@ -181,13 +181,16 @@ khai kiểm chữ ký lệnh. Chép các dòng đó vào `arduino/<sketch>/confi
 `.gitignore`).
 
 `MQTT_ROOT_CA` là chứng chỉ gốc **ISRG Root X1** của Let's Encrypt
-(https://letsencrypt.org/certs/isrgrootx1.pem). Chuyển file PEM thành chuỗi C:
+(https://letsencrypt.org/certs/isrgrootx1.pem). Lệnh sau in sẵn cả dòng `#define MQTT_ROOT_CA`
+dạng chuỗi C; dùng nó **thay** dòng `#define MQTT_ROOT_CA ""` trong `config.h`:
 
 ```bash
-curl -fsSL https://letsencrypt.org/certs/isrgrootx1.pem | tr -d '\r' | sed 's/.*/"&\\n" \\/'
+echo '#define MQTT_ROOT_CA \'
+curl -fsSL https://letsencrypt.org/certs/isrgrootx1.pem | tr -d '\r' | sed 's/.*/"&\\n" \\/' | sed '$ s/ \\$//'
 ```
 
-rồi đặt kết quả sau `#define MQTT_ROOT_CA`. Cuối cùng chuyển máy sang thiết bị thật trong CSDL:
+Dòng cuối không được có dấu `\` — nếu có, trình biên dịch nối luôn dòng `#define` kế tiếp vào chứng
+chỉ. Cuối cùng chuyển máy sang thiết bị thật trong CSDL:
 
 ```bash
 bash infra/staging/run.sh prepare-device M001
