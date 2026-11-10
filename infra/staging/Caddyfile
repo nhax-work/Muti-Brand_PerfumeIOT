@@ -39,8 +39,16 @@
 	reverse_proxy api:3000
 }
 
+# Landing page công khai (apps/landing). Nút "Đăng nhập"/"Đăng ký" trỏ /login, /register trên chính
+# tên miền này rồi được chuyển sang web quản trị — HTML không phải ghi cứng tên miền admin.
 {$APEX_HOST} {
-	redir https://{$ADMIN_HOST}{uri}
+	encode zstd gzip
+	redir /login https://{$ADMIN_HOST}/login
+	redir /register https://{$ADMIN_HOST}/register
+	redir /admin https://{$ADMIN_HOST}/
+	header Cache-Control "no-cache"
+	root * /srv/landing
+	file_server
 }
 
 # Site này chỉ để Caddy xin và gia hạn chứng chỉ cho broker. Mosquitto đọc chứng chỉ từ volume

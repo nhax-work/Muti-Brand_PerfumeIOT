@@ -10,7 +10,7 @@ VM. Toàn bộ hệ thống chạy bằng một file docker compose (NFR-MTN-03)
 | https://kiosk.scentstation.id.vn/?serial=M001 | Màn hình kiosk của máy `M001` |
 | https://api.scentstation.id.vn | API: webhook PayOS, ảnh sản phẩm, Swagger tại `/api/docs` |
 | `mqtt.scentstation.id.vn:8883` | Broker MQTT có TLS cho ESP32 và Device Simulator |
-| https://scentstation.id.vn | Chuyển hướng sang web quản trị |
+| https://scentstation.id.vn | Landing page ([`apps/landing`](../apps/landing)); `/login`, `/register` chuyển sang web quản trị |
 
 ```
 VM Azure (Ubuntu 24.04, 2 vCPU / 4GB)

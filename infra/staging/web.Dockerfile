@@ -1,5 +1,5 @@
-# Cổng vào staging: Caddy cấp HTTPS (Let's Encrypt), phục vụ bản build tĩnh của web quản trị và
-# kiosk, rồi chuyển /api sang backend. Hai app gọi API bằng đường dẫn tương đối `/api/v1` nên cùng
+# Cổng vào staging: Caddy cấp HTTPS (Let's Encrypt), phục vụ landing page, bản build tĩnh của web
+# quản trị và kiosk, rồi chuyển /api sang backend. Hai app gọi API bằng đường dẫn tương đối `/api/v1` nên cùng
 # origin, không cần CORS.
 
 FROM node:22.15.1-bookworm-slim AS build
@@ -31,3 +31,5 @@ FROM caddy:2.8.4-alpine
 COPY infra/staging/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/apps/admin-web/dist /srv/admin
 COPY --from=build /app/apps/kiosk/dist /srv/kiosk
+# Landing page là HTML/CSS tĩnh, không qua bước build.
+COPY apps/landing /srv/landing
