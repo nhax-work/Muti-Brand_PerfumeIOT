@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
 import BottleReturnsPage from './BottleReturnsPage';
 import type { BottleReturn } from './api';
@@ -88,8 +88,14 @@ describe('BottleReturnsPage', () => {
     installDomStubs();
   });
 
+  beforeEach(() => {
+    // Giữ ngày hiện tại trước hạn nhận của dữ liệu mẫu, không phụ thuộc ngày chạy CI.
+    vi.setSystemTime(new Date('2026-11-01T08:00:00Z'));
+  });
+
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it('renders page header and list of returns correctly', () => {
@@ -102,6 +108,22 @@ describe('BottleReturnsPage', () => {
     expect(screen.getByText('Nhận tại kho')).toBeDefined();
     expect(screen.getByText('Đã bàn giao')).toBeDefined();
     expect(screen.getByText('Chờ nhận hàng')).toBeDefined();
+  });
+
+  it.each([
+    ['2026-11-09T07:59:59.999Z', 'Chờ nhận hàng'],
+    ['2026-11-09T08:00:00.000Z', 'Chờ nhận hàng'],
+    ['2026-11-09T08:00:00.001Z', 'Chờ nhận hàng (Quá hạn)'],
+  ])('hiển thị trạng thái nhận hàng tại %s là %s', (now, status) => {
+    vi.setSystemTime(new Date(now));
+    renderScreen(<BottleReturnsPage />);
+
+    const pendingRow = screen.getByText('ret-1').closest('tr')!;
+    expect(within(pendingRow).getByText(status)).toBeDefined();
+
+    const handedOverRow = screen.getByText('ret-2').closest('tr')!;
+    expect(within(handedOverRow).getByText('Đã bàn giao')).toBeDefined();
+    expect(within(handedOverRow).queryByText(/Chờ nhận hàng/)).toBeNull();
   });
 
   it('opens detail drawer when clicking details button', () => {
