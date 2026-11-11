@@ -2011,29 +2011,18 @@ describe('SltService — Quản lý phiên bản hợp đồng khung (FR-SLT-48)
   let audits: AuditEntry[];
   let service: SltService;
 
-  const superAdmin: AuthenticatedUser = {
+  const superAdmin = user({
     userId: 'super-admin-1',
-    sessionId: 'sess-admin',
-    email: 'admin@scentstation.vn',
-    fullName: 'Super Admin',
-    status: 'ACTIVE',
-    mustChangePassword: false,
-    brandId: null,
     roles: ['PLATFORM_SUPER_ADMIN'],
-    permissions: ['rental.manage'],
-  };
+    permissions: new Set(['rental.manage']),
+  });
 
-  const brandAdmin: AuthenticatedUser = {
+  const brandAdmin = user({
     userId: 'brand-admin-1',
-    sessionId: 'sess-brand',
-    email: 'brand@example.com',
-    fullName: 'Brand Admin',
-    status: 'ACTIVE',
-    mustChangePassword: false,
     brandId: BRAND_A,
     roles: ['BRAND_ADMIN'],
-    permissions: [],
-  };
+    scope: { type: 'BRAND', brandId: BRAND_A } as AuthenticatedUser['scope'],
+  });
 
   beforeEach(() => {
     queries = new FakeSltQueries();

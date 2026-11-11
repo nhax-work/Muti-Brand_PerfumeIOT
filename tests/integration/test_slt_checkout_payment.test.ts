@@ -855,7 +855,7 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
             `UPDATE agreement_versions SET content = 'Nội dung bị sửa' WHERE version = $1`,
             [immutableVer],
           ),
-        ).rejects.toThrow(/chk_agreement_published_immutable/);
+        ).rejects.toThrow(/đã công bố, không sửa nội dung được/);
       } finally {
         await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
           immutableVer,
