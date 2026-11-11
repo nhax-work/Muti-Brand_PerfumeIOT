@@ -1,5 +1,5 @@
 import type { components } from '@scentstation/contracts';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
 
 export type MachineSlot = components['schemas']['MachineSlot'];
@@ -187,6 +187,23 @@ export function useBrandProducts() {
   });
 }
 
+/**
+ * Cấu hình slot đổi thì mọi màn đang hiển thị slot đó phải đọc lại: hóa đơn, chi tiết thuê, danh
+ * sách Slot của tôi, sơ đồ máy và báo cáo theo slot.
+ */
+function invalidateSlotSetup(queryClient: QueryClient, rentalId: string) {
+  for (const queryKey of [
+    ['rental-invoice', rentalId],
+    ['slot-rental-invoice', rentalId],
+    ['slot-rental', rentalId],
+    ['slot-rentals'],
+    ['machine-map'],
+    ['brand-slot-report'],
+  ]) {
+    void queryClient.invalidateQueries({ queryKey });
+  }
+}
+
 /** Gán / đổi sản phẩm cho slot (FR-SLT-27, FR-SLT-28). */
 export function useAssignProduct() {
   const queryClient = useQueryClient();
@@ -204,10 +221,7 @@ export function useAssignProduct() {
           body: { fragranceProductId },
         }),
       ),
-    onSuccess: (_, { rentalId }) => {
-      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
-      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
-    },
+    onSuccess: (_, { rentalId }) => invalidateSlotSetup(queryClient, rentalId),
   });
 }
 
@@ -222,10 +236,7 @@ export function useSetPricePerSpray() {
           body: { pricePerSpray },
         }),
       ),
-    onSuccess: (_, { rentalId }) => {
-      void queryClient.invalidateQueries({ queryKey: ['rental-invoice', rentalId] });
-      void queryClient.invalidateQueries({ queryKey: ['slot-rentals'] });
-    },
+    onSuccess: (_, { rentalId }) => invalidateSlotSetup(queryClient, rentalId),
   });
 }
 

@@ -1,7 +1,10 @@
-import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { message } from 'antd';
 import type { ReactNode } from 'react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@/shared/i18n';
 import { installDomStubs, renderScreen } from '@/test-utils';
 import ProductsPage from './ProductsPage';
 
@@ -157,5 +160,19 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     expect(screen.getByText('Aurore Matinale')).toBeTruthy();
     expect(screen.queryByText('Thêm sản phẩm')).toBeNull();
     expect(screen.queryByText('Sửa')).toBeNull();
+  });
+
+  it('mở từ nút Tạo sản phẩm của modal cấu hình slot (?new=1) thì pop-up tạo sản phẩm mở sẵn', async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <I18nProvider>
+          <MemoryRouter initialEntries={['/products?new=1']}>
+            <ProductsPage />
+          </MemoryRouter>
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Thêm sản phẩm')).toBeTruthy();
   });
 });

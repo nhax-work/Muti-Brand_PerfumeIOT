@@ -6,6 +6,8 @@
   --color-online: #10b981;
   --color-unstable: #f59e0b;
   --color-offline: #94a3b8;
+  --surface-muted: #f1f5f9;
+  --line: #e2e8f0;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -415,4 +417,53 @@ body {
 
 .ant-picker-time-panel-column:nth-child(3)::before {
   content: 'Giây';
+}
+
+/* Modal cấu hình slot của Brand Admin (SlotSetupModal). */
+.slot-setup-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.slot-setup-section + .slot-setup-section {
+  margin-top: 16px;
+}
+
+.slot-setup-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.slot-setup-option-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.slot-setup-thumb {
+  width: 40px;
+  aspect-ratio: 4 / 5;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-setup-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.slot-setup-thumb-placeholder {
+  color: var(--color-offline);
 }

@@ -36,14 +36,47 @@ const RENTALS = [
   rental('r-selling', 's-1', {}),
   rental('r-unpriced', 's-2', { pricePerSpray: null }),
   rental('r-ended', 's-3', { status: 'CLOSED', stage: 'ENDED' }),
+  // Đã cấu hình nhưng chưa lắp chai: chưa có trên sơ đồ máy, tên sản phẩm tra từ danh mục.
+  rental('r-awaiting', 's-4', {
+    status: 'DRAFT',
+    stage: 'AWAITING_STOCK',
+    fragranceProductId: 'p-2',
+  }),
 ];
+
+vi.mock('@/routes/rentals/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/routes/rentals/api')>()),
+  useBrandProducts: () => ({
+    data: {
+      items: [
+        {
+          id: 'p-1',
+          name: 'Aurore Matinale',
+          sku: 'MA-001',
+          defaultPrice: '35000.0000',
+          status: 'ACTIVE',
+        },
+        {
+          id: 'p-2',
+          name: 'Aurore Soir',
+          sku: 'MA-002',
+          defaultPrice: '40000.0000',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    isLoading: false,
+  }),
+  useAssignProduct: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSetPricePerSpray: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
 
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
   return {
     ...actual,
     useMyRentals: () => ({
-      data: { items: RENTALS, meta: { page: 1, pageSize: 100, total: 3 } },
+      data: { items: RENTALS, meta: { page: 1, pageSize: 100, total: 4 } },
       isLoading: false,
       refetch: vi.fn(),
     }),
@@ -155,14 +188,31 @@ describe('MySlotsPage — Slot của tôi', () => {
     expect(within(unpricedRow).getByText('Chưa cấu hình')).toBeTruthy();
 
     // Hóa đơn đã kết thúc không thuộc "slot của tôi".
-    expect(screen.queryByText('Máy Vincom #1 · Slot #3')).toBeNull();
-    expect(screen.getAllByRole('row')).toHaveLength(3); // tiêu đề + 2 slot
+    expect(screen.queryByText('Máy Vincom #1 · Slot #4')).toBeNull();
+    expect(screen.getAllByRole('row')).toHaveLength(4); // tiêu đề + 3 slot
   });
 
-  it('nút Cấu hình dẫn tới hóa đơn của slot (gán sản phẩm, đặt giá)', () => {
+  it('slot chờ nạp hàng đã cấu hình: tên sản phẩm lấy từ danh mục, nhãn Chờ nạp hàng chỉ hiện một lần', () => {
+    renderPage();
+    const row = screen.getByText('Máy Vincom #1 · Slot #3').closest('tr')!;
+    expect(within(row).getByText('Aurore Soir')).toBeTruthy();
+    expect(within(row).getAllByText('Chờ nạp hàng')).toHaveLength(1);
+  });
+
+  it('nút Cấu hình mở modal cấu hình ngay tại trang, không rời Slot của tôi', async () => {
     renderPage();
     const row = screen.getByText('Máy Vincom #1 · Slot #2').closest('tr')!;
     fireEvent.click(within(row).getByText('Cấu hình'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Cấu hình slot')).toBeTruthy();
+    expect(within(dialog).getByText('Máy Vincom #1 · Slot #2')).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('nút Hóa đơn vẫn dẫn tới trang hóa đơn của slot', () => {
+    renderPage();
+    const row = screen.getByText('Máy Vincom #1 · Slot #2').closest('tr')!;
+    fireEvent.click(within(row).getByText('Hóa đơn'));
     expect(mockNavigate).toHaveBeenCalledWith('/rentals/r-unpriced');
   });
 });

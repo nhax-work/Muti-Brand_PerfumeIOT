@@ -16,7 +16,8 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { useAuth } from '@/shared/auth';
@@ -57,7 +58,14 @@ export default function ProductsPage() {
   const { data, isLoading } = useProducts({ page, pageSize: 20, status });
   const save = useSaveProduct();
   const discontinue = useDiscontinueProduct();
-  const [editing, setEditing] = useState<Product | 'new' | null>(null);
+  // `?new=1`: tới từ nút "Tạo sản phẩm" ở modal cấu hình slot — mở sẵn pop-up tạo sản phẩm.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsNew = canEdit && searchParams.get('new') === '1';
+  const [editing, setEditing] = useState<Product | 'new' | null>(() => (wantsNew ? 'new' : null));
+  // Bỏ tham số sau lần mở đầu để tải lại trang không bật pop-up lần nữa.
+  useEffect(() => {
+    if (wantsNew) setSearchParams({}, { replace: true });
+  }, [wantsNew, setSearchParams]);
   const [form] = Form.useForm<ProductForm>();
   const uploadImage = useUploadProductImage();
   const deleteImage = useDeleteProductImage();

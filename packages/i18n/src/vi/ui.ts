@@ -1143,4 +1143,22 @@ export const ui = {
   productImageTooLarge: 'Ảnh vượt quá {maxMb} MB',
   productImageSaveFailed: 'Đã lưu sản phẩm nhưng chưa cập nhật được ảnh: {reason}',
   productNoImage: 'Chưa có ảnh',
+  slotSetupSave: 'Lưu cấu hình',
+  slotSetupSaved: 'Đã lưu cấu hình slot',
+  slotSetupStepProduct: 'Chọn sản phẩm',
+  slotSetupStepPrice: 'Đặt giá',
+  slotSetupStepStock: 'Lắp chai',
+  slotSetupStockWaiting: 'Nhân viên nền tảng sẽ lắp chai',
+  slotSetupProductLabel: 'Sản phẩm bán ở slot này',
+  slotSetupProductMeta: 'SKU {sku} · Giá gợi ý {price}',
+  slotSetupNoProducts:
+    'Thương hiệu chưa có sản phẩm nào. Tạo sản phẩm trước rồi quay lại đây để gán vào slot.',
+  slotSetupCreateProduct: 'Tạo sản phẩm',
+  slotSetupSuggestedPrice: 'Giá gợi ý của sản phẩm: {price}',
+  slotSetupUseSuggested: 'Dùng giá gợi ý',
+  slotSetupMissing: 'Kiosk chỉ bán slot đã có đủ sản phẩm và giá mỗi lượt xịt.',
+  slotSetupReadyAwaitingStock:
+    'Slot đã đủ sản phẩm và giá. Kiosk bắt đầu bán ngay khi nhân viên lắp chai.',
+  slotSetupReadySelling: 'Slot đã đủ sản phẩm và giá. Thay đổi có hiệu lực trên kiosk ngay.',
+  mySlotsInvoice: 'Hóa đơn',
 } as const;

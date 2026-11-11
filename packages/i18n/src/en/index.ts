@@ -1557,6 +1557,25 @@ export const en: SameKeysAs<typeof vi> = {
     productImageTooLarge: 'The image is larger than {maxMb} MB',
     productImageSaveFailed: 'The product was saved but its image was not updated: {reason}',
     productNoImage: 'No image',
+    slotSetupSave: 'Save configuration',
+    slotSetupSaved: 'Slot configuration saved',
+    slotSetupStepProduct: 'Choose product',
+    slotSetupStepPrice: 'Set price',
+    slotSetupStepStock: 'Install bottle',
+    slotSetupStockWaiting: 'Platform staff will install the bottle',
+    slotSetupProductLabel: 'Product sold in this slot',
+    slotSetupProductMeta: 'SKU {sku} · Suggested {price}',
+    slotSetupNoProducts:
+      'The brand has no products yet. Create a product first, then come back to assign it to the slot.',
+    slotSetupCreateProduct: 'Create product',
+    slotSetupSuggestedPrice: 'Suggested price for this product: {price}',
+    slotSetupUseSuggested: 'Use suggested price',
+    slotSetupMissing: 'The kiosk only sells a slot that has both a product and a price per spray.',
+    slotSetupReadyAwaitingStock:
+      'The slot has a product and a price. The kiosk starts selling as soon as staff install the bottle.',
+    slotSetupReadySelling:
+      'The slot has a product and a price. Changes take effect on the kiosk immediately.',
+    mySlotsInvoice: 'Invoice',
   },
 
   kiosk: {
