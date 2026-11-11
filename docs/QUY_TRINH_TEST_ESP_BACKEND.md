@@ -1,3 +1,5 @@
+> **Bảng mạch hiện tại: Rev C.** Dùng firmware `arduino/ScentStationValveDevice` cho PCB có van, PCF8575 và khóa tải. Xem [hồ sơ Rev C](<../AI gen/Documents/RevC/README.md>). `ScentStationDevice` là bản cho hệ bơm rời.
+
 # Test ESP32 với backend sau khi thử nút cục bộ
 
 ## 1. Nạp firmware kết nối
@@ -34,7 +36,7 @@ Trong terminal khác:
 npm run device:activate -- -MachineSerial M001 -SlotNumber 1
 ```
 
-Đèn 1 sáng và ESP hiện `Command armed: slot 1`. Thả rồi nhấn nút 1: chỉ bơm 1 chạy một lần khoảng 500 ms. Nhấn nút khác phải bị bỏ qua. Sau khi hoàn tất, nhấn lại mà chưa cấp lệnh mới thì không chạy. Test lệnh mới cho các slot còn lại đang được cấu hình cho phép. Một lệnh không bấm sẽ hết cửa sổ 60 giây và tắt đèn.
+Đèn 1 sáng và ESP hiện `Command armed: slot 1`. Thả rồi nhấn nút 1: chỉ bơm 1 chạy một lần khoảng 3 giây. Nhấn nút khác phải bị bỏ qua. Sau khi hoàn tất, nhấn lại mà chưa cấp lệnh mới thì không chạy. Test lệnh mới cho các slot còn lại đang được cấu hình cho phép. Một lệnh không bấm sẽ hết cửa sổ 60 giây và tắt đèn.
 
 Script này chỉ publish MQTT: không tạo payment/order/dispense_command trong backend. Vì vậy dùng nó để thử đèn và nút, không dùng nó để kết luận dữ liệu giao dịch đã lưu đầy đủ.
 

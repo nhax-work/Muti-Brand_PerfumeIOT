@@ -41,6 +41,10 @@ dist/
 coverage/
 *.tsbuildinfo
 .vitest/
+.tmp/
+
+# Local generated designs and documents
+/AI gen/
 
 # package-lock.json KHÔNG được ignore: CI chạy `npm ci` nên bắt buộc phải có trong repo.
 
