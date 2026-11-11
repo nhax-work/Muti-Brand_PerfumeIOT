@@ -48,6 +48,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 8 | `spec/decisions/` | Nhật ký ADR cho các thay đổi contract | Đang đề xuất hoặc rà soát một thay đổi contract |
 | 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
 | 10 | `docs/HUONG_DAN_FRONTEND.md` | Cấu trúc `apps/admin-web` và `apps/kiosk`, năm quy tắc FE, gọi API, i18n, xác thực lại | **Trước khi viết màn hình đầu tiên** |
+| 11 | `docs/QUY_TAC_GIAO_DIEN.md` | Bộ quy tắc thiết kế chung cho admin-web, kiosk, landing: token màu/chữ/khoảng cách, khung trang, màu trạng thái, giọng văn, checklist | **Trước khi sửa bất kỳ giao diện nào** |
 
 > **Quyết định mới nhất phải đọc trước khi đụng SLT, EXP, INV, ORD, DSP hay firmware:**
 > `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (thuê slot theo gói trả trước, hóa
