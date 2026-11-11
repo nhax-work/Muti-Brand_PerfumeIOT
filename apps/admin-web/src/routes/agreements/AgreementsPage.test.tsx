@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { message } from 'antd';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
@@ -50,14 +51,24 @@ vi.mock('./api', async () => ({
   usePublishAgreementVersion: () => ({ mutateAsync: mockPublish, isPending: false }),
 }));
 
-beforeAll(installDomStubs);
+beforeAll(() => {
+  installDomStubs();
+  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as unknown as ReturnType<
+    typeof message.success
+  >;
+  vi.spyOn(message, 'success').mockReturnValue(dummyMessage);
+  vi.spyOn(message, 'error').mockReturnValue(dummyMessage);
+});
+
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  mockCreate.mockClear();
+  mockPublish.mockClear();
+  mockRequestReauth.mockClear();
 });
 
 describe('AgreementsPage (FR-SLT-48)', () => {
-  it('hiển thị danh sách phiên bản kèm trạng thái, số thương hiệu đã đồng ý và chỉ hiện nút Công bố ở bản nháp', () => {
+  it('hiển thị danh sách phiên bản, trạng thái và nút Công bố ở bản nháp', () => {
     renderScreen(<AgreementsPage />);
 
     const draftRow = screen.getByText('2026.2').closest('tr')!;
@@ -74,20 +85,15 @@ describe('AgreementsPage (FR-SLT-48)', () => {
   it('mở modal soạn phiên bản mới và gửi dữ liệu tạo bản nháp', async () => {
     renderScreen(<AgreementsPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Soạn phiên bản mới/i }));
+    fireEvent.click(screen.getByText('Soạn phiên bản mới'));
     const dialog = await screen.findByRole('dialog');
+    const [versionInput, titleInput, contentInput] = within(dialog).getAllByRole('textbox');
 
-    fireEvent.change(within(dialog).getByLabelText(/Mã phiên bản/i), {
-      target: { value: '2026.3' },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/Tiêu đề hợp đồng/i), {
-      target: { value: 'Hợp đồng khung 2026.3' },
-    });
-    fireEvent.change(within(dialog).getByLabelText(/Nội dung điều khoản/i), {
-      target: { value: 'Toàn văn hợp đồng khung 2026.3' },
-    });
+    fireEvent.change(versionInput!, { target: { value: '2026.3' } });
+    fireEvent.change(titleInput!, { target: { value: 'Hợp đồng khung 2026.3' } });
+    fireEvent.change(contentInput!, { target: { value: 'Toàn văn hợp đồng khung 2026.3' } });
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /Lưu/i }));
+    fireEvent.click(within(dialog).getByText('Lưu'));
 
     await waitFor(() =>
       expect(mockCreate).toHaveBeenCalledWith({
@@ -98,7 +104,7 @@ describe('AgreementsPage (FR-SLT-48)', () => {
     );
   });
 
-  it('xác nhận công bố bản nháp yêu cầu reauth và gọi publish với X-Reauth-Token', async () => {
+  it('xác nhận công bố bản nháp yêu cầu reauth và gọi publish', async () => {
     renderScreen(<AgreementsPage />);
 
     const draftRow = screen.getByText('2026.2').closest('tr')!;

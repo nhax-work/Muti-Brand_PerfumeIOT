@@ -208,11 +208,11 @@ class FakeSltQueries {
     return updated;
   }
 
-  async countFrameworkAcceptances(agreementVersionId: string) {
+  async countFrameworkAcceptances(versionId: string) {
     return new Set(
       this.acceptances
-        .filter((acc) => acc.agreementVersionId === agreementVersionId && acc.kind === 'FRAMEWORK')
-        .map((acc) => acc.brandId),
+        .filter((a) => a.agreementVersionId === versionId && a.kind === 'FRAMEWORK')
+        .map((a) => a.brandId),
     ).size;
   }
 

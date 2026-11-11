@@ -49,9 +49,15 @@ export default function AgreementsPage() {
   const [form] = Form.useForm<AgreementVersionCreate>();
 
   const openCreateModal = () => {
-    form.resetFields();
     setCreateOpen(true);
   };
+
+  const viewingTitle = viewingVersion
+    ? `${viewingVersion.title} (v${viewingVersion.version})`
+    : undefined;
+  const publishModalTitle = publishingVersion
+    ? t('ui.agreementPublishModalTitle', { version: publishingVersion.version })
+    : undefined;
 
   const handleCreateDraft = async () => {
     const values = await form.validateFields().catch(() => null);
@@ -264,9 +270,7 @@ export default function AgreementsPage() {
         {/* Modal xem toàn văn nội dung phiên bản */}
         <Modal
           open={viewingVersion !== null}
-          title={
-            viewingVersion ? `${viewingVersion.title} (v${viewingVersion.version})` : undefined
-          }
+          title={viewingTitle}
           footer={[
             <Button key="close" onClick={() => setViewingVersion(null)}>
               {t('ui.cancel')}
@@ -318,11 +322,7 @@ export default function AgreementsPage() {
         {/* Modal xác nhận công bố phiên bản */}
         <Modal
           open={publishingVersion !== null}
-          title={
-            publishingVersion
-              ? t('ui.agreementPublishModalTitle', { version: publishingVersion.version })
-              : undefined
-          }
+          title={publishModalTitle}
           okText={t('ui.agreementPublishBtn')}
           cancelText={t('ui.cancel')}
           confirmLoading={publishMutation.isPending}
