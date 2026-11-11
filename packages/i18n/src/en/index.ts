@@ -250,6 +250,9 @@ export const en: SameKeysAs<typeof vi> = {
     taxCodeRequiredForVerification: 'Brand has not declared tax code, cannot verify legal entity',
     legalProfileSaved: 'Legal profile and payout account saved successfully',
     legalVerifiedSuccess: 'Legal entity verification recorded successfully',
+    logoFileRequired: 'Choose an image file for the logo',
+    logoTooLarge: 'The logo is larger than {maxMb} MB',
+    logoUnsupported: 'Only valid JPEG, PNG or WebP images are accepted for the logo',
   },
 
   prd: {
@@ -1576,6 +1579,10 @@ export const en: SameKeysAs<typeof vi> = {
     slotSetupReadySelling:
       'The slot has a product and a price. Changes take effect on the kiosk immediately.',
     mySlotsInvoice: 'Invoice',
+    brandLogo: 'Logo',
+    brandLogoHint:
+      'JPEG, PNG or WebP, up to {maxMb} MB. Square images on a plain background look best.',
+    brandLogoSaveFailed: 'The profile was saved but the logo was not updated: {reason}',
   },
 
   kiosk: {

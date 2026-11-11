@@ -1161,4 +1161,7 @@ export const ui = {
     'Slot đã đủ sản phẩm và giá. Kiosk bắt đầu bán ngay khi nhân viên lắp chai.',
   slotSetupReadySelling: 'Slot đã đủ sản phẩm và giá. Thay đổi có hiệu lực trên kiosk ngay.',
   mySlotsInvoice: 'Hóa đơn',
+  brandLogo: 'Logo',
+  brandLogoHint: 'JPEG, PNG hoặc WebP, tối đa {maxMb} MB. Ảnh vuông, nền trơn hiển thị đẹp nhất.',
+  brandLogoSaveFailed: 'Đã lưu hồ sơ nhưng chưa cập nhật được logo: {reason}',
 } as const;

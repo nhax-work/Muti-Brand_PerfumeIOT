@@ -20,7 +20,7 @@ import {
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
-import { AppError, invalidField } from '../../shared/errors/index.js';
+import { readImageFile } from '../../shared/http/multipart.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import {
@@ -136,7 +136,10 @@ export class PrdController {
     @Req() request: FastifyRequest,
   ) {
     const productId = parseBody(IdParam, id);
-    const data = await readImageFile(request, this.config.constraint('PRODUCT_IMAGE_MAX_BYTES'));
+    const data = await readImageFile(request, this.config.constraint('PRODUCT_IMAGE_MAX_BYTES'), {
+      required: 'prd.imageFileRequired',
+      tooLarge: 'prd.imageTooLarge',
+    });
     return this.images.upload(actor, scope, productId, data);
   }
 
@@ -158,31 +161,5 @@ export class PrdController {
     @Param('id') id: string,
   ) {
     return this.products.discontinue(actor, scope, parseBody(IdParam, id));
-  }
-}
-
-/**
- * Đọc đúng một tệp `file` từ multipart/form-data vào bộ nhớ, dừng ngay khi vượt `maxBytes` — không
- * bao giờ giữ một tệp quá cỡ trong RAM.
- */
-async function readImageFile(request: FastifyRequest, maxBytes: number): Promise<Buffer> {
-  if (!request.isMultipart()) throw invalidField('file', 'prd.imageFileRequired');
-  let part;
-  try {
-    part = await request.file({ limits: { fileSize: maxBytes, files: 1 } });
-  } catch {
-    throw invalidField('file', 'prd.imageFileRequired');
-  }
-  if (!part || part.fieldname !== 'file') throw invalidField('file', 'prd.imageFileRequired');
-  try {
-    // toBuffer() ném lỗi FST_REQ_FILE_TOO_LARGE khi vượt giới hạn fileSize.
-    return await part.toBuffer();
-  } catch (err) {
-    if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
-      throw new AppError('FILE_TOO_LARGE', 'prd.imageTooLarge', {
-        maxMb: Math.floor(maxBytes / (1024 * 1024)),
-      });
-    }
-    throw err;
   }
 }

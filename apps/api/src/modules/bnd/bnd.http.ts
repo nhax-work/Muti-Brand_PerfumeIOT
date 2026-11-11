@@ -6,6 +6,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -14,9 +15,13 @@ import {
   Post,
   Put,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { AppError } from '../../shared/errors/index.js';
+import { readImageFile } from '../../shared/http/multipart.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import {
@@ -28,6 +33,7 @@ import {
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { BndService } from './bnd.service.js';
+import { BrandLogoService } from './brand-logo.service.js';
 
 const BRAND_MANAGE = 'brand.manage';
 const MACHINE_VIEW = 'machine.view';
@@ -84,7 +90,11 @@ const IdParam = z.string().uuid();
 
 @Controller('brands')
 export class BndController {
-  constructor(@Inject(BndService) private readonly brands: BndService) {}
+  constructor(
+    @Inject(BndService) private readonly brands: BndService,
+    @Inject(BrandLogoService) private readonly logos: BrandLogoService,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'constraint'>,
+  ) {}
 
   /**
    * FR-BND-07: nhân sự nền tảng xem danh sách thương hiệu. Super Admin quản lý (brand.manage);
@@ -118,6 +128,28 @@ export class BndController {
   @Patch('me')
   updateMyBrand(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     return this.brands.updateMyBrand(actor, parseBody(SelfUpdateBody, body));
+  }
+
+  /**
+   * FR-BND-06, ADR-0022: upload logo thương hiệu (multipart, trường `file`). Đọc tối đa
+   * BRAND_LOGO_MAX_BYTES; vượt thì FILE_TOO_LARGE, không phải ảnh thì UNSUPPORTED_MEDIA_TYPE.
+   */
+  @Post('me/logo')
+  @HttpCode(200)
+  async uploadMyBrandLogo(@CurrentUser() actor: AuthenticatedUser, @Req() request: FastifyRequest) {
+    // Kiểm quyền trước khi đọc tệp: tài khoản nền tảng bị từ chối ngay, không phải chờ upload xong.
+    if (!actor.brandId) throw new AppError('FORBIDDEN_SCOPE', 'bnd.brandAccountOnly');
+    const data = await readImageFile(request, this.config.constraint('BRAND_LOGO_MAX_BYTES'), {
+      required: 'bnd.logoFileRequired',
+      tooLarge: 'bnd.logoTooLarge',
+    });
+    return this.logos.upload(actor, data);
+  }
+
+  /** FR-BND-06, ADR-0022: xóa logo thương hiệu. */
+  @Delete('me/logo')
+  deleteMyBrandLogo(@CurrentUser() actor: AuthenticatedUser) {
+    return this.logos.remove(actor);
   }
 
   /** FR-BND-09: Brand Admin khai hồ sơ pháp nhân và tài khoản nhận doanh thu. */
