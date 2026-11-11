@@ -328,6 +328,30 @@ export interface paths {
         patch: operations["updateMyBrand"];
         trace?: never;
     };
+    "/brands/me/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload logo thương hiệu
+         * @description FR-BND-06, ADR-0022: Brand Admin đưa logo cho thương hiệu của mình. Chỉ nhận JPEG, PNG, WebP (kiểm theo nội dung tệp), tối đa `BRAND_LOGO_MAX_BYTES`. Máy chủ mã hóa lại sang WebP, cạnh dài nhất tối đa `BRAND_LOGO_MAX_EDGE_PX`, bỏ metadata, rồi lưu lên kho ảnh và đặt `logoUrl`. Thay logo cũ nếu có. Tài khoản không thuộc thương hiệu nào nhận FORBIDDEN_SCOPE.
+         */
+        post: operations["uploadMyBrandLogo"];
+        /**
+         * Xóa logo thương hiệu
+         * @description FR-BND-06, ADR-0022: xóa logo khỏi kho ảnh và đặt logoUrl = null.
+         */
+        delete: operations["deleteMyBrandLogo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/users": {
         parameters: {
             query?: never;
@@ -3479,6 +3503,7 @@ export interface components {
             id: string;
             code: string;
             name: string;
+            /** @description URL tuyệt đối của logo. Logo upload qua `POST /brands/me/logo` nằm trên kho ảnh công khai, khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0022). */
             logoUrl?: string | null;
             description?: string | null;
             contactInfo?: {
@@ -5771,6 +5796,74 @@ export interface operations {
         };
         responses: {
             /** @description Đã cập nhật */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    uploadMyBrandLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã cập nhật logo */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Brand"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            /** @description Tệp vượt `BRAND_LOGO_MAX_BYTES` (FILE_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteMyBrandLogo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa logo */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -109,6 +109,13 @@ Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 �
 | `PRODUCT_IMAGE_MAX_BYTES` | 5242880 | FR-PRD-01, ADR-0020 |
 | `PRODUCT_IMAGE_MAX_EDGE_PX` | 1200 | FR-PRD-01, ADR-0020 |
 
+## Thương hiệu
+
+| Hằng | Giá trị | FR |
+|---|---|---|
+| `BRAND_LOGO_MAX_BYTES` | 2097152 | FR-BND-06, ADR-0022 |
+| `BRAND_LOGO_MAX_EDGE_PX` | 512 | FR-BND-06, ADR-0022 |
+
 ## Kiosk và giới hạn
 
 | Hằng | Giá trị | FR |

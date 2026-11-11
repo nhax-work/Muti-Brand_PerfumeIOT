@@ -534,7 +534,11 @@ components:
         id: { type: string, format: uuid }
         code: { type: string, maxLength: 50 }
         name: { type: string, maxLength: 200 }
-        logoUrl: { type: [string, 'null'] }
+        logoUrl:
+          type: [string, 'null']
+          description: >-
+            URL tuyệt đối của logo. Logo upload qua `POST /brands/me/logo` nằm trên kho ảnh công khai,
+            khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0022).
         description: { type: [string, 'null'] }
         contactInfo: { type: [object, 'null'], additionalProperties: true }
         status: { $ref: '#/components/schemas/BrandStatus' }
@@ -2926,6 +2930,56 @@ paths:
       responses:
         '200':
           description: Đã cập nhật
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /brands/me/logo:
+    post:
+      tags: [BND]
+      summary: Upload logo thương hiệu
+      operationId: uploadMyBrandLogo
+      description: >-
+        FR-BND-06, ADR-0022: Brand Admin đưa logo cho thương hiệu của mình. Chỉ nhận JPEG, PNG, WebP
+        (kiểm theo nội dung tệp), tối đa `BRAND_LOGO_MAX_BYTES`. Máy chủ mã hóa lại sang WebP, cạnh
+        dài nhất tối đa `BRAND_LOGO_MAX_EDGE_PX`, bỏ metadata, rồi lưu lên kho ảnh và đặt `logoUrl`.
+        Thay logo cũ nếu có. Tài khoản không thuộc thương hiệu nào nhận FORBIDDEN_SCOPE.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Đã cập nhật logo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413':
+          description: Tệp vượt `BRAND_LOGO_MAX_BYTES` (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [BND]
+      summary: Xóa logo thương hiệu
+      operationId: deleteMyBrandLogo
+      description: 'FR-BND-06, ADR-0022: xóa logo khỏi kho ảnh và đặt logoUrl = null.'
+      responses:
+        '200':
+          description: Đã xóa logo
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Brand' }

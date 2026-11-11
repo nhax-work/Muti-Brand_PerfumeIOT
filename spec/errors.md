@@ -27,13 +27,14 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `FORBIDDEN_SCOPE` | 403 | Ngoài phạm vi slot của thương hiệu |
 | `REAUTH_REQUIRED` | 403 | Thao tác nhạy cảm cần xác thực lại |
 
-## Sản phẩm
+## Tệp ảnh
 
-Thêm ngày 2026-11-02 theo ADR-0020 (upload ảnh sản phẩm, FR-PRD-01).
+Thêm ngày 2026-11-02 theo ADR-0020 (upload ảnh sản phẩm, FR-PRD-01); từ ADR-0022 dùng chung cho logo
+thương hiệu (FR-BND-06).
 
 | Mã | HTTP | Khi nào |
 |---|---|---|
-| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt `PRODUCT_IMAGE_MAX_BYTES` |
+| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt ngưỡng dung lượng của loại ảnh tương ứng: `PRODUCT_IMAGE_MAX_BYTES` (ảnh sản phẩm), `BRAND_LOGO_MAX_BYTES` (logo thương hiệu) |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải ảnh JPEG, PNG hay WebP hợp lệ — kiểm theo nội dung tệp, không theo đuôi tên hay `Content-Type` |
 
 ## Hóa đơn thuê slot
