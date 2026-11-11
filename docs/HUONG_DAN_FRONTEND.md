@@ -2,7 +2,8 @@
 
 Tài liệu này chi tiết hóa phần client của ADR-0003 (`spec/decisions/0003-to-chuc-ma-nguon.md`),
 không thay đổi quyết định nào trong đó. Đọc ADR-0003 trước, rồi đọc file này trước khi viết màn
-hình đầu tiên.
+hình đầu tiên. Quy tắc phần nhìn (màu, chữ, khung trang, màu trạng thái, chia việc khi nhiều người
+cùng sửa) ở `docs/QUY_TAC_GIAO_DIEN.md`.
 
 ## 1. Stack
 
