@@ -29,6 +29,7 @@ import {
 let app: NestFastifyApplication;
 let raw: pg.Client;
 let fx: IsolationFixture;
+let superAdmin: ReturnType<typeof asUser>;
 let brandA: ReturnType<typeof asUser>;
 let brandB: ReturnType<typeof asUser>;
 let packageId: string;
@@ -40,6 +41,7 @@ beforeAll(async () => {
   raw = await openRawClient();
   fx = await seedIsolationFixture(raw);
   app = await createTestApp();
+  superAdmin = asUser(app, (await login(app, fx.superAdminEmail, TEST_PASSWORD)).accessToken);
   brandA = asUser(app, (await login(app, fx.brandAdminAEmail, TEST_PASSWORD)).accessToken);
   brandB = asUser(app, (await login(app, fx.brandAdminBEmail, TEST_PASSWORD)).accessToken);
 
@@ -645,6 +647,218 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
       } finally {
         await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
           v2Version,
+        ]);
+        if (previous.rows[0]) {
+          await raw.query(`UPDATE agreement_versions SET is_current = true WHERE id = $1`, [
+            previous.rows[0].id,
+          ]);
+        }
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // FR-SLT-48: Super Admin quản lý phiên bản hợp đồng khung (soạn nháp, công bố, bất biến)
+  // ---------------------------------------------------------------------------
+  describe('Quản lý phiên bản hợp đồng khung (FR-SLT-48)', () => {
+    it('test_FR_SLT_48_single_current_version — Super Admin tạo nháp, công bố có reauth, Brand Admin bị chặn 403 trên endpoint quản trị', async () => {
+      const draftVer = `v48-${fx.runId}`.slice(0, 20);
+      const draftContent = `Hợp đồng khung chính thức phiên bản ${draftVer}`;
+      const expectedHash = createHash('sha256').update(draftContent, 'utf8').digest('hex');
+
+      const previous = await raw.query<{ id: string; version: string }>(
+        `SELECT id, version FROM agreement_versions WHERE is_current = true`,
+      );
+
+      try {
+        // 1. Brand Admin không gọi được các endpoint quản trị hợp đồng khung -> 403
+        const brandListRes = await brandA('GET', '/agreements');
+        expect(brandListRes.statusCode).toBe(403);
+
+        const brandCreateRes = await brandA('POST', '/agreements', {
+          payload: { version: draftVer, title: 'Brand tự tạo', content: draftContent },
+        });
+        expect(brandCreateRes.statusCode).toBe(403);
+
+        const brandPublishRes = await brandA('POST', `/agreements/${draftVer}/publish`);
+        expect(brandPublishRes.statusCode).toBe(403);
+
+        // 2. Super Admin tạo bản nháp -> 201, isCurrent = false, publishedAt = null
+        const createRes = await superAdmin('POST', '/agreements', {
+          payload: {
+            version: draftVer,
+            title: `Hợp đồng khung ${draftVer}`,
+            content: draftContent,
+          },
+        });
+        expect(createRes.statusCode).toBe(201);
+        const createdDraft = createRes.json<{
+          id: string;
+          version: string;
+          contentHash: string;
+          isCurrent: boolean;
+          publishedAt: string | null;
+        }>();
+        expect(createdDraft).toMatchObject({
+          version: draftVer,
+          contentHash: expectedHash,
+          isCurrent: false,
+          publishedAt: null,
+        });
+
+        // Trùng mã version -> 400 VALIDATION_ERROR
+        const dupRes = await superAdmin('POST', '/agreements', {
+          payload: {
+            version: draftVer,
+            title: 'Trùng version',
+            content: 'Nội dung khác',
+          },
+        });
+        expect(dupRes.statusCode).toBe(400);
+        expect(dupRes.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+
+        // 3. Super Admin liệt kê các phiên bản -> thấy cả bản nháp và bản hiện hành kèm acceptedBrandCount
+        const listBefore = await superAdmin('GET', '/agreements');
+        expect(listBefore.statusCode).toBe(200);
+        const itemsBefore = listBefore.json<
+          Array<{
+            id: string;
+            version: string;
+            isCurrent: boolean;
+            publishedAt: string | null;
+            acceptedBrandCount?: number;
+          }>
+        >();
+        const foundDraft = itemsBefore.find((v) => v.version === draftVer);
+        expect(foundDraft).toBeDefined();
+        expect(foundDraft?.isCurrent).toBe(false);
+        expect(foundDraft?.publishedAt).toBeNull();
+        expect(foundDraft?.acceptedBrandCount).toBe(0);
+
+        // 4. Công bố thiếu X-Reauth-Token -> 403 REAUTH_REQUIRED (FR-AUTH-09 AC4)
+        const publishNoReauth = await superAdmin('POST', `/agreements/${draftVer}/publish`);
+        expect(publishNoReauth.statusCode).toBe(403);
+        expect(publishNoReauth.json()).toMatchObject({ code: 'REAUTH_REQUIRED' });
+
+        // 5. Xác thực lại mật khẩu và công bố phiên bản mới -> 200
+        const reauthRes = await superAdmin('POST', '/auth/reauth', {
+          payload: { password: TEST_PASSWORD },
+        });
+        expect(reauthRes.statusCode).toBe(200);
+        const { reauthToken } = reauthRes.json<{ reauthToken: string }>();
+
+        const publishRes = await superAdmin('POST', `/agreements/${draftVer}/publish`, {
+          headers: { 'x-reauth-token': reauthToken },
+        });
+        expect(publishRes.statusCode).toBe(200);
+        const published = publishRes.json<{
+          id: string;
+          version: string;
+          isCurrent: boolean;
+          publishedAt: string | null;
+        }>();
+        expect(published.version).toBe(draftVer);
+        expect(published.isCurrent).toBe(true);
+        expect(published.publishedAt).not.toBeNull();
+
+        // Chỉ đúng 1 phiên bản có is_current = true trong CSDL
+        const currentRows = await raw.query<{ id: string; version: string }>(
+          `SELECT id, version FROM agreement_versions WHERE is_current = true`,
+        );
+        expect(currentRows.rows).toHaveLength(1);
+        expect(currentRows.rows[0]?.version).toBe(draftVer);
+
+        // Kiểm tra AuditLog đã ghi cả tạo nháp và công bố (FR-AUD-03)
+        const auditRows = await raw.query<{ action: string }>(
+          `SELECT action FROM audit_logs WHERE target_type = 'agreement_version' AND target_id = $1 ORDER BY occurred_at ASC`,
+          [createdDraft.id],
+        );
+        expect(auditRows.rows.map((r) => r.action)).toEqual([
+          'slt.agreement_version.created',
+          'slt.agreement_version.published',
+        ]);
+
+        // 6. Tương thích luồng hiện có: GET /agreements/current và POST /agreements/{version}/accept
+        const currentForBrandA = await brandA('GET', '/agreements/current');
+        expect(currentForBrandA.statusCode).toBe(200);
+        expect(currentForBrandA.json()).toMatchObject({
+          agreement: { version: draftVer, contentHash: expectedHash, isCurrent: true },
+          acceptance: null,
+        });
+
+        const acceptRes = await brandA('POST', `/agreements/${draftVer}/accept`, {
+          payload: { contentHash: expectedHash },
+        });
+        expect(acceptRes.statusCode).toBe(201);
+
+        // Các lần đồng ý cũ trên phiên bản cũ vẫn giữ nguyên
+        if (previous.rows[0]) {
+          const oldAcceptances = await raw.query<{ id: string }>(
+            `SELECT id FROM agreement_acceptances WHERE agreement_version_id = $1 AND brand_id = $2 AND kind = 'FRAMEWORK'`,
+            [previous.rows[0].id, fx.brandA],
+          );
+          expect(oldAcceptances.rows.length).toBeGreaterThanOrEqual(1);
+        }
+      } finally {
+        await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
+          draftVer,
+        ]);
+        if (previous.rows[0]) {
+          await raw.query(`UPDATE agreement_versions SET is_current = true WHERE id = $1`, [
+            previous.rows[0].id,
+          ]);
+        }
+      }
+    });
+
+    it('test_FR_SLT_48_published_content_immutable — phiên bản đã công bố không thể sửa nội dung hoặc công bố lại', async () => {
+      const immutableVer = `vIm-${fx.runId}`.slice(0, 20);
+      const previous = await raw.query<{ id: string }>(
+        `SELECT id FROM agreement_versions WHERE is_current = true`,
+      );
+
+      try {
+        const createRes = await superAdmin('POST', '/agreements', {
+          payload: {
+            version: immutableVer,
+            title: 'Bản kiểm tra bất biến',
+            content: 'Nội dung gốc không được phép sửa sau khi công bố',
+          },
+        });
+        expect(createRes.statusCode).toBe(201);
+
+        const reauth1 = await superAdmin('POST', '/auth/reauth', {
+          payload: { password: TEST_PASSWORD },
+        });
+        const token1 = reauth1.json<{ reauthToken: string }>().reauthToken;
+
+        const pub1 = await superAdmin('POST', `/agreements/${immutableVer}/publish`, {
+          headers: { 'x-reauth-token': token1 },
+        });
+        expect(pub1.statusCode).toBe(200);
+
+        // Công bố lại phiên bản đã công bố -> 400 VALIDATION_ERROR
+        const reauth2 = await superAdmin('POST', '/auth/reauth', {
+          payload: { password: TEST_PASSWORD },
+        });
+        const token2 = reauth2.json<{ reauthToken: string }>().reauthToken;
+
+        const pubAgain = await superAdmin('POST', `/agreements/${immutableVer}/publish`, {
+          headers: { 'x-reauth-token': token2 },
+        });
+        expect(pubAgain.statusCode).toBe(400);
+        expect(pubAgain.json()).toMatchObject({ code: 'VALIDATION_ERROR' });
+
+        // Cố tình UPDATE nội dung phiên bản đã công bố trực tiếp trong CSDL -> bị trigger chặn
+        await expect(
+          raw.query(
+            `UPDATE agreement_versions SET content = 'Nội dung bị sửa' WHERE version = $1`,
+            [immutableVer],
+          ),
+        ).rejects.toThrow(/chk_agreement_published_immutable/);
+      } finally {
+        await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
+          immutableVer,
         ]);
         if (previous.rows[0]) {
           await raw.query(`UPDATE agreement_versions SET is_current = true WHERE id = $1`, [

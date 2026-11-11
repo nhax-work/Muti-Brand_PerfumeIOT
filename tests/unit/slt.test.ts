@@ -104,6 +104,18 @@ class FakeSltQueries {
     publishedAt: new Date('2026-10-01T00:00:00Z'),
     createdAt: new Date('2026-10-01T00:00:00Z'),
   };
+  agreementVersions: AgreementVersionRecord[] = [
+    {
+      id: 'ag-1',
+      version: 'v1.0',
+      title: 'Hợp đồng khung',
+      content: 'Nội dung',
+      contentHash: HASH_V1,
+      isCurrent: true,
+      publishedAt: new Date('2026-10-01T00:00:00Z'),
+      createdAt: new Date('2026-10-01T00:00:00Z'),
+    },
+  ];
   acceptances: AgreementAcceptanceRecord[] = [BRAND_A, BRAND_B].map((brandId, i) => ({
     id: `acc-${i + 1}`,
     brandId,
@@ -123,6 +135,85 @@ class FakeSltQueries {
 
   async findCurrentAgreementVersion() {
     return this.currentAgreement;
+  }
+
+  async listAgreementVersions() {
+    return [...this.agreementVersions]
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .map((av) => ({
+        ...av,
+        acceptedBrandCount: new Set(
+          this.acceptances
+            .filter((acc) => acc.agreementVersionId === av.id && acc.kind === 'FRAMEWORK')
+            .map((acc) => acc.brandId),
+        ).size,
+      }));
+  }
+
+  async findAgreementVersionByVersion(version: string) {
+    return this.agreementVersions.find((av) => av.version === version) ?? null;
+  }
+
+  async lockAgreementVersionByVersion(version: string) {
+    return this.findAgreementVersionByVersion(version);
+  }
+
+  async insertAgreementVersion(params: {
+    version: string;
+    title: string;
+    content: string;
+    contentHash: string;
+    createdBy: string;
+  }) {
+    const record: AgreementVersionRecord = {
+      id: `ag-${this.agreementVersions.length + 1}`,
+      version: params.version,
+      title: params.title,
+      content: params.content,
+      contentHash: params.contentHash,
+      isCurrent: false,
+      publishedAt: null,
+      createdAt: new Date(Date.now() + this.agreementVersions.length * 1000),
+    };
+    this.agreementVersions.push(record);
+    return record;
+  }
+
+  async clearCurrentAgreementVersion(_now: Date) {
+    const idx = this.agreementVersions.findIndex((av) => av.isCurrent);
+    if (idx === -1) {
+      const prev = this.currentAgreement;
+      if (prev) this.currentAgreement = { ...prev, isCurrent: false };
+      return prev;
+    }
+    const prev = this.agreementVersions[idx]!;
+    const updated: AgreementVersionRecord = { ...prev, isCurrent: false };
+    this.agreementVersions[idx] = updated;
+    if (this.currentAgreement?.id === prev.id) {
+      this.currentAgreement = null;
+    }
+    return updated;
+  }
+
+  async publishAgreementVersionById(id: string, publishedAt: Date) {
+    const idx = this.agreementVersions.findIndex((av) => av.id === id);
+    if (idx === -1) throw new Error('Agreement version not found');
+    const updated: AgreementVersionRecord = {
+      ...this.agreementVersions[idx]!,
+      isCurrent: true,
+      publishedAt,
+    };
+    this.agreementVersions[idx] = updated;
+    this.currentAgreement = updated;
+    return updated;
+  }
+
+  async countFrameworkAcceptances(agreementVersionId: string) {
+    return new Set(
+      this.acceptances
+        .filter((acc) => acc.agreementVersionId === agreementVersionId && acc.kind === 'FRAMEWORK')
+        .map((acc) => acc.brandId),
+    ).size;
   }
 
   async findFrameworkAcceptance(brandId: string, agreementVersionId: string) {
@@ -1912,5 +2003,258 @@ describe('activatedEndsAt — kỳ hạn khi kích hoạt hóa đơn DRAFT (FR-S
     const endsAt = activatedEndsAt(draft, startsAt);
     expect(endsAt).toEqual(new Date('2026-11-19T03:00:00Z'));
     expect(endsAt.getTime()).toBeGreaterThan(startsAt.getTime());
+  });
+});
+
+describe('SltService — Quản lý phiên bản hợp đồng khung (FR-SLT-48)', () => {
+  let queries: FakeSltQueries;
+  let audits: AuditEntry[];
+  let service: SltService;
+
+  const superAdmin: AuthenticatedUser = {
+    userId: 'super-admin-1',
+    sessionId: 'sess-admin',
+    email: 'admin@scentstation.vn',
+    fullName: 'Super Admin',
+    status: 'ACTIVE',
+    mustChangePassword: false,
+    brandId: null,
+    roles: ['PLATFORM_SUPER_ADMIN'],
+    permissions: ['rental.manage'],
+  };
+
+  const brandAdmin: AuthenticatedUser = {
+    userId: 'brand-admin-1',
+    sessionId: 'sess-brand',
+    email: 'brand@example.com',
+    fullName: 'Brand Admin',
+    status: 'ACTIVE',
+    mustChangePassword: false,
+    brandId: BRAND_A,
+    roles: ['BRAND_ADMIN'],
+    permissions: [],
+  };
+
+  beforeEach(() => {
+    queries = new FakeSltQueries();
+    audits = [];
+    const fakeAudit = {
+      log: async (entry: AuditEntry) => {
+        audits.push(entry);
+      },
+    } as unknown as AuditService;
+    const fakeClock: Clock = {
+      now: () => new Date('2026-11-01T08:00:00Z'),
+    };
+    const fakeDb = {
+      transaction: () => ({
+        execute: async <T>(fn: (tx: unknown) => Promise<T>) => fn({}),
+      }),
+    } as unknown as Database;
+
+    service = new SltService(
+      queries as unknown as SltQueries,
+      {
+        listPackages: async () => [
+          {
+            id: 'pkg-1',
+            name: 'Gói 3 tháng',
+            duration_months: 3,
+            discount_percent: '0.00',
+            is_active: true,
+          },
+        ],
+        listPlans: async () => [
+          {
+            id: 'plan-1',
+            name: 'Tiêu chuẩn',
+            description: null,
+            monthly_price: '100000.0000',
+            coverage_percent: '30.00',
+            coverage_cap: '3000000.0000',
+            is_active: true,
+          },
+        ],
+      } as unknown as CatalogQueries,
+      {
+        findSlotById: async (id: string) => ({
+          id,
+          machineId: 'machine-1',
+          slotNumber: 1,
+          status: 'AVAILABLE',
+          monthlyRentPrice: '1000000.0000',
+          currentRentalId: null,
+        }),
+      } as unknown as MchQueries,
+      fakeAudit,
+      {} as unknown as PaymentService,
+      { notifyBrandAdmins: async () => {} } as never,
+      fakeClock,
+      fakeDb,
+      {
+        constraint: (k: string) => {
+          if (k === 'RENTAL_MAX_STOCKING_DAYS') return 10;
+          if (k === 'RENTAL_CHECKOUT_HOLD_MIN') return 15;
+          if (k === 'BRAND_MAX_HELD_SLOTS') return 5;
+          if (k === 'GRACE_FEE_RATE_DEFAULT') return 0.01;
+          return 0;
+        },
+      } as never,
+    );
+  });
+
+  it('test_FR_SLT_48_create_draft_and_list_versions — tạo bản nháp tính đúng SHA-256, ghi AuditLog và từ chối trùng mã version', async () => {
+    const content = '# Hợp đồng khung ScentStation 2026.2\nĐiều 1: Quy định chung.';
+    const expectedHash = createHash('sha256').update(content, 'utf8').digest('hex');
+
+    const draft = await service.createAgreementVersion(
+      superAdmin,
+      {
+        version: '  2026.2  ',
+        title: '  Hợp đồng khung 2026.2  ',
+        content,
+      },
+      { ip: '127.0.0.1', userAgent: 'Vitest' },
+    );
+
+    expect(draft.version).toBe('2026.2');
+    expect(draft.title).toBe('Hợp đồng khung 2026.2');
+    expect(draft.contentHash).toBe(expectedHash);
+    expect(draft.isCurrent).toBe(false);
+    expect(draft.publishedAt).toBeNull();
+    expect(draft.acceptedBrandCount).toBe(0);
+
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      actorType: 'USER',
+      actorId: superAdmin.userId,
+      action: 'slt.agreement_version.created',
+      targetType: 'agreement_version',
+      targetId: draft.id,
+    });
+
+    // Trùng mã phiên bản -> 400 VALIDATION_ERROR
+    await expect(
+      service.createAgreementVersion(superAdmin, {
+        version: '2026.2',
+        title: 'Bản trùng',
+        content: 'Nội dung khác',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    // Liệt kê các phiên bản kèm trạng thái và số brand đã đồng ý
+    const list = await service.listAgreementVersions(superAdmin);
+    expect(list).toHaveLength(2);
+    const v2Item = list.find((i) => i.version === '2026.2')!;
+    const v1Item = list.find((i) => i.version === 'v1.0')!;
+    expect(v2Item.isCurrent).toBe(false);
+    expect(v2Item.publishedAt).toBeNull();
+    expect(v2Item.acceptedBrandCount).toBe(0);
+    expect(v1Item.isCurrent).toBe(true);
+    expect(v1Item.acceptedBrandCount).toBe(2);
+  });
+
+  it('test_FR_SLT_48_single_current_version — công bố phiên bản mới hạ bản hiện hành cũ và chỉ có một bản hiện hành', async () => {
+    await service.createAgreementVersion(superAdmin, {
+      version: '2026.2',
+      title: 'Hợp đồng khung 2026.2',
+      content: 'Điều khoản mới 2026.2',
+    });
+
+    const published = await service.publishAgreementVersion(superAdmin, '2026.2', {
+      ip: '10.0.0.1',
+      userAgent: 'AdminBrowser',
+    });
+
+    expect(published.version).toBe('2026.2');
+    expect(published.isCurrent).toBe(true);
+    expect(published.publishedAt).toBe('2026-11-01T08:00:00.000Z');
+
+    const all = await service.listAgreementVersions(superAdmin);
+    const currentOnes = all.filter((v) => v.isCurrent);
+    expect(currentOnes).toHaveLength(1);
+    expect(currentOnes[0]!.version).toBe('2026.2');
+
+    const oldV1 = all.find((v) => v.version === 'v1.0')!;
+    expect(oldV1.isCurrent).toBe(false);
+    expect(oldV1.publishedAt).toBe('2026-10-01T00:00:00.000Z');
+    // Các lần đồng ý cũ với v1.0 vẫn giữ nguyên
+    expect(oldV1.acceptedBrandCount).toBe(2);
+
+    const publishAudit = audits.find((a) => a.action === 'slt.agreement_version.published');
+    expect(publishAudit).toBeDefined();
+    expect(publishAudit?.metadata).toMatchObject({
+      previousCurrentVersionId: 'ag-1',
+      previousCurrentVersion: 'v1.0',
+    });
+  });
+
+  it('test_FR_SLT_48_published_content_immutable — không được công bố lại phiên bản đã công bố', async () => {
+    // v1.0 đã được công bố từ trước -> từ chối 400 VALIDATION_ERROR
+    await expect(service.publishAgreementVersion(superAdmin, 'v1.0')).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+    });
+
+    // Phiên bản không tồn tại -> 404 NOT_FOUND
+    await expect(service.publishAgreementVersion(superAdmin, 'v99.9')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('test_FR_SLT_48_brand_forbidden — Brand Admin bị chặn 403 trên mọi hàm quản trị hợp đồng khung', async () => {
+    await expect(service.listAgreementVersions(brandAdmin)).rejects.toMatchObject({
+      code: 'FORBIDDEN_SCOPE',
+    });
+    await expect(
+      service.createAgreementVersion(brandAdmin, {
+        version: '2026.3',
+        title: 'Trái phép',
+        content: 'Nội dung',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+    await expect(service.publishAgreementVersion(brandAdmin, 'v1.0')).rejects.toMatchObject({
+      code: 'FORBIDDEN_SCOPE',
+    });
+  });
+
+  it('test_FR_SLT_48_accept_and_checkout_compatibility — công bố bản mới buộc brand đồng ý lại trước checkout mới, giữ nguyên đồng ý cũ', async () => {
+    const contentV2 = 'Nội dung hợp đồng khung 2026.2';
+    const draft = await service.createAgreementVersion(superAdmin, {
+      version: '2026.2',
+      title: 'Hợp đồng khung 2026.2',
+      content: contentV2,
+    });
+    await service.publishAgreementVersion(superAdmin, '2026.2');
+
+    // GET /agreements/current cho Brand A trả về bản 2026.2 với acceptance = null
+    const currentBeforeAccept = await service.getCurrentAgreement({
+      kind: 'BRAND',
+      brandId: BRAND_A,
+    });
+    expect(currentBeforeAccept.agreement.version).toBe('2026.2');
+    expect(currentBeforeAccept.acceptance).toBeNull();
+
+    // Brand A chưa đồng ý 2026.2 -> không tạo được checkout mới (403 AGREEMENT_NOT_ACCEPTED)
+    await expect(
+      service.createCheckout(
+        brandAdmin,
+        { kind: 'BRAND', brandId: BRAND_A },
+        { items: [{ slotId: 'slot-1', rentalPackageId: 'pkg-1', storagePlanId: 'plan-1' }] },
+      ),
+    ).rejects.toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+
+    // Brand A đồng ý phiên bản hiện hành 2026.2 -> thành công (created = true)
+    const accepted = await service.acceptAgreement(
+      brandAdmin,
+      { kind: 'BRAND', brandId: BRAND_A },
+      { version: '2026.2', contentHash: draft.contentHash },
+      { ip: '192.168.1.10', userAgent: 'BrandBrowser' },
+    );
+    expect(accepted.created).toBe(true);
+    expect(accepted.body.agreementVersionId).toBe(draft.id);
+
+    // Lần đồng ý cũ của Brand A ở v1.0 vẫn còn nguyên
+    const oldAcc = await queries.findFrameworkAcceptance(BRAND_A, 'ag-1');
+    expect(oldAcc).not.toBeNull();
   });
 });
