@@ -93,7 +93,7 @@ describe('AgreementsPage (FR-SLT-48)', () => {
     fireEvent.change(titleInput!, { target: { value: 'Hợp đồng khung 2026.3' } });
     fireEvent.change(contentInput!, { target: { value: 'Toàn văn hợp đồng khung 2026.3' } });
 
-    fireEvent.click(within(dialog).getByText('Lưu'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu thay đổi' }));
 
     await waitFor(() =>
       expect(mockCreate).toHaveBeenCalledWith({
@@ -124,4 +124,3 @@ describe('AgreementsPage (FR-SLT-48)', () => {
     });
   });
 });
-
