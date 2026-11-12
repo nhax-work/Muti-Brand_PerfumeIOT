@@ -272,7 +272,9 @@ describe('Tháo chai khỏi slot về kho (FR-INV-15)', () => {
     expect(repeat.json()).toMatchObject({ code: 'SLOT_UNAVAILABLE' });
 
     // 2. Chai có lượng còn lại = 0 -> khi tháo về trạng thái EMPTY
-    await client.query(`UPDATE bottles SET current_estimated_ml = 0 WHERE id = $1`, [fx.bottles[3]]);
+    await client.query(`UPDATE bottles SET current_estimated_ml = 0 WHERE id = $1`, [
+      fx.bottles[3],
+    ]);
     const emptyRes = await invStaff('DELETE', `/slots/${fx.slots[3]}/bottle`);
     expect(emptyRes.statusCode, emptyRes.body).toBe(200);
     expect(emptyRes.json<BottleDto>()).toMatchObject({
@@ -301,10 +303,9 @@ describe('Tháo chai khỏi slot về kho (FR-INV-15)', () => {
     expect(statuses).toEqual([200, 409]);
 
     // Phục hồi fx.bottles[2] lên fx.slots[2] cho suite điều chỉnh tồn kho kiểm tra lệch slot
-    await client.query(
-      `UPDATE bottles SET status = 'INSTALLED', removed_at = NULL WHERE id = $1`,
-      [fx.bottles[2]],
-    );
+    await client.query(`UPDATE bottles SET status = 'INSTALLED', removed_at = NULL WHERE id = $1`, [
+      fx.bottles[2],
+    ]);
     await client.query(
       `UPDATE machine_slots
           SET active_bottle_id = $1,
@@ -328,19 +329,17 @@ describe('Tháo chai khỏi slot về kho (FR-INV-15)', () => {
     expect(missingSlot.json()).toMatchObject({ code: 'NOT_FOUND' });
 
     // Hóa đơn đã báo không gia hạn (ADR-0014 / FR-EXP-26) -> 409 RENTAL_NOT_ACTIVE
-    await client.query(
-      `UPDATE slot_rentals SET non_renewal_requested_at = now() WHERE id = $1`,
-      [fx.rentals[2]],
-    );
+    await client.query(`UPDATE slot_rentals SET non_renewal_requested_at = now() WHERE id = $1`, [
+      fx.rentals[2],
+    ]);
     try {
       const nonRenew = await invStaff('DELETE', `/slots/${fx.slots[2]}/bottle`);
       expect(nonRenew.statusCode).toBe(409);
       expect(nonRenew.json()).toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
     } finally {
-      await client.query(
-        `UPDATE slot_rentals SET non_renewal_requested_at = NULL WHERE id = $1`,
-        [fx.rentals[2]],
-      );
+      await client.query(`UPDATE slot_rentals SET non_renewal_requested_at = NULL WHERE id = $1`, [
+        fx.rentals[2],
+      ]);
     }
 
     // Máy có đơn đang chờ thanh toán -> 409 MACHINE_BUSY
@@ -601,9 +600,13 @@ describe('Lịch sử vòng đời từng chai (FR-INV-17)', () => {
       payload: { slotId: fx.slots[1] },
     });
     expect(open3.statusCode, open3.body).toBe(201);
-    const close3 = await invStaff('POST', `/refill-sessions/${open3.json<{ id: string }>().id}/close`, {
-      payload: { newBottleId: b2Id, checklistCompleted: true },
-    });
+    const close3 = await invStaff(
+      'POST',
+      `/refill-sessions/${open3.json<{ id: string }>().id}/close`,
+      {
+        payload: { newBottleId: b2Id, checklistCompleted: true },
+      },
+    );
     expect(close3.statusCode, close3.body).toBe(200);
 
     await client.query(`UPDATE slot_rentals SET status = 'GRACE' WHERE id = $1`, [fx.rentals[1]]);
@@ -639,7 +642,11 @@ describe('Lịch sử vòng đời từng chai (FR-INV-17)', () => {
     const b2Hist = await invStaff('GET', `/bottles/${b2Id}/history`);
     expect(b2Hist.statusCode, b2Hist.body).toBe(200);
     expect(b2Hist.json<{ items: AuditEntryDto[] }>().items.map((i) => i.action)).toEqual(
-      expect.arrayContaining(['inv.bottle.registered', 'inv.bottle.installed', 'slt.bottle.liquidated']),
+      expect.arrayContaining([
+        'inv.bottle.registered',
+        'inv.bottle.installed',
+        'slt.bottle.liquidated',
+      ]),
     );
 
     // Cô lập dữ liệu (FR-AUTH-07): Brand A xem được chai của A; Brand B nhận 403 FORBIDDEN_SCOPE; ID lạ -> 404

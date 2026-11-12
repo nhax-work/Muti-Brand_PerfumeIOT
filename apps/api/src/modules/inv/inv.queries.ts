@@ -1190,10 +1190,7 @@ export class InvQueries {
     return row !== undefined;
   }
 
-  async lockBottleForAdjustment(
-    id: string,
-    tx: Executor,
-  ): Promise<BottleAdjustmentTarget | null> {
+  async lockBottleForAdjustment(id: string, tx: Executor): Promise<BottleAdjustmentTarget | null> {
     const row = await tx
       .selectFrom('bottles')
       .select(['id', 'brand_id', 'owner', 'status', 'current_estimated_ml'])

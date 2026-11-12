@@ -968,7 +968,11 @@ export class InvService {
     const record = await this.queries.transaction(async (tx) => {
       // Khóa máy → slot trước, chai sau để cùng thứ tự với tiêu thụ liều và tháo/báo hỏng.
       const installedSlotId = await this.queries.slotHoldingBottle(input.bottleId, tx);
-      if (installedSlotId !== null && input.slotId !== undefined && input.slotId !== installedSlotId) {
+      if (
+        installedSlotId !== null &&
+        input.slotId !== undefined &&
+        input.slotId !== installedSlotId
+      ) {
         throw invalidField('slotId', 'inv.adjustmentSlotMismatch');
       }
 
@@ -1034,11 +1038,7 @@ export class InvService {
         );
       } else {
         const mutableStockBottle = bottle.status === 'IN_STOCK' || bottle.status === 'EMPTY';
-        nextStatus = !mutableStockBottle
-          ? bottle.status
-          : afterUnits > 0
-            ? 'IN_STOCK'
-            : 'EMPTY';
+        nextStatus = !mutableStockBottle ? bottle.status : afterUnits > 0 ? 'IN_STOCK' : 'EMPTY';
         await this.queries.setBottleStock(
           bottle.id,
           { remainingMl: afterStr, status: nextStatus },

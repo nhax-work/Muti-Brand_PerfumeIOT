@@ -10,10 +10,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEntry } from '../../apps/api/src/shared/audit/index.js';
 import type { AppConfig } from '../../apps/api/src/shared/config/index.js';
 import type { DB } from '../../apps/api/src/shared/db/index.js';
-import type {
-  BottleStatus,
-  SlotStatus,
-} from '../../apps/api/src/shared/db/types.generated.js';
+import type { BottleStatus, SlotStatus } from '../../apps/api/src/shared/db/types.generated.js';
 import { AppError } from '../../apps/api/src/shared/errors/index.js';
 import type { BrandScope } from '../../apps/api/src/shared/scoping/index.js';
 import {
@@ -468,12 +465,12 @@ beforeEach(() => {
 
 describe('INV controllers — quyền, xác thực lại và validate HTTP', () => {
   it('gắn đúng decorator phân quyền và reauth cho 4 endpoint mới', () => {
-    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, InventoryBatchesController.prototype.create)).toEqual([
-      'inventory.manage',
-    ]);
-    expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, SlotBottleController.prototype.removeBottle)).toEqual([
-      'inventory.manage',
-    ]);
+    expect(
+      Reflect.getMetadata(REQUIRED_PERMISSIONS, InventoryBatchesController.prototype.create),
+    ).toEqual(['inventory.manage']);
+    expect(
+      Reflect.getMetadata(REQUIRED_PERMISSIONS, SlotBottleController.prototype.removeBottle),
+    ).toEqual(['inventory.manage']);
     expect(
       Reflect.getMetadata(REQUIRED_PERMISSIONS, InventoryAdjustmentsController.prototype.create),
     ).toEqual(['inventory.adjust']);
@@ -609,7 +606,11 @@ describe('InvService.removeBottleFromSlot — FR-INV-15', () => {
     queries.slots.set(SLOT_1, makeSlot());
     queries.bottles.set(BOTTLE_1, makeBottle({ currentEstimatedMl: '32.5000' }));
 
-    const result = await service.removeBottleFromSlot(inventoryStaff, SLOT_1, '  Bảo dưỡng định kỳ  ');
+    const result = await service.removeBottleFromSlot(
+      inventoryStaff,
+      SLOT_1,
+      '  Bảo dưỡng định kỳ  ',
+    );
 
     expect(result.status).toBe('IN_STOCK');
     expect(result.currentEstimatedMl).toBe(32.5);
@@ -690,7 +691,10 @@ describe('InvService.createAdjustment — FR-INV-16', () => {
   });
 
   it('đồng bộ chai đang lắp + slot với fixed-point và chuyển LOW / EMPTY theo ngưỡng', async () => {
-    queries.slots.set(SLOT_1, makeSlot({ calibratedDosageMl: '0.2500', lowStockThresholdMl: '10.0000' }));
+    queries.slots.set(
+      SLOT_1,
+      makeSlot({ calibratedDosageMl: '0.2500', lowStockThresholdMl: '10.0000' }),
+    );
     queries.bottles.set(BOTTLE_1, makeBottle({ currentEstimatedMl: '48.1255' }));
 
     const lowAdj = await service.createAdjustment(inventoryStaff, {
@@ -739,7 +743,12 @@ describe('InvService.createAdjustment — FR-INV-16', () => {
 
     queries.bottles.set(
       BOTTLE_2,
-      makeBottle({ id: BOTTLE_2, status: 'LIQUIDATED', currentEstimatedMl: '15.0000', installedSlotId: null }),
+      makeBottle({
+        id: BOTTLE_2,
+        status: 'LIQUIDATED',
+        currentEstimatedMl: '15.0000',
+        installedSlotId: null,
+      }),
     );
     await service.createAdjustment(inventoryStaff, {
       bottleId: BOTTLE_2,
@@ -873,7 +882,10 @@ describe('InvService.getBottleHistory & closeRefillSession audit — FR-INV-17 /
       ['inv.bottle.installed', 'Bottle', BOTTLE_2],
       ['inv.refill.closed', 'RefillSession', SESSION_1],
     ]);
-    expect(audit.entries[0]?.after).toMatchObject({ status: 'IN_STOCK', refillSessionId: SESSION_1 });
+    expect(audit.entries[0]?.after).toMatchObject({
+      status: 'IN_STOCK',
+      refillSessionId: SESSION_1,
+    });
     expect(audit.entries[1]?.after).toMatchObject({ status: 'INSTALLED', slotId: SLOT_1 });
   });
 });
