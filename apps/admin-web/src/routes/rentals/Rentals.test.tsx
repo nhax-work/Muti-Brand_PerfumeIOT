@@ -809,22 +809,55 @@ describe('AvailableSlotsPage Component (Task 5, FR-SLT-56)', () => {
         machineDisplayName: 'Máy Kiosk Vincom',
         locationName: 'Tầng 1 Vincom Đồng Khởi',
         monthlyRentPrice: '1000000.0000',
+        machineSlotCount: 3,
         status: 'AVAILABLE',
       },
     ];
     mockCreateCheckoutFn.mockReset();
   });
 
-  it('hiển thị danh sách slot trống và nút giữ chỗ', () => {
+  it('hiển thị máy, dãy ô slot và nút giữ chỗ', () => {
     render(
       <TestWrapper>
         <AvailableSlotsPage />
       </TestWrapper>,
     );
 
-    expect(screen.getByText(/Slot #1/)).toBeDefined();
     expect(screen.getByText(/Máy Kiosk Vincom/)).toBeDefined();
+    expect(screen.getByText('1/3 ô trống')).toBeDefined();
+    expect(screen.getByRole('checkbox', { name: /Slot 1/ })).toBeDefined();
     expect(screen.getByText('Giữ chỗ và thanh toán')).toBeDefined();
+  });
+
+  it('ô không có trong danh sách trống chỉ hiện "Không khả dụng", không chọn được (BR-012)', () => {
+    render(
+      <TestWrapper>
+        <AvailableSlotsPage />
+      </TestWrapper>,
+    );
+
+    // Máy 3 ô, chỉ ô 1 trống: ô 2 và 3 không phải ô chọn được và không kèm giá.
+    expect(screen.getAllByRole('checkbox')).toHaveLength(1);
+    expect(screen.getByText('Slot 2')).toBeDefined();
+    expect(screen.getByText('Slot 3')).toBeDefined();
+    expect(screen.getAllByText('Không khả dụng').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/\/tháng/)).toHaveLength(2); // giá ô 1 + "Từ … /tháng" ở đầu thẻ
+  });
+
+  it('bấm ô trống thì thêm vào giỏ, bấm đầu thẻ máy thì thu gọn dãy ô', () => {
+    render(
+      <TestWrapper>
+        <AvailableSlotsPage />
+      </TestWrapper>,
+    );
+
+    const bay = screen.getByRole('checkbox', { name: /Slot 1/ });
+    fireEvent.click(bay);
+    expect(bay.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText('Đã chọn 1 slot')).toBeDefined();
+
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    expect(screen.queryByRole('checkbox')).toBeNull();
   });
 
   it('hiển thị rõ lỗi và banner khi gặp HOLD_LIMIT_REACHED', async () => {

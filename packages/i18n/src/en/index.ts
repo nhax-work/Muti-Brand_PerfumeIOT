@@ -1757,6 +1757,18 @@ export const en: SameKeysAs<typeof vi> = {
       'Start each article with a line "ĐIỀU 1: Article name"; write numbered items as "1. …"; "Label: value" lines at the top show as general information.',
     agreementPreview: 'Preview as displayed',
     agreementPreviewEmpty: 'Enter the terms to see a preview.',
+    rentFreeOfTotal: '{free}/{total} bays free',
+    rentPriceFrom: 'From {price}/month',
+    rentSelectedOnMachine: '{count} selected',
+    rentSlotFree: 'Free',
+    rentSlotSelected: 'Selected',
+    rentSlotUnavailable: 'Unavailable',
+    rentPickHint: 'Click a free bay to select it; you can pick several bays across machines.',
+    rentMachinesCount:
+      '{count} machines have {slots} free slots — click a machine to see its bays.',
+    rentConfigTitle: 'Plans for the selected slots',
+    rentCartEmpty: 'No slot selected yet. Open a machine and click a free bay.',
+    rentRemoveSlot: 'Remove slot',
   },
 
   kiosk: {
