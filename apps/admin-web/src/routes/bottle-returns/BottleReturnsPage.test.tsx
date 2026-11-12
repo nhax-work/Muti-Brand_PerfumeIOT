@@ -17,7 +17,7 @@ const mockReturns: BottleReturn[] = [
     returnMethod: 'SHIP_TO_BRAND',
     shippingAddress: '123 Đường Lê Lợi, Q1, TP.HCM',
     readyAt: '2026-10-26T08:00:00Z',
-    pickupDeadline: '2026-11-09T08:00:00Z',
+    pickupDeadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     handedOverAt: null,
     recipientName: null,
     trackingNumber: null,
