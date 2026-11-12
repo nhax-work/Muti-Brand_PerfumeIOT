@@ -108,10 +108,12 @@ afterAll(async () => {
     await releaseOpenOrders(client, fx.machineId);
   }
   await flow?.cleanup();
-  await staffManageOnly?.cleanup();
-  await staffFullInv?.cleanup();
   if (client && fx) {
     await cleanupIsolationFixture(client, fx);
+  }
+  await staffManageOnly?.cleanup();
+  await staffFullInv?.cleanup();
+  if (client) {
     await client.end();
   }
   await app?.close();
@@ -142,7 +144,7 @@ describe('Tạo lô nước hoa thủ công (FR-INV-01)', () => {
       sourceDeclarationId: null,
       batchNumber,
       quantityReceived: 24,
-      authenticityStatus: 'NONE',
+      authenticityStatus: 'NOT_SUBMITTED',
     });
     expect(new Date(body.receivedAt).toISOString()).toBe(receivedAt);
     expect(new Date(body.expiresAt!).toISOString()).toBe(expiresAt);
@@ -285,6 +287,7 @@ describe('Tháo chai khỏi slot về kho (FR-INV-15)', () => {
     });
 
     // 3. Chai trên slot đã LIQUIDATED (fx.slots[4]) khi tháo giữ nguyên LIQUIDATED + owner PLATFORM
+    await client.query(`UPDATE bottles SET status = 'LIQUIDATED' WHERE id = $1`, [fx.bottles[4]]);
     const liqRes = await invStaff('DELETE', `/slots/${fx.slots[4]}/bottle`);
     expect(liqRes.statusCode, liqRes.body).toBe(200);
     expect(liqRes.json<BottleDto>()).toMatchObject({
@@ -329,17 +332,27 @@ describe('Tháo chai khỏi slot về kho (FR-INV-15)', () => {
     expect(missingSlot.json()).toMatchObject({ code: 'NOT_FOUND' });
 
     // Hóa đơn đã báo không gia hạn (ADR-0014 / FR-EXP-26) -> 409 RENTAL_NOT_ACTIVE
-    await client.query(`UPDATE slot_rentals SET non_renewal_requested_at = now() WHERE id = $1`, [
-      fx.rentals[2],
-    ]);
+    await client.query(
+      `UPDATE slot_rentals
+          SET non_renewal_requested_at = now(),
+              non_renewal_requested_by = $2,
+              return_method = 'WAREHOUSE_PICKUP'
+        WHERE id = $1`,
+      [fx.rentals[2], fx.superAdminId],
+    );
     try {
       const nonRenew = await invStaff('DELETE', `/slots/${fx.slots[2]}/bottle`);
       expect(nonRenew.statusCode).toBe(409);
       expect(nonRenew.json()).toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
     } finally {
-      await client.query(`UPDATE slot_rentals SET non_renewal_requested_at = NULL WHERE id = $1`, [
-        fx.rentals[2],
-      ]);
+      await client.query(
+        `UPDATE slot_rentals
+            SET non_renewal_requested_at = NULL,
+                non_renewal_requested_by = NULL,
+                return_method = NULL
+          WHERE id = $1`,
+        [fx.rentals[2]],
+      );
     }
 
     // Máy có đơn đang chờ thanh toán -> 409 MACHINE_BUSY
@@ -513,8 +526,16 @@ describe('Lịch sử vòng đời từng chai (FR-INV-17)', () => {
     expect(approvedBatchRes.statusCode, approvedBatchRes.body).toBe(201);
     const batchId = approvedBatchRes.json<BatchDto>().id;
     await client.query(
-      `UPDATE inventory_batches SET authenticity_status = 'APPROVED' WHERE id = $1`,
-      [batchId],
+      `UPDATE inventory_batches
+          SET authenticity_status = 'APPROVED',
+              authenticity_document_url = 'https://cdn.test.local/coa.pdf',
+              authenticity_document_type = 'COA',
+              authenticity_submitted_by = $2,
+              authenticity_submitted_at = now(),
+              authenticity_verified_by = $2,
+              authenticity_verified_at = now()
+        WHERE id = $1`,
+      [batchId, staffFullInv.userId],
     );
 
     // Đăng ký 2 chai mới
