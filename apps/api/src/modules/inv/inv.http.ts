@@ -18,8 +18,12 @@ import {
   Param,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { readImageFile } from '../../shared/http/multipart.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import {
@@ -30,6 +34,7 @@ import {
   type AuthenticatedUser,
 } from '../auth/index.js';
 import { InvService } from './inv.service.js';
+import { ShipmentPhotoService } from './shipment-photo.service.js';
 
 const INVENTORY_DECLARE = 'inventory.declare';
 const INVENTORY_VERIFY = 'inventory.verify';
@@ -61,6 +66,10 @@ const ShipmentCreateBody = z.object({
   declaredBottleVolumeMl: z.number().positive(),
   expectedShipDate: IsoDate.optional(),
 });
+
+/** openapi `ShipmentPhotoKind` — ở query để thứ tự trường multipart không còn quan trọng (ADR-0024). */
+const PhotoQuery = z.object({ kind: z.enum(['BEFORE_PACKING', 'PACKED']) });
+const PhotoParams = z.object({ id: z.string().uuid(), photoId: z.string().uuid() });
 
 /** openapi `ShipmentReceive`. */
 const ShipmentReceiveBody = z.object({
@@ -100,6 +109,7 @@ const BottleQuery = z.object({
     ])
     .optional(),
   batchId: z.string().uuid().optional(),
+  fragranceProductId: z.string().uuid().optional(),
 });
 
 /** openapi `BottleDamageReport` — lý do rỗng sau khi cắt khoảng trắng bị service từ chối. */
@@ -159,7 +169,11 @@ const RefillCloseBody = z.object({
 
 @Controller('shipment-declarations')
 export class ShipmentDeclarationsController {
-  constructor(@Inject(InvService) private readonly inv: InvService) {}
+  constructor(
+    @Inject(InvService) private readonly inv: InvService,
+    @Inject(ShipmentPhotoService) private readonly photos: ShipmentPhotoService,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'constraint'>,
+  ) {}
 
   /** FR-INV-27 */
   @Get()
@@ -178,6 +192,41 @@ export class ShipmentDeclarationsController {
     @Body() body: unknown,
   ) {
     return this.inv.declareShipment(actor, scope, parseBody(ShipmentCreateBody, body));
+  }
+
+  /**
+   * FR-INV-22, ADR-0024: thêm ảnh lô hàng trước khi đóng gói / kiện hàng đã đóng gói (multipart,
+   * trường `file`; loại ảnh ở query `kind`).
+   */
+  @Post(':id/photos')
+  @HttpCode(200)
+  @RequirePermissions(INVENTORY_DECLARE)
+  async addPhoto(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Query() rawQuery: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { kind } = parseBody(PhotoQuery, rawQuery);
+    const data = await readImageFile(request, this.config.constraint('SHIPMENT_PHOTO_MAX_BYTES'), {
+      required: 'inv.shipmentPhotoFileRequired',
+      tooLarge: 'inv.shipmentPhotoTooLarge',
+    });
+    return this.photos.add(actor, scope, id, kind, data);
+  }
+
+  /** FR-INV-22, ADR-0024: xóa một ảnh khi khai báo còn DECLARED. */
+  @Delete(':id/photos/:photoId')
+  @RequirePermissions(INVENTORY_DECLARE)
+  removePhoto(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id, photoId } = parseBody(PhotoParams, params);
+    return this.photos.remove(actor, scope, id, photoId);
   }
 
   /** FR-INV-24, 25, 26 */
@@ -333,6 +382,33 @@ export class RefillSessionsController {
       parseBody(IdParam, params).id,
       parseBody(RefillCloseBody, body),
     );
+  }
+
+  /** ADR-0028 */
+  @Post(':id/cancel')
+  @HttpCode(200)
+  @RequirePermissions(INVENTORY_MANAGE)
+  cancel(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown, @Body() body: unknown) {
+    return this.inv.cancelRefillSession(
+      actor,
+      parseBody(IdParam, params).id,
+      parseBody(RefillCancelBody, body).reason,
+    );
+  }
+}
+
+/** openapi `RefillSessionCancel` — lý do rỗng sau khi cắt khoảng trắng bị service từ chối. */
+const RefillCancelBody = z.object({ reason: z.string().max(2000) });
+
+@Controller('refill-worklist')
+export class RefillWorklistController {
+  constructor(@Inject(InvService) private readonly inv: InvService) {}
+
+  /** ADR-0026: việc cần nạp của Inventory Staff. */
+  @Get()
+  @RequirePermissions(INVENTORY_MANAGE)
+  async list(@CurrentBrandScope() scope: BrandScope) {
+    return { items: await this.inv.refillWorklist(scope) };
   }
 }
 

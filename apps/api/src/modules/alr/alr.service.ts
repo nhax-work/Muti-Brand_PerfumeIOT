@@ -157,8 +157,28 @@ export class AlrService {
     actor: AuthenticatedUser,
     filter: NotificationFilter,
   ): Promise<{ items: Notification[]; total: number }> {
-    const { items, total } = await this.queries.list(viewerOf(actor), filter);
+    const viewer: NotificationViewer = filter.mine
+      ? { kind: 'RECIPIENT', userId: actor.userId }
+      : viewerOf(actor);
+    const { items, total } = await this.queries.list(viewer, filter);
     return { items: items.map(toDto), total };
+  }
+
+  /** ADR-0028: chuông trên header — chỉ thông báo trong ứng dụng của chính người gọi. */
+  async countUnread(actor: AuthenticatedUser): Promise<{ unread: number }> {
+    return { unread: await this.queries.countUnread(actor.userId) };
+  }
+
+  async markRead(actor: AuthenticatedUser, id: string): Promise<Notification> {
+    if (!(await this.queries.markRead(id, actor.userId, this.clock.now()))) {
+      throw new AppError('NOT_FOUND', 'alr.notificationNotFound');
+    }
+    return this.get(actor, id);
+  }
+
+  async markAllRead(actor: AuthenticatedUser): Promise<{ unread: number }> {
+    await this.queries.markAllRead(actor.userId, this.clock.now());
+    return { unread: 0 };
   }
 
   async get(actor: AuthenticatedUser, id: string): Promise<Notification> {

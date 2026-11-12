@@ -533,7 +533,8 @@ describe('BndController & AccessGuard — Bảo vệ pháp nhân và phân quy�
   });
 
   it('test_FR_BND_09_controller_validation_rejects_invalid_tax_code_and_missing_payout_field', () => {
-    const controller = new BndController(service);
+    // Test chỉ đi qua bước kiểm dữ liệu hồ sơ pháp lý — không chạm tới upload logo (ADR-0022).
+    const controller = new BndController(service, undefined as never, undefined as never);
 
     // Mã số thuế dưới 10 ký tự -> VALIDATION_ERROR
     expect(() =>

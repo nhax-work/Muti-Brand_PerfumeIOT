@@ -19,6 +19,8 @@ import { useI18n } from '@/shared/i18n';
 import { activeNavPath, groupOfPath, isNavGroup, visibleNav } from '../navigation';
 import { BrandOnboardingTour } from '../onboarding/BrandOnboardingTour';
 import { EmailVerificationBanner } from './EmailVerificationBanner';
+import { NotificationBell } from './NotificationBell';
+import { SalesStopBanner } from './SalesStopBanner';
 import { isOnboardingDone, markOnboardingDone } from '../onboarding/onboarding-storage';
 
 /** Tên mỗi ngôn ngữ viết bằng chính ngôn ngữ đó, nên không đổi theo ngôn ngữ đang chọn. */
@@ -177,6 +179,7 @@ export function AdminLayout() {
                   />
                 </Tooltip>
               )}
+              <NotificationBell />
               <Select<Locale>
                 value={locale}
                 onChange={setLocale}
@@ -208,6 +211,7 @@ export function AdminLayout() {
         </Layout.Header>
 
         <EmailVerificationBanner />
+        <SalesStopBanner />
 
         {/* NỘI DUNG CUỘN CHUỘT (BODY) */}
         <Layout.Content className="admin-content">

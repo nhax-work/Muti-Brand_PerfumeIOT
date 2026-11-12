@@ -30,9 +30,11 @@ import type { BrandScope } from '../../shared/scoping/index.js';
 import {
   CurrentBrandScope,
   CurrentUser,
+  RequirePermissions,
   RequireReauth,
   type AuthenticatedUser,
 } from '../auth/index.js';
+import { CATALOG_MANAGE } from './catalog.service.js';
 import { SltService } from './slt.service.js';
 
 type HttpRequest = Parameters<typeof originOf>[0];
@@ -359,14 +361,58 @@ export class SlotRentalQuoteController {
 
 const AgreementVersionParam = z.object({ version: z.string().min(1).max(20) });
 
+/** openapi.yaml: AgreementVersionCreate (FR-SLT-48, ADR-0013). */
+const AgreementVersionCreateBody = z.object({
+  version: z.string().trim().min(1).max(20),
+  title: z.string().trim().min(1).max(200),
+  content: z.string().min(1),
+});
+
 @Controller('agreements')
 export class AgreementsController {
   constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  /** FR-SLT-48 (ADR-0013): Super Admin liệt kê mọi phiên bản hợp đồng khung (nháp + đã công bố). */
+  @Get()
+  @RequirePermissions(CATALOG_MANAGE)
+  listAgreements(@CurrentUser() actor: AuthenticatedUser) {
+    return this.service.listAgreementVersions(actor);
+  }
+
+  /** FR-SLT-48 (ADR-0013): Super Admin soạn phiên bản hợp đồng khung mới (trạng thái nháp). */
+  @Post()
+  @HttpCode(201)
+  @RequirePermissions(CATALOG_MANAGE)
+  createAgreement(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+  ) {
+    const input = parseBody(AgreementVersionCreateBody, body);
+    return this.service.createAgreementVersion(actor, input, originOf(request));
+  }
 
   /** FR-SLT-48, FR-SLT-49 (ADR-0013) */
   @Get('current')
   getCurrentAgreement(@CurrentBrandScope() scope: BrandScope) {
     return this.service.getCurrentAgreement(scope);
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): Super Admin công bố phiên bản hợp đồng khung làm bản hiện hành duy nhất.
+   * Yêu cầu xác thực lại mật khẩu (FR-AUTH-09 AC4).
+   */
+  @Post(':version/publish')
+  @HttpCode(200)
+  @RequirePermissions(CATALOG_MANAGE)
+  @RequireReauth()
+  publishAgreement(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param() params: unknown,
+    @Req() request: HttpRequest,
+  ) {
+    const { version } = parseBody(AgreementVersionParam, params);
+    return this.service.publishAgreementVersion(actor, version, originOf(request));
   }
 
   /** FR-SLT-49 (ADR-0013): 201 khi ghi nhận mới, 200 khi thương hiệu đã đồng ý từ trước. */

@@ -43,8 +43,10 @@ import {
   type BottleRecord,
   type InventoryAdjustmentRecord,
   type RefillSessionRecord,
+  type RefillSessionView,
   type ShipmentRecord,
 } from './inv.queries.js';
+import { buildRefillWorklist, type RefillWorkItem } from './refill-worklist.js';
 
 export type ShipmentDeclaration = Schema<'ShipmentDeclaration'>;
 export type InventoryBatch = Schema<'InventoryBatch'>;
@@ -56,6 +58,10 @@ export type BottleHistoryEntry = Schema<'AuditLogEntry'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
+/** `bottles.identifier varchar(150)`. */
+const BOTTLE_IDENTIFIER_MAX_LENGTH = 150;
+/** Số thứ tự chai trong mã tự sinh đệm 0 ít nhất tới 3 chữ số: `…-001` (ADR-0025). */
+const BOTTLE_SEQ_MIN_WIDTH = 3;
 
 export interface DeclareShipmentInput {
   readonly fragranceProductId: string;
@@ -201,8 +207,8 @@ export class InvService {
   }
 
   /**
-   * FR-INV-24, 25, 26: tiếp nhận và đối chiếu. Cập nhật khai báo và tạo lô trong CÙNG transaction
-   * (FR-INV-26 AC1); nhận 0 chai thì không tạo lô (FR-INV-25 AC3).
+   * FR-INV-24, 25, 26: tiếp nhận và đối chiếu. Cập nhật khai báo, tạo lô và tạo từng chai của lô
+   * trong CÙNG transaction (FR-INV-26 AC1, AC4 — ADR-0025); nhận 0 chai thì không tạo lô (FR-INV-25 AC3).
    */
   async receiveShipment(
     actor: AuthenticatedUser,
@@ -221,6 +227,16 @@ export class InvService {
       if (discrepancy && !notes) {
         throw invalidField('discrepancyNotes', 'inv.discrepancyNotesRequired');
       }
+      // ADR-0025: mỗi chai nhận về thành một dòng `bottles` — chặn số liệu nhập nhầm sinh hàng loạt.
+      if (input.receivedQuantity > this.config.constraint('SHIPMENT_RECEIVE_MAX_BOTTLES')) {
+        throw invalidField('receivedQuantity', 'inv.receivedQuantityTooLarge');
+      }
+      const batchNumber = input.batchNumber.trim();
+      const width = Math.max(BOTTLE_SEQ_MIN_WIDTH, String(input.receivedQuantity).length);
+      const identifierPrefix = `${shipment.productSku}-${batchNumber}-`;
+      if (identifierPrefix.length + width > BOTTLE_IDENTIFIER_MAX_LENGTH) {
+        throw invalidField('batchNumber', 'inv.bottleIdentifierTooLong');
+      }
 
       const now = this.clock.now();
       await this.queries.markShipmentReceived(
@@ -236,6 +252,7 @@ export class InvService {
       );
 
       let createdBatchId: string | null = null;
+      let bottlesCreated = 0;
       if (input.receivedQuantity > 0) {
         try {
           createdBatchId = await this.queries.insertBatch(
@@ -243,7 +260,7 @@ export class InvService {
               brandId: shipment.brandId,
               fragranceProductId: shipment.fragranceProductId,
               sourceDeclarationId: shipment.id,
-              batchNumber: input.batchNumber.trim(),
+              batchNumber,
               receivedAt: now,
               expiresAt: input.expiresAt ?? null,
               quantityReceived: input.receivedQuantity,
@@ -251,9 +268,24 @@ export class InvService {
             },
             tx,
           );
+          // ADR-0025: chai sinh cùng transaction với lô — không có lô nào nhận hàng mà thiếu chai.
+          bottlesCreated = await this.queries.insertBottlesForBatch(
+            {
+              batchId: createdBatchId,
+              identifierPrefix,
+              width,
+              initialVolumeMl: shipment.declaredBottleVolumeMl,
+            },
+            tx,
+          );
         } catch (error) {
-          if (uniqueViolation(error) === 'uq_batch_brand_product_number') {
+          const constraint = uniqueViolation(error);
+          if (constraint === 'uq_batch_brand_product_number') {
             throw invalidField('batchNumber', 'inv.batchNumberTaken');
+          }
+          // Trùng mã với chai đăng ký tay trước đó (POST /bottles) — đổi số lô là hết trùng.
+          if (constraint === 'uq_bottle_brand_identifier') {
+            throw invalidField('batchNumber', 'inv.batchBottleIdentifierTaken');
           }
           throw error;
         }
@@ -273,6 +305,7 @@ export class InvService {
             status: discrepancy ? 'DISCREPANCY' : 'RECEIVED',
             receivedQuantity: input.receivedQuantity,
             batchId: createdBatchId,
+            bottlesCreated,
           },
         },
         tx,
@@ -455,6 +488,7 @@ export class InvService {
       readonly pageSize: number;
       readonly status?: BottleStatus | undefined;
       readonly batchId?: string | undefined;
+      readonly fragranceProductId?: string | undefined;
     },
   ): Promise<{ items: Bottle[]; total: number }> {
     const { items, total } = await this.queries.listBottles(scope, filter);
@@ -581,6 +615,11 @@ export class InvService {
   // -----------------------------------------------------------------------------------
   // Phiếu nạp (FR-INV-29 ÷ 32)
   // -----------------------------------------------------------------------------------
+
+  /** ADR-0026: việc cần nạp, tính từ hóa đơn, yêu cầu bổ sung và tồn kho — không có bảng riêng. */
+  async refillWorklist(scope: BrandScope): Promise<RefillWorkItem[]> {
+    return buildRefillWorklist(await this.queries.refillWorklist(scope, this.clock.now()));
+  }
 
   async listRefillSessions(
     scope: BrandScope,
@@ -777,6 +816,44 @@ export class InvService {
           targetId: session.id,
           before: { status: 'STARTED', activeBottleId: oldBottleId },
           after: { status: 'COMPLETED', activeBottleId: bottle.id, rentalId: rental.id },
+        },
+        tx,
+      );
+    });
+    return toRefillDto((await this.queries.findRefillSession(sessionId))!);
+  }
+
+  /**
+   * ADR-0028: hủy phiếu đang mở mà không lắp chai — mở nhầm slot, hay mở rồi mới biết không có chai
+   * đúng. Slot giữ nguyên chai cũ; máy nhận đơn lại khi không còn phiếu mở (chốt chặn ở ORD đọc
+   * `refill_sessions.status`). Yêu cầu bổ sung đã gắn được gỡ ra trong cùng transaction.
+   */
+  async cancelRefillSession(
+    actor: AuthenticatedUser,
+    sessionId: string,
+    reason: string,
+  ): Promise<RefillSession> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw invalidField('reason', 'inv.cancelReasonRequired');
+    await this.queries.transaction(async (tx) => {
+      const session = await this.queries.lockRefillSession(sessionId, tx);
+      if (!session) throw new AppError('NOT_FOUND', 'inv.refillSessionNotFound');
+      if (session.status !== 'STARTED') {
+        throw new AppError('REFILL_SESSION_NOT_OPEN', 'inv.refillSessionNotOpen');
+      }
+      const now = this.clock.now();
+      await this.queries.cancelRefillSession(session.id, { notes: trimmed, at: now }, tx);
+      await this.refillRequests.unlinkFromSession(tx, session.id, actor.userId);
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: session.brandId,
+          action: 'inv.refill.cancelled',
+          targetType: 'RefillSession',
+          targetId: session.id,
+          before: { status: 'STARTED' },
+          after: { status: 'CANCELLED', reason: trimmed },
         },
         tx,
       );
@@ -1131,6 +1208,12 @@ export function toShipmentDto(r: ShipmentRecord): ShipmentDeclaration {
     receivedAt: iso(r.receivedAt),
     resultingBatchId: r.resultingBatchId,
     createdAt: r.createdAt.toISOString(),
+    photos: r.photos.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      url: p.url,
+      createdAt: p.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -1175,8 +1258,16 @@ export function toBottleDto(r: BottleRecord): Bottle {
   };
 }
 
-export function toRefillDto(r: RefillSessionRecord): RefillSession {
+export function toRefillDto(r: RefillSessionRecord | RefillSessionView): RefillSession {
   return {
+    ...('slotNumber' in r
+      ? {
+          slotNumber: r.slotNumber,
+          brandName: r.brandName,
+          fragranceProductId: r.fragranceProductId,
+          productName: r.productName,
+        }
+      : {}),
     id: r.id,
     brandId: r.brandId,
     machineId: r.machineId,

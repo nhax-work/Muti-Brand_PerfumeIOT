@@ -173,6 +173,8 @@ vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   useShipmentDeclarations: () => ({ data: { items: [] }, isLoading: false }),
   useCreateShipmentDeclaration: () => noopMutation(),
+  useAddShipmentPhoto: () => noopMutation(),
+  useDeleteShipmentPhoto: () => noopMutation(),
   useReceiveShipment: () => noopMutation(),
   useInventoryBatches: () => ({ data: { items: BATCHES }, isLoading: false }),
   useAllBrands: (enabled: boolean) => ({
@@ -188,11 +190,13 @@ vi.mock('./api', async (importOriginal) => ({
   useApproveAuthenticity: () => noopMutation(),
   useRejectAuthenticity: () => noopMutation(),
   useRefillSessions: () => ({ data: { items: [] }, isLoading: false }),
+  useRefillWorklist: () => ({ data: { items: [] }, isLoading: false }),
   useStockBottles: () => ({ data: { items: [] }, isLoading: false }),
   useMachinesForRefill: () => ({ data: { items: [] }, isLoading: false }),
-  useMachineSlots: () => ({ data: { items: [] }, isLoading: false }),
+  useMachineSlots: () => ({ data: [], isLoading: false }),
   useOpenRefillSession: () => noopMutation(),
   useCloseRefillSession: () => noopMutation(),
+  useCancelRefillSession: () => noopMutation(),
   useInventoryReport: () => ({ data: { items: [] }, isLoading: false }),
   useBottles: (filter: BottlesFilter) => {
     mockUseBottlesSpy(filter);

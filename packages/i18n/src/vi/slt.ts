@@ -20,6 +20,9 @@ export const slt = {
   agreementNotFound: 'Không tìm thấy phiên bản hợp đồng khung',
   agreementNotCurrent: 'Chỉ đồng ý được phiên bản hợp đồng khung hiện hành',
   agreementContentChanged: 'Nội dung hợp đồng khung đã thay đổi, vui lòng mở lại để xem bản mới',
+  agreementVersionTaken: 'Mã phiên bản hợp đồng khung đã tồn tại',
+  agreementAlreadyPublished:
+    'Phiên bản hợp đồng khung này đã được công bố, nội dung và trạng thái công bố là bất biến',
   holdLimitReached:
     'Số slot giữ chỗ chưa thanh toán vượt quá giới hạn tối đa (tối đa 5 slot cho mỗi thương hiệu)',
   slotSwapNotAllowed:
@@ -77,6 +80,8 @@ export const slt = {
   compensationPaidSubject: 'Đã chi trả bồi thường chai {bottle}',
   compensationPaidContent:
     'Khoản bồi thường {amount} đ cho chai {bottle} đã được chuyển khoản. Mã giao dịch: {reference}.',
+  pricePerSprayFollowsProduct:
+    'Giá mỗi lượt xịt đặt theo sản phẩm. Sửa giá ở trang Sản phẩm, mọi slot bán sản phẩm đó đổi theo.',
 } as const;
 
 export const storageCompensationStatus = {

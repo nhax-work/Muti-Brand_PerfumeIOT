@@ -6,10 +6,10 @@
 Nguồn: `seed_document/DB_DIAGRAM_MERMAID.md` · Chuẩn đặt tên: `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`
 Lược đồ thi hành: `spec/contracts/schema.sql` · Mô tả từng cột: `spec/contracts/data-dictionary.md`
 
-45 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
+46 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
 `storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008 + `refund_claims` theo ADR-0012
 + `email_verifications`, `agreement_versions`, `agreement_acceptances`, `brand_payouts` theo ADR-0013 +
-`bottle_returns` theo ADR-0014). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
+`bottle_returns` theo ADR-0014 + `shipment_declaration_photos` theo ADR-0024). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
 tổng quan các quan hệ cốt lõi, rồi 6 sơ đồ chi tiết theo nhóm.
 
 ---
@@ -327,6 +327,12 @@ erDiagram
         int received_quantity
         shipment_declaration_status status
     }
+    SHIPMENT_DECLARATION_PHOTOS {
+        uuid id PK
+        uuid declaration_id FK
+        shipment_photo_kind kind
+        text url
+    }
     INVENTORY_BATCHES {
         uuid id PK
         uuid brand_id FK
@@ -384,6 +390,7 @@ erDiagram
     }
 
     BRAND_SHIPMENT_DECLARATIONS ||--o| INVENTORY_BATCHES : "sinh lô khi nhận"
+    BRAND_SHIPMENT_DECLARATIONS ||--o{ SHIPMENT_DECLARATION_PHOTOS : "kèm ảnh"
     INVENTORY_BATCHES ||--o{ BOTTLES : "gồm"
     BOTTLES ||--o{ REFILL_SESSIONS : "được tháo/lắp qua"
     BOTTLES ||--o{ INVENTORY_ADJUSTMENTS : "được điều chỉnh"

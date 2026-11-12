@@ -19,6 +19,11 @@ export const inv = {
   productNotOwned: 'Sản phẩm không thuộc thương hiệu của bạn',
   shipmentNotFound: 'Không tìm thấy khai báo gửi hàng',
   shipmentAlreadyProcessed: 'Khai báo này đã được tiếp nhận hoặc đã hủy',
+  shipmentPhotoFileRequired: 'Chọn một tệp ảnh để tải lên',
+  shipmentPhotoTooLarge: 'Ảnh vượt quá {maxMb} MB',
+  shipmentPhotoUnsupported: 'Chỉ nhận ảnh JPEG, PNG hoặc WebP hợp lệ',
+  shipmentPhotoLimit: 'Mỗi loại ảnh tối đa {max} ảnh',
+  shipmentPhotoNotFound: 'Không tìm thấy ảnh của khai báo',
   discrepancyNotesRequired: 'Số thực nhận lệch số khai báo — bắt buộc ghi chú lý do',
   batchNumberTaken: 'Số lô này đã tồn tại cho sản phẩm của thương hiệu',
   brandNotFound: 'Không tìm thấy thương hiệu',
@@ -29,12 +34,17 @@ export const inv = {
     'Hóa đơn đã báo không gia hạn — vui lòng tháo chai qua luồng lập phiếu trả hàng',
   adjustmentReasonRequired: 'Bắt buộc nhập lý do điều chỉnh tồn kho',
   adjustmentSlotMismatch: 'Slot được chọn không khớp với slot mà chai đang lắp',
+  batchBottleIdentifierTaken:
+    'Mã chai sinh từ số lô này trùng với chai đã đăng ký trước — hãy dùng số lô khác',
+  bottleIdentifierTooLong: 'Mã sản phẩm và số lô quá dài để sinh mã chai — hãy rút ngắn số lô',
+  receivedQuantityTooLarge: 'Số thực nhận vượt quá giới hạn cho một lần tiếp nhận',
   batchNotFound: 'Không tìm thấy lô hàng',
   authenticityAlreadyApproved: 'Lô đã được duyệt giấy tờ chính hãng, không nộp lại được',
   authenticityNotPending: 'Lô không ở trạng thái chờ duyệt giấy tờ',
   documentSubmissionExpired:
     'Đã quá hạn nộp giấy tờ chính hãng ({days} ngày kể từ khi thanh toán hóa đơn)',
   reasonRequired: 'Bắt buộc nhập lý do',
+  cancelReasonRequired: 'Nhập lý do hủy phiếu nạp',
   bottleIdentifierTaken: 'Mã định danh chai đã tồn tại trong thương hiệu',
   bottleNotFound: 'Không tìm thấy chai',
   bottleNotOwned: 'Chai không thuộc thương hiệu đang thuê slot',
@@ -97,4 +107,19 @@ export const refillSessionStatus = {
   STARTED: 'Đang thao tác',
   COMPLETED: 'Hoàn tất',
   CANCELLED: 'Đã hủy',
+} as const;
+
+/** Loại việc cần nạp (ADR-0026). */
+export const refillWorkKind = {
+  FIRST_INSTALL: 'Lắp chai đầu tiên',
+  REFILL_REQUEST: 'Theo yêu cầu bổ sung',
+  LOW_STOCK: 'Sắp hết',
+} as const;
+
+/** Lý do việc cần nạp chưa làm được (ADR-0026). */
+export const refillWorkBlocker = {
+  PRODUCT_NOT_ASSIGNED: 'Thương hiệu chưa gán sản phẩm cho slot',
+  REQUEST_NOT_APPROVED: 'Yêu cầu bổ sung chờ Super Admin duyệt',
+  NO_STOCK: 'Kho chưa có chai của sản phẩm này',
+  DOCS_NOT_APPROVED: 'Lô hàng chưa được duyệt giấy tờ chính hãng',
 } as const;
