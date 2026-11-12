@@ -140,6 +140,10 @@ export interface AgreementVersionRecord {
   readonly createdAt: Date;
 }
 
+export interface AgreementVersionWithStatsRecord extends AgreementVersionRecord {
+  readonly acceptedBrandCount: number;
+}
+
 /** FR-SLT-49 (ADR-0013). IP lưu trong CSDL nhưng không đọc ra — API không trả. */
 export interface AgreementAcceptanceRecord {
   readonly id: string;
@@ -848,13 +852,165 @@ export class SltQueries {
   }
 
   /** FR-SLT-48 (ADR-0013): phiên bản hợp đồng khung hiện hành — tối đa một (uq_agreement_version_current). */
-  async findCurrentAgreementVersion(): Promise<AgreementVersionRecord | null> {
-    const row = await this.db
+  async findCurrentAgreementVersion(
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord | null> {
+    const row = await executor
       .selectFrom('agreement_versions')
       .select(AGREEMENT_VERSION_COLUMNS)
       .where('is_current', '=', true)
       .executeTakeFirst();
     return row ? toAgreementVersion(row) : null;
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): liệt kê mọi phiên bản hợp đồng khung (nháp + đã công bố), mới nhất trước,
+   * kèm số thương hiệu đã đồng ý từng phiên bản (kind = FRAMEWORK).
+   */
+  async listAgreementVersions(
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionWithStatsRecord[]> {
+    const rows = await executor
+      .selectFrom('agreement_versions as av')
+      .leftJoin('agreement_acceptances as aa', (join) =>
+        join.onRef('aa.agreement_version_id', '=', 'av.id').on('aa.kind', '=', 'FRAMEWORK'),
+      )
+      .select([
+        'av.id',
+        'av.version',
+        'av.title',
+        'av.content',
+        'av.content_hash',
+        'av.is_current',
+        'av.published_at',
+        'av.created_at',
+        sql<string>`count(distinct aa.brand_id)`.as('accepted_brand_count'),
+      ])
+      .groupBy([
+        'av.id',
+        'av.version',
+        'av.title',
+        'av.content',
+        'av.content_hash',
+        'av.is_current',
+        'av.published_at',
+        'av.created_at',
+      ])
+      .orderBy('av.created_at', 'desc')
+      .orderBy('av.id', 'desc')
+      .execute();
+
+    return rows.map((row) => ({
+      ...toAgreementVersion(row),
+      acceptedBrandCount: Number(row.accepted_brand_count ?? 0),
+    }));
+  }
+
+  /** FR-SLT-48 (ADR-0013): tìm phiên bản hợp đồng khung theo mã version. */
+  async findAgreementVersionByVersion(
+    version: string,
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord | null> {
+    const row = await executor
+      .selectFrom('agreement_versions')
+      .select(AGREEMENT_VERSION_COLUMNS)
+      .where('version', '=', version)
+      .executeTakeFirst();
+    return row ? toAgreementVersion(row) : null;
+  }
+
+  /** FR-SLT-48 (ADR-0013): khóa bản ghi phiên bản hợp đồng khung FOR UPDATE khi công bố. */
+  async lockAgreementVersionByVersion(
+    version: string,
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord | null> {
+    const row = await executor
+      .selectFrom('agreement_versions')
+      .select(AGREEMENT_VERSION_COLUMNS)
+      .where('version', '=', version)
+      .forUpdate()
+      .executeTakeFirst();
+    return row ? toAgreementVersion(row) : null;
+  }
+
+  /** FR-SLT-48 (ADR-0013): tạo phiên bản hợp đồng khung ở trạng thái nháp (is_current = false, published_at = null). */
+  async insertAgreementVersion(
+    params: {
+      version: string;
+      title: string;
+      content: string;
+      contentHash: string;
+      createdBy: string;
+    },
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord> {
+    const row = await executor
+      .insertInto('agreement_versions')
+      .values({
+        version: params.version,
+        title: params.title,
+        content: params.content,
+        content_hash: params.contentHash,
+        is_current: false,
+        published_at: null,
+        created_by: params.createdBy,
+      })
+      .returning(AGREEMENT_VERSION_COLUMNS)
+      .executeTakeFirstOrThrow();
+    return toAgreementVersion(row);
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): hạ phiên bản đang hiện hành (is_current = true -> false) trước khi đặt
+   * phiên bản mới làm hiện hành để không vi phạm partial unique index `uq_agreement_version_current`.
+   */
+  async clearCurrentAgreementVersion(
+    now: Date,
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord | null> {
+    const row = await executor
+      .updateTable('agreement_versions')
+      .set({
+        is_current: false,
+        updated_at: now,
+      })
+      .where('is_current', '=', true)
+      .returning(AGREEMENT_VERSION_COLUMNS)
+      .executeTakeFirst();
+    return row ? toAgreementVersion(row) : null;
+  }
+
+  /** FR-SLT-48 (ADR-0013): công bố phiên bản nháp thành phiên bản hiện hành duy nhất. */
+  async publishAgreementVersionById(
+    id: string,
+    publishedAt: Date,
+    executor: Executor = this.db,
+  ): Promise<AgreementVersionRecord> {
+    const row = await executor
+      .updateTable('agreement_versions')
+      .set({
+        is_current: true,
+        published_at: publishedAt,
+        updated_at: publishedAt,
+      })
+      .where('id', '=', id)
+      .returning(AGREEMENT_VERSION_COLUMNS)
+      .executeTakeFirstOrThrow();
+    return toAgreementVersion(row);
+  }
+
+  /** FR-SLT-48 (ADR-0013): đếm số thương hiệu đã đồng ý một phiên bản hợp đồng khung. */
+  async countFrameworkAcceptances(
+    agreementVersionId: string,
+    executor: Executor = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('agreement_acceptances')
+      .select((eb) => eb.fn.count<string>('brand_id').distinct().as('count'))
+      .where('agreement_version_id', '=', agreementVersionId)
+      .where('kind', '=', 'FRAMEWORK')
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
   }
 
   /** FR-SLT-49 (ADR-0013): lần thương hiệu đồng ý một phiên bản hợp đồng khung. */

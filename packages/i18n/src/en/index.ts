@@ -293,6 +293,9 @@ export const en: SameKeysAs<typeof vi> = {
     agreementNotCurrent: 'Only the current framework agreement version can be accepted',
     agreementContentChanged:
       'The framework agreement has changed. Please reopen it to review the new version',
+    agreementVersionTaken: 'This framework agreement version identifier already exists',
+    agreementAlreadyPublished:
+      'This framework agreement version has already been published and is immutable',
     holdLimitReached:
       'The number of unpaid holding slots exceeds the maximum limit (up to 5 slots per brand)',
     slotSwapNotAllowed:
@@ -1612,6 +1615,33 @@ export const en: SameKeysAs<typeof vi> = {
     productImageTooLarge: 'The image is larger than {maxMb} MB',
     productImageSaveFailed: 'The product was saved but its image was not updated: {reason}',
     productNoImage: 'No image',
+    // Framework agreement version management (FR-SLT-48, ADR-0013)
+    agreements: 'Framework Agreements',
+    agreementsTitle: 'Framework Agreement Versions',
+    agreementsSubtitle:
+      'Draft new agreement versions, publish the active version, and track brand acceptances.',
+    agreementCreateDraft: 'Draft New Version',
+    agreementCreateModalTitle: 'Create Framework Agreement Draft',
+    agreementVersionLabel: 'Version Code',
+    agreementVersionPlaceholder: 'e.g. 2026.2',
+    agreementTitleLabel: 'Agreement Title',
+    agreementTitlePlaceholder: 'Enter framework agreement title...',
+    agreementContentLabel: 'Terms & Conditions Content',
+    agreementContentPlaceholder: 'Enter full framework agreement text...',
+    agreementStatusDraft: 'Draft',
+    agreementStatusCurrent: 'Current',
+    agreementStatusPublished: 'Published (Archived)',
+    agreementAcceptedBrandsCount: '{count} brands',
+    agreementAcceptedColumn: 'Accepted Brands',
+    agreementPublishBtn: 'Publish',
+    agreementPublishModalTitle: 'Confirm Publishing Version {version}',
+    agreementPublishConfirmText:
+      'Once published, this version becomes the single active framework agreement and its content cannot be modified. All brands must accept this version before creating their next slot rental checkout. Password re-authentication is required.',
+    agreementPublishSuccess: 'Framework agreement version published successfully',
+    agreementDraftCreatedSuccess: 'Framework agreement draft created successfully',
+    agreementViewContent: 'View Content',
+    agreementPublishedAtLabel: 'Published At',
+    noAgreementVersions: 'No framework agreement versions found.',
     slotSetupSave: 'Save configuration',
     slotSetupSaved: 'Slot configuration saved',
     slotSetupStepProduct: 'Assign product',
