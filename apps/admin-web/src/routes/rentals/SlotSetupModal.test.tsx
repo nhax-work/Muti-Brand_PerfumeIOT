@@ -140,7 +140,9 @@ describe('SlotSetupModal — cấu hình slot (FR-SLT-27, ADR-0023)', () => {
     mockProducts = [product('p-1', 'Aurore Matinale')];
     mockShipments = [{ id: 'd-1', fragranceProductId: 'p-1', status: 'DECLARED' }];
     const first = await renderModal({ ...baseRental, fragranceProductId: 'p-1' });
-    expect(within(first).getByText('Đã khai báo, chờ kho nhận hàng.')).toBeTruthy();
+    const declaredNote = within(first).getByText('Đã khai báo, chờ kho nhận hàng.');
+    // Thương hiệu đã làm xong phần mình ở bước Gửi hàng: bước được đánh dấu xong, không còn đang làm.
+    expect(declaredNote.closest('.ant-steps-item')?.className).toContain('ant-steps-item-finish');
     cleanup();
 
     mockShipments = [{ id: 'd-1', fragranceProductId: 'p-1', status: 'RECEIVED' }];

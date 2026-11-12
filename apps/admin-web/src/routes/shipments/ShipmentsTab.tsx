@@ -26,9 +26,10 @@ import {
   type UploadFile,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
 import {
   type ShipmentDeclaration,
@@ -100,10 +101,27 @@ export function ShipmentsTab({
 
   const [declareOpen, setDeclareOpen] = useState(() => canDeclare && initialDeclare !== undefined);
   const [declareForm] = Form.useForm<DeclareValues>();
+  const declareProductId = Form.useWatch('fragranceProductId', declareForm);
+  // Thể tích chai lấy từ sản phẩm đã khai báo; vẫn sửa được nếu lô này gửi chai cỡ khác. Chạy cả khi
+  // danh sách sản phẩm về sau sản phẩm chọn sẵn từ luồng cấu hình slot. Sản phẩm chưa khai thể tích
+  // thì để trống cho người dùng nhập, không giữ số của sản phẩm chọn trước đó.
+  // Phụ thuộc giá trị nguyên thủy, không phụ thuộc object sản phẩm: refetch danh sách không được ghi đè
+  // số người dùng vừa sửa.
+  const declareProduct = products.data?.items.find((p) => p.id === declareProductId);
+  const declareProductFound = declareProduct !== undefined;
+  const declareProductVolume = declareProduct?.fullBottleVolumeMl ?? null;
+  useEffect(() => {
+    if (!declareProductFound) return;
+    declareForm.setFieldValue(
+      'declaredBottleVolumeMl',
+      declareProductVolume !== null && declareProductVolume > 0 ? declareProductVolume : undefined,
+    );
+  }, [declareForm, declareProductId, declareProductFound, declareProductVolume]);
   const [photosOf, setPhotosOf] = useState<string | null>(null);
   const [receiving, setReceiving] = useState<ShipmentDeclaration | null>(null);
   const [receiveForm] = Form.useForm<ReceiveValues>();
   const receivedQuantity = Form.useWatch('receivedQuantity', receiveForm);
+  const receiveBatchNumber = Form.useWatch('batchNumber', receiveForm);
 
   const handleDeclare = async () => {
     const values = await declareForm.validateFields().catch(() => null);
@@ -153,7 +171,11 @@ export function ShipmentsTab({
         ...(values.expiresAt ? { expiresAt: values.expiresAt.toISOString() } : {}),
         ...(values.discrepancyNotes ? { discrepancyNotes: values.discrepancyNotes } : {}),
       });
-      void message.success(t(result.batch ? 'inv.shipmentReceived' : 'ui.shipmentReceivedNoBatch'));
+      void message.success(
+        result.batch
+          ? t('ui.shipmentReceivedWithBottles', { count: result.batch.quantityReceived })
+          : t('ui.shipmentReceivedNoBatch'),
+      );
       setReceiving(null);
       receiveForm.resetFields();
     } catch (error) {
@@ -290,7 +312,6 @@ export function ShipmentsTab({
           form={declareForm}
           layout="vertical"
           initialValues={{
-            declaredBottleVolumeMl: 50,
             fragranceProductId: initialDeclare?.productId,
             beforePacking: [],
             packed: [],
@@ -382,7 +403,12 @@ export function ShipmentsTab({
             label={t('ui.receivedQuantity')}
             rules={[{ required: true, message: t('validation.required') }]}
           >
-            <InputNumber min={0} precision={0} style={{ width: '100%' }} />
+            <InputNumber
+              min={0}
+              max={SPEC_CONSTRAINTS.SHIPMENT_RECEIVE_MAX_BOTTLES}
+              precision={0}
+              style={{ width: '100%' }}
+            />
           </Form.Item>
           <Form.Item
             name="batchNumber"
@@ -409,6 +435,17 @@ export function ShipmentsTab({
             <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
+        {/* ADR-0025: tiếp nhận tạo luôn từng chai — báo trước mã để kho dán nhãn lên chai thật. */}
+        {typeof receivedQuantity === 'number' && receivedQuantity > 0 && (
+          <Alert
+            type="info"
+            showIcon
+            title={t('ui.receiveCreatesBottles', { count: receivedQuantity })}
+            description={t('ui.receiveBottleCodeHint', {
+              batchNumber: receiveBatchNumber?.trim() || t('ui.batchNumberLabel'),
+            })}
+          />
+        )}
       </Modal>
     </Space>
   );

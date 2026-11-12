@@ -97,8 +97,17 @@ export default function MySlotsPage() {
     [rentals.data],
   );
   const invoices = useInvoices(held.map((r) => r.id));
+  // Sơ đồ máy chỉ có slot đã lắp chai: máy chủ không tính slot chờ nạp hàng là đang khai thác
+  // (`brandHoldsSlotNow`) và trả 403 cho thương hiệu chỉ có slot chờ nạp trên máy đó — không hỏi.
   const machineIds = useMemo(
-    () => [...new Set(held.map((r) => r.machineId).filter(Boolean))],
+    () => [
+      ...new Set(
+        held
+          .filter((r) => r.stage !== 'AWAITING_STOCK')
+          .map((r) => r.machineId)
+          .filter(Boolean),
+      ),
+    ],
     [held],
   ) as string[];
   const maps = useMachineMaps(machineIds);

@@ -28,10 +28,11 @@ export default function ShipmentsPage() {
   const isBrand = user?.brandId != null;
 
   // Tới từ modal cấu hình slot: `?declare=1&product=…&returnTo=…` mở sẵn pop-up khai báo,
-  // `?tab=batches` mở thẳng tab lô hàng để nộp giấy tờ. Đọc một lần rồi xóa khỏi URL.
+  // `?tab=batches` mở thẳng tab lô hàng để nộp giấy tờ. Đọc một lần rồi xóa khỏi URL. Thủ Kho vào thẳng
+  // tab nạp, nơi có danh sách việc cần nạp (ADR-0026).
   const [searchParams, setSearchParams] = useSearchParams();
   const [entry] = useState(() => ({
-    tab: searchParams.get('tab') ?? 'shipments',
+    tab: searchParams.get('tab') ?? (!isBrand && can('inventory.manage') ? 'refill' : 'shipments'),
     declare:
       searchParams.get('declare') === '1'
         ? {

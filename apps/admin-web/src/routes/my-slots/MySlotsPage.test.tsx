@@ -8,6 +8,8 @@ import MySlotsPage from './MySlotsPage';
 import { periodRange } from './period';
 
 const mockNavigate = vi.fn();
+/** Máy mà trang hỏi sơ đồ (FR-RPT-12) — ghi lại để kiểm không hỏi máy chỉ có slot chờ nạp. */
+const mapRequests: string[][] = [];
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
   useNavigate: () => mockNavigate,
@@ -36,8 +38,10 @@ const RENTALS = [
   rental('r-selling', 's-1', {}),
   rental('r-unpriced', 's-2', { pricePerSpray: null }),
   rental('r-ended', 's-3', { status: 'CLOSED', stage: 'ENDED' }),
-  // Đã cấu hình nhưng chưa lắp chai: chưa có trên sơ đồ máy, tên sản phẩm tra từ danh mục.
+  // Đã cấu hình nhưng chưa lắp chai: chưa có trên sơ đồ máy, tên sản phẩm tra từ danh mục. Nằm trên
+  // máy khác để kiểm trang không hỏi sơ đồ máy chỉ có slot chờ nạp.
   rental('r-awaiting', 's-4', {
+    machineId: 'm-2',
     status: 'DRAFT',
     stage: 'AWAITING_STOCK',
     fragranceProductId: 'p-2',
@@ -76,6 +80,31 @@ vi.mock('@/routes/shipments/api', async (importOriginal) => ({
   useInventoryBatches: () => ({ data: { items: [] } }),
 }));
 
+const machineMaps = [
+  {
+    data: [
+      {
+        slotNumber: 1,
+        mine: true,
+        available: true,
+        slotId: 's-1',
+        productName: 'Aurore Matinale',
+        estimatedRemainingSprays: 412,
+      },
+      {
+        slotNumber: 2,
+        mine: true,
+        available: false,
+        slotId: 's-2',
+        productName: 'Aurore Nocturne',
+        estimatedRemainingSprays: 90,
+        lowStock: true,
+      },
+      { slotNumber: 3, mine: false, available: false },
+    ],
+  },
+];
+
 vi.mock('./api', async () => {
   const actual = await vi.importActual<typeof import('./api')>('./api');
   return {
@@ -94,30 +123,10 @@ vi.mock('./api', async () => {
           locationName: 'Vincom Đồng Khởi',
         },
       })),
-    useMachineMaps: () => [
-      {
-        data: [
-          {
-            slotNumber: 1,
-            mine: true,
-            available: true,
-            slotId: 's-1',
-            productName: 'Aurore Matinale',
-            estimatedRemainingSprays: 412,
-          },
-          {
-            slotNumber: 2,
-            mine: true,
-            available: false,
-            slotId: 's-2',
-            productName: 'Aurore Nocturne',
-            estimatedRemainingSprays: 90,
-            lowStock: true,
-          },
-          { slotNumber: 3, mine: false, available: false },
-        ],
-      },
-    ],
+    useMachineMaps: (ids: string[]) => {
+      mapRequests.push([...ids]);
+      return machineMaps;
+    },
     useBrandSlotReport: () => ({
       data: [
         {
@@ -202,6 +211,12 @@ describe('MySlotsPage — Slot của tôi', () => {
     const row = screen.getByText('Máy Vincom #1 · Slot #3').closest('tr')!;
     expect(within(row).getByText('Aurore Soir')).toBeTruthy();
     expect(within(row).getAllByText('Chờ nạp hàng')).toHaveLength(1);
+  });
+
+  it('chỉ hỏi sơ đồ máy có slot đã lắp chai — máy chỉ có slot chờ nạp trả 403 cho thương hiệu', () => {
+    mapRequests.length = 0;
+    renderPage();
+    expect(mapRequests.at(-1)).toEqual(['m-1']);
   });
 
   it('nút Cấu hình mở modal cấu hình ngay tại trang, không rời Slot của tôi', async () => {

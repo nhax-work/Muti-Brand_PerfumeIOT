@@ -36,8 +36,8 @@ export function useInvoices(rentalIds: readonly string[]) {
 }
 
 /**
- * Sơ đồ từng máy (FR-RPT-12): slot nào đang bán và còn bao nhiêu lượt xịt. Máy chỉ có slot đang
- * chờ nạp hàng trả 404 — không phải lỗi, chỉ là chưa có gì để xem — nên không thử lại.
+ * Sơ đồ từng máy (FR-RPT-12): slot nào đang bán và còn bao nhiêu lượt xịt. Chỉ truyền máy có slot đã
+ * lắp chai — máy chỉ có slot chờ nạp hàng trả 403 cho thương hiệu. Không thử lại khi lỗi.
  */
 export function useMachineMaps(machineIds: readonly string[]) {
   return useQueries({

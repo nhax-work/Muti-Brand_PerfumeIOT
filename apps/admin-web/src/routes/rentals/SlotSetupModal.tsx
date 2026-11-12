@@ -169,8 +169,9 @@ export function SlotSetupModal({
           }
         : declared
           ? {
+              // Phần của thương hiệu ở bước này (khai báo, gửi hàng) đã xong; còn lại là kho nhận.
               title: t('ui.slotSetupStepShip'),
-              status: 'process',
+              status: 'finish',
               content: <StepNote text={t('ui.slotSetupShipDeclared')} />,
             }
           : {
