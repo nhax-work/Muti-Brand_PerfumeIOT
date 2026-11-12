@@ -1001,7 +1001,7 @@ components:
         reason: { type: string, minLength: 1 }
     AvailableSlot:
       type: object
-      required: [slotId, machineId, slotNumber, locationName, monthlyRentPrice]
+      required: [slotId, machineId, slotNumber, machineSlotCount, locationName, monthlyRentPrice]
       description: >-
         Slot trống hiển thị cho Brand Admin. KHÔNG kèm bất kỳ thông tin nào về thương hiệu đã từng
         thuê trước đó (FR-SLT-19, BR-012).
@@ -1010,6 +1010,13 @@ components:
         machineId: { type: string, format: uuid }
         machineDisplayName: { type: string }
         slotNumber: { type: integer }
+        machineSlotCount:
+          type: integer
+          minimum: 1
+          description: >-
+            Tổng số slot đang lắp trên máy (không tính slot đã xóa), để màn thuê vẽ đủ dãy ô như máy
+            thật; ô không có trong danh sách trống hiện "Không khả dụng". Chỉ là con số của máy,
+            không nói slot nào của ai (BR-012).
         locationId: { type: string, format: uuid }
         locationName: { type: string }
         monthlyRentPrice:
