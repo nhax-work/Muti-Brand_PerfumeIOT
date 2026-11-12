@@ -1,7 +1,7 @@
 # FR-DSP — Điều khiển lượt xịt an toàn
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A12 · 27 FR  
-> Trạng thái AC: **một phần** — FR-DSP-21÷27 (ADR-0007, nút bấm vật lý) đã có AC; FR-DSP-01÷20 **chưa viết**.  
+> Trạng thái AC: **một phần** — FR-DSP-18÷27 đã có AC (FR-DSP-18÷20 viết 2026-10-21); FR-DSP-01÷17 **chưa viết**.  
 > Lưu ý: FR-DSP-06, 08, 11÷15, 18 đã đổi phát biểu theo ADR-0007 — viết AC theo phát biểu mới trong `docs/`.
 > Phụ trách: TV1
 > Mức chi tiết: **bắt buộc viết AC đầy đủ**
@@ -25,6 +25,67 @@ Mẫu định dạng AC: xem `spec/modules/SLT.md`
 **Test:** `test_FR_DSP_01_<mo_ta>`
 
 -->
+
+---
+
+## FR-DSP-18 — Lệnh không có hồi âm thành UNKNOWN
+* **Statement:** Hệ thống phải chuyển lệnh xịt sang trạng thái UNKNOWN khi không nhận được xác nhận hoặc từ chối trong `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc gửi, hoặc không nhận được kết quả hoặc từ chối trong `DISPENSE_PRESS_WINDOW_SEC` cộng `DISPENSE_RESULT_TIMEOUT_SEC` kể từ lúc xác nhận.
+* **Traces:** BR-002 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1 (Gửi mà không ACK):** Given lệnh ở `SENT` và quá `DISPENSE_RESULT_TIMEOUT_SEC` kể từ `sent_at` chưa có `ACK` hay `REJECT`,  
+    When nhịp quét DSP chạy,  
+    Then lệnh chuyển `UNKNOWN`; đơn của lệnh `CUSTOMER` giữ `DISPENSE_REQUESTED` và được gắn `needs_manual_review` (vào `GET /orders/manual-review`).
+  * **AC2 (ACK mà không có kết quả):** Given lệnh ở `ACKNOWLEDGED` và quá `DISPENSE_PRESS_WINDOW_SEC` + `DISPENSE_RESULT_TIMEOUT_SEC` kể từ `acknowledged_at`,  
+    When nhịp quét chạy,  
+    Then lệnh chuyển `UNKNOWN` như AC1. Trước mốc đó lệnh vẫn `ACKNOWLEDGED` (khách còn trong thời gian bấm).
+  * **AC3 (Chưa gửi mà quá TTL):** Given lệnh ở `CREATED` đã qua `expires_at` (`DISPENSE_CMD_TTL_SEC`),  
+    When nhịp quét chạy,  
+    Then lệnh chuyển `EXPIRED`, không bao giờ được publish; đơn `FAILED` với `CMD_EXPIRED` và gắn `needs_manual_review` (FR-DSP-06).
+  * **AC4 (Kết quả về muộn):** Given lệnh đã `UNKNOWN`,  
+    When thiết bị gửi kết quả thành công, hoặc `REJECT PRESS_TIMEOUT`,  
+    Then lệnh được khép theo kết quả đó: thành công → đơn `DISPENSED`; `PRESS_TIMEOUT` → đơn `FORFEITED` và gỡ cờ kiểm tra thủ công. Lệnh không bị đếm hai lần vào chuỗi lỗi liên tiếp (FR-ALR-04).
+  * **AC5 (Bù sau downtime):** Given dịch vụ tắt qua các mốc trên,  
+    When bật lại,  
+    Then lần quét đầu tiên xử lý mọi lệnh đã quá mốc — quét theo mốc thời gian trong CSDL, không theo việc job có chạy đúng giờ.
+* **Test:** `test_FR_DSP_18_sent_without_ack_becomes_unknown`, `test_FR_DSP_18_acknowledged_without_result_becomes_unknown_after_press_window`, `test_FR_DSP_06_unsent_command_past_ttl_expires`, `test_FR_DSP_17_late_success_after_unknown_closes_order`, `test_FR_DSP_24_late_press_timeout_after_unknown_forfeits_and_clears_review`
+
+---
+
+## FR-DSP-19 — Không tự tạo lệnh mới sau UNKNOWN
+* **Statement:** Hệ thống phải không tự động tạo lệnh xịt mới cho đơn hàng có lệnh ở trạng thái UNKNOWN.
+* **Traces:** BR-002 · **Priority:** M
+* **Acceptance criteria:**
+  * **AC1:** Given đơn có lệnh `CUSTOMER` ở `UNKNOWN`,  
+    When nhịp điều phối DSP chạy bất kỳ số lần nào,  
+    Then không có lệnh mới nào được tạo cho đơn đó (đơn đã rời `PAID`); việc xử lý đi qua kiểm tra thủ công hoặc phiếu khiếu nại (ADR-0012).
+  * **AC2:** Given máy có lệnh `UNKNOWN` của đơn khác,  
+    When có đơn `PAID` mới chờ lượt trên cùng máy,  
+    Then lệnh `UNKNOWN` không còn tính là lệnh `CUSTOMER` hiệu lực (`uq_machine_active_customer_command`), nên đơn mới vẫn được ghi lệnh.
+* **Test:** `test_FR_DSP_19_unknown_command_never_triggers_new_command`
+
+---
+
+## FR-DSP-20 — Ghi nhận riêng lượt xịt chẩn đoán
+* **Statement:** Hệ thống phải ghi nhận riêng các lượt xịt chẩn đoán, không tính vào doanh thu và không tính vào thống kê lượt xịt khách hàng.
+* **Traces:** BR-005, BR-008 · **Priority:** M
+* **API:** `POST /machines/{id}/diagnostic-dispense`, `GET /dispense-commands`, `GET /orders/{id}/dispense-command`
+* **Acceptance criteria:**
+  * **AC1 (Ghi riêng):** Given Operations Staff tạo lượt xịt chẩn đoán trên slot `S` (FR-MNT-09),  
+    When lệnh được ghi,  
+    Then `dispense_commands` có một hàng `command_type = 'DIAGNOSTIC'`, `order_id` NULL; không có hàng `orders` hay `payments` nào được tạo.
+  * **AC2 (Không vào doanh thu):** Given đã có lượt chẩn đoán thành công,  
+    When tính `GET /revenue/split`, kỳ chi trả (FR-SLT-52) hay `GET /settlements`,  
+    Then số đơn và số tiền không đổi so với trước lượt chẩn đoán.
+  * **AC3 (Không vào thống kê lượt xịt khách):** Given báo cáo lượt xịt khách hàng (RPT),  
+    When có lượt chẩn đoán trong kỳ,  
+    Then lượt đó không được đếm; chuỗi lỗi liên tiếp (FR-ALR-04) cũng chỉ đếm lệnh `CUSTOMER`.
+  * **AC4 (Tra cứu):** Given danh sách lệnh xịt,  
+    When gọi `GET /dispense-commands?commandType=DIAGNOSTIC`,  
+    Then chỉ trả lệnh chẩn đoán, phân trang; Brand Admin chỉ thấy lệnh có `brand_id` của mình (lệnh chẩn đoán trên slot không có hóa đơn có `brand_id` NULL nên không hiện với thương hiệu nào).
+  * **AC5 (Lệnh của một đơn):** Given đơn `O` của thương hiệu `A`,  
+    When gọi `GET /orders/{id}/dispense-command`,  
+    Then trả lệnh `CUSTOMER` gần nhất của đơn kèm kết quả; đơn chưa có lệnh → `NOT_FOUND`; Brand Admin của `B` → `FORBIDDEN_SCOPE`.
+* **Test:** `test_FR_DSP_20_diagnostic_not_counted_as_order`, `test_FR_DSP_20_list_filters_by_command_type`, `test_FR_DSP_20_order_dispense_command_scoped`
 
 ---
 

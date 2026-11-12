@@ -1,0 +1,278 @@
+/* Thông tin bên trái (mã đơn, công cụ dev ở cuối cột), mã QR + đồng hồ chiếm phần lớn bên phải. */
+.page {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr);
+  column-gap: var(--sp-8);
+  padding: var(--sp-3) var(--gutter);
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h1);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+.product {
+  margin: var(--sp-2) 0 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+}
+
+.amount {
+  margin: 0;
+  font-size: var(--fs-h2);
+  font-weight: 500;
+}
+
+.method {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.lookUp {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-body);
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+/* Chấm nhấp nháy nhẹ: đang chờ ngân hàng báo về. */
+.pulse {
+  width: var(--sp-1);
+  height: var(--sp-1);
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+/* Nút viền — lối thoát duy nhất. */
+.cancel {
+  align-self: flex-start;
+  min-width: calc(var(--touch-min) * 3);
+  min-height: var(--touch-min);
+  margin-top: var(--sp-3);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--text);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.primary,
+.retry {
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-4);
+  border: none;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--on-action);
+  font-size: var(--fs-body);
+}
+
+.qrArea {
+  display: grid;
+  place-items: center;
+}
+
+/* Cạnh QR lấy theo phần cao còn lại (trừ header, lề, khối đồng hồ): ~560px ở 1280×800, vẫn vừa
+   1024×600. Khối đồng hồ cùng bề rộng với mã. */
+.qrFrame {
+  display: grid;
+  gap: var(--sp-2);
+  width: clamp(240px, calc(100dvh - var(--header-h) - 176px), 560px);
+  margin: 0;
+}
+
+.qr {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--qr-bg);
+}
+
+/* Khối đồng hồ: nền đen chữ trắng; 60 giây cuối đổi sang màu accent, chữ đen — không đỏ, không nháy. */
+.clock {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  /* 12×20 và cỡ số 32px theo bản thiết kế khối đồng hồ. */
+  padding: 12px 20px;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--on-action);
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.clockUrgent {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.clockLabel {
+  font-size: var(--fs-small);
+  opacity: 0.75;
+}
+
+.clockTime {
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.expired {
+  display: grid;
+  justify-items: center;
+  gap: var(--sp-2);
+  max-width: 28em;
+  font-size: var(--fs-body);
+  text-align: center;
+}
+
+.expired p {
+  margin: 0;
+}
+
+.expiredTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  font-weight: 400;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.reference {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.reference span {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.dev {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.dev button {
+  min-height: var(--touch-min);
+  padding: 0 var(--sp-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+.confirmBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: var(--scrim);
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.confirmBox {
+  display: grid;
+  gap: var(--sp-2);
+  width: min(560px, calc(100vw - 2 * var(--gutter)));
+  padding: var(--sp-5);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: var(--fs-body);
+}
+
+.confirmBox p {
+  margin: 0;
+}
+
+.confirmTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-h2);
+  font-weight: 400;
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.confirmActions .cancel {
+  margin-top: 0;
+  min-width: 0;
+}
+
+/* Màn thấp (1024×600): thu tiêu đề và khoảng cách để cột thông tin vừa cạnh mã QR. */
+@media (max-height: 680px) {
+  .info {
+    gap: var(--sp-1);
+  }
+
+  .title {
+    font-size: var(--fs-h2);
+  }
+
+  .product,
+  .amount {
+    font-size: var(--fs-body);
+  }
+
+  .cancel {
+    margin-top: var(--sp-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}

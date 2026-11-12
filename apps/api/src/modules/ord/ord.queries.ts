@@ -9,6 +9,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Kysely, type Selectable, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
+import { openRefillSessionOn } from './sales-stop.js';
 import type {
   BrandStatus,
   CommandStatus,
@@ -58,6 +59,8 @@ export interface KioskMachineRecord {
   readonly status: MachineConnectionStatus;
   readonly operatingMode: MachineOperatingMode;
   readonly timeZone: string;
+  /** Có phiếu nạp STARTED — cả máy dừng nhận đơn (FR-INV-30, ADR-0015 mục 6). */
+  readonly hasOpenRefillSession: boolean;
 }
 
 /** Một slot của máy kèm hóa đơn đang chiếm dụng (nếu có) — đủ để quyết định bán được hay không. */
@@ -178,12 +181,19 @@ export class OrdQueries {
   // Kiosk: máy, slot, danh mục
   // -----------------------------------------------------------------------------------
 
-  async findMachineBySerial(serialNumber: string, executor: Executor = this.db) {
+  /**
+   * @param lock khóa dòng `machines` (chỉ dùng trong transaction tạo đơn). Mở phiếu nạp (INV) và ép
+   *   bảo trì (MCH) khóa cùng dòng, nên không thao tác nào chen vào giữa bước kiểm "máy nhận đơn" và
+   *   bước ghi đơn (FR-INV-30, FR-INV-32, ADR-0015, ADR-0017).
+   */
+  async findMachineBySerial(serialNumber: string, executor: Executor = this.db, lock = false) {
     const row = await executor
       .selectFrom('machines as m')
       .innerJoin('locations as l', 'l.id', 'm.location_id')
       .select(['m.id', 'm.serial_number', 'm.status', 'm.operating_mode', 'l.timezone'])
+      .select(openRefillSessionOn('m.id').as('has_open_refill_session'))
       .where('m.serial_number', '=', serialNumber)
+      .$if(lock, (qb) => qb.forUpdate('m'))
       .executeTakeFirst();
     if (!row) return null;
     const record: KioskMachineRecord = {
@@ -192,6 +202,7 @@ export class OrdQueries {
       status: row.status,
       operatingMode: row.operating_mode,
       timeZone: row.timezone,
+      hasOpenRefillSession: Boolean(row.has_open_refill_session),
     };
     return record;
   }
@@ -602,6 +613,23 @@ export class OrdQueries {
       actorId: r.actor_id,
       occurredAt: r.occurred_at,
     }));
+  }
+
+  /** Đơn trên máy theo trạng thái, cũ trước — cho máy bị ép bảo trì (FR-MNT-17, ADR-0017). */
+  async listOrderIdsOnMachine(
+    machineId: string,
+    statuses: readonly OrderStatus[],
+    executor: Executor = this.db,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('orders')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', [...statuses])
+      .orderBy('created_at')
+      .orderBy('id')
+      .execute();
+    return rows.map((r) => r.id);
   }
 }
 

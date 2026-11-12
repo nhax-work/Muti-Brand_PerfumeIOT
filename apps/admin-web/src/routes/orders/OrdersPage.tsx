@@ -1,4 +1,4 @@
-import { WarningOutlined } from '@ant-design/icons';
+import { ApartmentOutlined, WarningOutlined } from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
   Alert,
@@ -28,9 +28,11 @@ import {
   type Order,
   type OrderStatus,
   useManualReviewOrders,
+  useOrderDispenseCommand,
   useOrderHistory,
   useOrders,
 } from './api';
+import { OrderTraceDrawer } from './OrderTraceDrawer';
 
 const STATUS_TAGS: Record<OrderStatus, { color: string; label: MessageKey }> = {
   CREATED: { color: 'default', label: 'ui.orderCreated' },
@@ -58,6 +60,9 @@ export default function OrdersPage() {
   const isPlatform = !user?.brandId;
   const canReview =
     user?.roles.some((r) => r === 'PLATFORM_SUPER_ADMIN' || r === 'OPERATIONS_STAFF') ?? false;
+  // FR-AUD-11: truy vết đọc nhật ký kiểm toán — chỉ hiện khi có `audit.read`, máy chủ vẫn kiểm.
+  const canTrace = user?.permissions.includes('audit.read') ?? false;
+  const [tracing, setTracing] = useState<string | null>(null);
 
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<OrderStatus | undefined>();
@@ -227,7 +232,9 @@ export default function OrdersPage() {
           order={selected}
           onClose={() => setSelected(null)}
           onOpenClaims={canReview ? () => void navigate('/refund-claims') : undefined}
+          onTrace={canTrace ? setTracing : undefined}
         />
+        <OrderTraceDrawer orderId={tracing} onClose={() => setTracing(null)} />
       </div>
     </RequireRole>
   );
@@ -237,16 +244,32 @@ function OrderDrawer({
   order,
   onClose,
   onOpenClaims,
+  onTrace,
 }: {
   order: Order | null;
   onClose: () => void;
   onOpenClaims?: (() => void) | undefined;
+  onTrace?: ((orderId: string) => void) | undefined;
 }) {
   const { t } = useI18n();
   const history = useOrderHistory(order?.id);
+  const command = useOrderDispenseCommand(order?.id);
   if (!order) return null;
   return (
-    <Drawer open width={520} title={order.paymentReference} onClose={onClose} destroyOnHidden>
+    <Drawer
+      open
+      width={520}
+      title={order.paymentReference}
+      onClose={onClose}
+      destroyOnHidden
+      extra={
+        onTrace && (
+          <Button icon={<ApartmentOutlined />} onClick={() => onTrace(order.id)}>
+            {t('ui.orderTrace')}
+          </Button>
+        )
+      }
+    >
       {order.needsManualReview && (
         <Alert
           type="warning"
@@ -283,6 +306,40 @@ function OrderDrawer({
           {codeLabel(t, 'orderCode', order.failureCode)}
         </Descriptions.Item>
       </Descriptions>
+      <Typography.Title level={5} style={{ marginTop: 24 }}>
+        {t('ui.orderDispenseCommand')}
+      </Typography.Title>
+      {command.data ? (
+        <Descriptions column={1} size="small" bordered>
+          <Descriptions.Item label={t('ui.pricingStatus')}>
+            {codeLabel(t, 'commandStatus', command.data.status)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandToken')}>
+            <Typography.Text copyable style={{ fontSize: 12 }}>
+              {command.data.commandToken}
+            </Typography.Text>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandSentAt')}>
+            {formatDateTime(command.data.sentAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandAcknowledgedAt')}>
+            {formatDateTime(command.data.acknowledgedAt)}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('ui.commandResult')}>
+            {!command.data.result
+              ? '—'
+              : command.data.result.success
+                ? t('ui.commandSucceeded')
+                : t('ui.commandFailedWith', {
+                    code: codeLabel(t, 'orderCode', command.data.result.failureCode ?? null),
+                  })}
+          </Descriptions.Item>
+        </Descriptions>
+      ) : (
+        <Typography.Text type="secondary">
+          {command.isLoading ? '…' : t('ui.orderNoDispenseCommand')}
+        </Typography.Text>
+      )}
       <Typography.Title level={5} style={{ marginTop: 24 }}>
         {t('ui.orderHistory')}
       </Typography.Title>

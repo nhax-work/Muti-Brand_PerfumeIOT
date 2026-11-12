@@ -11,3 +11,4 @@ export {
   type DeviceResultInput,
 } from './dsp.service.js';
 export { outcomeOf, type CommandOutcome, type DeviceReport } from './dispense-outcome.js';
+export { DOSE_CONSUMER, type DoseConsumer } from './dose-consumption.port.js';

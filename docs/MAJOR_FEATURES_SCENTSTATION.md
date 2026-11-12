@@ -30,8 +30,8 @@
   Snapshots revenue ownership (`BRAND` vs. `PLATFORM`) immutably at order creation, strictly isolates brand sales from liquidated platform earnings, and automatically generates periodic revenue-reconciliation statements of brand spray revenue to be paid out (rent is prepaid via invoices; no revenue share — ADR-0006) using high-precision decimal math.  
   *(Traces: BR-008, BR-009, BR-012, BR-013 · FR-REV-01, FR-REV-02, FR-REV-03, FR-REV-05, FR-SLT-17, FR-SLT-18, NFR-DAT-02)*
 
-* **FE-07: Smart IoT Inventory Tracking, Refill Tickets, and Leakage Detection**  
-  Tracks perfume volume across serialized bottles, estimates remaining perfume per actuation calibrated against physical load-cell sensors, triggers low-stock and suspected leakage alerts, verifies warehouse batch receipts, and uses dedicated Refill Tickets to temporarily suppress door alarms during legitimate bottle replenishments.  
+* **FE-07: Smart IoT Inventory Tracking and Refill Tickets**  
+  Tracks perfume volume across serialized bottles, estimates remaining perfume by counting successful sprays against a calibrated dose per slot (no load cell, ADR-0019), triggers low-stock and empty-slot alerts, verifies warehouse batch receipts, and uses dedicated Refill Tickets to temporarily suppress door alarms during legitimate bottle replenishments.  
   *(Traces: BR-005, BR-008 · FR-INV-02, FR-INV-05, FR-INV-09, FR-INV-11, FR-INV-14, FR-INV-19, FR-INV-22…31, FR-RFQ-01…08)*
 
 * **FE-08: Cryptographically Signed Dispense Commands and Anti-Duplicate Spray Control**  
@@ -93,8 +93,8 @@ mindmap
     Inventory & Refill Operations
       Serialized Bottle Management
       Batch Receipt Verification
-      Load Cell Weight Calibration
-      Low Stock & Leak Detection
+      Per-Slot Dose Calibration
+      Low Stock & Empty Slot Alerts
       Refill Tickets Door-Safe Workflow
     Operations & Maintenance
       Automated Severity Alerting
@@ -152,13 +152,13 @@ graph LR
     B3 --> B3_2["Device Telemetry"]
     B3_2 --> B3_2_1["Heartbeat Monitoring"]
     B3_2 --> B3_2_2["Remote Power Control"]
-    B3_2 --> B3_2_3["Load Cell Telemetry"]
+    B3_2 --> B3_2_3["Door & Actuator Telemetry"]
 
     %% Branch 4: Inventory & Maintenance
     Root --> B4["<b>Inventory & Operations</b>"]
     B4 --> B4_1["Smart Inventory"]
     B4_1 --> B4_1_1["Bottle Serialization"]
-    B4_1 --> B4_1_2["Consumption & Leak Alert"]
+    B4_1 --> B4_1_2["Spray-Count Consumption & Low Stock Alert"]
     B4_1 --> B4_1_3["Refill Tickets & Checklist"]
     B4 --> B4_2["Operations & Maintenance"]
     B4_2 --> B4_2_1["Auto Incident Alerts"]
@@ -199,7 +199,7 @@ graph LR
 | **FE-04** | Gán sản phẩm & tự do đặt giá slot | Hãng gán sản phẩm vào slot đã thuê và tự quyết định giá mỗi lượt xịt; giá đã lưu vào đơn hàng là bất biến. | **Mới:** Quy định rõ ràng hành động gán/đổi sản phẩm cho slot (FR-SLT-27..29). |
 | **FE-05** | Ân hạn, gia hạn & thanh lý tự động | Nhắc hết hạn T-7/T-3, tự động chuyển ân hạn (Grace Period) có tính phí lưu kho, thanh lý về Nền tảng nếu không gia hạn. | Giữ nguyên |
 | **FE-06** | Phân tách nguồn thu & đối soát định kỳ | Gán nhãn doanh thu `BRAND` vs `PLATFORM`, sinh bảng đối soát doanh thu lượt xịt chuyển trả cho thương hiệu (tiền thuê đã thu trước qua hóa đơn, không còn ăn chia — ADR-0006). | **Mới:** Chuẩn hóa kiểu dữ liệu tiền tệ `numeric` chính xác cao (NFR-DAT-02). |
-| **FE-07** | Quản lý tồn kho IoT, phiếu nạp & cảnh báo rò rỉ | Theo dõi chai theo mã số, ước tính tiêu thụ kết hợp cảm biến tải trọng (Load Cell), cảnh báo rò rỉ, checklist nạp chai. | **Mới:** Bổ sung Phiếu nạp (Refill Ticket) để chặn báo động giả "cửa mở" và đối soát lô hàng kho. |
+| **FE-07** | Quản lý tồn kho IoT & phiếu nạp | Theo dõi chai theo mã số, ước tính lượng còn lại bằng đếm lượt xịt thành công × liều hiệu chuẩn (không dùng load cell — ADR-0019), cảnh báo sắp hết, checklist nạp chai. | **Mới:** Bổ sung Phiếu nạp (Refill Ticket) để chặn báo động giả "cửa mở" và đối soát lô hàng kho. |
 | **FE-08** | Lệnh xịt ký số & chống xịt trùng | Lệnh xịt ký HMAC kèm thời hạn TTL, kiểm tra cảm biến an toàn (cửa đóng, không bảo trì), bảo đảm 100% không xịt trùng (BR-002). | Giữ nguyên |
 | **FE-09** | Telemetry thời gian thực & điều khiển máy từ xa | Theo dõi heartbeat MQTT (Online/Unstable/Offline), truyền nhận telemetry cảm biến, bật/tắt máy hoặc slot từ xa. | **Mới:** Bàn giao quyền điều khiển máy/slot cho vai trò hợp nhất **Operations Staff**; quy định rõ luật AVAILABLE của slot. |
 | **FE-10** | Cảnh báo sự cố & bảo trì hợp nhất | Tự động phát hiện lỗi, phân cấp cảnh báo, tạo ticket và chẩn đoán xịt thử, checklist kiểm tra sau sửa chữa. | **Mới:** Gộp Operations Manager & Technician thành **Operations Staff** phụ trách trọn gói. |

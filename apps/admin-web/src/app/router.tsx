@@ -16,6 +16,16 @@ export const router = createBrowserRouter([
         lazy: () => import('@/routes/login/LoginPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/register',
+        lazy: () =>
+          import('@/routes/register/RegisterPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/verify-email',
+        lazy: () =>
+          import('@/routes/verify-email/VerifyEmailPage').then((m) => ({ Component: m.default })),
+      },
+      {
         // Công khai: khách mở từ QR sự cố trên kiosk, không đăng nhập (ADR-0012).
         path: '/claim',
         lazy: () => import('@/routes/claim/ClaimPage').then((m) => ({ Component: m.default })),
@@ -76,6 +86,40 @@ export const router = createBrowserRouter([
           import('@/routes/rentals/CheckoutDetailPage').then((m) => ({ Component: m.default })),
       },
       {
+        path: '/dispense-commands',
+        lazy: () =>
+          import('@/routes/dispense-commands/DispenseCommandsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/brand-payouts',
+        lazy: () =>
+          import('@/routes/brand-payouts/BrandPayoutsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/reports',
+        lazy: () => import('@/routes/reports/ReportsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/refill-requests',
+        lazy: () =>
+          import('@/routes/refill-requests/RefillRequestsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/storage-compensations',
+        lazy: () =>
+          import('@/routes/storage-compensations/StorageCompensationsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/revenue',
+        lazy: () => import('@/routes/revenue/RevenuePage').then((m) => ({ Component: m.default })),
+      },
+      {
         path: '/refund-claims',
         lazy: () =>
           import('@/routes/refund-claims/RefundClaimsPage').then((m) => ({ Component: m.default })),
@@ -120,8 +164,44 @@ export const router = createBrowserRouter([
         lazy: () =>
           import('@/routes/rentals/RentalDetailPage').then((m) => ({ Component: m.default })),
       },
+      {
+        path: '/notifications',
+        lazy: () =>
+          import('@/routes/notifications/NotificationsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/alerts',
+        lazy: () => import('@/routes/alerts/AlertsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/shipments',
+        lazy: () =>
+          import('@/routes/shipments/ShipmentsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/maintenance-tickets',
+        lazy: () =>
+          import('@/routes/maintenance-tickets/MaintenanceTicketsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/audit-logs',
+        lazy: () =>
+          import('@/routes/audit-logs/AuditLogsPage').then((m) => ({ Component: m.default })),
+      },
+      {
+        path: '/bottle-returns',
+        lazy: () =>
+          import('@/routes/bottle-returns/BottleReturnsPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
     ],
   },
+
   {
     path: '*',
     lazy: () => import('@/routes/not-found/NotFoundPage').then((m) => ({ Component: m.default })),

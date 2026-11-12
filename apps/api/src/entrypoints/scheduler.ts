@@ -6,8 +6,10 @@
  */
 
 import { Logger, type INestApplicationContext } from '@nestjs/common';
+import { AlrService } from '../modules/alr/index.js';
 import { DspJobs } from '../modules/dsp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
+import { RevService } from '../modules/rev/index.js';
 import { SltJobs } from '../modules/slt/index.js';
 import { IotMqttGateway } from '../modules/iot/iot.mqtt.js';
 
@@ -22,6 +24,16 @@ const RENTAL_CHECKOUT_EXPIRY_TICK_MS = 60_000;
  * bằng giờ và ngày nên năm phút một lần là đủ.
  */
 const REFUND_CLAIM_TICK_MS = 5 * 60_000;
+/**
+ * Kỳ chi trả doanh thu: cộng dồn DRAFT, chốt CONFIRMED khi hết tháng (FR-SLT-52). Số DRAFT là số tạm
+ * nên trễ vài phút không sao; mốc chốt kỳ tính theo dữ liệu nên chạy trễ vẫn đúng.
+ */
+const PAYOUT_TICK_MS = 5 * 60_000;
+/**
+ * Gửi email thông báo tiền/hàng đã xếp hàng (FR-ALR-16, ADR-0017). Khoảng thử lại do
+ * EMAIL_RETRY_INTERVAL_MIN quyết định ở truy vấn; nhịp này chỉ cần đủ nhanh cho email mới.
+ */
+const EMAIL_TICK_MS = 30_000;
 
 export interface SchedulerOptions {
   /** Chạy vòng điều phối lệnh xịt — chỉ bật khi đã kết nối MQTT. */
@@ -83,6 +95,45 @@ export function startScheduler(
     }, RENTAL_CHECKOUT_EXPIRY_TICK_MS),
   );
 
+  let activatingStockingOverdue = false;
+  const activateStockingOverdue = () => {
+    if (activatingStockingOverdue) return;
+    activatingStockingOverdue = true;
+    slt
+      .autoActivateStockingOverdue()
+      .then((n) => n > 0 && logger.log(`Đã tự kích hoạt ${n} hóa đơn quá hạn lưu kho`))
+      .catch((e: unknown) => logger.error(`Tự kích hoạt hóa đơn quá hạn lỗi: ${String(e)}`))
+      .finally(() => (activatingStockingOverdue = false));
+  };
+  // Chạy ngay khi khởi động để bù hóa đơn quá hạn trong lúc dịch vụ tắt (FR-SLT-42 AC2).
+  activateStockingOverdue();
+  timers.push(setInterval(activateStockingOverdue, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
+
+  let handlingExpiry = false;
+  const handleExpiryJobs = () => {
+    if (handlingExpiry) return;
+    handlingExpiry = true;
+    Promise.all([
+      slt.scanExpiringRentals(),
+      slt.sendExpiringNotices(),
+      slt.autoTransitionToGrace(),
+      slt.calculateDailyGraceFees(),
+      slt.autoTransitionToLiquidated(),
+    ])
+      .then(([expiringCount, noticesCount, graceCount, feeCount, liquidatedCount]) => {
+        if (expiringCount > 0) logger.log(`Đã chuyển ${expiringCount} hóa đơn sang EXPIRING`);
+        if (noticesCount > 0) logger.log(`Đã gửi ${noticesCount} thông báo hết hạn T-7/T-3`);
+        if (graceCount > 0) logger.log(`Đã xử lý ${graceCount} hóa đơn chuyển GRACE/RENEWED`);
+        if (feeCount > 0) logger.log(`Đã tính phí lưu kho ân hạn cho ${feeCount} hóa đơn`);
+        if (liquidatedCount > 0) logger.log(`Đã chuyển ${liquidatedCount} hóa đơn sang thanh lý`);
+      })
+      .catch((e: unknown) => logger.error(`Quét hết hạn và ân hạn lỗi: ${String(e)}`))
+      .finally(() => (handlingExpiry = false));
+  };
+  // Chạy ngay khi khởi động để bù kiểm tra hết hạn / ân hạn trong lúc dịch vụ tắt
+  handleExpiryJobs();
+  timers.push(setInterval(handleExpiryJobs, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
+
   const claims = app.get(RefundClaimsService);
   let maintainingClaims = false;
   timers.push(
@@ -103,8 +154,71 @@ export function startScheduler(
     }, REFUND_CLAIM_TICK_MS),
   );
 
+  const rev = app.get(RevService);
+  let refreshingPayouts = false;
+  const refreshPayouts = () => {
+    if (refreshingPayouts) return;
+    refreshingPayouts = true;
+    rev
+      .refreshPayouts()
+      .catch((e: unknown) => logger.error(`Cập nhật kỳ chi trả lỗi: ${String(e)}`))
+      .finally(() => (refreshingPayouts = false));
+  };
+  // Chạy ngay khi khởi động để bù kỳ lỡ chốt trong lúc dịch vụ tắt.
+  refreshPayouts();
+  timers.push(setInterval(refreshPayouts, PAYOUT_TICK_MS));
+
+  const alr = app.get(AlrService);
+  let dispatchingEmails = false;
+  const dispatchEmails = () => {
+    if (dispatchingEmails) return;
+    dispatchingEmails = true;
+    alr
+      .dispatchDueEmails()
+      .then(({ sent, failed }) => {
+        if (sent + failed > 0) logger.log(`Email thông báo: ${sent} đã gửi, ${failed} lỗi`);
+      })
+      .catch((e: unknown) => logger.error(`Gửi email thông báo lỗi: ${String(e)}`))
+      .finally(() => (dispatchingEmails = false));
+  };
+  // Chạy ngay khi khởi động để gửi bù email xếp hàng trong lúc dịch vụ tắt.
+  dispatchEmails();
+  timers.push(setInterval(dispatchEmails, EMAIL_TICK_MS));
+
+  let sweepingAlerts = false;
+  const sweepAlerts = () => {
+    if (sweepingAlerts) return;
+    sweepingAlerts = true;
+    Promise.all([alr.sweepDoorOpenAlerts(), alr.sweepLowStockAlerts()])
+      .then(([doors, stocks]) => {
+        if (doors + stocks > 0)
+          logger.log(`Cảnh báo: ${doors} cửa mở quá hạn, ${stocks} slot cạn/hết`);
+      })
+      .catch((e: unknown) => logger.error(`Quét cảnh báo lỗi: ${String(e)}`))
+      .finally(() => (sweepingAlerts = false));
+  };
+  sweepAlerts();
+  timers.push(setInterval(sweepAlerts, 60_000));
+
+  let sweepingExpiry = false;
+  const sweepExpiry = () => {
+    if (sweepingExpiry) return;
+    sweepingExpiry = true;
+    alr
+      .sweepExpiringRentals()
+      .then(({ notified7, notified3 }) => {
+        if (notified7 + notified3 > 0) {
+          logger.log(`Nhắc hạn hợp đồng: ${notified7} mốc 7 ngày, ${notified3} mốc 3 ngày`);
+        }
+      })
+      .catch((e: unknown) => logger.error(`Quét hết hạn hợp đồng lỗi: ${String(e)}`))
+      .finally(() => (sweepingExpiry = false));
+  };
+  sweepExpiry();
+  timers.push(setInterval(sweepExpiry, 5 * 60_000));
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, phiếu khiếu nại${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email, quét cảnh báo, nhắc hết hạn hợp đồng${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }

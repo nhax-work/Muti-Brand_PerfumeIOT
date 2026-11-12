@@ -198,4 +198,40 @@ describe('SlotCard Component', () => {
     expect(screen.getByText('MA-001')).toBeDefined();
     expect(screen.getByText('BTL #1')).toBeDefined();
   });
+  it('FR-MNT-09: nút xịt chẩn đoán chỉ hiện khi được phép, và khóa khi slot chưa hiệu chuẩn', () => {
+    const onDiagnosticDispense = vi.fn();
+    const { rerender } = render(
+      <TestWrapper>
+        <SlotCard slot={mockSlot} rental={mockRental} brand={mockBrand} onOpenConfig={vi.fn()} />
+      </TestWrapper>,
+    );
+    expect(screen.queryByText('Xịt chẩn đoán')).toBeNull();
+
+    rerender(
+      <TestWrapper>
+        <SlotCard
+          slot={mockSlot}
+          rental={mockRental}
+          brand={mockBrand}
+          onOpenConfig={vi.fn()}
+          onDiagnosticDispense={onDiagnosticDispense}
+        />
+      </TestWrapper>,
+    );
+    fireEvent.click(screen.getByText('Xịt chẩn đoán'));
+    expect(onDiagnosticDispense).toHaveBeenCalledWith(mockSlot);
+
+    rerender(
+      <TestWrapper>
+        <SlotCard
+          slot={{ ...mockSlot, calibratedDosageMl: null }}
+          rental={mockRental}
+          brand={mockBrand}
+          onOpenConfig={vi.fn()}
+          onDiagnosticDispense={onDiagnosticDispense}
+        />
+      </TestWrapper>,
+    );
+    expect(screen.getByText('Xịt chẩn đoán').closest('button')?.disabled).toBe(true);
+  });
 });

@@ -11,7 +11,7 @@
  * id cố định). Chỉ dùng ở máy dev — không chạy trên môi trường có dữ liệu thật.
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { hash } from 'argon2';
 import pg from 'pg';
 import 'dotenv/config';
@@ -106,12 +106,25 @@ const PERMISSIONS = [
   ['brand.manage', 'Tạo và cập nhật thương hiệu (FR-BND-01/02/03)'],
   ['user.manage', 'Tạo, khóa và đặt lại mật khẩu tài khoản (FR-USR-01..05)'],
   ['machine.manage', 'Đăng ký và cấu hình máy, slot (FR-MCH-01..06)'],
+  ['machine.view', 'Xem danh sách và chi tiết máy, slot (FR-MCH-08..10)'],
   ['machine.operate', 'Bật/tắt máy và slot từ xa (FR-MCH-11/12)'],
   ['rental.manage', 'Tạo, gia hạn, chấm dứt, thanh lý hợp đồng (FR-SLT-01..14)'],
   ['rental.request', 'Gửi yêu cầu thuê slot trống (FR-SLT-20)'],
   ['product.manage', 'Quản lý danh mục sản phẩm của thương hiệu mình (FR-PRD-01..05)'],
   ['inventory.manage', 'Nhập lô, đăng ký chai, nạp và tháo chai (FR-INV-01..17)'],
-  ['inventory.adjust', 'Điều chỉnh tồn kho kèm lý do (FR-INV-16)'],
+  [
+    'inventory.adjust',
+    'Điều chỉnh tồn kho kèm lý do, ghi nhận chai hư hỏng (FR-INV-16, FR-SLT-44)',
+  ],
+  [
+    'inventory.declare',
+    'Khai báo lô hàng gửi kho và nộp giấy tờ chính hãng của thương hiệu mình (FR-INV-22, 33)',
+  ],
+  ['inventory.verify', 'Duyệt hoặc từ chối giấy tờ chính hãng của lô (FR-INV-34)'],
+  [
+    'notification.manage',
+    'Tra bằng chứng gửi thông báo của mọi thương hiệu và gửi lại email lỗi (FR-ALR-16)',
+  ],
   ['refill.request', 'Gửi yêu cầu bổ sung nước hoa (FR-RFQ-01)'],
   ['refill.fulfill', 'Duyệt và lên lịch yêu cầu bổ sung (FR-RFQ-06/07)'],
   [
@@ -124,6 +137,10 @@ const PERMISSIONS = [
   ['maintenance.handle', 'Tạo và xử lý phiếu bảo trì (FR-MNT-01..13)'],
   ['report.brand', 'Xem báo cáo trong phạm vi thương hiệu mình (FR-RPT-08/10)'],
   ['report.platform', 'Xem báo cáo tổng hợp toàn nền tảng (FR-RPT-15)'],
+  [
+    'revenue.manage',
+    'Chuyển kỳ chi trả sang PAID, trả lời khiếu nại, chi trả bồi thường, xem doanh thu tách hai nguồn và doanh thu bán gói (FR-SLT-45, 47, 53, 54, FR-REV-04)',
+  ],
   ['audit.read', 'Tra cứu nhật ký kiểm toán (FR-AUD-10)'],
 ] as const;
 
@@ -134,6 +151,7 @@ const PERMISSIONS = [
 const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   [ID.roleSuperAdmin]: PERMISSIONS.map(([code]) => code),
   [ID.roleOpsStaff]: [
+    'machine.view',
     'machine.operate',
     'alert.handle',
     'maintenance.handle',
@@ -142,10 +160,16 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     'order.refund',
     'report.platform',
   ],
-  [ID.roleInventoryStaff]: ['inventory.manage', 'inventory.adjust', 'refill.fulfill'],
+  [ID.roleInventoryStaff]: [
+    'inventory.manage',
+    'inventory.adjust',
+    'refill.fulfill',
+    'machine.view',
+  ],
   [ID.roleBrandAdmin]: [
     'product.manage',
     'rental.request',
+    'inventory.declare',
     'refill.request',
     'report.brand',
     'order.view',
@@ -184,6 +208,8 @@ async function main(): Promise<void> {
     // Danh mục gói trước: hóa đơn seed chụp giá từ gói thuê, gói bảo quản và giá niêm yết slot.
     await seedRentalCatalog(client);
     await seedRentalsAndBottles(client);
+    await seedAgreementVersions(client);
+    await seedNotifications(client);
 
     await client.query('COMMIT');
 
@@ -481,20 +507,101 @@ async function seedProducts(client: pg.Client): Promise<void> {
 }
 
 async function seedInventory(client: pg.Client): Promise<void> {
+  // Giấy tờ chính hãng ghi vào cột riêng của lô (ADR-0017 mục 1): lô của A đang chờ duyệt, lô của B
+  // đã được Super Admin duyệt nên chai của lô này lắp được vào slot (FR-INV-35).
   const batches = [
-    [ID.batches[0], ID.brandA, ID.products[0], 'LOT-MA-2026-01', ID.userInventoryStaff],
-    [ID.batches[1], ID.brandB, ID.products[2], 'LOT-HV-2026-01', ID.userInventoryStaff],
+    {
+      id: ID.batches[0],
+      brandId: ID.brandA,
+      productId: ID.products[0],
+      batchNumber: 'LOT-MA-2026-01',
+      status: 'PENDING',
+      documentUrl: 'https://example.com/docs/coo-ma-2026.pdf',
+      submittedBy: ID.userBrandAdminA,
+      verifiedBy: null,
+    },
+    {
+      id: ID.batches[1],
+      brandId: ID.brandB,
+      productId: ID.products[2],
+      batchNumber: 'LOT-HV-2026-01',
+      status: 'APPROVED',
+      documentUrl: 'https://example.com/docs/coo-hv-2026.pdf',
+      submittedBy: ID.userBrandAdminB,
+      verifiedBy: ID.userSuperAdmin,
+    },
   ] as const;
 
-  for (const [id, brandId, productId, batchNumber, createdBy] of batches) {
+  for (const batch of batches) {
     await client.query(
-      `INSERT INTO inventory_batches (id, brand_id, fragrance_product_id, batch_number,
-                                      received_at, expires_at, quantity_received, created_by)
-       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5)
-       ON CONFLICT (id) DO NOTHING`,
-      [id, brandId, productId, batchNumber, createdBy],
+      `INSERT INTO inventory_batches (id, brand_id, fragrance_product_id, batch_number, received_at,
+                                      expires_at, quantity_received, created_by,
+                                      authenticity_status, authenticity_document_url,
+                                      authenticity_document_type, authenticity_submitted_by,
+                                      authenticity_submitted_at, authenticity_verified_by,
+                                      authenticity_verified_at)
+       VALUES ($1, $2, $3, $4, now(), now() + interval '18 months', 10, $5,
+               $6::batch_authenticity_status, $7, 'CERTIFICATE_OF_ORIGIN', $8, now(), $9::uuid,
+               CASE WHEN $9::uuid IS NULL THEN NULL ELSE now() END)
+       ON CONFLICT (id) DO UPDATE SET
+         authenticity_status = EXCLUDED.authenticity_status,
+         authenticity_document_url = EXCLUDED.authenticity_document_url,
+         authenticity_document_type = EXCLUDED.authenticity_document_type,
+         authenticity_submitted_by = EXCLUDED.authenticity_submitted_by,
+         authenticity_submitted_at = EXCLUDED.authenticity_submitted_at,
+         authenticity_verified_by = EXCLUDED.authenticity_verified_by,
+         authenticity_verified_at = EXCLUDED.authenticity_verified_at,
+         authenticity_rejection_reason = NULL`,
+      [
+        batch.id,
+        batch.brandId,
+        batch.productId,
+        batch.batchNumber,
+        ID.userInventoryStaff,
+        batch.status,
+        batch.documentUrl,
+        batch.submittedBy,
+        batch.verifiedBy,
+      ],
     );
   }
+
+  // Khai báo gửi hàng mẫu (FR-INV-22..25)
+  await client.query(
+    `INSERT INTO brand_shipment_declarations (id, brand_id, fragrance_product_id, declared_quantity,
+                                             declared_bottle_volume_ml, expected_ship_date, status, declared_by)
+     VALUES ('eeeeeeee-eeee-4eee-8eee-000000000001', $1, $2, 12, 50.0000, current_date + interval '3 days', 'DECLARED', $3)
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.products[0], ID.userBrandAdminA],
+  );
+
+  await client.query(
+    `INSERT INTO brand_shipment_declarations (id, brand_id, fragrance_product_id, declared_quantity,
+                                             declared_bottle_volume_ml, expected_ship_date, status,
+                                             received_quantity, discrepancy_notes, received_at, received_by, declared_by)
+     VALUES ('eeeeeeee-eeee-4eee-8eee-000000000002', $1, $2, 10, 50.0000, current_date - interval '2 days', 'DISCREPANCY',
+             9, 'Hao hụt 1 chai do va đập trong quá trình vận chuyển', now() - interval '1 day', $3, $4)
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.products[1], ID.userInventoryStaff, ID.userBrandAdminA],
+  );
+
+  // Chai dự phòng trong kho sẵn sàng nạp máy (status = IN_STOCK)
+  await client.query(
+    `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
+                          status, initial_volume_ml, current_estimated_ml,
+                          opened_at, installed_at, expires_at)
+     VALUES ('99999999-9999-4999-8999-000000000009', $1, 'BRAND', $2, $3, 'BTL-MA-SPARE-01',
+             'IN_STOCK', 50.0000, 50.0000, NULL, NULL, now() + interval '18 months')
+     ON CONFLICT (id) DO NOTHING`,
+    [ID.brandA, ID.batches[0], ID.products[0]],
+  );
+
+  // Cập nhật đóng phiếu cũ cho DB đã seed (W7-19: tránh phiếu STARTED làm dừng bán kiosk M001)
+  await client.query(
+    `UPDATE refill_sessions
+     SET status = 'CANCELLED', completed_at = now()
+     WHERE id = 'ffffffff-ffff-4fff-8fff-000000000001' AND status = 'STARTED'`,
+  );
 }
 
 /** Ảnh chụp giá của một hóa đơn seed — đúng công thức SltService (FR-SLT-33, FR-SLT-36). */
@@ -624,9 +731,9 @@ async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
 
     await client.query(
       `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                            status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                            status, initial_volume_ml, current_estimated_ml,
                             opened_at, installed_at, expires_at)
-       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+       VALUES ($1, $2, 'BRAND', $3, $4, $5, 'INSTALLED', 50.0000, 48.0000,
                now() - interval '30 days', now() - interval '30 days',
                now() + interval '18 months')
        ON CONFLICT (id) DO NOTHING`,
@@ -645,6 +752,166 @@ async function seedRentalsAndBottles(client: pg.Client): Promise<void> {
       ID.slots[plan.slot],
     ]);
   }
+}
+
+async function seedNotifications(client: pg.Client): Promise<void> {
+  const notifs = [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000001',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'EMAIL',
+      subject:
+        '[ScentStation] Xác nhận thanh toán thuê slot thành công (HD-SEED-000001, HD-SEED-000002)',
+      content: `Kính gửi Quý đối tác Maison Aurore,
+
+Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
+- Mã phiên thanh toán: ${ID.checkoutA}
+- Danh sách mã hóa đơn: HD-SEED-000001, HD-SEED-000002
+- Thời điểm thanh toán: 2026-10-20 14:30:00 (Asia/Ho_Chi_Minh)
+
+Các bước tiếp theo cần thực hiện:
+1. Khai báo lô hàng gửi kho tại cổng quản trị thương hiệu (FR-INV-22).
+2. Sau khi kho tiếp nhận và đối soát tem kiểm định, chai nước hoa sẽ được nạp vào các slot đã thuê.
+3. Cấu hình slot và cài đặt giá trải nghiệm để sẵn sàng phục vụ khách hàng tại Kiosk.
+
+Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
+
+Trân trọng,
+Hệ thống Quản trị ScentStation`,
+      status: 'PENDING',
+      sentAt: null,
+      readAt: null,
+      createdAt: "now() - interval '2 days'",
+      referenceId: ID.checkoutA,
+      attempts: 0,
+      lastError: null,
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000002',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'ALERT_SLOT_LOW_VOLUME',
+      channel: 'EMAIL',
+      subject: '[ScentStation] Cảnh báo dung tích chai nước hoa BTL-1 sắp cạn',
+      content: `Kính gửi Quý đối tác Maison Aurore,
+
+Hệ thống phát hiện chai nước hoa BTL-1 tại Kiosk Crescent Mall (Slot 1) có dung tích ước tính còn dưới 10% (4.8ml).
+Vui lòng chuẩn bị chai bổ sung và tạo yêu cầu nạp hàng để tránh gián đoạn dịch vụ.
+
+Thông báo này được ghi nhận làm bằng chứng đối soát vận hành (FR-ALR-16).
+
+Trân trọng,
+Hệ thống Vận hành ScentStation`,
+      status: 'FAILED',
+      sentAt: null,
+      readAt: null,
+      createdAt: "now() - interval '1 day'",
+      referenceId: null,
+      // Hết lượt tự thử — chỉ Super Admin gửi lại tay được (FR-ALR-16 AC3).
+      attempts: 5,
+      lastError: '550 5.1.1 Mailbox unavailable',
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000003',
+      brandId: ID.brandA,
+      recipientUserId: ID.userBrandAdminA,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'IN_APP',
+      subject: 'Thanh toán thuê slot đã được ghi nhận',
+      content: `Phiên thanh toán thuê slot ${ID.checkoutA} đã được xác nhận thành công. Hóa đơn điện tử và chứng từ đối soát đã được lưu trữ.`,
+      status: 'READ',
+      sentAt: "now() - interval '2 days'",
+      readAt: "now() - interval '2 days'",
+      createdAt: "now() - interval '2 days'",
+      referenceId: ID.checkoutA,
+      attempts: 0,
+      lastError: null,
+    },
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-000000000004',
+      brandId: ID.brandB,
+      recipientUserId: ID.userBrandAdminB,
+      type: 'RENTAL_CHECKOUT_PAID',
+      channel: 'EMAIL',
+      subject: '[ScentStation] Xác nhận đối soát phiên thanh toán Nhà Hương Việt (HD-SEED-000003)',
+      content: `Kính gửi Quý đối tác Nhà Hương Việt,
+
+Phiên thanh toán thuê slot của quý thương hiệu đã được hệ thống ScentStation xác nhận thành công.
+- Mã phiên thanh toán: ${ID.checkoutB}
+- Danh sách mã hóa đơn: HD-SEED-000003
+
+Thông báo này được lưu trữ trong cơ sở dữ liệu làm bằng chứng đối soát pháp lý (FR-ALR-16, ADR-0013).
+
+Trân trọng,
+Hệ thống Quản trị ScentStation`,
+      status: 'FAILED',
+      sentAt: null,
+      readAt: null,
+      createdAt: "now() - interval '1 day'",
+      referenceId: ID.checkoutB,
+      attempts: 1,
+      lastError: 'SMTP 421: dịch vụ tạm thời không nhận thư',
+    },
+  ];
+
+  for (const n of notifs) {
+    await client.query(
+      // Email mang bằng chứng gửi (ADR-0017 mục 4): địa chỉ chụp lúc xếp hàng, số lần thử, lỗi cuối.
+      `INSERT INTO notifications (id, brand_id, recipient_user_id, type, channel, subject, content, status,
+                                  sent_at, read_at, created_at, reference_id, recipient_address,
+                                  delivery_attempts, last_attempt_at, last_error)
+       SELECT $1, $2, $3, $4, $5::varchar, $6, $7, $8, ${n.sentAt ?? 'NULL'}, ${n.readAt ?? 'NULL'}, ${n.createdAt},
+              $9, CASE WHEN $5::varchar = 'EMAIL' THEN u.email END, $10::int,
+              CASE WHEN $10::int > 0 THEN ${n.createdAt} END, $11
+         FROM users u WHERE u.id = $3
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        n.id,
+        n.brandId,
+        n.recipientUserId,
+        n.type,
+        n.channel,
+        n.subject,
+        n.content,
+        n.status,
+        n.referenceId,
+        n.attempts,
+        n.lastError,
+      ],
+    );
+  }
+}
+
+async function seedAgreementVersions(client: pg.Client): Promise<void> {
+  const content = `HỢP ĐỒNG KHUNG CUNG CẤP DỊCH VỤ THUÊ SLOT MÁY TRẢI NGHIỆM NƯỚC HOA SCENTSTATION
+
+Phiên bản: v1.0
+Áp dụng cho: Mọi thương hiệu đối tác tham gia thuê slot trên hệ sinh thái ScentStation.
+
+ĐIỀU 1: ĐỐI TƯỢNG VÀ PHẠM VI DỊCH VỤ
+Nền tảng ScentStation cung cấp hệ thống máy kiosk trải nghiệm nước hoa thông minh đặt tại các địa điểm thương mại. Thương hiệu thuê vị trí slot trên máy để trưng bày và cho khách hàng trải nghiệm sản phẩm nước hoa dạng xịt định lượng tự động.
+
+ĐIỀU 2: QUYỀN VÀ NGHĨA VỤ CỦA THƯƠNG HIỆU
+1. Thương hiệu chịu trách nhiệm về chất lượng, nguồn gốc xuất xứ và độ an toàn của sản phẩm nước hoa nạp vào slot.
+2. Thương hiệu thanh toán đầy đủ phí thuê slot và phí dịch vụ bảo quản hàng hóa theo từng phiên thanh toán.
+3. Thương hiệu có quyền đổi slot cùng máy trong vòng 48 giờ sau khi thanh toán nếu slot chưa được lắp chai.
+
+ĐIỀU 3: BẢO VỆ DỮ LIỆU VÀ CÔ LẬP
+Hệ thống bảo đảm dữ liệu doanh thu, lượt xịt và cấu hình slot của từng thương hiệu được cô lập hoàn toàn, không thể bị truy cập bởi các thương hiệu khác cùng đặt máy.`;
+
+  const hash = createHash('sha256').update(content, 'utf8').digest('hex');
+
+  await client.query(
+    `INSERT INTO agreement_versions (id, version, title, content, content_hash, is_current, published_at, created_by)
+     VALUES ('cccccccc-cccc-4ccc-8ccc-000000000001', 'v1.0', 'Hợp đồng khung cung cấp dịch vụ ScentStation', $1, $2, true, now(), $3)
+     ON CONFLICT (version) DO UPDATE
+     SET content = EXCLUDED.content,
+         content_hash = EXCLUDED.content_hash,
+         is_current = true`,
+    [content, hash, ID.userSuperAdmin],
+  );
 }
 
 await main();

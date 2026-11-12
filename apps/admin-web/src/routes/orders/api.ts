@@ -5,6 +5,7 @@ import { api, unwrap } from '@/shared/api';
 export type Order = components['schemas']['Order'];
 export type OrderStatus = components['schemas']['OrderStatus'];
 export type OrderStatusHistoryEntry = components['schemas']['OrderStatusHistoryEntry'];
+export type OrderTrace = components['schemas']['OrderTrace'];
 
 export interface OrderSearch {
   readonly page: number;
@@ -42,5 +43,32 @@ export function useOrderHistory(orderId: string | undefined) {
     queryKey: ['orders', orderId, 'history'],
     queryFn: () => unwrap(api.GET('/orders/{id}/history', { params: { path: { id: orderId! } } })),
     enabled: Boolean(orderId),
+  });
+}
+
+/** Truy vết đầu-cuối một đơn (FR-AUD-11) — chỉ người có `audit.read`. */
+export function useOrderTrace(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ['orders', orderId, 'trace'],
+    queryFn: () =>
+      unwrap(
+        api.GET('/audit-logs/order-trace/{orderId}', { params: { path: { orderId: orderId! } } }),
+      ),
+    enabled: Boolean(orderId),
+    retry: false,
+  });
+}
+
+/**
+ * Lệnh xịt của đơn kèm kết quả từ thiết bị (FR-DSP-16, FR-DSP-20). Đơn chưa từng được ghi lệnh thì
+ * máy chủ trả NOT_FOUND — không thử lại.
+ */
+export function useOrderDispenseCommand(orderId: string | undefined) {
+  return useQuery({
+    queryKey: ['orders', orderId, 'dispense-command'],
+    queryFn: () =>
+      unwrap(api.GET('/orders/{id}/dispense-command', { params: { path: { id: orderId! } } })),
+    enabled: Boolean(orderId),
+    retry: false,
   });
 }

@@ -17,6 +17,7 @@ import {
 } from '../../apps/api/src/modules/auth/decorators.js';
 import {
   AvailableSlotsController,
+  LocationsController,
   MachinesController,
   SlotsController,
 } from '../../apps/api/src/modules/mch/mch.http.js';
@@ -36,7 +37,6 @@ class FakeMchQueries {
   locations = new Map<string, LocationRecord>();
   machines = new Map<string, MachineRecord>();
   slots = new Map<string, MachineSlotRecord>();
-  statusHistories: Array<{ machineId: string; mode: string; actorId?: string }> = [];
 
   private locSeq = 0;
   private mchSeq = 0;
@@ -174,22 +174,19 @@ class FakeMchQueries {
     return updated;
   }
 
-  async updateMachineMode(
-    id: string,
-    mode: MachineOperatingMode,
-    reason?: string,
-    actorId?: string,
-  ) {
-    const mch = this.machines.get(id);
-    if (!mch) return null;
-    const updated: MachineRecord = {
-      ...mch,
+  /** Đổi chế độ thẳng trong bộ nhớ — luồng đổi chế độ thật kiểm ở test_mch_machine_mode (CSDL thật). */
+  setMode(id: string, mode: MachineOperatingMode) {
+    this.machines.set(id, {
+      ...this.machines.get(id)!,
       operatingMode: mode,
       updatedAt: new Date(),
-    };
-    this.machines.set(id, updated);
-    this.statusHistories.push({ machineId: id, mode, actorId });
-    return updated;
+    });
+  }
+
+  pendingOrdersByMachine = new Map<string, number>();
+
+  async countPendingOrdersAndCommands(machineId: string) {
+    return this.pendingOrdersByMachine.get(machineId) ?? 0;
   }
 
   // Slots
@@ -279,6 +276,7 @@ const SUPER_ADMIN: AuthenticatedUser = {
   permissionVersion: 1,
   sessionId: 'ses-1',
   mustChangePassword: false,
+  emailVerificationPending: false,
   scope: { type: 'PLATFORM' },
 };
 
@@ -399,53 +397,6 @@ describe('MchService (Machine, Slot, Location)', () => {
         }),
       ).rejects.toMatchObject({ messageKey: 'mch.serialTaken' });
     });
-
-    it('đổi chế độ hoạt động máy và ghi nhận lịch sử', async () => {
-      const machine = await service.createMachine(SUPER_ADMIN, {
-        locationId: activeLocationId,
-        serialNumber: 'M001',
-        displayName: 'Máy 1',
-        slotCount: 4,
-      });
-
-      const updated = await service.setMachineMode(SUPER_ADMIN, machine.id, {
-        operatingMode: 'MAINTENANCE',
-        reason: 'Bảo trì định kỳ máy',
-      });
-
-      expect(updated.operatingMode).toBe('MAINTENANCE');
-      expect(queries.statusHistories).toHaveLength(1);
-      expect(queries.statusHistories[0]!.mode).toBe('MAINTENANCE');
-      expect(queries.statusHistories[0]!.actorId).toBe(SUPER_ADMIN.userId);
-      expect(updated.slotCount).toBe(4);
-      expect(audit.entries.at(-1)).toMatchObject({
-        action: 'mch.machine.mode_changed',
-        actorId: SUPER_ADMIN.userId,
-        severity: 'WARNING',
-        before: { operatingMode: 'NORMAL' },
-        after: { operatingMode: 'MAINTENANCE' },
-        metadata: { reason: 'Bảo trì định kỳ máy' },
-      });
-    });
-
-    it('xóa mềm máy: chuyển operatingMode sang DISABLED', async () => {
-      const machine = await service.createMachine(SUPER_ADMIN, {
-        locationId: activeLocationId,
-        serialNumber: 'M001',
-        displayName: 'Máy 1',
-        slotCount: 4,
-      });
-
-      const disabled = await service.softDeleteMachine(
-        SUPER_ADMIN,
-        machine.id,
-        'Dừng hoạt động máy',
-      );
-      expect(disabled.operatingMode).toBe('DISABLED');
-
-      const reloaded = await service.getMachine(machine.id);
-      expect(reloaded.operatingMode).toBe('DISABLED');
-    });
   });
 
   describe('Machine Slot Management & Config', () => {
@@ -552,7 +503,7 @@ describe('MchService (Machine, Slot, Location)', () => {
 
     it('không bật slot khi máy chứa nó đã DISABLED', async () => {
       await service.setSlotEnabled(SUPER_ADMIN, slotId, false);
-      await service.setMachineMode(SUPER_ADMIN, machineId, { operatingMode: 'DISABLED' });
+      queries.setMode(machineId, 'DISABLED');
       await rejectsWith(service.setSlotEnabled(SUPER_ADMIN, slotId, true), 'VALIDATION_ERROR');
     });
 
@@ -639,7 +590,7 @@ describe('MchService (Machine, Slot, Location)', () => {
       queries.slots.set(first!.id, { ...queries.slots.get(first!.id)!, currentRentalId: 'r-1' });
       expect((await service.listAvailableSlots(page)).total).toBe(3);
 
-      await service.setMachineMode(SUPER_ADMIN, machineB, { operatingMode: 'DISABLED' });
+      queries.setMode(machineB, 'DISABLED');
       expect((await service.listAvailableSlots(page)).total).toBe(1);
 
       await service.softDeleteLocation(locA);
@@ -659,6 +610,101 @@ describe('MchService (Machine, Slot, Location)', () => {
       expect(Reflect.getMetadata(REQUIRES_REAUTH, SlotsController.prototype.updateConfig)).toBe(
         true,
       );
+    });
+
+    it('test_FR_MNT_17_force_emergency_maintenance — chỉ một đường ép bảo trì: PUT /machines/{id}/mode, quyền machine.operate (ADR-0017)', () => {
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.setMode),
+      ).toEqual(['machine.operate']);
+      expect('forceMaintenance' in MachinesController.prototype).toBe(false);
+    });
+
+    it('tách quyền đọc máy (machine.view) cho Operations Staff, giữ machine.manage cho quản trị và khóa MQTT (Task 2)', () => {
+      // 1. Class-level vẫn gác bằng machine.manage cho các thao tác quản lý (đăng ký máy, xoay khóa MQTT, cập nhật máy)
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController)).toEqual([
+        'machine.manage',
+      ]);
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.create),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.issueCredential),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.revokeCredential),
+      ).toBeUndefined();
+
+      // 2. Các endpoint đọc danh sách và chi tiết máy được tách cho machine.view để Ops xem được
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.list)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listSlots),
+      ).toEqual(['machine.view']);
+      expect(
+        Reflect.getMetadata(REQUIRED_PERMISSIONS, MachinesController.prototype.listStatusHistory),
+      ).toEqual(['machine.view']);
+
+      // 3. Đọc địa điểm và slot cũng cho phép machine.view để Ops tải trang máy không bị 403
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController)).toEqual([
+        'machine.manage',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.list)).toEqual(
+        ['machine.view'],
+      );
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, LocationsController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
+      expect(Reflect.getMetadata(REQUIRED_PERMISSIONS, SlotsController.prototype.get)).toEqual([
+        'machine.view',
+      ]);
+    });
+  });
+
+  describe('FR-MCH-09 — máy DRAINING hiện số việc còn phải phục vụ (ADR-0015, ADR-0017)', () => {
+    let machineId: string;
+
+    beforeEach(async () => {
+      const loc = await service.createLocation({ code: 'LOC_MNT', name: 'Điểm bảo trì' });
+      const mch = await service.createMachine(SUPER_ADMIN, {
+        locationId: loc.id,
+        serialNumber: 'M_DRAIN_01',
+        displayName: 'Máy Draining Test',
+        slotCount: 2,
+      });
+      machineId = mch.id;
+    });
+
+    it('test_FR_MNT_05_read_only_draining — getMachine chỉ đọc, không tự chuyển MAINTENANCE', async () => {
+      queries.setMode(machineId, 'DRAINING');
+      queries.pendingOrdersByMachine.set(machineId, 2);
+      const draining = await service.getMachine(machineId);
+      expect(draining.operatingMode).toBe('DRAINING');
+      expect(draining.drainingOrdersCount).toBe(2);
+
+      // Hết việc: lời gọi đọc vẫn để nguyên DRAINING — tự chuyển MAINTENANCE là việc của DSP.
+      queries.pendingOrdersByMachine.set(machineId, 0);
+      const refreshed = await service.getMachine(machineId);
+      expect(refreshed.operatingMode).toBe('DRAINING');
+      expect(refreshed.drainingOrdersCount).toBe(0);
+    });
+
+    it('test_FR_MCH_09_display_operating_mode — listMachines hiển thị drainingOrdersCount', async () => {
+      queries.setMode(machineId, 'DRAINING');
+      queries.pendingOrdersByMachine.set(machineId, 5);
+
+      const { items } = await service.listMachines({ page: 1, pageSize: 10 });
+      const found = items.find((m) => m.id === machineId);
+      expect(found?.operatingMode).toBe('DRAINING');
+      expect(found?.drainingOrdersCount).toBe(5);
+    });
+
+    it('máy không DRAINING thì không có drainingOrdersCount', async () => {
+      queries.pendingOrdersByMachine.set(machineId, 3);
+      expect((await service.getMachine(machineId)).drainingOrdersCount).toBeUndefined();
     });
   });
 });

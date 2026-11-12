@@ -120,21 +120,23 @@ export class PayosPaymentGateway implements PaymentGateway {
     const amount = wholeVnd(request.amount);
     const orderCode = newOrderCode();
     const description = shortDescription(request.reference);
+    const returnUrl = request.returnUrl ?? this.config.returnUrl;
+    const cancelUrl = request.cancelUrl ?? this.config.cancelUrl;
     const body = {
       orderCode,
       amount,
       description,
-      cancelUrl: this.config.cancelUrl,
-      returnUrl: this.config.returnUrl,
+      cancelUrl,
+      returnUrl,
       // Quá hạn đơn / hạn giữ chỗ thì PayOS từ chối nhận tiền (P0-3 bản rà soát).
       expiredAt: Math.floor(request.expiresAt.getTime() / 1000),
       signature: payosSignatureOf(
         {
           amount,
-          cancelUrl: this.config.cancelUrl,
+          cancelUrl,
           description,
           orderCode,
-          returnUrl: this.config.returnUrl,
+          returnUrl,
         },
         this.config.checksumKey,
       ),

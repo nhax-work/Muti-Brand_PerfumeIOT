@@ -7,7 +7,7 @@
  *   - test_FR_SLT_43_notify_paid_and_active_invoice: AC1, AC3
  */
 
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -70,17 +70,19 @@ beforeAll(async () => {
 
 afterAll(async () => {
   // Dọn payments, events, checkouts, rentals tạo thêm
-  await raw.query(`DELETE FROM notifications WHERE brand_id IN ($1, $2)`, [fx.brandA, fx.brandB]);
-  const leftover = await raw.query<{ id: string }>(
-    `SELECT id FROM rental_checkouts WHERE brand_id IN ($1, $2)`,
-    [fx.brandA, fx.brandB],
-  );
-  await deleteCheckouts(leftover.rows.map((r) => r.id));
-  await raw.query(`DELETE FROM machine_slots WHERE id IN ($1, $2)`, [vacantSlot1, vacantSlot2]);
-  await raw.query(`DELETE FROM rental_packages WHERE id = $1`, [packageId]);
-  await raw.query(`DELETE FROM storage_plans WHERE id = $1`, [storagePlanId]);
+  if (fx) {
+    await raw.query(`DELETE FROM notifications WHERE brand_id IN ($1, $2)`, [fx.brandA, fx.brandB]);
+    const leftover = await raw.query<{ id: string }>(
+      `SELECT id FROM rental_checkouts WHERE brand_id IN ($1, $2)`,
+      [fx.brandA, fx.brandB],
+    );
+    await deleteCheckouts(leftover.rows.map((r) => r.id));
+    await raw.query(`DELETE FROM machine_slots WHERE id IN ($1, $2)`, [vacantSlot1, vacantSlot2]);
+    await raw.query(`DELETE FROM rental_packages WHERE id = $1`, [packageId]);
+    await raw.query(`DELETE FROM storage_plans WHERE id = $1`, [storagePlanId]);
 
-  await cleanupIsolationFixture(raw, fx);
+    await cleanupIsolationFixture(raw, fx);
+  }
   await app?.close();
   await raw?.end();
 });
@@ -105,14 +107,28 @@ async function deleteCheckouts(checkoutIds: readonly string[]): Promise<void> {
   if (checkoutIds.length === 0) return;
   const ids = [...checkoutIds];
   await inTransaction(async () => {
+    await raw.query("SET session_replication_role = 'replica'");
     await raw.query(
       `DELETE FROM payment_events WHERE payment_id IN
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
+    await raw.query(
+      `DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`,
+      [ids],
+    );
     await raw.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
+    await raw.query("SET session_replication_role = 'origin'");
+  });
+}
+
+async function acceptAnnex(checkoutId: string, user = brandA) {
+  const annexRes = await user('GET', `/rental-checkouts/${checkoutId}/annex`);
+  const { contentHash } = annexRes.json<{ contentHash: string }>();
+  await user('POST', `/rental-checkouts/${checkoutId}/annex/accept`, {
+    payload: { contentHash },
   });
 }
 
@@ -157,6 +173,13 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     // AC7: Brand B không thể bấm thanh toán cho phiên của Brand A → 403 FORBIDDEN_SCOPE
     const forbiddenRes = await brandB('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(forbiddenRes.statusCode).toBe(403);
+
+    // FR-SLT-50 AC2: Chưa đồng ý phụ lục mà gọi thanh toán -> 403 AGREEMENT_NOT_ACCEPTED
+    const unacceptedRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
+    expect(unacceptedRes.statusCode).toBe(403);
+
+    // Đồng ý phụ lục
+    await acceptAnnex(checkout.id);
 
     // AC1: Brand A bấm thanh toán → trả RentalPaymentIntent PENDING
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
@@ -221,6 +244,8 @@ describe('FR-SLT-37 — Khởi tạo thanh toán phiên thuê slot', () => {
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
 
+    await acceptAnnex(checkout.id);
+
     // Bấm thanh toán đồng thời
     const [res1, res2] = await Promise.all([
       brandA('POST', `/rental-checkouts/${checkout.id}/payments`),
@@ -258,6 +283,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string; totalAmount: string }>();
+
+    await acceptAnnex(checkout.id);
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
@@ -316,6 +343,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
 
+    await acceptAnnex(checkout.id);
+
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
     const payment = payRes.json<{ paymentId: string }>();
@@ -370,6 +399,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
+
+    await acceptAnnex(checkout.id);
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);
@@ -433,6 +464,8 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
 
+    await acceptAnnex(checkout.id);
+
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     const payment = payRes.json<{ paymentId: string }>();
 
@@ -454,16 +487,34 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
       }),
     );
 
-    // AC1: Mọi Brand Admin active của Brand A nhận đúng 1 thông báo
+    // AC1: Mọi Brand Admin active của Brand A nhận đúng thông báo
     const notifsA = await raw.query(
-      `SELECT * FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID'`,
+      `SELECT * FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'IN_APP'`,
       [fx.brandA],
     );
     expect(notifsA.rowCount).toBeGreaterThanOrEqual(1);
     for (const notif of notifsA.rows) {
       expect(notif.channel).toBe('IN_APP');
-      expect(notif.status).toBe('PENDING');
+      expect(notif.status).toBe('SENT');
       expect(notif.content).toContain('HD-');
+    }
+
+    // FR-ALR-16 (ADR-0017): webhook chỉ XẾP HÀNG email, job ALR gửi sau khi commit — không còn bản
+    // ghi EMAIL ở SENT mà chưa từng gửi. Địa chỉ và mã sự kiện chụp ngay lúc xếp hàng làm bằng chứng.
+    const emailsA = await raw.query(
+      `SELECT status, sent_at, recipient_address, reference_id, delivery_attempts
+         FROM notifications WHERE brand_id = $1 AND type = 'RENTAL_CHECKOUT_PAID' AND channel = 'EMAIL'`,
+      [fx.brandA],
+    );
+    expect(emailsA.rowCount).toBe(notifsA.rowCount);
+    for (const email of emailsA.rows) {
+      expect(email).toMatchObject({
+        status: 'PENDING',
+        sent_at: null,
+        recipient_address: fx.brandAdminAEmail,
+        reference_id: checkout.id,
+        delivery_attempts: 0,
+      });
     }
 
     // AC3: Brand Admin của Brand B không nhận thông báo nào
@@ -473,5 +524,134 @@ describe('FR-SLT-38 & FR-SLT-43 — Xác nhận webhook và thông báo', () => 
     // Dọn dẹp
     await raw.query(`DELETE FROM notifications WHERE brand_id = $1`, [fx.brandA]);
     await deleteCheckouts([checkout.id]);
+  });
+
+  describe('Việc D (ADR-0013 / FR-USR-07, FR-SLT-49) — Chốt chặn tạo phiên thanh toán', () => {
+    it('test_FR_USR_07_unverified_account_cannot_checkout', async () => {
+      const unverifiedUserId = randomUUID();
+      const unverifiedEmail = `unverified.${randomUUID().slice(0, 8)}@test.local`;
+      const pwdRow = await raw.query<{ password_hash: string }>(
+        `SELECT password_hash FROM users WHERE id = $1`,
+        [fx.superAdminId],
+      );
+      await raw.query(
+        `INSERT INTO users (id, brand_id, email, password_hash, full_name, status)
+         VALUES ($1, $2, $3, $4, 'Unverified User', 'ACTIVE')`,
+        [unverifiedUserId, fx.brandA, unverifiedEmail, pwdRow.rows[0]!.password_hash],
+      );
+      const roleRow = await raw.query<{ role_id: string }>(
+        `SELECT role_id FROM user_roles WHERE user_id = (SELECT id FROM users WHERE email = $1)`,
+        [fx.brandAdminAEmail],
+      );
+      await raw.query(
+        `INSERT INTO user_roles (id, user_id, role_id, scope_type) VALUES ($1, $2, $3, 'BRAND')`,
+        [randomUUID(), unverifiedUserId, roleRow.rows[0]!.role_id],
+      );
+      await raw.query(
+        `INSERT INTO email_verifications (user_id, email, token_hash, expires_at)
+         VALUES ($1, $2, encode(sha256(convert_to($3, 'UTF8')), 'hex'), now() + interval '24 hours')`,
+        [unverifiedUserId, unverifiedEmail, randomUUID()],
+      );
+
+      try {
+        const unverifiedUser = asUser(
+          app,
+          (await login(app, unverifiedEmail, TEST_PASSWORD)).accessToken,
+        );
+
+        const res = await unverifiedUser('POST', '/rental-checkouts', {
+          payload: { items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }] },
+        });
+        expect(res.statusCode).toBe(403);
+        expect(res.json()).toMatchObject({ code: 'EMAIL_NOT_VERIFIED' });
+      } finally {
+        await raw.query(`DELETE FROM email_verifications WHERE user_id = $1`, [unverifiedUserId]);
+        await raw.query(`DELETE FROM refresh_sessions WHERE user_id = $1`, [unverifiedUserId]);
+        await raw.query(`DELETE FROM user_roles WHERE user_id = $1`, [unverifiedUserId]);
+        await raw.query(`DELETE FROM users WHERE id = $1`, [unverifiedUserId]);
+      }
+    });
+
+    it('test_FR_USR_07_admin_created_account_needs_no_verification', async () => {
+      const res = await brandA('POST', '/rental-checkouts', {
+        payload: { items: [{ slotId: vacantSlot1, rentalPackageId: packageId, storagePlanId }] },
+      });
+      expect(res.statusCode).toBe(201);
+      const checkoutId = res.json<{ id: string }>().id;
+      await deleteCheckouts([checkoutId]);
+    });
+
+    it('test_FR_SLT_49_new_version_requires_reaccept', async () => {
+      // agreement_acceptances chỉ cho thêm mới và bản đã công bố thì bất biến: bản v2 ở lại CSDL, chỉ
+      // trả quyền "hiện hành" về bản cũ khi xong.
+      const previous = await raw.query<{ id: string }>(
+        `SELECT id FROM agreement_versions WHERE is_current`,
+      );
+      const v2Version = `t2-${fx.runId}`;
+      const v2Content = `Điều khoản mới ${fx.runId}.`;
+      const v2Hash = createHash('sha256').update(v2Content).digest('hex');
+      await raw.query(`UPDATE agreement_versions SET is_current = false WHERE is_current`);
+      await raw.query(
+        `INSERT INTO agreement_versions
+           (version, title, content, content_hash, is_current, published_at, created_by)
+         VALUES ($1, 'Hợp đồng v2', $2, $3, true, now(), $4)`,
+        [v2Version, v2Content, v2Hash, fx.superAdminId],
+      );
+
+      try {
+        // Chưa đồng ý bản mới → từ chối
+        const rejected = await brandB('POST', '/rental-checkouts', {
+          payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
+        });
+        expect(rejected.statusCode).toBe(403);
+        expect(rejected.json()).toMatchObject({ code: 'AGREEMENT_NOT_ACCEPTED' });
+
+        const current = await brandB('GET', '/agreements/current');
+        expect(current.statusCode).toBe(200);
+        expect(current.json()).toMatchObject({
+          agreement: { version: v2Version, contentHash: v2Hash, isCurrent: true },
+          acceptance: null,
+        });
+
+        // contentHash lệch (văn bản đã đổi sau khi mở) → VALIDATION_ERROR
+        const stale = await brandB('POST', `/agreements/${v2Version}/accept`, {
+          payload: { contentHash: 'f'.repeat(64) },
+        });
+        expect(stale.statusCode).toBe(400);
+
+        // Đồng ý bản mới: 201 lần đầu, 200 cùng bản ghi khi gọi lại
+        const accepted = await brandB('POST', `/agreements/${v2Version}/accept`, {
+          payload: { contentHash: v2Hash },
+        });
+        expect(accepted.statusCode).toBe(201);
+        expect(accepted.json()).toMatchObject({ brandId: fx.brandB, kind: 'FRAMEWORK' });
+        const again = await brandB('POST', `/agreements/${v2Version}/accept`, {
+          payload: { contentHash: v2Hash },
+        });
+        expect(again.statusCode).toBe(200);
+        expect(again.json<{ id: string }>().id).toBe(accepted.json<{ id: string }>().id);
+
+        const ok = await brandB('POST', '/rental-checkouts', {
+          payload: { items: [{ slotId: vacantSlot2, rentalPackageId: packageId, storagePlanId }] },
+        });
+        expect(ok.statusCode).toBe(201);
+        const checkoutId = ok.json<{ id: string }>().id;
+        const stored = await raw.query<{ agreement_version_id: string | null }>(
+          `SELECT agreement_version_id FROM rental_checkouts WHERE id = $1`,
+          [checkoutId],
+        );
+        expect(stored.rows[0]?.agreement_version_id).not.toBeNull();
+        await deleteCheckouts([checkoutId]);
+      } finally {
+        await raw.query(`UPDATE agreement_versions SET is_current = false WHERE version = $1`, [
+          v2Version,
+        ]);
+        if (previous.rows[0]) {
+          await raw.query(`UPDATE agreement_versions SET is_current = true WHERE id = $1`, [
+            previous.rows[0].id,
+          ]);
+        }
+      }
+    });
   });
 });

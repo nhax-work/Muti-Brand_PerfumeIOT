@@ -41,14 +41,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
   }, [queryClient]);
 
+  const reloadUser = useCallback(async () => {
+    if (!sessionStore.get()) return;
+    sessionStore.updateUser(await unwrap(api.GET('/auth/me')));
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status: session ? 'authenticated' : restoring ? 'restoring' : 'anonymous',
       user: session?.user ?? null,
       login,
       logout,
+      reloadUser,
     }),
-    [session, restoring, login, logout],
+    [session, restoring, login, logout, reloadUser],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

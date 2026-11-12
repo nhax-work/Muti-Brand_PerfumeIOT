@@ -59,16 +59,29 @@ Tuần 5, khi có lệnh xịt: `status = DISPENSE_REQUESTED` + `pressDeadline` 
 
 ---
 
-## 3. TV3 — thanh toán phiên thuê slot (FR-SLT-37, FR-SLT-38)
+## 3. TV3 — thanh toán phiên thuê slot (FR-SLT-37, FR-SLT-38, FR-SLT-48, FR-SLT-49, FR-SLT-50)
 
 Mọi thứ import từ `modules/ord/index.ts`. `PaymentModule` là `@Global`, inject là dùng được.
 
-### 3.1. Tạo thanh toán — `POST /rental-checkouts/{id}/payments`
+### 3.0. Điều kiện tiên quyết: Xác minh email & Hợp đồng khung dịch vụ (ADR-0013)
+1. **Xác minh email** (FR-USR-07): Brand Admin tự đăng ký phải xác minh email trước khi tạo phiên giữ chỗ. Nếu chưa xác minh, `POST /rental-checkouts` trả về 403 `EMAIL_NOT_VERIFIED`.
+2. **Hợp đồng khung dịch vụ** (FR-SLT-48, FR-SLT-49): Brand Admin phải xem qua `GET /agreements/current` và xác nhận đồng ý qua `POST /agreements/{version}/accept` với `contentHash`. Nếu chưa đồng ý bản hợp đồng hiện hành, `POST /rental-checkouts` trả về 403 `AGREEMENT_NOT_ACCEPTED`.
+
+### 3.1. Tạo phiên giữ chỗ slot — `POST /rental-checkouts`
+Brand Admin chọn các slot trống, gói thuê và gói bảo quản (`items: [{ slotId, rentalPackageId, storagePlanId }]`). Hệ thống kiểm tra giới hạn giữ chỗ tối đa 5 slot đang chờ thanh toán (FR-SLT-56), nếu vượt quá trả 409 `HOLD_LIMIT_REACHED`.
+
+### 3.2. Đọc và đồng ý Phụ lục hợp đồng thuê slot — `GET & POST /rental-checkouts/{id}/annex` (FR-SLT-50, ADR-0013)
+Hệ thống tự sinh phụ lục hợp đồng từ ảnh chụp giá và dịch vụ của phiên thanh toán:
+1. `GET /rental-checkouts/{id}/annex`: Trả về nội dung Markdown và `contentHash` (SHA-256).
+2. `POST /rental-checkouts/{id}/annex/accept`: Brand Admin gửi `contentHash` để xác nhận. Nếu phụ lục thay đổi giữa chừng thì trả 400 `VALIDATION_ERROR` (`slt.annexContentChanged`).
+3. Nếu chưa đồng ý phụ lục mà bấm thanh toán, `POST /rental-checkouts/{id}/payments` bị từ chối 403 `AGREEMENT_NOT_ACCEPTED` (`slt.annexNotAccepted`).
+
+### 3.3. Tạo thanh toán — `POST /rental-checkouts/{id}/payments`
 
 ```ts
 import { newPaymentReference, PaymentService } from '../ord/index.js';
 
-// Trong transaction của bạn, sau khi khóa phiên và kiểm phiên còn chờ thanh toán, chưa quá hạn:
+// Trong transaction của bạn, sau khi khóa phiên và kiểm phiên còn chờ thanh toán, chưa quá hạn, đã đồng ý phụ lục:
 const existing = await this.payments.findPendingIntent({ rentalCheckoutId: checkout.id }, tx);
 if (existing) return existing;                                  // FR-SLT-37 AC2
 const reference = newPaymentReference('CHK', now, 'Asia/Ho_Chi_Minh'); // MỖI payment một mã mới
@@ -81,6 +94,9 @@ return this.payments.createPending(
     currency: checkout.currency,
     expiresAt: checkout.holdExpiresAt,
     description: `ScentStation thuê slot ${reference}`,
+    // Tự động điều hướng PayOS về trang chi tiết phiên thanh toán trên web quản trị (ADR-0016):
+    returnUrl: `${this.config.adminWebBaseUrl}/rentals/checkouts/${checkout.id}`,
+    cancelUrl: `${this.config.adminWebBaseUrl}/rentals/checkouts/${checkout.id}`,
   },
   tx,
 );

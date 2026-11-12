@@ -4,13 +4,17 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { DATABASE, type Database } from '../../shared/db/index.js';
+import { sql, type Kysely, type Transaction } from 'kysely';
+import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
   CredentialStatus,
   MachineConnectionStatus,
   MachineOperatingMode,
   SlotStatus,
 } from '../../shared/db/types.generated.js';
+import { HOLDING_RENTAL_STATUSES, OCCUPYING_RENTAL_STATUSES } from '../../shared/scoping/index.js';
+
+type Executor = Kysely<DB>;
 
 export interface LocationRecord {
   readonly id: string;
@@ -41,6 +45,7 @@ export interface MachineRecord {
   readonly configurationVersion: number;
   readonly simulatorEnabled: boolean;
   readonly slotCount: number;
+  readonly drainingOrdersCount?: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -120,15 +125,12 @@ export interface DeviceCredentialRecord {
   readonly lastAuthenticatedAt: Date | null;
 }
 
-/** Hợp đồng đang giữ slot (spec/errors.md: SLOT_OCCUPIED). */
-const ACTIVE_RENTAL_STATUSES = ['ACTIVE', 'EXPIRING', 'GRACE', 'LIQUIDATED'] as const;
-
 /**
  * Hóa đơn làm slot KHÔNG còn trống để chào thuê (FR-SLT-19 AC2): bốn trạng thái chiếm dụng cộng
  * DRAFT — đang giữ chỗ chờ thanh toán, hoặc đã thanh toán chờ nạp hàng (ADR-0006). Cùng tập với
  * `excl_slot_rental_overlap`.
  */
-const RENTAL_BLOCKING_STATUSES = ['DRAFT', ...ACTIVE_RENTAL_STATUSES] as const;
+const RENTAL_BLOCKING_STATUSES = ['DRAFT', ...OCCUPYING_RENTAL_STATUSES] as const;
 
 @Injectable()
 export class MchQueries {
@@ -463,49 +465,89 @@ export class MchQueries {
     return this.findMachineById(id);
   }
 
-  async updateMachineMode(
+  transaction<T>(work: (tx: Transaction<DB>) => Promise<T>): Promise<T> {
+    return this.db.transaction().execute(work);
+  }
+
+  /**
+   * Khóa máy, đổi chế độ và ghi lịch sử nguồn OPERATOR (FR-MCH-13). Khóa cùng dòng `machines` mà ORD
+   * khóa khi tạo đơn, nên không đơn nào chen vào giữa lúc đổi chế độ (ADR-0015).
+   *
+   * @param next chế độ đích, tính từ chế độ hiện tại đọc SAU khi khóa
+   * @returns chế độ trước và sau, hoặc `null` nếu không có máy. Trùng nhau là không đổi gì.
+   */
+  async changeMode(
     id: string,
-    mode: MachineOperatingMode,
-    reason?: string,
-    actorId?: string,
-  ): Promise<MachineRecord | null> {
-    const changed = await this.db.transaction().execute(async (trx) => {
-      const current = await trx
-        .selectFrom('machines')
-        .select('operating_mode')
-        .where('id', '=', id)
-        .forUpdate()
-        .executeTakeFirst();
+    next: (current: MachineOperatingMode) => MachineOperatingMode,
+    reason: string | null,
+    actorId: string,
+    tx: Executor,
+  ): Promise<{ before: MachineOperatingMode; after: MachineOperatingMode } | null> {
+    const current = await tx
+      .selectFrom('machines')
+      .select('operating_mode')
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    if (!current) return null;
+    const mode = next(current.operating_mode);
+    if (current.operating_mode === mode) return { before: mode, after: mode };
 
-      if (!current) return false;
+    await tx
+      .updateTable('machines')
+      .set({ operating_mode: mode, updated_at: new Date() })
+      .where('id', '=', id)
+      .execute();
+    await tx
+      .insertInto('machine_status_histories')
+      .values({
+        machine_id: id,
+        from_operating_mode: current.operating_mode,
+        to_operating_mode: mode,
+        reason,
+        source: 'OPERATOR',
+        changed_by: actorId,
+      })
+      .execute();
+    return { before: current.operating_mode, after: mode };
+  }
 
-      await trx
-        .updateTable('machines')
-        .set({
-          operating_mode: mode,
-          updated_at: new Date(),
-        })
-        .where('id', '=', id)
-        .execute();
+  /**
+   * FR-MCH-09: việc máy DRAINING còn phải phục vụ — cùng điều kiện "cạn việc" mà DSP dùng để tự
+   * chuyển MAINTENANCE: đơn chờ thanh toán, đơn chờ lượt và lệnh xịt khách hàng còn hiệu lực.
+   */
+  async countPendingOrdersAndCommands(machineId: string): Promise<number> {
+    const row = await this.db
+      .selectNoFrom((eb) => [
+        eb
+          .selectFrom('orders')
+          .where('machine_id', '=', machineId)
+          .where('status', 'in', ['CREATED', 'PENDING_PAYMENT', 'PAID'])
+          .select((e) => e.fn.countAll<string>().as('n'))
+          .as('orders'),
+        eb
+          .selectFrom('dispense_commands')
+          .where('machine_id', '=', machineId)
+          .where('command_type', '=', 'CUSTOMER')
+          .where('status', 'in', ['CREATED', 'SENT', 'ACKNOWLEDGED'])
+          .select((e) => e.fn.countAll<string>().as('n'))
+          .as('commands'),
+      ])
+      .executeTakeFirstOrThrow();
+    return Number(row.orders) + Number(row.commands);
+  }
 
-      // Ghi lịch sử trạng thái (FR-MCH-13)
-      await trx
-        .insertInto('machine_status_histories')
-        .values({
-          machine_id: id,
-          from_operating_mode: current.operating_mode,
-          to_operating_mode: mode,
-          reason: reason ?? null,
-          source: 'OPERATOR',
-          changed_by: actorId ?? null,
-        })
-        .execute();
-
-      return true;
-    });
-
-    // Đọc lại sau transaction để có slotCount thật thay vì tự dựng record.
-    return changed ? this.findMachineById(id) : null;
+  /** Thương hiệu đang thuê slot trên máy — nhận thông báo máy vào bảo trì (FR-MNT-07). */
+  async listBrandsOnMachine(machineId: string, executor: Executor): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .select('sr.brand_id')
+      .distinct()
+      .where('ms.machine_id', '=', machineId)
+      .where('sr.status', 'in', [...HOLDING_RENTAL_STATUSES])
+      .execute();
+    return rows.map((r) => r.brand_id);
   }
 
   // =========================================================================
@@ -520,7 +562,7 @@ export class MchQueries {
         eb
           .selectFrom('slot_rentals as r')
           .whereRef('r.slot_id', '=', 's.id')
-          .where('r.status', 'in', ACTIVE_RENTAL_STATUSES)
+          .where('r.status', 'in', OCCUPYING_RENTAL_STATUSES)
           .select('r.id')
           .limit(1)
           .as('current_rental_id'),
@@ -540,7 +582,7 @@ export class MchQueries {
         eb
           .selectFrom('slot_rentals as r')
           .whereRef('r.slot_id', '=', 's.id')
-          .where('r.status', 'in', ACTIVE_RENTAL_STATUSES)
+          .where('r.status', 'in', OCCUPYING_RENTAL_STATUSES)
           .select('r.id')
           .limit(1)
           .as('current_rental_id'),
@@ -636,6 +678,12 @@ export class MchQueries {
           ? {
               calibrated_dosage_ml:
                 data.calibratedDosageMl !== null ? String(data.calibratedDosageMl) : null,
+            }
+          : {}),
+        // Đổi liều thì quy lại số lượt từ lượng còn lại; không tính lại lịch sử (ADR-0019 mục 2).
+        ...(data.calibratedDosageMl
+          ? {
+              estimated_remaining_sprays: sql<number>`floor(estimated_remaining_ml / ${String(data.calibratedDosageMl)}::numeric)::int`,
             }
           : {}),
         ...(data.lowStockThresholdMl !== undefined
@@ -842,6 +890,19 @@ export class MchQueries {
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
+  }
+
+  async hasUnfinishedPostTest(machineId: string, executor: Executor = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('maintenance_tickets')
+      .select('id')
+      .where('machine_id', '=', machineId)
+      .where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'WAITING_PART', 'POST_TEST'])
+      .where((eb) =>
+        eb.or([eb('post_test_result', 'is', null), eb('post_test_result', '!=', 'PASS')]),
+      )
+      .executeTakeFirst();
+    return Boolean(row);
   }
 }
 

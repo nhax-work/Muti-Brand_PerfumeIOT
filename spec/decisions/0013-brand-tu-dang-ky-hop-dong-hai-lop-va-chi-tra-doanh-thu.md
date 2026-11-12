@@ -126,3 +126,24 @@ lực, sắp hết hạn, vào ân hạn, sắp thanh lý, đã thanh lý, hàng
 | Khiếu nại số liệu | — | Cột `dispute_*` trên `brand_payouts`, mỗi kỳ một khiếu nại; `chk_payout_paid_dispute_resolved` chặn PAID khi chưa trả lời | FR-SLT-54 ở mức M chỉ cần một vòng hỏi–đáp |
 | Hợp đồng khung bất biến | — | `trg_agreement_versions_published_immutable` | Mã băm trong bằng chứng đồng ý phải trỏ tới đúng văn bản đã công bố |
 | Endpoint thêm | — | `/auth/verify-email/resend`, `GET/POST /agreements`, `/agreements/{version}/publish`, `/brands/{id}/legal-verification`, `/brands/me/legal-profile` | Cần cho FR-USR-07, FR-SLT-48, FR-BND-09, 10 — ADR chỉ liệt kê endpoint phía thương hiệu |
+
+**2026-10-20 — Bổ sung trường payoutAccountMasked vào schema BrandProfile (FR-BND-09)**:
+
+| Hạng mục | Đã làm |
+|---|---|
+| `openapi.yaml` | Thêm trường `payoutAccountMasked` vào schema `BrandProfile` (gồm `bankCode`, `maskedAccountNumber`, `accountHolder`) để hiển thị thông tin 4 số cuối tài khoản nhận doanh thu phục vụ đối soát pháp nhân mà vẫn tuân thủ NFR-DAT-04 (không lộ số tài khoản đầy đủ). |
+
+**2026-10-21 — hiện thực kỳ chi trả (TV1, việc T7)** — module `apps/api/src/modules/rev`:
+
+| Hạng mục | Đã làm |
+|---|---|
+| Kỳ chi trả | Job `RevService.refreshPayouts` 5 phút một lần và ngay khi khởi động: tính lại kỳ DRAFT từ đầu, chốt CONFIRMED kỳ của tháng đã hết theo giờ Việt Nam. Đơn thuộc kỳ theo `paid_at`; cùng tập `REVENUE_ORDER_STATUSES` với báo cáo RPT |
+| Chuyển PAID | `POST /brand-payouts/{id}/pay`: quyền mới `revenue.manage` (chỉ Super Admin) + xác thực lại; `RENTAL_NOT_ACTIVE` khi kỳ không CONFIRMED hoặc còn khiếu nại; `BRAND_NOT_VERIFIED` khi thiếu `legal_verified_at` hoặc tài khoản nhận tiền |
+| Khiếu nại | `…/dispute` chỉ Brand Admin, kỳ CONFIRMED, một lần; `…/dispute-response` Super Admin; thông báo trong ứng dụng |
+| Đối soát, tách doanh thu | `GET /settlements` (FR-SLT-17, 18), `GET /revenue/split` (FR-REV-04) |
+| Màn hình | `/brand-payouts`, `/revenue` trên web quản trị |
+
+AC FR-SLT-53, 54 trong `spec/modules/SLT.md` đã sửa theo contract (`/pay`, `/dispute-response`,
+`RENTAL_NOT_ACTIVE`); bản AC cũ dùng `/payout`, `/resolve-dispute` và mã `DISPUTE_PENDING` không có trong
+`openapi.yaml` hay `errors.md`. Thông báo kỳ chi trả mới ở kênh `IN_APP`; gửi email do hạ tầng FR-ALR-16
+của TV4 nối sau.

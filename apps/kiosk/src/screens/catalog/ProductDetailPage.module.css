@@ -1,0 +1,175 @@
+/* Chiếm trọn vùng dưới header: ảnh nửa trái, thông tin nửa phải. */
+.page {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.image {
+  aspect-ratio: auto;
+  height: 100%;
+  border-radius: 0;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--sp-1) var(--gutter) var(--sp-3);
+}
+
+.back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: var(--touch-min);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: var(--fs-small);
+}
+
+/* Mô tả dài thì cuộn trong cột (mép dưới mờ dần báo còn chữ); giá, chỉ dẫn và nút thanh toán luôn
+   nằm cuối màn. */
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - var(--sp-3)), transparent);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.brand {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.name {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--fs-display);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+.desc {
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
+.notes {
+  display: grid;
+  gap: var(--sp-1);
+  margin: 0;
+  font-size: var(--fs-small);
+}
+
+.noteRow {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--sp-2);
+}
+
+.noteRow dt {
+  color: var(--text-muted);
+}
+
+.noteRow dd {
+  margin: 0;
+}
+
+.price {
+  flex-shrink: 0;
+  margin: 0;
+  font-size: var(--fs-h2);
+}
+
+.perSpray {
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.guide {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+/* Hình nút tròn có đèn trên máy — màu accent chỉ dùng cho thứ gắn với đèn nút. */
+.buttonNo {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: var(--touch-min);
+  height: var(--touch-min);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 var(--sp-1) color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--on-accent);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+}
+
+.guideText {
+  margin: 0;
+  font-size: var(--fs-body);
+}
+
+.guideNote {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-muted);
+}
+
+.pay {
+  flex-shrink: 0;
+  min-height: calc(var(--touch-min) + var(--sp-2));
+  border: none;
+  border-radius: var(--radius);
+  background: var(--action);
+  color: var(--on-action);
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+
+.guide,
+.back {
+  flex-shrink: 0;
+}
+
+/* Màn thấp (1024×600): thu tên, khoảng cách và nút để chỉ dẫn + nút thanh toán vẫn nằm trong màn. */
+@media (max-height: 680px) {
+  .info {
+    gap: var(--sp-2);
+  }
+
+  .name {
+    font-size: var(--fs-h1);
+  }
+
+  .price {
+    font-size: var(--fs-body);
+  }
+
+  .guideText {
+    font-size: var(--fs-small);
+  }
+
+  .pay {
+    min-height: var(--touch-min);
+  }
+}

@@ -98,14 +98,20 @@ async function deleteCheckouts(checkoutIds: readonly string[]): Promise<void> {
   if (checkoutIds.length === 0) return;
   const ids = [...checkoutIds];
   await inTransaction(async () => {
+    await raw.query("SET session_replication_role = 'replica'");
     await raw.query(
       `DELETE FROM payment_events WHERE payment_id IN
          (SELECT id FROM payments WHERE rental_checkout_id = ANY($1::uuid[]))`,
       [ids],
     );
+    await raw.query(
+      `DELETE FROM agreement_acceptances WHERE rental_checkout_id = ANY($1::uuid[])`,
+      [ids],
+    );
     await raw.query(`DELETE FROM payments WHERE rental_checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM slot_rentals WHERE checkout_id = ANY($1::uuid[])`, [ids]);
     await raw.query(`DELETE FROM rental_checkouts WHERE id = ANY($1::uuid[])`, [ids]);
+    await raw.query("SET session_replication_role = 'origin'");
   });
 }
 
@@ -122,6 +128,11 @@ describe('FR-SLT-39 — Hủy phiên và hóa đơn hết giờ giữ chỗ', ()
     });
     expect(checkoutRes.statusCode).toBe(201);
     const checkout = checkoutRes.json<{ id: string }>();
+
+    const annexRes = await brandA('GET', `/rental-checkouts/${checkout.id}/annex`);
+    await brandA('POST', `/rental-checkouts/${checkout.id}/annex/accept`, {
+      payload: { contentHash: annexRes.json<{ contentHash: string }>().contentHash },
+    });
 
     const payRes = await brandA('POST', `/rental-checkouts/${checkout.id}/payments`);
     expect(payRes.statusCode).toBe(200);

@@ -6,7 +6,6 @@
 export const kiosk = {
   welcome: 'Chào mừng bạn đến với ScentStation',
   homeSubtitle: 'Khám phá & trải nghiệm hương thơm cao cấp chỉ với một chạm',
-  tapToStart: 'Chạm để chọn mùi hương',
   featureAuthentic: 'Nước hoa chính hãng',
   featureFineMist: 'Xịt sương vi hạt cao cấp',
   featureQrPay: 'Thanh toán QR nhanh chóng',
@@ -19,8 +18,6 @@ export const kiosk = {
   catalogSubtitle: 'Khám phá các mùi hương cao cấp và chạm để trải nghiệm',
   allBrands: 'Tất cả',
   slotNumber: 'Ngăn {slot}',
-  pricePerSpray: '{price} / lượt xịt',
-  outOfStock: 'Bán hết',
   emptyCatalog: 'Hiện chưa có sản phẩm nào khả dụng trên máy này',
   backToHome: 'Trang chủ',
   backToCatalog: 'Quay lại danh mục',
@@ -33,14 +30,9 @@ export const kiosk = {
   priceLabel: 'Giá một lượt xịt',
   productNotFound: 'Không tìm thấy sản phẩm',
   productUnavailable: 'Mùi hương này hiện tạm thời không khả dụng',
-  brandLabel: 'Thương hiệu',
   slotLabel: 'Vị trí ngăn',
   // Thanh toán và nhận lượt xịt (FR-ORD-08, 11, 21, 25÷27)
   checkoutTitle: 'Thanh toán lượt xịt',
-  pressTermsTitle: 'Trước khi thanh toán',
-  pressTerms:
-    'Sau khi thanh toán, đèn nút số {slot} trên máy sẽ sáng. Bạn cần bấm nút đó trong {seconds} giây để nhận lượt xịt. Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
-  agreeAndPay: 'Đồng ý và thanh toán',
   cancel: 'Hủy',
   goBack: 'Quay lại',
   leavePaymentConfirm:
@@ -48,25 +40,23 @@ export const kiosk = {
   stayHere: 'Ở lại',
   leaveAnyway: 'Vẫn quay lại',
   creatingOrder: 'Đang tạo đơn…',
+  retryCreateOrder: 'Thử lại',
   scanToPay: 'Quét mã để thanh toán',
   paymentReference: 'Mã thanh toán',
   amountLabel: 'Số tiền',
   paymentExpiresIn: 'Mã hết hạn sau {seconds} giây',
   waitingForPayment: 'Đang chờ xác nhận thanh toán…',
-  waitingForTurn: 'Đã thanh toán. Máy đang phục vụ khách trước, vui lòng chờ trong giây lát.',
-  preparingMachine: 'Đã thanh toán. Đang chuẩn bị máy…',
-  pressButtonNow: 'Mời bấm nút số {slot}',
   pressCountdown: 'Còn {seconds} giây',
   dispensedTitle: 'Cảm ơn bạn!',
   dispensedHint: 'Chúc bạn một ngày thơm tho.',
   pressTimeoutTitle: 'Đã hết thời gian bấm nút',
-  pressTimeoutHint:
-    'Đã hết {seconds} giây chờ bấm nút. Lần sau, bạn hãy đứng sẵn trước máy và để ý nút sáng đèn ngay sau khi thanh toán nhé.',
   paymentExpiredTitle: 'Mã thanh toán đã hết hạn',
   paymentExpiredHint: 'Nếu bạn chưa chuyển khoản, chỉ cần chọn lại mùi hương để thử lại.',
   paymentExpiredLatePayment:
     'Nếu bạn đã chuyển khoản, đừng lo: giao dịch vẫn được ghi nhận để hoàn tiền. Hãy lưu lại mã {reference}.',
-  orderProblemTitle: 'Lượt xịt gặp sự cố',
+  latePaymentTitle: 'Tiền về sau khi mã đã hết hạn',
+  latePaymentHint:
+    'Máy không xịt cho giao dịch này. Bạn sẽ được hoàn lại tiền — hãy quét mã bên dưới để gửi thông tin nhận hoàn tiền.',
   checkingResult: 'Đang xác nhận kết quả với máy…',
   // Máy chạy không có nhân viên (BR-001) — chỉ dẫn khách tới kênh hỗ trợ thật nếu có cấu hình.
   supportHint: 'Vui lòng lưu lại mã {reference} và liên hệ {contact} để được hỗ trợ.',
@@ -76,32 +66,49 @@ export const kiosk = {
   supportHintNoContact:
     'Hệ thống đã ghi nhận sự cố. Vui lòng chụp lại mã {reference} để được hỗ trợ khi cần.',
   // Màn hình Thanh toán thành công & Hướng dẫn nhận lượt xịt (ADR-0007)
-  paymentSuccessTitle: 'Thanh toán thành công',
-  guidePressHeading: 'Nhấn nút ở ô số',
-  guideStatusPreparing: 'Đèn nút sắp sáng…',
-  guideStatusWaiting: 'Máy đang phục vụ khách trước, chờ giây lát…',
-  guideStatusLit: 'Đèn đã sáng — bấm ngay',
-  guideStepApproach: 'Đưa cổ tay hoặc cổ cách vòi 10–15 cm',
-  guideStepPress: 'Nhấn nút ô số {slot} khi đèn sáng',
   guideStepHold: 'Giữ yên 2–3 giây',
-  copyCode: 'Sao chép mã',
   copied: 'Đã sao chép!',
-  mockPayGuide: 'Lệnh thanh toán giả lập (Dev / Test):',
   copyCommand: 'Sao chép lệnh test',
-  waitingPaymentDesc: 'Đang chờ xác nhận từ ngân hàng / ví điện tử…',
-  cancelOrder: 'Hủy thanh toán',
   // Băng chuyền & modal chi tiết / mã QR ở màn danh mục
+  language: 'Ngôn ngữ',
+  // Danh mục: ba bước dưới wordmark, nhãn thẻ (FR-ORD-01)
+  introChoose: 'Chọn hương',
+  introScan: 'Quét mã',
+  introPress: 'Nhấn nút trên máy',
+  perSpray: '/ lượt xịt',
+  // Trang chi tiết: chỉ dẫn nút bấm hiện trước mã QR (FR-ORD-25)
+  pressGuide: 'Sau khi thanh toán, nhấn nút số {slot} trên máy trong {seconds} giây.',
+  pressNoRefund: 'Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
+  payAmount: 'Thanh toán {price}',
+  slotUnavailable: 'Tạm ngừng',
+  buttonNumber: 'Nút số {slot}',
   scrollLeft: 'Cuộn sang trái',
   scrollRight: 'Cuộn sang phải',
-  close: 'Đóng',
   productImageAlt: 'Ảnh chai nước hoa',
-  tapToExplore: 'CHẠM ĐỂ THỬ HƯƠNG & CHI TIẾT',
-  outOfStockInfo: 'TẠM HẾT HÀNG • XEM THÔNG TIN',
-  paymentValidFor: 'Thời gian hiệu lực: {time}',
   cancelPaymentConfirmTitle: 'Bạn muốn hủy thanh toán?',
   cancelPaymentConfirm:
     'Nếu bạn đã quét mã và chuyển khoản, xin đừng hủy — hệ thống cần vài giây để nhận tiền. Rời đi lúc này, lượt xịt có thể bắt đầu khi bạn không còn đứng trước máy.',
   continuePayment: 'Tiếp tục thanh toán',
   cancelAnyway: 'Vẫn hủy',
   cancelling: 'Đang hủy…',
+  // Màn quét mã thanh toán (FR-ORD-08)
+  paymentMethod: 'VietQR · App ngân hàng',
+  afterPayLookUp: 'Thanh toán xong, hãy nhìn lên máy — nút số {slot} sẽ sáng.',
+  // Sau thanh toán: chuẩn bị, chờ lượt, nhấn nút, kết quả (FR-ORD-11, 21, 26, 27)
+  paidTitle: 'Đã nhận thanh toán',
+  preparingHint: 'Đang chuẩn bị máy…',
+  pressTimeoutHint: 'Rất tiếc, đã qua {seconds} giây để nhấn nút nên máy không xịt lượt này.',
+  orderProblemTitle: 'Xin lỗi, máy chưa xịt được lượt của bạn',
+  // Màn chờ (NFR-USA-02)
+  tapToStart: 'Chạm để bắt đầu',
+  // Khối đồng hồ dưới mã QR; màn máy bận khi chưa tạo được đơn (FR-ORD-24, 35)
+  qrExpiresIn: 'Mã QR hết hạn sau',
+  machineBusyTitle: 'Máy đang phục vụ khách khác',
+  machineBusyHint: 'Vui lòng chờ trong giây lát',
+  chooseAnother: 'Chọn hương khác',
+  waitingTurnHint: 'Bạn là lượt tiếp theo · Máy sẽ sẵn sàng trong giây lát',
+  // Màn nhấn nút: tiêu đề và ba bước (FR-ORD-26)
+  pressButtonN: 'Nhấn nút số {slot}',
+  guideStepApproach: 'Đưa cổ tay cách vòi 10–15 cm',
+  guideStepPress: 'Nhấn nút số {slot} đang sáng',
 } as const;

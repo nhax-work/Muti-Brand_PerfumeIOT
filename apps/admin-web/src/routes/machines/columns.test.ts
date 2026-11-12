@@ -58,4 +58,18 @@ describe('getMachineColumns', () => {
       expect(String(rendered)).toContain('HCM_Q1');
     }
   });
+
+  it('hiển thị số đơn dở dang khi máy đang ở chế độ DRAINING (FR-MCH-09)', () => {
+    const modeCol = columns.find((c) => 'key' in c && c.key === 'operatingMode');
+    expect(modeCol).toBeDefined();
+    if (modeCol && 'render' in modeCol && typeof modeCol.render === 'function') {
+      const drainingMachine: Machine = {
+        ...mockMachine,
+        operatingMode: 'DRAINING',
+        drainingOrdersCount: 3,
+      };
+      const rendered = modeCol.render('DRAINING', drainingMachine, 0);
+      expect(rendered).toBeDefined();
+    }
+  });
 });

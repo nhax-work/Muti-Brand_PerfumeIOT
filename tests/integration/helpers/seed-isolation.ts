@@ -23,12 +23,16 @@ const ALL_PERMISSIONS = [
   'brand.manage',
   'user.manage',
   'machine.manage',
+  'machine.view',
   'machine.operate',
   'rental.manage',
   'rental.request',
   'product.manage',
   'inventory.manage',
   'inventory.adjust',
+  'inventory.declare',
+  'inventory.verify',
+  'notification.manage',
   'refill.request',
   'refill.fulfill',
   'order.view',
@@ -38,6 +42,7 @@ const ALL_PERMISSIONS = [
   'maintenance.handle',
   'report.brand',
   'report.platform',
+  'revenue.manage',
   'audit.read',
 ] as const;
 
@@ -45,6 +50,7 @@ const ALL_PERMISSIONS = [
 const BRAND_ADMIN_PERMISSIONS = [
   'product.manage',
   'rental.request',
+  'inventory.declare',
   'refill.request',
   'report.brand',
   'order.view',
@@ -85,6 +91,7 @@ export interface IsolationFixture {
   readonly orders: readonly SeededOrder[];
   /** Số đo trên slot 1 nhưng TRƯỚC kỳ hạn hợp đồng của A (FR-AUTH-07 AC3). */
   readonly readingBeforeRentalId: string;
+  readonly seededRoles?: readonly string[];
 }
 
 function days(n: number): number {
@@ -195,6 +202,32 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
       );
     }
 
+    // ADR-0013 / FR-SLT-49: cả hai thương hiệu seed đã đồng ý hợp đồng khung hiện hành. CSDL test
+    // chưa có phiên bản nào thì công bố một bản — bản đó ở lại cho các lần chạy sau (đã công bố thì
+    // bất biến, và agreement_acceptances chỉ cho thêm mới).
+    let current = await client.query<{ id: string; content_hash: string }>(
+      `SELECT id, content_hash FROM agreement_versions WHERE is_current`,
+    );
+    if (!current.rows[0]) {
+      const content = `Điều khoản dịch vụ ScentStation (test ${runId}).`;
+      current = await client.query<{ id: string; content_hash: string }>(
+        `INSERT INTO agreement_versions
+           (version, title, content, content_hash, is_current, published_at, created_by)
+         VALUES ($1, 'Hợp đồng khung (test)', $2, encode(sha256(convert_to($2, 'UTF8')), 'hex'),
+                 true, now(), $3)
+         RETURNING id, content_hash`,
+        [`test-${runId}`, content, superAdminId],
+      );
+    }
+    const agreement = current.rows[0]!;
+    await client.query(
+      `INSERT INTO agreement_acceptances
+         (brand_id, accepted_by, kind, agreement_version_id, content_hash, ip_address, user_agent)
+       VALUES ($1, $2, 'FRAMEWORK', $5, $6, '127.0.0.1', 'seed-isolation'),
+              ($3, $4, 'FRAMEWORK', $5, $6, '127.0.0.1', 'seed-isolation')`,
+      [brandA, brandAdminAId, brandB, brandAdminBId, agreement.id, agreement.content_hash],
+    );
+
     await client.query(
       `INSERT INTO locations (id, code, name, address, status)
        VALUES ($1, $2, $3, 'Dia chi test', 'ACTIVE')`,
@@ -279,9 +312,9 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     for (let i = 0; i < bottles.length; i++) {
       await client.query(
         `INSERT INTO bottles (id, brand_id, owner, batch_id, fragrance_product_id, identifier,
-                              status, initial_volume_ml, current_estimated_ml, empty_weight_g,
+                              status, initial_volume_ml, current_estimated_ml,
                               opened_at, installed_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000, 62.5000,
+         VALUES ($1, $2, $3, $4, $5, $6, 'INSTALLED', 50.0000, 48.0000,
                  $7, $7, now() + interval '18 months')`,
         [
           bottles[i],
@@ -356,7 +389,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
         await client.query(
           `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                         measured_at)
-           VALUES ($1, $2, $3, 'slot_weight_g', 120.5, 'g', $4)`,
+           VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 48.0, 'ml', $4)`,
           [randomUUID(), machineId, slots[i], measuredAt],
         );
       }
@@ -365,7 +398,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
     await client.query(
       `INSERT INTO sensor_readings (id, machine_id, slot_id, reading_type, numeric_value, unit,
                                     measured_at)
-       VALUES ($1, $2, $3, 'slot_weight_g', 999.9, 'g', $4)`,
+       VALUES ($1, $2, $3, 'ESTIMATED_REMAINING_ML', 49.5, 'ml', $4)`,
       [readingBeforeRentalId, machineId, slots[0], new Date(now - days(60))],
     );
 
@@ -402,6 +435,7 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
       liquidatedAt,
       orders,
       readingBeforeRentalId,
+      seededRoles: [roleSuperAdmin, roleBrandAdmin],
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -416,6 +450,9 @@ export async function seedIsolationFixture(client: pg.Client): Promise<Isolation
  * `trg_audit_logs_append_only`, FR-AUD-09) mà `audit_logs.brand_id` lại có khóa ngoại tới `brands`,
  * nên mỗi lần đăng nhập là một hàng khóa vĩnh viễn thương hiệu đó lại. Mã thương hiệu có hậu tố
  * theo từng lần chạy nên vài hàng bỏ lại không làm lần chạy sau hỏng.
+ *
+ * Cùng lý do với `agreement_acceptances` (chỉ cho thêm mới, ADR-0013): thương hiệu và tài khoản đã
+ * đồng ý hợp đồng khung — cùng tài khoản đã soạn phiên bản hợp đồng — được bỏ lại.
  */
 /**
  * Khách trước đã rời màn QR: đơn chờ thanh toán của máy → EXPIRED, thanh toán PENDING → EXPIRED — như
@@ -437,6 +474,58 @@ export async function releaseOpenOrders(client: pg.Client, machineId: string): P
   );
 }
 
+export interface PlatformStaff {
+  readonly userId: string;
+  readonly email: string;
+  /** Xóa tài khoản, vai trò và phiên — gọi TRƯỚC `cleanupIsolationFixture`. */
+  cleanup(): Promise<void>;
+}
+
+/**
+ * Tài khoản nền tảng (Inventory Staff, Operations Staff…) cho test cần vai trò mà fixture không có.
+ * Mật khẩu là `TEST_PASSWORD`, dùng lại băm của Super Admin fixture.
+ */
+export async function seedPlatformStaff(
+  client: pg.Client,
+  fx: IsolationFixture,
+  roleCode: 'INVENTORY_STAFF' | 'OPERATIONS_STAFF',
+  permissions: readonly string[],
+): Promise<PlatformStaff> {
+  const roleId = randomUUID();
+  const userId = randomUUID();
+  const email = `${roleCode.toLowerCase()}.${randomUUID().slice(0, 8)}.${fx.runId}@test.local`;
+  await client.query(
+    `INSERT INTO roles (id, brand_id, code, name, is_system) VALUES ($1, NULL, $2, $3, true)`,
+    [roleId, roleCode, `${roleCode} ${fx.runId}`],
+  );
+  await client.query(
+    `INSERT INTO role_permissions (role_id, permission_id)
+     SELECT $1, p.id FROM permissions p WHERE p.code = ANY($2::varchar[])`,
+    [roleId, [...permissions]],
+  );
+  await client.query(
+    `INSERT INTO users (id, brand_id, email, password_hash, full_name, status)
+     SELECT $1, NULL, $2, password_hash, $3, 'ACTIVE' FROM users WHERE id = $4`,
+    [userId, email, `Nhan su ${roleCode}`, fx.superAdminId],
+  );
+  await client.query(
+    `INSERT INTO user_roles (id, user_id, role_id, scope_type) VALUES ($1, $2, $3, 'PLATFORM')`,
+    [randomUUID(), userId, roleId],
+  );
+  return {
+    userId,
+    email,
+    async cleanup() {
+      await client.query(`DELETE FROM notifications WHERE recipient_user_id = $1`, [userId]);
+      await client.query(`DELETE FROM refresh_sessions WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
+      await client.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await client.query(`DELETE FROM role_permissions WHERE role_id = $1`, [roleId]);
+      await client.query(`DELETE FROM roles WHERE id = $1`, [roleId]);
+    },
+  };
+}
+
 export async function cleanupIsolationFixture(
   client: pg.Client,
   fx: IsolationFixture,
@@ -451,7 +540,9 @@ export async function cleanupIsolationFixture(
     `SELECT DISTINCT role_id FROM user_roles WHERE user_id = ANY($1::uuid[])`,
     [users],
   );
-  const roles = roleRows.rows.map((r) => r.role_id);
+  const roles = Array.from(
+    new Set([...roleRows.rows.map((r) => r.role_id), ...(fx.seededRoles ?? [])]),
+  );
 
   const statements: readonly (readonly [string, unknown[]])[] = [
     [`UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1`, [fx.machineId]],
@@ -460,9 +551,25 @@ export async function cleanupIsolationFixture(
     // Cảnh báo do test sinh ra (vd FR-ALR-04 tự tắt slot) trỏ tới máy và slot của fixture.
     [`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM orders WHERE machine_id = $1`, [fx.machineId]],
+    // Kỳ chi trả và thông báo do job/thao tác trong test sinh ra — khóa ngoại tới brands và users.
+    [`DELETE FROM brand_payouts WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [
+      `DELETE FROM notifications WHERE brand_id = ANY($1::uuid[]) OR recipient_user_id = ANY($2::uuid[])`,
+      [brands, users],
+    ],
+    // Tương tác kiosk (FR-RPT-06), yêu cầu bổ sung (FR-RFQ), khoản bồi thường và điều chỉnh tồn
+    // kho (FR-SLT-44, ADR-0018) do test sinh ra — trỏ tới hóa đơn, phiên nạp, chai.
+    [`DELETE FROM kiosk_interaction_events WHERE machine_id = $1`, [fx.machineId]],
+    [`DELETE FROM refill_requests WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM storage_compensations WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM inventory_adjustments WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    // Phiếu nạp và khai báo gửi hàng do test INV sinh ra (ADR-0017) — trỏ tới chai, lô, slot.
+    [`DELETE FROM refill_sessions WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM bottles WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM bottle_returns WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM slot_rentals WHERE slot_id = ANY($1::uuid[])`, [fx.slots]],
     [`DELETE FROM inventory_batches WHERE brand_id = ANY($1::uuid[])`, [brands]],
+    [`DELETE FROM brand_shipment_declarations WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM fragrance_products WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM machine_status_histories WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_credentials WHERE machine_id = $1`, [fx.machineId]],
@@ -470,9 +577,18 @@ export async function cleanupIsolationFixture(
     [`DELETE FROM machines WHERE id = $1`, [fx.machineId]],
     [`DELETE FROM locations WHERE id = $1`, [fx.locationId]],
     [`DELETE FROM refresh_sessions WHERE user_id = ANY($1::uuid[])`, [users]],
-    [`DELETE FROM user_roles WHERE user_id = ANY($1::uuid[])`, [users]],
+    [
+      `DELETE FROM user_roles WHERE user_id = ANY($1::uuid[]) OR role_id = ANY($2::uuid[])`,
+      [users, roles],
+    ],
     [`DELETE FROM role_permissions WHERE role_id = ANY($1::uuid[])`, [roles]],
-    [`DELETE FROM users WHERE id = ANY($1::uuid[])`, [users]],
+    // Người đã đồng ý hoặc soạn hợp đồng khung bị khóa lại như `brands` (xem chú thích hàm).
+    [
+      `DELETE FROM users u WHERE u.id = ANY($1::uuid[])
+         AND NOT EXISTS (SELECT 1 FROM agreement_acceptances a WHERE a.accepted_by = u.id)
+         AND NOT EXISTS (SELECT 1 FROM agreement_versions v WHERE v.created_by = u.id)`,
+      [users],
+    ],
     [`DELETE FROM roles WHERE id = ANY($1::uuid[])`, [roles]],
   ];
 

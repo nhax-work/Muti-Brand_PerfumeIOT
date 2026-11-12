@@ -19,6 +19,12 @@ export interface BrandRecord {
   readonly status: BrandStatus;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  readonly taxCode: string | null;
+  readonly businessLicenseNumber: string | null;
+  readonly payoutAccountCiphertext: Buffer | null;
+  readonly payoutAccountKeyVersion: number | null;
+  readonly legalVerifiedAt: Date | null;
+  readonly legalVerifiedBy: string | null;
 }
 
 export interface BrandFilter {
@@ -39,6 +45,13 @@ export interface UpdateBrandData {
   readonly logoUrl?: string | null;
   readonly description?: string | null;
   readonly contactInfo?: Record<string, unknown> | null;
+}
+
+export interface UpdateLegalProfileData {
+  readonly taxCode: string;
+  readonly businessLicenseNumber?: string;
+  readonly payoutAccountCiphertext: Buffer | null;
+  readonly payoutAccountKeyVersion: number | null;
 }
 
 @Injectable()
@@ -132,6 +145,34 @@ export class BndQueries {
       .where('id', '=', id)
       .execute();
   }
+
+  async updateLegalProfile(id: string, input: UpdateLegalProfileData): Promise<void> {
+    await this.db
+      .updateTable('brands')
+      .set({
+        tax_code: input.taxCode,
+        business_license_number: input.businessLicenseNumber ?? null,
+        payout_account_ciphertext: input.payoutAccountCiphertext,
+        payout_account_key_version: input.payoutAccountKeyVersion,
+        legal_verified_at: null,
+        legal_verified_by: null,
+        updated_at: new Date(),
+      })
+      .where('id', '=', id)
+      .execute();
+  }
+
+  async verifyLegal(id: string, adminId: string, verifiedAt: Date): Promise<void> {
+    await this.db
+      .updateTable('brands')
+      .set({
+        legal_verified_at: verifiedAt,
+        legal_verified_by: adminId,
+        updated_at: new Date(),
+      })
+      .where('id', '=', id)
+      .execute();
+  }
 }
 
 function toRecord(row: {
@@ -143,8 +184,14 @@ function toRecord(row: {
   contact_info: unknown;
   kiosk_content: unknown;
   status: BrandStatus;
-  created_at: Date;
-  updated_at: Date;
+  created_at: Date | string;
+  updated_at: Date | string;
+  tax_code?: string | null;
+  business_license_number?: string | null;
+  payout_account_ciphertext?: Buffer | null;
+  payout_account_key_version?: number | null;
+  legal_verified_at?: Date | string | null;
+  legal_verified_by?: string | null;
 }): BrandRecord {
   return {
     id: row.id,
@@ -157,5 +204,11 @@ function toRecord(row: {
     status: row.status,
     createdAt: new Date(row.created_at),
     updatedAt: new Date(row.updated_at),
+    taxCode: row.tax_code ?? null,
+    businessLicenseNumber: row.business_license_number ?? null,
+    payoutAccountCiphertext: row.payout_account_ciphertext ?? null,
+    payoutAccountKeyVersion: row.payout_account_key_version ?? null,
+    legalVerifiedAt: row.legal_verified_at ? new Date(row.legal_verified_at) : null,
+    legalVerifiedBy: row.legal_verified_by ?? null,
   };
 }

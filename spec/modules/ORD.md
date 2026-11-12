@@ -1,7 +1,7 @@
 # FR-ORD — Đơn hàng và thanh toán
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 33 FR  
-> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007 — nút bấm vật lý; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012 — hoàn tiền thủ công qua phiếu khiếu nại; FR-ORD-33 thêm ngày 2026-10-14 theo ADR-0015 — khách hủy đơn trên kiosk)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 35 FR  
+> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012; FR-ORD-19 soát lại, FR-ORD-33÷35 thêm ngày 2026-10-17 theo ADR-0015 — dừng bán an toàn)  
 > Phụ trách: TV1 / Tài  
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
@@ -269,21 +269,30 @@
 ---
 
 ## FR-ORD-19 — Đánh dấu đơn hàng cần kiểm tra thủ công khi xịt thất bại
-* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại, không xác định, bị thiết bị từ chối (kể cả trước khi đèn sáng) hoặc chờ lượt quá hạn (FR-ORD-34); trừ trường hợp khách không bấm nút trong thời gian chờ và trường hợp thiết bị từ chối một bản sao lệnh (`CMD_DUPLICATE`). *(Câu yêu cầu viết lại ngày 2026-10-14 theo ADR-0011, ADR-0015; AC bên dưới cần soát lại cho khớp.)*
+* **Statement:** Hệ thống phải đánh dấu đơn hàng cần kiểm tra thủ công khi thanh toán thành công nhưng lượt xịt thất bại, không xác định, bị thiết bị từ chối (kể cả trước khi đèn sáng) hoặc chờ lượt quá hạn (FR-ORD-34); trừ trường hợp khách không bấm nút trong thời gian chờ và trường hợp thiết bị từ chối một bản sao lệnh (`CMD_DUPLICATE`) (ADR-0011, ADR-0015).
 * **Traces:** BR-002, BR-006 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given đơn hàng `O` đã thanh toán (`PAID`), lệnh xịt được gửi đi nhưng thiết bị báo lỗi (`FAILED`) hoặc quá `DISPENSE_RESULT_TIMEOUT_SEC = 60` không có phản hồi (`UNKNOWN`),  
+  * **AC1 (Lỗi thiết bị hoặc timeout phản hồi):** Given đơn hàng `O` đã thanh toán (`PAID`), lệnh xịt được gửi đi nhưng thiết bị báo lỗi (`FAILED`) hoặc quá `DISPENSE_RESULT_TIMEOUT_SEC = 60` không có phản hồi (`UNKNOWN`),  
     When hệ thống xử lý kết quả,  
     Then đơn hàng `O` chuyển sang trạng thái `FAILED`, được đánh dấu cờ `needs_manual_review = TRUE` (hoặc chuyển `REFUND_PENDING`), và sinh cảnh báo Alert gửi đến Operations Staff.
-  * **AC2 (Không tự xịt lại):** Given đơn hàng rơi vào trạng thái xịt thất bại hoặc không xác định,  
+  * **AC2 (Tuyệt đối không tự xịt lại):** Given đơn hàng rơi vào trạng thái xịt thất bại hoặc không xác định,  
     When hệ thống xử lý,  
     Then tuyệt đối không tự động sinh lệnh xịt thứ hai (bảo đảm an toàn theo BR-002).
   * **AC3 (Khách không bấm nút):** Given thiết bị từ chối lệnh với mã `PRESS_TIMEOUT`,  
     When hệ thống xử lý kết quả,  
     Then đơn chuyển `FORFEITED` và **không** được đánh dấu `needs_manual_review`, không sinh cảnh báo (ADR-0007).
-  * **AC4 (Từ chối lúc bấm vì lý do an toàn):** Given đèn đã sáng, khách bấm nút nhưng cửa đang mở (`DOOR_OPEN`),  
+  * **AC4 (Từ chối lúc bấm vì lý do an toàn):** Given đèn đã sáng, khách bấm nút nhưng cửa đang mở (`DOOR_OPEN`) hoặc lỗi phần cứng phát sinh,  
     When thiết bị từ chối,  
     Then đơn chuyển `FAILED` và được đánh dấu `needs_manual_review = TRUE` — khách không có lỗi.
+  * **AC5 (Từ chối trước ACK / trước khi đèn sáng - ADR-0015):** Given lệnh xịt gửi xuống nhưng thiết bị từ chối ngay trước khi sáng đèn (do cửa mở, máy vào `DRAINING`, lỗi cảm biến hoặc kẹt cơ cấu),  
+    When thiết bị gửi phản hồi từ chối lệnh,  
+    Then đơn hàng chuyển ngay sang `FAILED`, đánh dấu `needs_manual_review = TRUE` và tạo Alert để nhân viên vận hành xử lý.
+  * **AC6 (Bỏ qua từ chối bản sao lệnh CMD_DUPLICATE - ADR-0011):** Given thiết bị từ chối một bản tin lệnh với mã lỗi `CMD_DUPLICATE` (do gửi lại bản tin MQTT trùng lặp),  
+    When hệ thống nhận phản hồi,  
+    Then hệ thống bỏ qua bản tin này, **không** khép lệnh xịt gốc, **không** thay đổi trạng thái đơn hàng sang thất bại và **không** đánh dấu `needs_manual_review`.
+  * **AC7 (Chờ lượt quá hạn - FR-ORD-34):** Given đơn hàng `PAID` nhưng chờ lượt quá `PAID_QUEUE_MAX_SEC` mà chưa thể tạo lệnh xịt,  
+    When job timeout quét xử lý,  
+    Then đơn hàng chuyển `FAILED` với mã `QUEUE_TIMEOUT` và được đánh dấu `needs_manual_review = TRUE`.
 * **Test:** `test_FR_ORD_19_flag_order_for_manual_review_on_dispense_failure`
 
 ---
@@ -505,3 +514,44 @@
   * **AC4:** Given không liên lạc được cổng, When kiosk gọi hủy, Then hệ thống vẫn hủy đơn phía mình (AC3 bảo vệ tiền nếu khách vẫn trả).
   * **AC5:** Given đơn không thuộc máy gửi yêu cầu, When kiosk gọi hủy, Then trả `NOT_FOUND` và đơn giữ nguyên.
 * **Test:** `test_FR_ORD_33_kiosk_cancel_pending_order`
+
+---
+
+## FR-ORD-34 — Hết hạn hàng đợi đơn đã thanh toán quá hạn tạo lệnh xịt
+* **Statement:** Hệ thống phải chuyển đơn đã thanh toán sang FAILED với mã `QUEUE_TIMEOUT` và đánh dấu kiểm tra thủ công khi quá `PAID_QUEUE_MAX_SEC` giây kể từ lúc thanh toán mà chưa tạo được lệnh xịt (ADR-0015).
+* **Traces:** BR-002 · **Priority:** M · ADR-0015 mục 2
+* **Acceptance criteria:**
+  * **AC1 (Hết hạn hàng đợi chờ xịt):** Given đơn hàng `O` ở trạng thái `PAID` trên máy `M` nhưng chưa được tạo lệnh xịt (chưa chuyển `DISPENSE_REQUESTED`),  
+    When thời gian kể từ `paid_at` vượt quá `PAID_QUEUE_MAX_SEC` (180 giây),  
+    Then job định kỳ phát hiện và chuyển đơn `O` sang `FAILED`, lưu mã thất bại `failure_reason = 'QUEUE_TIMEOUT'`, đánh dấu `needs_manual_review = TRUE` để nhân viên rà soát hoàn tiền.
+  * **AC2 (Bù sau downtime):** Given hệ thống hoặc background job bị gián đoạn hoạt động,  
+    When dịch vụ khởi động lại,  
+    Then job tự động quét các đơn `PAID` bị tồn đọng quá `PAID_QUEUE_MAX_SEC` và xử lý chuyển `FAILED` kèm `QUEUE_TIMEOUT` đầy đủ (catch-up).
+  * **AC3 (Hiển thị hỗ trợ tại Kiosk):** Given đơn hàng bị chuyển `FAILED` với mã `QUEUE_TIMEOUT`,  
+    When Kiosk của máy `M` kiểm tra trạng thái đơn,  
+    Then Kiosk hiển thị màn hình thông báo sự cố kèm mã QR dẫn tới trang gửi phiếu khiếu nại (FR-ORD-28).
+  * **AC4 (Tạo lệnh kịp thời):** Given đơn hàng đã tạo lệnh xịt thành công (`DISPENSE_REQUESTED`) trước khi chạm mốc 180 giây,  
+    Then đơn không bị ảnh hưởng bởi job xử lý `QUEUE_TIMEOUT`.
+* **Test:** `test_FR_ORD_34_queue_timeout_expired_paid_orders`
+
+---
+
+## FR-ORD-35 — Mỗi máy tối đa một đơn chờ thanh toán
+* **Statement:** Hệ thống phải bảo đảm mỗi máy có tối đa một đơn ở trạng thái CREATED hoặc PENDING_PAYMENT, và từ chối tạo đơn mới với `MACHINE_BUSY` khi đã có (ADR-0015).
+* **Traces:** BR-002 · **Priority:** M · ADR-0015 mục 1
+* **API:** `POST /kiosk/machines/{serialNumber}/orders`
+* **Acceptance criteria:**
+  * **AC1 (Máy đang có đơn chờ):** Given máy `M` đang tồn tại một đơn hàng ở trạng thái `CREATED` hoặc `PENDING_PAYMENT`,  
+    When nhận yêu cầu tạo đơn mới trên máy `M`,  
+    Then hệ thống từ chối tạo đơn và trả về HTTP 409 `MACHINE_BUSY`.
+  * **AC2 (Ràng buộc CSDL bắt buộc):** Tính toàn vẹn được bảo đảm bằng partial unique index trong CSDL:
+    ```sql
+    CREATE UNIQUE INDEX uq_machine_open_order
+      ON orders (machine_id)
+      WHERE status IN ('CREATED', 'PENDING_PAYMENT');
+    ```
+    Trường hợp hai yêu cầu tạo đơn gửi đến đồng thời trên cùng máy `M`, đúng một yêu cầu thành công, yêu cầu còn lại bị CSDL ném lỗi trùng khóa và hệ thống trả về HTTP 409 `MACHINE_BUSY`.
+  * **AC3 (Giải phóng máy):** Given đơn đang chờ trên máy `M` đã được chuyển sang `PAID`, `EXPIRED`, hoặc `FAILED`,  
+    When gửi yêu cầu tạo đơn mới,  
+    Then hệ thống chấp nhận và tạo đơn thành công.
+* **Test:** `test_FR_ORD_35_single_pending_order_per_machine`

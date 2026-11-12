@@ -19,4 +19,11 @@ export const auth = {
   wrongCurrentPassword: 'Mật khẩu hiện tại không đúng',
   newPasswordMustDiffer: 'Mật khẩu mới phải khác mật khẩu hiện tại',
   newPasswordSameAsCurrent: 'Trùng mật khẩu hiện tại',
+  registerRateLimited: 'Quá nhiều yêu cầu đăng ký, vui lòng thử lại sau ít phút',
+  invalidVerificationToken: 'Mã xác minh email không hợp lệ hoặc không tồn tại',
+  verificationTokenExpired: 'Mã xác minh email đã hết hạn',
+  brandCodeTaken: 'Mã thương hiệu đã tồn tại',
+  verificationEmailSubject: 'Xác minh tài khoản thương hiệu ScentStation',
+  verificationEmailBody:
+    'Chào mừng bạn đến với ScentStation. Vui lòng bấm vào liên kết sau để xác minh email của bạn: {link}. Liên kết này có hiệu lực trong {hours} giờ.',
 } as const;

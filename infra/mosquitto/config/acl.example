@@ -11,3 +11,7 @@ topic write scentstation/M001/event
 topic write scentstation/M001/command/result
 topic read  scentstation/M001/command
 topic read  scentstation/M001/config
+
+# Bảo trì có chữ ký: cùng phạm vi máy, không mở wildcard cho tài khoản thiết bị.
+topic read  scentstation/M001/test/command
+topic write scentstation/M001/test/result

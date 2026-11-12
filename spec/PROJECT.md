@@ -48,6 +48,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 | 8 | `spec/decisions/` | Nhật ký ADR cho các thay đổi contract | Đang đề xuất hoặc rà soát một thay đổi contract |
 | 9 | `docs/HUONG_DAN_BACKEND.md` | Cách viết một module backend: bảo vệ endpoint, cô lập dữ liệu, lỗi, ngưỡng, test | **Trước khi viết module backend đầu tiên** |
 | 10 | `docs/HUONG_DAN_FRONTEND.md` | Cấu trúc `apps/admin-web` và `apps/kiosk`, năm quy tắc FE, gọi API, i18n, xác thực lại | **Trước khi viết màn hình đầu tiên** |
+| 11 | `docs/QUY_TAC_GIAO_DIEN.md` | Bộ quy tắc thiết kế chung cho admin-web, kiosk, landing: token màu/chữ/khoảng cách, khung trang, màu trạng thái, giọng văn, checklist | **Trước khi sửa bất kỳ giao diện nào** |
 
 > **Quyết định mới nhất phải đọc trước khi đụng SLT, EXP, INV, ORD, DSP hay firmware:**
 > `spec/decisions/0006-mua-goi-thue-slot-tu-phuc-vu-va-hoa-don.md` (thuê slot theo gói trả trước, hóa
@@ -58,7 +59,8 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > định, chủ động không gia hạn, đổi slot, giới hạn giữ chỗ), `0015-*` (dừng bán an toàn); và `0016-*`
 > (tích hợp PayOS). Các ADR này đổi nghiệp vụ lõi; tài liệu nguồn trong `seed_document/` (trừ `DB_DIAGRAM_MERMAID.md`)
 > và mọi ghi nhớ cũ về "hợp đồng thuê", "yêu cầu thuê", "phí cố định", "ăn chia", "xịt ngay sau
-> thanh toán" đều đã lỗi thời.
+> thanh toán" đều đã lỗi thời. `0017-*`, `0018-*` hoàn thiện contract tuần 7 và tuần 8 (tồn kho, thông
+> báo, chai hư hỏng, yêu cầu bổ sung).
 
 > Cả năm file contract đã tồn tại và **đã đóng băng**: `erd.md`, `data-dictionary.md`, `schema.sql`,
 > `openapi.yaml`, `mqtt.md`. Chuẩn đặt tên và giá trị enum chốt ở
@@ -71,23 +73,18 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 > migration trong `migrations/` (danh sách ADR và file tương ứng ở đầu `schema.sql`); `pg_dump --schema-only` của DB nạp
 > `schema.sql` phải trùng với DB chạy hết migration.
 
-> Trạng thái acceptance criteria trong `spec/modules/` (188/286 FR hiệu lực, đếm lại ngày 2026-09-29
-> sau ADR-0006 và ADR-0007 — đều đã duyệt; 7 FR mức X đã bãi bỏ không tính):
+> Trạng thái acceptance criteria trong `spec/modules/` (cập nhật ngày 2026-10-17 sau khi hoàn thành 28 FR mới theo ADR-0013, 0014, 0015 và 12 FR của RFQ; 7 FR mức X đã bãi bỏ không tính):
 >
-> - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`
-> - **Một phần:** `BND` (chỉ FR-BND-05, 08 — cô lập dữ liệu), `MCH` (chỉ FR-MCH-15..17), `DSP` (chỉ
->   FR-DSP-21..27 — nút bấm vật lý, ADR-0007)
-> - **Còn rỗng:** `IOT`, `RPT`, `RFQ`, `AUD`, `PRD`
+> - **Đủ:** `AUTH`, `USR`, `SLT`, `ORD`, `EXP`, `INV`, `MNT`, `ALR`, `REV`, `RFQ`
+> - **Một phần:** `BND` (FR-BND-05, 08, 09, 10), `MCH` (FR-MCH-09, 15..18), `DSP` (FR-DSP-18..27 — timeout, chẩn đoán, nút bấm vật lý), `RPT` (FR-RPT-04, 06), `IOT` (FR-IOT-04..06), `AUD` (FR-AUD-11) — ba mục sau thêm ngày 2026-10-26 theo lộ trình tuần 8
+> - **Còn rỗng:** `PRD`
 >
-> **Lệch từ 2026-10-14:** ADR-0013, 0014, 0015 thêm 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
-> FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16) **chưa có AC**, và viết lại
-> câu yêu cầu của FR-USR-01, 05, FR-SLT-17, 18, 44, FR-EXP-06, 07, FR-INV-04, 30, 31, FR-ORD-19,
-> FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04, FR-AUTH-09 — AC cũ của các FR này trong
-> `spec/modules/` có thể còn theo nghĩa cũ, phải soát lại khi hiện thực ADR tương ứng.
+> **Đã hoàn thành ngày 2026-10-17:** Viết đủ AC cho 28 FR mới (FR-USR-06, 07, FR-BND-09, 10, FR-SLT-48 ÷ 56,
+> FR-EXP-23 ÷ 28, FR-INV-32 ÷ 35, FR-ORD-34, 35, FR-MCH-18, FR-MNT-17, FR-ALR-16), viết đủ 12 FR cho `RFQ`
+> (FR-RFQ-01 ÷ 12), và rà soát khớp 100% các FR viết lại câu yêu cầu (FR-USR-01, 05, FR-SLT-17, 18, 44,
+> FR-EXP-06, 07, FR-INV-04, 30, 31, FR-ORD-19, FR-ALR-04, 15, FR-MNT-05, 06, FR-MCH-09, FR-RPT-04, FR-AUTH-09).
 >
-> Đừng bịa acceptance criteria cho nhóm rỗng — viết theo đúng định dạng Given/When/Then đã dùng ở
-> `spec/modules/SLT.md`, hoặc nêu rõ là còn thiếu. Header của mỗi file ghi số FR và trạng thái; đếm
-> lại bằng cách so mục `## FR-XXX-NN` trong file với bảng FR ở `docs/FR_NFR_SCENTSTATION.md`.
+> Header của mỗi file ghi số FR và trạng thái; đếm lại bằng cách so mục `## FR-XXX-NN` trong file với bảng FR ở `docs/FR_NFR_SCENTSTATION.md`.
 
 ## 3. Quy tắc bắt buộc
 
@@ -151,6 +148,40 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
 - **Migration thêm giá trị enum** phải nằm ở file riêng, và file sau **không** được ép chuỗi thành giá
   trị enum mới (so sánh qua `::text`): node-pg-migrate chạy mọi migration đang chờ trong **một**
   transaction. Kiểm cả DB trống lẫn DB đã có lược đồ cũ (`docs/MIGRATIONS.md`).
+- **Ranh giới module (QT3, ADR-0003).** Module khác chỉ import từ `index.ts` của module đó; ESLint
+  (`no-restricted-imports` trong `eslint.config.js`) chặn import thẳng vào file nội bộ. Mỗi bảng có
+  đúng một module sở hữu. Chỉ module sở hữu được INSERT/UPDATE/DELETE bảng đó; module khác muốn ghi
+  thì gọi service mà module sở hữu export. Đọc chéo trong `*.queries.ts` (JOIN, truy vấn con) thì được.
+
+  | Module | Bảng sở hữu |
+  |---|---|
+  | AUTH | `refresh_sessions`, `email_verifications` |
+  | BND | `brands` |
+  | USR | `users`, `user_roles` (`roles`, `permissions`, `role_permissions` chỉ nạp bằng migration) |
+  | PRD | `fragrance_products` |
+  | MCH | `locations`, `machines`, `machine_slots`, `machine_status_histories`, `device_credentials` |
+  | SLT | `rental_packages`, `storage_plans`, `rental_checkouts`, `slot_rentals`, `agreement_versions`, `agreement_acceptances`, `storage_compensations` (`slot_rental_requests` DEPRECATED) |
+  | EXP | `bottle_returns` |
+  | INV | `brand_shipment_declarations`, `inventory_batches`, `bottles`, `refill_sessions`, `inventory_adjustments` |
+  | RFQ | `refill_requests` |
+  | ORD | `orders`, `order_status_histories`, `payments`, `payment_events`, `kiosk_interaction_events`, `refund_claims` |
+  | DSP | `dispense_commands`, `dispense_results` |
+  | IOT | `device_events`, `sensor_readings` |
+  | ALR | `alerts`, `notifications` — chỉ ghi qua `AlrService.raiseAlert`, `notifyBrandAdmins`, `notifyUsers` |
+  | MNT | `maintenance_tickets`, `maintenance_activities` |
+  | REV | `brand_payouts` |
+  | `shared/audit` | `audit_logs` — chỉ thêm, qua `AuditService` |
+
+  Các chỗ ghi chéo còn tồn tại (nợ kỹ thuật, ghi nhận 2026-10-29). Code mới không thêm chỗ ghi chéo
+  nào; khi sửa vào các chỗ này thì chuyển sang gọi service của module sở hữu:
+
+  | Bảng | Module đang ghi chéo |
+  |---|---|
+  | `brands`, `users` | AUTH (thương hiệu tự đăng ký, khóa đăng nhập) |
+  | `machines`, `machine_status_histories` | DSP (DRAINING → MAINTENANCE), IOT (trạng thái kết nối) |
+  | `machine_slots` | DSP, EXP, INV, SLT |
+  | `slot_rentals` | EXP (đóng hóa đơn khi trả hàng) |
+  | `bottles` | EXP (trả hàng), SLT (thanh lý) |
 
 ## 4. Không bao giờ tự quyết
 

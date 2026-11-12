@@ -74,6 +74,7 @@ vi.mock('./api', async () => {
             slotId: 's-2',
             productName: 'Aurore Nocturne',
             estimatedRemainingSprays: 90,
+            lowStock: true,
           },
           { slotNumber: 3, mine: false, available: false },
         ],
@@ -182,5 +183,16 @@ describe('periodRange', () => {
       to: new Date(2026, 9, 1).toISOString(),
     });
     expect(periodRange('all', now)).toEqual({});
+  });
+});
+
+describe('MySlotsPage — gợi ý yêu cầu bổ sung (FR-RFQ-03)', () => {
+  it('test_FR_RFQ_03_suggest_refill_on_low_stock — slot máy chủ gắn lowStock hiện nhãn và nút, mở yêu cầu điền sẵn hóa đơn', () => {
+    renderPage();
+    expect(screen.getAllByText('Sắp hết')).toHaveLength(1);
+    const buttons = screen.getAllByText('Yêu cầu bổ sung');
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]!);
+    expect(mockNavigate).toHaveBeenCalledWith('/refill-requests?rentalId=r-unpriced');
   });
 });

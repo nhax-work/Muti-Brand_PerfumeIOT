@@ -1,6 +1,6 @@
 import type { LoginRequest } from '@scentstation/contracts';
 import { Alert, Button, Card, Form, Input } from 'antd';
-import { Navigate, useLocation, useNavigate, type Location } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router';
 import { errorMessage } from '@/shared/api';
 import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
@@ -51,6 +51,9 @@ export default function LoginPage() {
         <Button type="primary" htmlType="submit" block loading={login.isPending}>
           {t('ui.login')}
         </Button>
+        <div style={{ marginTop: 16, textAlign: 'center' }}>
+          <Link to="/register">{t('ui.registerBrandLink')}</Link>
+        </div>
       </Form>
     </Card>
   );

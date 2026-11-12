@@ -189,6 +189,44 @@ describe('PayosPaymentGateway.createPayment', () => {
     });
   });
 
+  it('test_FR_ORD_08_payos_supports_custom_return_and_cancel_urls', async () => {
+    const capture: { url?: string; init?: RequestInit } = {};
+    const gateway = new PayosPaymentGateway(
+      CONFIG,
+      fakeFetch(capture, {
+        code: '00',
+        desc: 'success',
+        data: {
+          qrCode: '000201010212VIETQR',
+          checkoutUrl: 'https://pay.payos.vn/web/custom',
+          paymentLinkId: 'p2',
+        },
+      }),
+    );
+    const expiresAt = new Date('2026-10-14T03:20:00Z');
+    const customReturnUrl = 'https://admin.test/rentals/checkouts/chk-123';
+    const customCancelUrl = 'https://admin.test/rentals/checkouts/chk-123';
+    await gateway.createPayment({
+      reference: 'CHK-20261014-XYZ789',
+      amount: '500000',
+      currency: 'VND',
+      expiresAt,
+      description: 'Thuê slot',
+      returnUrl: customReturnUrl,
+      cancelUrl: customCancelUrl,
+    });
+
+    const sent = JSON.parse(String(capture.init?.body)) as Record<string, unknown>;
+    expect(sent['returnUrl']).toBe(customReturnUrl);
+    expect(sent['cancelUrl']).toBe(customCancelUrl);
+    const expectedSignature = createHmac('sha256', CONFIG.checksumKey)
+      .update(
+        `amount=500000&cancelUrl=${customCancelUrl}&description=CHKXYZ789&orderCode=${String(sent['orderCode'])}&returnUrl=${customReturnUrl}`,
+      )
+      .digest('hex');
+    expect(sent['signature']).toBe(expectedSignature);
+  });
+
   it('test_FR_ORD_08_payos_rejects_fractional_amount_and_error_response', async () => {
     const capture = {};
     const ok = new PayosPaymentGateway(CONFIG, fakeFetch(capture, { code: '00', data: null }));

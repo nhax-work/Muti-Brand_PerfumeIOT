@@ -60,7 +60,49 @@ export interface AppConfig {
    * quy tắc với khóa trên: thiếu ở dev thì tính năng tắt, production bắt buộc có.
    */
   readonly refundClaimTokenSecret: string | null;
+  /**
+   * Địa chỉ URL cơ sở của ứng dụng web quản trị (ADMIN_WEB_BASE_URL). Mặc định http://localhost:5173.
+   */
+  readonly adminWebBaseUrl: string;
+  /**
+   * Cờ dev in link xác minh email ra console (DEV_LOG_EMAIL_VERIFICATION_TOKEN). Mặc định TẮT.
+   * Cấm bật ở production.
+   */
+  readonly devLogEmailVerificationToken: boolean;
+  /** Cấu hình máy chủ gửi thư SMTP thật (FR-USR-07, FR-ALR-16). `null` khi chạy ở chế độ console log. */
+  readonly smtp: SmtpConfig | null;
+  /** Nơi lưu ảnh sản phẩm (ADR-0020). */
+  readonly media: MediaConfig;
   constraint<K extends ConstraintName>(name: K): ConstraintValue<K>;
+}
+
+export interface SmtpConfig {
+  readonly host: string;
+  readonly port: number;
+  readonly secure: boolean;
+  readonly user: string | null;
+  readonly pass: string | null;
+  readonly from: string;
+}
+
+/**
+ * Kho ảnh sản phẩm (ADR-0020). `local` ghi vào thư mục MEDIA_DIR và API tự phục vụ tại
+ * /api/v1/media — cho máy dev chưa có khóa R2, test và CI. `r2` ghi lên Cloudflare R2 qua S3 API.
+ */
+export interface MediaConfig {
+  readonly driver: 'local' | 'r2';
+  /** Tiền tố URL công khai của ảnh, không có dấu `/` cuối (MEDIA_PUBLIC_BASE_URL). */
+  readonly publicBaseUrl: string;
+  /** Thư mục lưu khi driver `local` (MEDIA_DIR). */
+  readonly localDir: string;
+  readonly r2: R2Config | null;
+}
+
+export interface R2Config {
+  readonly accountId: string;
+  readonly accessKeyId: string;
+  readonly secretAccessKey: string;
+  readonly bucket: string;
 }
 
 export interface PayosConfig {
@@ -157,6 +199,34 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
   }
 
+  const adminWebBaseUrl = env['ADMIN_WEB_BASE_URL'] || 'http://localhost:5173';
+  const rawDevLogToken = env['DEV_LOG_EMAIL_VERIFICATION_TOKEN'];
+  if (
+    rawDevLogToken !== undefined &&
+    rawDevLogToken !== '' &&
+    !['true', 'false'].includes(rawDevLogToken)
+  ) {
+    throw new Error(
+      `DEV_LOG_EMAIL_VERIFICATION_TOKEN phải là true hoặc false, nhận được: ${rawDevLogToken}`,
+    );
+  }
+  const devLogEmailVerificationToken = rawDevLogToken === 'true';
+  if (appEnv === 'production' && devLogEmailVerificationToken) {
+    throw new Error(
+      'DEV_LOG_EMAIL_VERIFICATION_TOKEN không được bật ở production (nguy cơ lộ token xác minh email).',
+    );
+  }
+
+  const smtp = loadSmtpConfig(env);
+  if (appEnv === 'production' && !smtp) {
+    throw new Error(
+      'SMTP_HOST ở production là bắt buộc — bằng chứng gửi email không được là bản ghi chỉ ghi log (FR-ALR-16, ADR-0017).',
+    );
+  }
+
+  const port = Number(env['PORT'] ?? 3000);
+  const media = loadMediaConfig(env, port);
+
   const overrides = new Map<ConstraintName, number | readonly number[]>();
   for (const name of Object.keys(SPEC_CONSTRAINTS) as ConstraintName[]) {
     const raw = env[name];
@@ -171,7 +241,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   return {
     env: appEnv,
-    port: Number(env['PORT'] ?? 3000),
+    port,
     databaseUrl,
     jwtSecret,
     paymentProvider,
@@ -182,10 +252,93 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     swaggerEnabled,
     refundAccountEncKey,
     refundClaimTokenSecret,
+    adminWebBaseUrl,
+    devLogEmailVerificationToken,
+    smtp,
+    media,
     constraint<K extends ConstraintName>(name: K): ConstraintValue<K> {
       return (overrides.get(name) ?? SPEC_CONSTRAINTS[name]) as ConstraintValue<K>;
     },
   };
+}
+
+/** Tải cấu hình SMTP gửi email thật; thiếu SMTP_HOST hoặc SMTP_USER thì trả `null`. */
+function loadSmtpConfig(env: NodeJS.ProcessEnv): SmtpConfig | null {
+  const host = env['SMTP_HOST'];
+  if (!host || host === PLACEHOLDER_SECRET) return null;
+  const port = Number(env['SMTP_PORT'] ?? 587);
+  const secure = env['SMTP_SECURE'] === 'true' || port === 465;
+  const user = env['SMTP_USER'] || null;
+  const pass = env['SMTP_PASS'] || null;
+  const from =
+    env['SMTP_FROM'] ||
+    (user ? `"ScentStation" <${user}>` : '"ScentStation" <no-reply@scentstation.vn>');
+  return { host, port, secure, user, pass, from };
+}
+
+/**
+ * Kho ảnh sản phẩm (ADR-0020). Mặc định `local` để máy dev chạy được ngay; chọn `r2` mà thiếu biến
+ * R2_* thì API không khởi động — khóa R2 là bí mật, không có giá trị mặc định (NFR-SEC-05).
+ */
+function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
+  const driver = env['MEDIA_STORAGE_DRIVER'] || 'local';
+  if (driver !== 'local' && driver !== 'r2') {
+    throw new Error(`MEDIA_STORAGE_DRIVER phải là local hoặc r2, nhận được: ${driver}`);
+  }
+  const localDir = env['MEDIA_DIR'] || 'storage/media';
+  const rawBase = env['MEDIA_PUBLIC_BASE_URL'];
+  if (driver === 'local') {
+    const publicBaseUrl = (rawBase || `http://localhost:${port}/api/v1/media`).replace(/\/+$/, '');
+    return { driver, publicBaseUrl, localDir, r2: null };
+  }
+
+  const read = (name: string) => {
+    const value = env[name];
+    return value && value !== PLACEHOLDER_SECRET ? value : null;
+  };
+  const accountId = parseR2AccountId(read('R2_ACCOUNT_ID'));
+  const accessKeyId = read('R2_ACCESS_KEY_ID');
+  const secretAccessKey = read('R2_SECRET_ACCESS_KEY');
+  const bucket = read('R2_BUCKET');
+  if (!accountId || !accessKeyId || !secretAccessKey || !bucket || !rawBase) {
+    throw new Error(
+      'MEDIA_STORAGE_DRIVER=r2 cần đủ R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET, MEDIA_PUBLIC_BASE_URL (ADR-0020).',
+    );
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(rawBase);
+  } catch {
+    throw new Error(`MEDIA_PUBLIC_BASE_URL phải là URL tuyệt đối, nhận được: ${rawBase}`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error('MEDIA_PUBLIC_BASE_URL của R2 phải dùng https (NFR-SEC-01).');
+  }
+  return {
+    driver,
+    publicBaseUrl: rawBase.replace(/\/+$/, ''),
+    localDir,
+    r2: { accountId, accessKeyId, secretAccessKey, bucket },
+  };
+}
+
+/**
+ * Account ID của Cloudflare là 32 ký tự hex. Trang tạo token hiện cả endpoint
+ * `https://<ACCOUNT_ID>.r2.cloudflarestorage.com`, nên người cấu hình hay dán nguyên URL đó — nhận cả
+ * hai dạng. Sai định dạng thì báo ngay lúc khởi động thay vì để S3 client dựng một tên miền vô nghĩa
+ * (`<bucket>.https`) rồi hỏng ở lần upload đầu tiên.
+ */
+function parseR2AccountId(raw: string | null): string | null {
+  if (!raw) return null;
+  const value = raw.trim();
+  const fromEndpoint = /^https?:\/\/([0-9a-f]{32})\.r2\.cloudflarestorage\.com\/?$/i.exec(value);
+  const id = (fromEndpoint ? fromEndpoint[1]! : value).toLowerCase();
+  if (!/^[0-9a-f]{32}$/.test(id)) {
+    throw new Error(
+      'R2_ACCOUNT_ID phải là Account ID 32 ký tự hex (phần đầu của https://<ACCOUNT_ID>.r2.cloudflarestorage.com) (ADR-0020).',
+    );
+  }
+  return id;
 }
 
 /** Đủ năm biến PAYOS_* (khác giá trị mẫu) thì trả cấu hình; thiếu biến nào thì `null`. */

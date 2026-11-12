@@ -25,3 +25,6 @@ packages/contracts/src/openapi.ts
 
 # File thiet ke, ho so va cong cu sinh artifact
 AI gen/
+
+# Hồ sơ điện/PCB và dữ liệu xuất từ KiCad: giữ nguyên nội dung xuất để đối chiếu.
+hardware/driver15/

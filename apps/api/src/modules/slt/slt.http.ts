@@ -9,12 +9,33 @@
  * từ `POST /rental-checkouts` và kích hoạt khi lắp chai đầu tiên (FR-SLT-24) hoặc job FR-SLT-42.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { z } from 'zod';
+import { originOf } from '../../shared/http/request-origin.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
-import { CurrentBrandScope, CurrentUser, type AuthenticatedUser } from '../auth/index.js';
+import {
+  CurrentBrandScope,
+  CurrentUser,
+  RequireReauth,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { SltService } from './slt.service.js';
+
+type HttpRequest = Parameters<typeof originOf>[0];
 
 const RENTAL_STATUSES = [
   'DRAFT',
@@ -66,6 +87,30 @@ const ProductAssignBody = z.object({
 const PriceUpdateBody = z.object({
   pricePerSpray: z.string().min(1),
 });
+
+const SlotSwapBody = z.object({
+  targetSlotId: z.string().uuid(),
+});
+
+const NonRenewalBody = z.object({
+  returnMethod: z.enum(['WAREHOUSE_PICKUP', 'SHIP_TO_BRAND'] as const),
+});
+
+const RenewRentalBody = z.object({
+  rentalPackageId: z.string().uuid(),
+  storagePlanId: z.string().uuid(),
+});
+
+const GracePeriodBody = z.object({
+  graceEndsAt: z.string().datetime({ offset: true }).or(z.string().datetime()),
+});
+
+/** openapi.yaml: AgreementAccept. */
+const AgreementAcceptBody = z.object({ contentHash: z.string().regex(/^[0-9a-f]{64}$/) });
+
+interface StatusReply {
+  status(code: number): unknown;
+}
 
 @Controller('slot-rentals')
 export class SltController {
@@ -121,6 +166,99 @@ export class SltController {
     const { pricePerSpray } = parseBody(PriceUpdateBody, body);
     return this.service.setPricePerSpray(actor, scope, id, pricePerSpray);
   }
+
+  /** FR-SLT-55 (ADR-0014): Đổi hóa đơn sang slot khác cùng máy khi mua nhầm. */
+  @Post(':id/swap-slot')
+  @HttpCode(200)
+  swapSlot(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { targetSlotId } = parseBody(SlotSwapBody, body);
+    return this.service.swapSlot(actor, scope, id, targetSlotId);
+  }
+
+  /** FR-EXP-23, FR-EXP-25 (ADR-0014): Báo không gia hạn, lấy hàng về trước endsAt. */
+  @Post(':id/non-renewal')
+  @HttpCode(200)
+  requestNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { returnMethod } = parseBody(NonRenewalBody, body);
+    return this.service.requestNonRenewal(actor, scope, id, returnMethod);
+  }
+
+  /** FR-EXP-24 (ADR-0014): Rút lại việc báo không gia hạn trước endsAt. */
+  @Delete(':id/non-renewal')
+  @HttpCode(200)
+  withdrawNonRenewal(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.withdrawNonRenewal(actor, scope, id);
+  }
+
+  /** FR-SLT-12, FR-EXP-12, FR-EXP-13: Brand Admin mua gói mới gia hạn cho slot đang EXPIRING/GRACE. */
+  @Post(':id/renew')
+  @HttpCode(201)
+  renew(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const parsed = parseBody(RenewRentalBody, body);
+    return this.service.renew(actor, scope, id, parsed);
+  }
+
+  /** FR-EXP-07: Platform Super Admin ấn định ngày kết thúc ân hạn. */
+  @Put(':id/grace-period')
+  @HttpCode(200)
+  setGracePeriod(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { graceEndsAt } = parseBody(GracePeriodBody, body);
+    return this.service.setGracePeriod(actor, scope, id, new Date(graceEndsAt));
+  }
+
+  /** FR-EXP-14, FR-EXP-15, FR-EXP-16: Platform Super Admin thanh lý hóa đơn (chuyển quyền chai sang PLATFORM). */
+  @Post(':id/liquidate')
+  @RequireReauth()
+  @HttpCode(200)
+  liquidate(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.liquidate(actor, scope, id);
+  }
+
+  /** FR-SLT-14: Platform Super Admin đóng hóa đơn đã thanh lý và giải phóng slot. */
+  @Post(':id/close')
+  @HttpCode(200)
+  close(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.close(actor, scope, id);
+  }
 }
 
 @Controller('rental-checkouts')
@@ -169,6 +307,43 @@ export class RentalCheckoutsController {
     const { id } = parseBody(IdParam, params);
     return this.service.cancelCheckout(actor, scope, id);
   }
+
+  /** FR-SLT-50 (ADR-0013): Lấy phụ lục của phiên thanh toán. */
+  @Get(':id/annex')
+  getCheckoutAnnex(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    return this.service.getCheckoutAnnex(actor, scope, id);
+  }
+
+  /**
+   * FR-SLT-50 (ADR-0013): Brand Admin đồng ý phụ lục trước khi thanh toán.
+   * 201 khi ghi nhận mới, 200 khi đã đồng ý từ trước.
+   */
+  @Post(':id/annex/accept')
+  async acceptCheckoutAnnex(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+    @Res({ passthrough: true }) reply: StatusReply,
+  ) {
+    const { id } = parseBody(IdParam, params);
+    const { contentHash } = parseBody(AgreementAcceptBody, body);
+    const { created, body: acceptance } = await this.service.acceptCheckoutAnnex(
+      actor,
+      scope,
+      id,
+      { contentHash },
+      originOf(request),
+    );
+    reply.status(created ? 201 : 200);
+    return acceptance;
+  }
 }
 
 @Controller('slots')
@@ -179,5 +354,40 @@ export class SlotRentalQuoteController {
   getQuote(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
     const { id } = parseBody(IdParam, params);
     return this.service.getQuote(actor, id);
+  }
+}
+
+const AgreementVersionParam = z.object({ version: z.string().min(1).max(20) });
+
+@Controller('agreements')
+export class AgreementsController {
+  constructor(@Inject(SltService) private readonly service: SltService) {}
+
+  /** FR-SLT-48, FR-SLT-49 (ADR-0013) */
+  @Get('current')
+  getCurrentAgreement(@CurrentBrandScope() scope: BrandScope) {
+    return this.service.getCurrentAgreement(scope);
+  }
+
+  /** FR-SLT-49 (ADR-0013): 201 khi ghi nhận mới, 200 khi thương hiệu đã đồng ý từ trước. */
+  @Post(':version/accept')
+  async acceptAgreement(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Body() body: unknown,
+    @Req() request: HttpRequest,
+    @Res({ passthrough: true }) reply: StatusReply,
+  ) {
+    const { version } = parseBody(AgreementVersionParam, params);
+    const { contentHash } = parseBody(AgreementAcceptBody, body);
+    const { created, body: acceptance } = await this.service.acceptAgreement(
+      actor,
+      scope,
+      { version, contentHash },
+      originOf(request),
+    );
+    reply.status(created ? 201 : 200);
+    return acceptance;
   }
 }

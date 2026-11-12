@@ -6,15 +6,37 @@
  * ở `en/` trong cùng commit (spec/PROJECT.md Mục 3).
  */
 
+import { alr, alertSeverity, alertStatus, notificationChannel, notificationStatus } from './alr.js';
 import { auth } from './auth.js';
 import { bnd } from './bnd.js';
-import { actorType, credentialStatus, orderCode, revenueOwner, statusSource } from './codes.js';
+import {
+  actorType,
+  brandPayoutStatus,
+  commandStatus,
+  credentialStatus,
+  dispenseType,
+  orderCode,
+  revenueOwner,
+  statusSource,
+} from './codes.js';
 import { common } from './common.js';
+import {
+  authenticityStatus,
+  bottleStatus,
+  inv,
+  refillSessionStatus,
+  shipmentStatus,
+} from './inv.js';
+import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
 import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import { bottleReturnMethod, exp } from './exp.js';
+import { mnt, ticketPriority, ticketStatus } from './mnt.js';
 import { ord } from './ord.js';
 import { prd } from './prd.js';
-import { slt } from './slt.js';
+import { rev } from './rev.js';
+import { refillRequestReason, refillRequestStatus, rfq } from './rfq.js';
+import { slt, storageCompensationStatus } from './slt.js';
 import { ui } from './ui.js';
 import { usr } from './usr.js';
 import { validation } from './validation.js';
@@ -24,6 +46,11 @@ export const vi = {
   validation,
   auth,
   mch,
+  alr,
+  alertSeverity,
+  alertStatus,
+  notificationStatus,
+  notificationChannel,
   slotStatus,
   machineStatus,
   machineOperatingMode,
@@ -33,11 +60,30 @@ export const vi = {
   revenueOwner,
   credentialStatus,
   statusSource,
+  commandStatus,
+  dispenseType,
+  brandPayoutStatus,
   bnd,
   prd,
   slt,
+  storageCompensationStatus,
   ord,
+  dsp,
+  rev,
   usr,
   ui,
   kiosk,
+  inv,
+  shipmentStatus,
+  authenticityStatus,
+  refillSessionStatus,
+  bottleStatus,
+  rfq,
+  refillRequestStatus,
+  refillRequestReason,
+  mnt,
+  ticketStatus,
+  ticketPriority,
+  exp,
+  bottleReturnMethod,
 } as const;

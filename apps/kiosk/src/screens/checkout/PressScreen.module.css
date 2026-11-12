@@ -1,0 +1,159 @@
+/*
+ * Hai tầng vừa khít phần dưới header ở 1280×800 lẫn 1024×600: tầng trên (vòng số nút + tiêu đề)
+ * cao --tier; ba thẻ bên dưới lấy chiều cao còn lại, nên khung hình 4:3 của thẻ tính ngược từ đó.
+ * 230px = lề trên dưới, khoảng cách hai tầng, phần chữ của thẻ (số bước, chú thích 2 dòng, padding).
+ */
+.page {
+  /* Đèn trên máy sáng liên tục (firmware không nháy) — vòng số nút "thở" theo nhịp này. */
+  --lamp-period: 1.6s;
+  --tier: clamp(150px, 30dvh, 240px);
+  --anim-h: calc(100dvh - var(--header-h) - var(--tier) - 230px);
+  --card-w: calc(var(--anim-h) * 4 / 3 + 2 * var(--sp-2));
+  --card-bg: color-mix(in srgb, var(--on-action) 8%, var(--action));
+
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--gutter);
+  background: var(--action);
+  color: var(--on-action);
+  animation: kiosk-enter var(--dur) var(--ease) both;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-5);
+  height: var(--tier);
+}
+
+.lamp {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: clamp(140px, 22vh, 180px);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+}
+
+.ring {
+  position: absolute;
+  inset: calc(-1 * var(--sp-1));
+  width: calc(100% + 2 * var(--sp-1));
+  height: calc(100% + 2 * var(--sp-1));
+  fill: none;
+  stroke: color-mix(in srgb, var(--on-action) 18%, transparent);
+  stroke-width: 1.5;
+  transform: rotate(-90deg);
+}
+
+.ringLeft {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 500ms linear;
+}
+
+.lampNo {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-serif);
+  font-size: clamp(72px, 12vh, 104px);
+  line-height: 1;
+  animation: lamp var(--lamp-period) ease-in-out infinite;
+}
+
+/* 10 giây cuối: nháy nhanh gấp đôi, vẫn màu đèn. */
+.hurry {
+  --lamp-period: 0.8s;
+}
+
+@keyframes lamp {
+  50% {
+    box-shadow: 0 0 0 var(--sp-2) color-mix(in srgb, var(--accent) 35%, transparent);
+    filter: brightness(1.15);
+  }
+}
+
+.copy {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(32px, 6dvh, 48px);
+  font-weight: 400;
+  line-height: var(--lh-tight);
+}
+
+.count {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.count strong {
+  font-size: clamp(28px, 5dvh, 40px);
+  font-weight: 500;
+}
+
+/* Ba thẻ ngang bằng nhau, tổng rộng tối đa ~1100px, thu theo chiều cao màn. */
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sp-3);
+  width: min(1100px, 100%, calc(3 * var(--card-w) + 2 * var(--sp-3)));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  opacity: 0.5;
+  transition:
+    opacity var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.card[data-active='true'] {
+  border-color: var(--accent);
+  opacity: 1;
+}
+
+.stepNo {
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Tối đa hai dòng — chuỗi tiếng Anh dài hơn vẫn giữ thẻ cùng chiều cao. */
+.caption {
+  min-height: calc(2em * var(--lh-body));
+  margin: 0;
+  font-size: var(--fs-small);
+  line-height: var(--lh-body);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lampNo {
+    animation: none;
+  }
+}

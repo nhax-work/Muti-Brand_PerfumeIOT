@@ -145,3 +145,14 @@ PayOS chỉ nhận chuyển khoản VietQR, nên khách không có tài khoản 
 
 Còn lại cho T7 (lộ trình): chốt chặn "máy dừng nhận đơn" dùng chung khi có phiếu nạp mở (FR-INV-30), `DRAINING`
 tự sang `MAINTENANCE` (FR-MNT-05), ép chuyển (FR-MNT-17).
+
+**2026-10-21 — hiện thực phần còn lại phía ORD/DSP (TV1, việc T7):**
+
+| FR | Hiện thực | Test |
+|---|---|---|
+| FR-MNT-06, FR-INV-30 | `ord/sales-stop.ts` dùng chung: tạo đơn khi máy DRAINING/MAINTENANCE/DISABLED hoặc có `refill_sessions` STARTED → `MACHINE_IN_MAINTENANCE`; `listArmableOrders` ghi lệnh cho đơn chờ lượt khi máy NORMAL hoặc DRAINING và không có phiếu nạp mở | `test_safe_stop.test.ts` (`test_FR_MNT_06_*`, `test_FR_INV_30_*`) |
+| FR-MNT-05, 07 | `DspService.completeDraining` trong nhịp DSP: máy DRAINING hết lệnh CUSTOMER hiệu lực, đơn chờ thanh toán, đơn chờ lượt → MAINTENANCE, lịch sử nguồn `SYSTEM`, thông báo Brand Admin có slot trên máy, AuditLog `dsp.machine.draining_completed`; quét theo trạng thái nên bù được sau downtime | `test_safe_stop.test.ts` (`test_FR_MNT_05_*`, 3 test) |
+| `mqtt.md` §7 | `deviceOperatingMode`: máy DRAINING gửi NORMAL xuống thiết bị; heartbeat so theo giá trị đã quy đổi | `iot-messages.test.ts` |
+
+Còn lại thuộc TV4: `PUT /machines/{id}/mode` đưa máy vào DRAINING, ép chuyển kèm lý do (FR-MNT-17), mở phiếu
+nạp (FR-INV-29, 32). Test của TV1 đặt DRAINING và phiếu nạp thẳng vào CSDL.

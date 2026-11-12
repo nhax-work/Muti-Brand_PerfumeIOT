@@ -21,7 +21,6 @@ export const TelemetryMessage = Common.extend({
       z.object({
         slot_number: z.number().int().positive(),
         actuator_status: z.enum(['IDLE', 'RUNNING', 'FAULT']),
-        load_cell_g: z.number().finite().optional(),
         estimated_remaining_ml: z.number().finite().nonnegative().optional(),
       }),
     )

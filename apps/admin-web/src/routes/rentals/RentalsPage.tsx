@@ -9,6 +9,8 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { useBrands } from '@/routes/machines/api';
+import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { useSlotRentals, type RentalInvoiceStage, type SlotRental } from './api';
 
@@ -28,6 +30,12 @@ const STAGE_TAGS: Record<RentalInvoiceStage, { color: string; labelKey: string }
 export default function RentalsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  // Super Admin xem hóa đơn của mọi thương hiệu; thuê slot và thanh toán là việc của Brand Admin.
+  const isBrandAdmin = user?.roles.includes('BRAND_ADMIN') ?? false;
+  const { data: brandsData } = useBrands(!isBrandAdmin);
+  const brandName = (brandId: string) =>
+    brandsData?.items.find((b) => b.id === brandId)?.name ?? brandId.slice(0, 8);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -42,7 +50,19 @@ export default function RentalsPage() {
   const rentals = data?.items ?? [];
   const total = data?.meta?.total ?? 0;
 
+  const brandColumn: ColumnsType<SlotRental> = isBrandAdmin
+    ? []
+    : [
+        {
+          title: t('ui.rentalBrandColumn'),
+          dataIndex: 'brandId',
+          key: 'brandId',
+          render: (brandId: string) => <Text>{brandName(brandId)}</Text>,
+        },
+      ];
+
   const columns: ColumnsType<SlotRental> = [
+    ...brandColumn,
     {
       title: t('ui.invoiceNumber'),
       dataIndex: 'invoiceNumber',
@@ -54,7 +74,7 @@ export default function RentalsPage() {
           </Text>
           {record.checkoutId && (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Phiên: {record.checkoutId.slice(0, 8)}...
+              {t('ui.checkoutSessionShort', { id: record.checkoutId.slice(0, 8) })}
             </Text>
           )}
         </Space>
@@ -64,9 +84,14 @@ export default function RentalsPage() {
       title: t('ui.rentalStage'),
       dataIndex: 'stage',
       key: 'stage',
-      render: (stage: RentalInvoiceStage) => {
+      render: (stage: RentalInvoiceStage, record) => {
         const config = STAGE_TAGS[stage] || { color: 'default', labelKey: stage };
-        return <Tag color={config.color}>{t(config.labelKey as never)}</Tag>;
+        return (
+          <Space>
+            <Tag color={config.color}>{t(config.labelKey as never)}</Tag>
+            {record.nonRenewalRequestedAt && <Tag color="orange">{t('ui.nonRenewingTag')}</Tag>}
+          </Space>
+        );
       },
     },
     {
@@ -85,11 +110,11 @@ export default function RentalsPage() {
       render: (_, record) => (
         <Space direction="vertical" size={2}>
           <Text style={{ fontSize: 13 }}>
-            {record.durationMonths ? `${record.durationMonths} tháng` : '-'}
+            {record.durationMonths ? t('ui.monthsCount', { months: record.durationMonths }) : '-'}
           </Text>
           {record.paidAt && (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Thanh toán: {new Date(record.paidAt).toLocaleDateString('vi-VN')}
+              {t('ui.paidOnDate', { date: new Date(record.paidAt).toLocaleDateString('vi-VN') })}
             </Text>
           )}
         </Space>
@@ -107,7 +132,7 @@ export default function RentalsPage() {
       title: t('ui.actions'),
       key: 'actions',
       render: (_, record) => {
-        if (record.stage === 'AWAITING_PAYMENT' && record.checkoutId) {
+        if (isBrandAdmin && record.stage === 'AWAITING_PAYMENT' && record.checkoutId) {
           return (
             <Button
               type="primary"
@@ -133,7 +158,7 @@ export default function RentalsPage() {
   ];
 
   return (
-    <RequireRole allow={['BRAND_ADMIN']}>
+    <RequireRole allow={['BRAND_ADMIN', 'PLATFORM_SUPER_ADMIN']}>
       <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
         <div
           style={{
@@ -150,13 +175,15 @@ export default function RentalsPage() {
             </Title>
           </div>
           <Space>
-            <Button
-              type="primary"
-              icon={<AppstoreAddOutlined />}
-              onClick={() => void navigate('/rentals/available')}
-            >
-              {t('ui.rentNewSlot')}
-            </Button>
+            {isBrandAdmin && (
+              <Button
+                type="primary"
+                icon={<AppstoreAddOutlined />}
+                onClick={() => void navigate('/rentals/available')}
+              >
+                {t('ui.rentNewSlot')}
+              </Button>
+            )}
             <Button icon={<ReloadOutlined />} onClick={() => void refetch()} />
           </Space>
         </div>

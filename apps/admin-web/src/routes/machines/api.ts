@@ -13,6 +13,8 @@ export type Location = components['schemas']['Location'];
 export type SlotRental = components['schemas']['SlotRental'];
 export type Brand = components['schemas']['Brand'];
 export type Product = components['schemas']['Product'];
+export type SensorReading = components['schemas']['SensorReading'];
+export type DeviceEvent = components['schemas']['DeviceEvent'];
 
 export interface MachineFilterParams {
   readonly page?: number;
@@ -27,8 +29,8 @@ export function useMachines(params: MachineFilterParams = {}) {
   const { page = 1, pageSize = 20, locationId, status, operatingMode } = params;
   return useQuery({
     queryKey: ['machines', { page, pageSize, locationId, status, operatingMode }],
-    queryFn: () =>
-      unwrap(
+    queryFn: async () => {
+      const res = await unwrap(
         api.GET('/machines', {
           params: {
             query: {
@@ -40,7 +42,12 @@ export function useMachines(params: MachineFilterParams = {}) {
             },
           },
         }),
-      ),
+      );
+      return res as unknown as {
+        items: Machine[];
+        meta: { page: number; pageSize: number; total: number };
+      };
+    },
   });
 }
 
@@ -62,12 +69,14 @@ export function useLocations() {
 export function useMachine(id: string | undefined) {
   return useQuery({
     queryKey: ['machine', id],
-    queryFn: () =>
-      unwrap(
+    queryFn: async () => {
+      const res = await unwrap(
         api.GET('/machines/{id}', {
           params: { path: { id: id! } },
         }),
-      ),
+      );
+      return res as Machine;
+    },
     enabled: Boolean(id),
   });
 }
@@ -112,10 +121,14 @@ export function useMachineRentals(machineId: string | undefined) {
   });
 }
 
-/** Danh sách thương hiệu để tra cứu tên thương hiệu đang thuê slot (FR-BND-07). */
-export function useBrands() {
+/**
+ * Danh sách thương hiệu để tra cứu tên thương hiệu đang thuê slot (FR-BND-07). Chỉ nhân sự nền tảng
+ * đọc được; màn hình dùng chung với Brand Admin truyền `enabled = false` cho họ.
+ */
+export function useBrands(enabled = true) {
   return useQuery({
     queryKey: ['brands'],
+    enabled,
     queryFn: async () => {
       try {
         return await unwrap(
@@ -160,10 +173,12 @@ export function useSetMachineMode() {
       id,
       operatingMode,
       reason,
+      force,
     }: {
       id: string;
       operatingMode: MachineOperatingMode;
       reason?: string;
+      force?: boolean;
     }) => {
       const reauthToken = await requestReauth();
       return unwrap(
@@ -172,13 +187,32 @@ export function useSetMachineMode() {
             path: { id },
             header: { 'X-Reauth-Token': reauthToken },
           },
-          body: { operatingMode, reason },
+          body: { operatingMode, reason, force },
         }),
       );
     },
     onSuccess: (_, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['machine', id] });
       void queryClient.invalidateQueries({ queryKey: ['machines'] });
+    },
+  });
+}
+
+/**
+ * Lượt xịt chẩn đoán (FR-MNT-09) — cần xác thực lại. Máy chủ trả 202 khi đã ghi lệnh; kết quả từ
+ * thiết bị về sau, xem ở màn Lệnh xịt.
+ */
+export function useDiagnosticDispense() {
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (input: { machineId: string; slotId: string; note?: string }) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/diagnostic-dispense', {
+          params: { path: { id: input.machineId }, header: { 'X-Reauth-Token': reauthToken } },
+          body: { slotId: input.slotId, ...(input.note ? { note: input.note } : {}) },
+        }),
+      );
     },
   });
 }
@@ -323,5 +357,55 @@ export function useMachineStatusHistory(machineId: string | undefined, page: num
         }),
       ),
     enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-04: số đo cảm biến của máy, mới nhất trước. */
+export function useSensorReadings(
+  machineId: string | undefined,
+  params: { page: number; slotId?: string; readingType?: string },
+) {
+  return useQuery({
+    queryKey: ['machine-sensor-readings', machineId, params],
+    queryFn: () =>
+      unwrap(
+        api.GET('/machines/{id}/sensor-readings', {
+          params: { path: { id: machineId! }, query: { ...params, pageSize: 20 } },
+        }),
+      ),
+    enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-05: sự kiện thiết bị (khởi động, kết nối lại, lỗi…), mới nhất trước. */
+export function useDeviceEvents(machineId: string | undefined, page: number) {
+  return useQuery({
+    queryKey: ['machine-device-events', machineId, page],
+    queryFn: () =>
+      unwrap(
+        api.GET('/machines/{id}/device-events', {
+          params: { path: { id: machineId! }, query: { page, pageSize: 20 } },
+        }),
+      ),
+    enabled: Boolean(machineId),
+  });
+}
+
+/** FR-IOT-06: đẩy lại cấu hình xuống thiết bị — đổi cấu hình máy nên cần xác thực lại. */
+export function usePushMachineConfig() {
+  const queryClient = useQueryClient();
+  const requestReauth = useReauth();
+  return useMutation({
+    mutationFn: async (machineId: string) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/machines/{id}/config/push', {
+          params: { path: { id: machineId }, header: { 'X-Reauth-Token': reauthToken } },
+        }),
+      );
+    },
+    onSuccess: (machine) => {
+      queryClient.setQueryData(['machine', machine.id], machine);
+    },
   });
 }

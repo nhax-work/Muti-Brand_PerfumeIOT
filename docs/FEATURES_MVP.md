@@ -82,7 +82,7 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
-| F-INVS-01 | Nạp/tháo/điều chỉnh nước hoa tại máy | FR-INV-01, 02, 05, 13, 14, 15, 16 | 7 | Tạo lô nước hoa, đăng ký chai, ghi khối lượng ban đầu khi lắp, hoàn thành checklist nạp, quy trình tháo chai trả kho, điều chỉnh tồn kho kèm lý do bắt buộc. |
+| F-INVS-01 | Nạp/tháo/điều chỉnh nước hoa tại máy | FR-INV-01, 02, 05, 13, 14, 15, 16 | 7 | Tạo lô nước hoa, đăng ký chai kèm dung tích ban đầu, hoàn thành checklist nạp, quy trình tháo chai trả kho, điều chỉnh tồn kho kèm lý do bắt buộc. |
 | F-INVS-02 | Xử lý & hoàn tất yêu cầu bổ sung | FR-RFQ-08, 09 | 2 | Liên kết yêu cầu bổ sung với phiên nạp thực tế; yêu cầu tự chuyển COMPLETED khi phiên nạp kết thúc thành công. |
 
 ## 7. Thiết bị (Firmware)
@@ -90,7 +90,7 @@ Nguồn: **214 FR mức M**, trải trên 17 module (AUTH, BND, USR, PRD, MCH, S
 | Mã | Feature | FR nguồn | Số FR | Mô tả |
 |---|---|---|---|---|
 | F-DEV-01 | Thực thi lệnh xịt an toàn | FR-DSP-07…16 | 10 | Xác minh chữ ký lệnh, từ chối lệnh hết hạn/sai máy/trùng mã, từ chối khi cửa mở/đang MAINTENANCE/slot rỗng, kích hoạt đúng cơ cấu slot đích, gửi xác nhận tiếp nhận và kết quả thực hiện. |
-| F-DEV-02 | Giao tiếp & báo cáo trạng thái thiết bị | FR-IOT-01, 04, 05, 10, 11, 13 | 6 | Gửi heartbeat định kỳ, telemetry (khối lượng, cửa, cơ cấu, nguồn điện), sự kiện vận hành, lưu tạm & gửi lại khi mất kết nối, hiển thị trạng thái tạm ngưng trên kiosk khi mất liên lạc. |
+| F-DEV-02 | Giao tiếp & báo cáo trạng thái thiết bị | FR-IOT-01, 04, 05, 10, 11, 13 | 6 | Gửi heartbeat định kỳ, telemetry (cửa, cơ cấu, nguồn điện), sự kiện vận hành, lưu tạm & gửi lại khi mất kết nối, hiển thị trạng thái tạm ngưng trên kiosk khi mất liên lạc. |
 
 ## 8. Hệ thống (engine nghiệp vụ chạy nền)
 
@@ -105,7 +105,7 @@ Nhóm này không có màn hình thao tác riêng — là logic backend bắt bu
 | F-SYS-05 | Sinh bảng đối soát doanh thu kỳ | FR-SLT-17, 18 | 2 | Gộp toàn bộ hóa đơn của một thương hiệu trong kỳ, tính doanh thu lượt xịt phải chuyển trả (không còn phí thuê/ăn chia — ADR-0006). |
 | F-SYS-06 | Quy trình tự động ân hạn, gia hạn & thanh lý | FR-EXP-01…06, 08, 09, 13…17, 19…22 | 17 | Thông báo T-7/T-3, chuyển trạng thái EXPIRING→GRACE→LIQUIDATED, chuyển quyền sở hữu chai khi thanh lý, ghi audit toàn bộ sự kiện. |
 | F-SYS-07 | Phân tách & gán chủ sở hữu doanh thu | FR-REV-01, 02, 03, 05, 06 | 5 | Gán BRAND/PLATFORM cho từng đơn hàng tại thời điểm tạo, giữ nguyên dù quyền sở hữu tồn kho đổi sau đó. |
-| F-SYS-08 | Theo dõi & cảnh báo tồn kho tự động | FR-INV-03, 04, 06, 07, 08, 09, 10, 11, 12, 17 | 10 | Ước tính lượng còn lại, cập nhật sau mỗi lượt xịt, sinh cảnh báo sắp hết/rò rỉ, chặn gán chai hết hạn/sai thương hiệu, chuyển slot UNAVAILABLE khi cạn. |
+| F-SYS-08 | Theo dõi & cảnh báo tồn kho tự động | FR-INV-03, 04, 06, 07, 08, 09, 10, 11, 12, 17 | 10 | Ước tính lượng còn lại, cập nhật sau mỗi lượt xịt, sinh cảnh báo sắp hết/hết hàng, chặn gán chai hết hạn/sai thương hiệu, chuyển slot UNAVAILABLE khi cạn. |
 | F-SYS-09 | Quản lý vòng đời yêu cầu bổ sung | FR-RFQ-04, 05, 11, 12 | 4 | State machine SUBMITTED→…→COMPLETED, thông báo Platform/Inventory Staff, chặn tạo trùng yêu cầu trên cùng slot. |
 | F-SYS-10 | Xử lý đơn hàng & webhook thanh toán | FR-ORD-04, 05, 06, 07, 09, 10, 12…19 | 14 | Kiểm tra điều kiện tạo đơn, lưu snapshot giá/slot/hóa đơn, sinh mã tham chiếu, xác minh chữ ký & idempotency webhook, state machine đơn hàng, xử lý hết hạn/refund flag. |
 | F-SYS-11 | Sinh & ký lệnh xịt | FR-DSP-01…06, 17…20 | 10 | Chỉ tạo lệnh sau khi PAID, ký số, giới hạn 1 lệnh active/đơn, timeout 60s, chuyển DISPENSED/UNKNOWN theo kết quả thiết bị, tách riêng lượt xịt chẩn đoán. |

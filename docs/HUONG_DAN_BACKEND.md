@@ -127,8 +127,8 @@ Phân quyền dựa trên **mã quyền** trong bảng `permissions`, không d�
 liệu, đổi được mà không đổi code. Danh sách quyền hiện có ở `scripts/seed.ts` (`PERMISSIONS`). Cần
 quyền mới thì thêm vào seed và gán cho đúng vai trò.
 
-**`@RequireReauth()` phải gắn trên đúng 9 endpoint** mà `openapi.yaml` khai báo header
-`X-Reauth-Token`: hoàn tiền, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý, và 5 endpoint đổi cấu hình
+**`@RequireReauth()` phải gắn trên đúng các endpoint** mà `openapi.yaml` khai báo header
+`X-Reauth-Token` (16 endpoint): hoàn tiền và chi trả, điều chỉnh tồn kho, xịt chẩn đoán, thanh lý, 5 endpoint đổi cấu hình
 máy. Danh sách đầy đủ ở `spec/modules/AUTH.md` FR-AUTH-09 AC4.
 
 ---

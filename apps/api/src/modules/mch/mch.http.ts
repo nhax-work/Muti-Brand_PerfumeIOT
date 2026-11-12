@@ -23,9 +23,11 @@ import {
   RequireReauth,
   type AuthenticatedUser,
 } from '../auth/index.js';
+import { MachineModeService } from './machine-mode.service.js';
 import { MchService } from './mch.service.js';
 
 const MACHINE_MANAGE = 'machine.manage';
+const MACHINE_VIEW = 'machine.view';
 const MACHINE_OPERATE = 'machine.operate';
 const RENTAL_REQUEST = 'rental.request';
 
@@ -65,6 +67,7 @@ export class LocationsController {
 
   /** FR-MCH-03: Danh sách địa điểm */
   @Get()
+  @RequirePermissions(MACHINE_VIEW)
   async list(@Query() query: unknown) {
     const filter = parseBody(LocationListQuery, query);
     const { items, total } = await this.mch.listLocations(filter);
@@ -81,6 +84,7 @@ export class LocationsController {
 
   /** Chi tiết địa điểm */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getLocation(parseBody(IdParam, id));
   }
@@ -118,23 +122,28 @@ const MachineUpdateBody = z.object({
 });
 
 const MachineModeBody = z.object({
-  operatingMode: z.enum(['NORMAL', 'MAINTENANCE', 'DISABLED']),
+  operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']),
   reason: z.string().optional(),
+  force: z.boolean().optional(),
 });
 
 const MachineListQuery = PageQuery.extend({
   locationId: z.string().uuid().optional(),
   status: z.enum(['ONLINE', 'UNSTABLE', 'OFFLINE']).optional(),
-  operatingMode: z.enum(['NORMAL', 'MAINTENANCE', 'DISABLED']).optional(),
+  operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']).optional(),
 });
 
 @Controller('machines')
 @RequirePermissions(MACHINE_MANAGE)
 export class MachinesController {
-  constructor(@Inject(MchService) private readonly mch: MchService) {}
+  constructor(
+    @Inject(MchService) private readonly mch: MchService,
+    @Inject(MachineModeService) private readonly machineMode: MachineModeService,
+  ) {}
 
   /** FR-MCH-08..10: Danh sách máy */
   @Get()
+  @RequirePermissions(MACHINE_VIEW)
   async list(@Query() query: unknown) {
     const filter = parseBody(MachineListQuery, query);
     const { items, total } = await this.mch.listMachines(filter);
@@ -151,6 +160,7 @@ export class MachinesController {
 
   /** FR-MCH-08..10: Chi tiết máy */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getMachine(parseBody(IdParam, id));
   }
@@ -163,31 +173,33 @@ export class MachinesController {
     return this.mch.updateMachine(validatedId, input);
   }
 
-  /** FR-MCH-11, FR-MNT-05: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */
+  /** FR-MCH-11, FR-MNT-05, FR-MNT-17: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */
   @Put(':id/mode')
   @RequirePermissions(MACHINE_OPERATE)
   @RequireReauth()
   setMode(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string, @Body() body: unknown) {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(MachineModeBody, body);
-    return this.mch.setMachineMode(actor, validatedId, input);
+    return this.machineMode.setMode(actor, validatedId, input);
   }
 
   /** Xóa mềm máy (chuyển sang DISABLED) */
   @Delete(':id')
   softDelete(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     const validatedId = parseBody(IdParam, id);
-    return this.mch.softDeleteMachine(actor, validatedId);
+    return this.machineMode.softDelete(actor, validatedId);
   }
 
   /** FR-MCH-15..17: Danh sách slots của máy */
   @Get(':id/slots')
+  @RequirePermissions(MACHINE_VIEW)
   listSlots(@Param('id') id: string) {
     return this.mch.listSlotsByMachine(parseBody(IdParam, id));
   }
 
   /** FR-MCH-13: Lịch sử chuyển trạng thái kết nối và chế độ hoạt động của máy. */
   @Get(':id/status-history')
+  @RequirePermissions(MACHINE_VIEW)
   async listStatusHistory(@Param('id') id: string, @Query() query: unknown) {
     const validatedId = parseBody(IdParam, id);
     const filter = parseBody(PageQuery, query);
@@ -265,6 +277,7 @@ export class SlotsController {
 
   /** Chi tiết một slot */
   @Get(':id')
+  @RequirePermissions(MACHINE_VIEW)
   get(@Param('id') id: string) {
     return this.mch.getSlot(parseBody(IdParam, id));
   }

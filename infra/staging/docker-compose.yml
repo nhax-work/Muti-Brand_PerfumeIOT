@@ -1,0 +1,98 @@
+# Môi trường staging ScentStation trên một VM (NFR-MTN-03: dựng bằng một lệnh docker compose).
+#
+# Không chạy trực tiếp file này — dùng infra/staging/deploy.sh, script đó truyền đúng --env-file.
+# Biến ${...} lấy từ $SECRETS_DIR/compose.env; bí mật của backend nằm trong $SECRETS_DIR/api.env.
+# Cả hai file nằm NGOÀI repo (mặc định /opt/scentstation/secrets), tạo bằng init-secrets.sh.
+
+name: scentstation-staging
+
+services:
+  db:
+    image: postgres:16.6-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      TZ: UTC
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Chỉ nghe trên 127.0.0.1 của VM — internet không tới được. DBeaver/pgAdmin trên laptop vào qua
+    # đường hầm SSH (docs/DEPLOY_STAGING.md mục 5).
+    ports:
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER} -d ${DB_NAME}']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mqtt:
+    image: eclipse-mosquitto:2.0.20
+    restart: unless-stopped
+    init: true
+    entrypoint: ['/bin/sh', '/staging/start.sh']
+    environment:
+      MQTT_PUBLIC_HOST: ${MQTT_HOST}
+    ports:
+      - '8883:8883'
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/start.sh:/staging/start.sh:ro
+      - ${SECRETS_DIR}/mosquitto:/mosquitto/secrets
+      - mqtt_data:/mosquitto/data
+      - caddy_data:/caddy-data:ro
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/staging/api.Dockerfile
+    image: scentstation-staging-api
+    restart: unless-stopped
+    init: true
+    env_file: ${SECRETS_DIR}/api.env
+    environment:
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      MQTT_URL: mqtt://scent-backend:${MQTT_BACKEND_PASSWORD}@mqtt:1883
+      PORT: '3000'
+      MEDIA_DIR: /data/media
+      ADMIN_WEB_BASE_URL: https://${ADMIN_HOST}
+    volumes:
+      - media:/data/media
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/staging/web.Dockerfile
+      args:
+        VITE_CLAIM_PAGE_URL: https://${ADMIN_HOST}/claim
+        VITE_SUPPORT_CONTACT: ${SUPPORT_CONTACT:-}
+    image: scentstation-staging-web
+    restart: unless-stopped
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+      APEX_HOST: ${APEX_HOST}
+      ADMIN_HOST: ${ADMIN_HOST}
+      KIOSK_HOST: ${KIOSK_HOST}
+      API_HOST: ${API_HOST}
+      MQTT_HOST: ${MQTT_HOST}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  db_data:
+  mqtt_data:
+  media:
+  caddy_data:
+  caddy_config:

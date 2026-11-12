@@ -100,3 +100,35 @@ describe('Device Simulator — kịch bản lỗi (ADR-0015)', () => {
     for (let i = 0; i < 5; i++) expect(dispense()).toMatchObject({ success: false });
   });
 });
+
+describe('Device Simulator — lệnh chẩn đoán (ADR-0007)', () => {
+  it('test_FR_DSP_27_diagnostic_dispenses_immediately', () => {
+    const clock = new ManualClock();
+    const stages: { stage: string; success?: boolean; pressed_at?: string }[] = [];
+    const machine = new SimulatedMachine({
+      serial: 'M001',
+      verifier: ANY_SIGNATURE,
+      clock,
+      log: () => undefined,
+      // Không ai bấm nút: lệnh CUSTOMER sẽ treo tới PRESS_TIMEOUT, lệnh chẩn đoán thì không.
+      behavior: { pressWindowSec: 60, pressAfterMs: null },
+      publish: (topic, payload) => {
+        if (topic.endsWith('/command/result')) stages.push(JSON.parse(payload) as never);
+      },
+    });
+    machine.onCommand(
+      JSON.stringify({
+        machine_serial: 'M001',
+        command_token: 'cmd_diag',
+        dispense_type: 'DIAGNOSTIC',
+        slot_number: 2,
+        expires_at: new Date(clock.now() + 60_000).toISOString(),
+        signature: 'x',
+      }),
+    );
+    // Đồng hồ chưa chạy giây nào: ACK rồi RESULT thành công ngay, không có mốc bấm nút.
+    expect(stages.map((s) => s.stage)).toEqual(['ACK', 'RESULT']);
+    expect(stages[1]).toMatchObject({ success: true });
+    expect(stages[1]).not.toHaveProperty('pressed_at');
+  });
+});

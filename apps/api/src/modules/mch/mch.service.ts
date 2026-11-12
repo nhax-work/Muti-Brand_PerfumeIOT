@@ -65,6 +65,7 @@ function toMachineDto(r: MachineRecord): MachineDto {
     firmwareVersion: r.firmwareVersion,
     configurationVersion: r.configurationVersion,
     slotCount: r.slotCount,
+    ...(r.drainingOrdersCount !== undefined ? { drainingOrdersCount: r.drainingOrdersCount } : {}),
   };
 }
 
@@ -217,7 +218,16 @@ export class MchService {
 
   async listMachines(filter: MachineFilter): Promise<{ items: MachineDto[]; total: number }> {
     const { items, total } = await this.queries.listMachines(filter);
-    return { items: items.map(toMachineDto), total };
+    const enriched = await Promise.all(
+      items.map(async (m) => {
+        if (m.operatingMode === 'DRAINING') {
+          const pendingCount = await this.queries.countPendingOrdersAndCommands(m.id);
+          return toMachineDto({ ...m, drainingOrdersCount: pendingCount });
+        }
+        return toMachineDto(m);
+      }),
+    );
+    return { items: enriched, total };
   }
 
   async getMachine(id: string): Promise<MachineDto> {
@@ -225,6 +235,12 @@ export class MchService {
     if (!record) {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
+
+    if (record.operatingMode === 'DRAINING') {
+      const pendingCount = await this.queries.countPendingOrdersAndCommands(id);
+      return toMachineDto({ ...record, drainingOrdersCount: pendingCount });
+    }
+
     return toMachineDto(record);
   }
 
@@ -280,58 +296,6 @@ export class MchService {
       throw new AppError('NOT_FOUND', 'mch.machineNotFound');
     }
     return toMachineDto(updated);
-  }
-
-  /**
-   * Đổi chế độ hoạt động của máy (FR-MCH-11, FR-MNT-05, FR-MNT-12).
-   */
-  async setMachineMode(
-    actor: AuthenticatedUser,
-    id: string,
-    input: MachineModeUpdateInput,
-  ): Promise<MachineDto> {
-    const machine = await this.queries.findMachineById(id);
-    if (!machine) {
-      throw new AppError('NOT_FOUND', 'mch.machineNotFound');
-    }
-
-    const updated = await this.queries.updateMachineMode(
-      id,
-      input.operatingMode,
-      input.reason,
-      actor.userId,
-    );
-    if (!updated) {
-      throw new AppError('NOT_FOUND', 'mch.machineNotFound');
-    }
-
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      action: 'mch.machine.mode_changed',
-      targetType: 'machine',
-      targetId: id,
-      // Tắt máy hoặc đưa vào bảo trì ảnh hưởng mọi thương hiệu có slot trên máy.
-      severity: input.operatingMode === 'NORMAL' ? 'INFO' : 'WARNING',
-      before: { operatingMode: machine.operatingMode },
-      after: { operatingMode: updated.operatingMode },
-      metadata: { reason: input.reason ?? null },
-    });
-    return toMachineDto(updated);
-  }
-
-  /**
-   * Xóa mềm máy: chuyển operating_mode sang DISABLED.
-   */
-  async softDeleteMachine(
-    actor: AuthenticatedUser,
-    id: string,
-    reason?: string,
-  ): Promise<MachineDto> {
-    return this.setMachineMode(actor, id, {
-      operatingMode: 'DISABLED',
-      reason: reason ?? 'Xóa mềm máy',
-    });
   }
 
   // =========================================================================

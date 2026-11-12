@@ -6,8 +6,11 @@
  */
 
 import { Global, Inject, Injectable, Module } from '@nestjs/common';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Transaction } from 'kysely';
 import type { DB } from '../../shared/db/index.js';
+import { AuditService } from '../../shared/audit/index.js';
+import { AlrService } from '../alr/index.js';
 import {
   RENTAL_CHECKOUT_PAYMENT_HANDLER,
   type CheckoutPaymentOutcome,
@@ -19,7 +22,11 @@ import { SltQueries } from './slt.queries.js';
 
 @Injectable()
 export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
-  constructor(@Inject(SltQueries) private readonly queries: SltQueries) {}
+  constructor(
+    @Inject(SltQueries) private readonly queries: SltQueries,
+    @Inject(AlrService) private readonly alr: AlrService,
+    @Inject(AuditService) private readonly audit: AuditService,
+  ) {}
 
   async onPaymentSucceeded(
     tx: Transaction<DB>,
@@ -54,29 +61,75 @@ export class SltCheckoutPaymentHandler implements RentalCheckoutPaymentHandler {
       const invoiceNumber = newInvoiceNumber(event.paidAt, 'Asia/Ho_Chi_Minh');
       invoiceNumbers.push(invoiceNumber);
       await this.queries.markRentalPaid(r.id, event.paidAt, invoiceNumber, tx);
+
+      // FR-SLT-12 AC3, FR-EXP-13 AC1: Gia hạn trong ân hạn:
+      // Trong cùng transaction H1 -> RENEWED, H2 -> ACTIVE với starts_at = t, ends_at = t + duration_months, dừng tính phí ân hạn.
+      if (r.previousRentalId) {
+        const h1 = await this.queries.findById({ kind: 'UNRESTRICTED' }, r.previousRentalId);
+        if (h1 && h1.status === 'GRACE') {
+          const duration = r.durationMonths ?? 1;
+          const startsAt = event.paidAt;
+          const endsAt = new Date(startsAt);
+          endsAt.setMonth(endsAt.getMonth() + duration);
+
+          await this.queries.transitionToRenewed(h1.id, r.id, startsAt, endsAt, event.paidAt, tx);
+
+          await this.audit.log(
+            {
+              actorType: 'SYSTEM',
+              action: 'slt.rental.renewed',
+              targetType: 'SlotRental',
+              targetId: h1.id,
+              before: { id: h1.id, status: h1.status },
+              after: { id: h1.id, status: 'RENEWED' },
+            },
+            tx,
+          );
+
+          await this.audit.log(
+            {
+              actorType: 'SYSTEM',
+              action: 'slt.rental.activated',
+              targetType: 'SlotRental',
+              targetId: r.id,
+              before: { id: r.id, status: 'DRAFT' },
+              after: { id: r.id, status: 'ACTIVE', startsAt, endsAt },
+            },
+            tx,
+          );
+
+          const renewParams = {
+            invoiceNumber,
+            startsAt: startsAt.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+            endsAt: endsAt.toLocaleDateString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+          };
+          await this.alr.notifyBrandAdmins(tx, {
+            brandId: event.brandId,
+            type: 'RENTAL_ACTIVE',
+            subject: translate(DEFAULT_LOCALE, 'slt.rentalActivatedSubject', { invoiceNumber }),
+            content: translate(DEFAULT_LOCALE, 'slt.rentalActivatedContent', renewParams),
+            referenceId: r.id,
+            at: event.receivedAt,
+          });
+        }
+      }
     }
 
-    // 6. Thông báo FR-SLT-43 AC1: một bản ghi cho mỗi Brand Admin đang hoạt động của thương hiệu.
-    const brandAdminIds = await this.queries.findActiveBrandAdminIds(event.brandId, tx);
-    const invoiceListText = invoiceNumbers.join(', ');
-    const notificationContent = `Thanh toán thành công cho phiên thuê slot. Mã hóa đơn: ${invoiceListText}. Vui lòng gửi hàng và cấu hình slot cho các chai nước hoa.`;
-    const notificationSubject = `Xác nhận thanh toán thuê slot (${invoiceListText})`;
-
-    for (const adminId of brandAdminIds) {
-      await this.queries.insertNotification(
-        {
-          brandId: event.brandId,
-          recipientUserId: adminId,
-          type: 'RENTAL_CHECKOUT_PAID',
-          channel: 'IN_APP',
-          subject: notificationSubject,
-          content: notificationContent,
-          status: 'PENDING',
-          createdAt: event.receivedAt,
-        },
-        tx,
-      );
-    }
+    // 5. FR-SLT-43 AC1, FR-ALR-16: mỗi Brand Admin ACTIVE một thông báo trong ứng dụng và một email.
+    //    Email chỉ XẾP HÀNG ở đây; job ALR gửi sau khi webhook commit — không gọi mạng trong tx này.
+    const params = {
+      invoices: invoiceNumbers.join(', '),
+      checkout: event.checkoutId,
+      paidAt: event.paidAt.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    };
+    await this.alr.notifyBrandAdmins(tx, {
+      brandId: event.brandId,
+      type: 'RENTAL_CHECKOUT_PAID',
+      subject: translate(DEFAULT_LOCALE, 'slt.checkoutPaidSubject', params),
+      content: translate(DEFAULT_LOCALE, 'slt.checkoutPaidContent', params),
+      referenceId: event.checkoutId,
+      at: event.receivedAt,
+    });
 
     return { kind: 'PAID' };
   }

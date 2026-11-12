@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Alert,
@@ -23,7 +23,9 @@ import {
   ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
-import { errorMessage } from '@/shared/api';
+import { FrameworkAgreementModal } from '@/shared/agreement';
+import { ApiRequestError, errorMessage } from '@/shared/api';
+import { useResendVerification } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { useAvailableSlots, useCreateCheckout, useRentalQuote, type AvailableSlot } from './api';
 
@@ -47,6 +49,23 @@ function SlotQuoteSelector({
 }) {
   const { t } = useI18n();
   const { data: quote, isLoading } = useRentalQuote(slot.slotId);
+
+  useEffect(() => {
+    if (quote && (!config.rentalPackageId || !config.storagePlanId)) {
+      const defaultPkg = config.rentalPackageId ?? quote.packages[0]?.rentalPackageId;
+      const defaultPlan = config.storagePlanId ?? quote.storagePlans[0]?.id;
+      const pkg = quote.packages.find((p) => p.rentalPackageId === defaultPkg);
+      const plan = quote.storagePlans.find((p) => p.id === defaultPlan);
+      const rent = pkg ? Number(pkg.rentAmount) : 0;
+      const storage = plan && pkg ? Number(plan.monthlyPrice) * pkg.durationMonths : 0;
+      onChange({
+        ...config,
+        rentalPackageId: defaultPkg,
+        storagePlanId: defaultPlan,
+        estimatedTotal: rent + storage,
+      });
+    }
+  }, [quote, config.rentalPackageId, config.storagePlanId]);
 
   if (isLoading) {
     return <Spin size="small" />;
@@ -149,10 +168,14 @@ export default function AvailableSlotsPage() {
   const navigate = useNavigate();
   const { data, isLoading, error, refetch } = useAvailableSlots({ pageSize: 50 });
   const createCheckout = useCreateCheckout();
+  const resendVerification = useResendVerification();
 
   const [selectedConfigs, setSelectedConfigs] = useState<Map<string, SelectedSlotConfig>>(
     new Map(),
   );
+  const [isAgreementModalOpen, setIsAgreementModalOpen] = useState(false);
+  const [unverifiedEmailAlert, setUnverifiedEmailAlert] = useState(false);
+  const [holdLimitAlert, setHoldLimitAlert] = useState(false);
 
   const slots = data?.items ?? [];
 
@@ -170,6 +193,15 @@ export default function AvailableSlotsPage() {
     const next = new Map(selectedConfigs);
     next.set(config.slotId, config);
     setSelectedConfigs(next);
+  };
+
+  const handleResendVerification = async () => {
+    try {
+      await resendVerification.mutateAsync();
+      message.success(t('ui.resendVerificationSuccess'));
+    } catch (resendErr) {
+      message.error(errorMessage(resendErr, t));
+    }
   };
 
   const handleCheckout = async () => {
@@ -197,6 +229,24 @@ export default function AvailableSlotsPage() {
       message.success(t('ui.holdAndCheckout'));
       void navigate(`/rentals/checkouts/${checkout.id}`);
     } catch (err: unknown) {
+      if (err instanceof ApiRequestError) {
+        if (err.code === 'EMAIL_NOT_VERIFIED') {
+          setUnverifiedEmailAlert(true);
+          message.error(errorMessage(err, t));
+          return;
+        }
+        if (err.code === 'AGREEMENT_NOT_ACCEPTED') {
+          setIsAgreementModalOpen(true);
+          message.warning(t('ui.agreementRequiredNotice'));
+          return;
+        }
+        if (err.code === 'HOLD_LIMIT_REACHED') {
+          setHoldLimitAlert(true);
+          message.error(t('slt.holdLimitReached') || errorMessage(err, t));
+          return;
+        }
+      }
+
       message.error(errorMessage(err, t));
 
       // Tự động tải lại danh sách slot khả dụng từ server
@@ -237,6 +287,38 @@ export default function AvailableSlotsPage() {
           </Title>
           <Paragraph type="secondary">{t('ui.availableSlotsSubtitle')}</Paragraph>
         </div>
+
+        {unverifiedEmailAlert && (
+          <Alert
+            type="warning"
+            showIcon
+            message={t('ui.emailNotVerifiedNotice')}
+            action={
+              <Button
+                size="small"
+                type="primary"
+                loading={resendVerification.isPending}
+                onClick={handleResendVerification}
+              >
+                {t('ui.resendVerification')}
+              </Button>
+            }
+            style={{ marginBottom: 16 }}
+            closable
+            onClose={() => setUnverifiedEmailAlert(false)}
+          />
+        )}
+
+        {holdLimitAlert && (
+          <Alert
+            type="error"
+            message={t('slt.holdLimitReached')}
+            showIcon
+            closable
+            onClose={() => setHoldLimitAlert(false)}
+            style={{ marginBottom: 16 }}
+          />
+        )}
 
         {error && (
           <Alert
@@ -353,6 +435,14 @@ export default function AvailableSlotsPage() {
             </Col>
           </Row>
         )}
+
+        <FrameworkAgreementModal
+          open={isAgreementModalOpen}
+          onClose={() => setIsAgreementModalOpen(false)}
+          // Đồng ý xong thì tạo tiếp phiên thanh toán đang dở.
+          onAccepted={handleCheckout}
+          busy={createCheckout.isPending}
+        />
       </div>
     </RequireRole>
   );

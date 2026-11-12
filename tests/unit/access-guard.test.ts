@@ -16,6 +16,7 @@ import { AccessGuard } from '../../apps/api/src/modules/auth/access.guard.js';
 import {
   AllowPendingPasswordChange,
   Public,
+  RequireAnyPermission,
   RequirePermissions,
   RequireReauth,
 } from '../../apps/api/src/modules/auth/decorators.js';
@@ -39,6 +40,7 @@ function user(overrides: Partial<AuthenticatedUser> = {}): AuthenticatedUser {
     fullName: 'Ops',
     sessionId: 'session-1',
     mustChangePassword: false,
+    emailVerificationPending: false,
     ...overrides,
   };
 }
@@ -103,6 +105,33 @@ describe('AccessGuard', () => {
     await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
   });
 
+  it('test_FR_AUTH_06_guard_any_permission_passes_with_one_of_them', async () => {
+    const target = endpoint(RequireAnyPermission('report.brand', 'alert.handle'));
+    await expect(guardFor(user()).canActivate(context(target, bearer()))).resolves.toBe(true);
+  });
+
+  it('test_FR_AUTH_06_guard_any_permission_rejects_when_none_present', async () => {
+    const target = endpoint(RequireAnyPermission('report.brand', 'user.manage'));
+    await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
+  });
+
+  it('test_FR_AUTH_06_guard_handler_any_permission_replaces_controller_requirement', async () => {
+    const handler = function handler() {};
+    class Controller {}
+    RequirePermissions('product.manage')(Controller);
+    RequireAnyPermission('product.manage', 'alert.handle')(handler);
+    const target = { handler, Controller };
+    await expect(guardFor(user()).canActivate(context(target, bearer()))).resolves.toBe(true);
+  });
+
+  it('test_FR_AUTH_06_guard_controller_requirement_still_applies_without_handler_override', async () => {
+    const handler = function handler() {};
+    class Controller {}
+    RequirePermissions('product.manage')(Controller);
+    const target = { handler, Controller };
+    await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'FORBIDDEN_SCOPE');
+  });
+
   it('test_FR_AUTH_09_guard_requires_reauth_token', async () => {
     const target = endpoint(RequireReauth());
     await rejectsWith(guardFor(user()).canActivate(context(target, bearer())), 'REAUTH_REQUIRED');
@@ -139,5 +168,50 @@ describe('AccessGuard', () => {
     // phân quyền trước xác thực là lộ ra endpoint nào đòi quyền gì.
     const target = endpoint(RequirePermissions('user.manage'));
     await rejectsWith(guardFor(user()).canActivate(context(target)), 'UNAUTHENTICATED');
+  });
+
+  it('Task 2: Ops Staff có machine.view truy cập được endpoint đọc nhưng bị chặn ở endpoint machine.manage', async () => {
+    // Giả lập Controller Machines: class gác machine.manage, method list gác machine.view
+    const listHandler = function list() {};
+    const createHandler = function create() {};
+    class MachinesControllerMock {}
+    RequirePermissions('machine.manage')(MachinesControllerMock);
+    RequirePermissions('machine.view')(listHandler);
+
+    const opsUser = user({
+      roles: ['OPERATIONS_STAFF'],
+      permissions: new Set(['machine.view', 'machine.operate', 'order.view']),
+    });
+
+    const opsGuard = guardFor(opsUser);
+
+    // 1. Ops Staff gọi list (GET /machines) -> Thành công
+    const listCtx = {
+      getHandler: () => listHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: opsUser }) }),
+    } as unknown as ExecutionContext;
+    await expect(opsGuard.canActivate(listCtx)).resolves.toBe(true);
+
+    // 2. Ops Staff gọi create (POST /machines kế thừa class machine.manage) -> Bị chặn 403
+    const createCtx = {
+      getHandler: () => createHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: opsUser }) }),
+    } as unknown as ExecutionContext;
+    await rejectsWith(opsGuard.canActivate(createCtx), 'FORBIDDEN_SCOPE');
+
+    // 3. Brand Admin (không có machine.view) gọi list -> Bị chặn 403
+    const brandUser = user({
+      roles: ['BRAND_ADMIN'],
+      permissions: new Set(['product.manage', 'rental.request', 'order.view']),
+    });
+    const brandGuard = guardFor(brandUser);
+    const brandListCtx = {
+      getHandler: () => listHandler,
+      getClass: () => MachinesControllerMock,
+      switchToHttp: () => ({ getRequest: () => ({ headers: bearer(), user: brandUser }) }),
+    } as unknown as ExecutionContext;
+    await rejectsWith(brandGuard.canActivate(brandListCtx), 'FORBIDDEN_SCOPE');
   });
 });

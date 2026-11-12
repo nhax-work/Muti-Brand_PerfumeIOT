@@ -16,11 +16,21 @@ import {
   Query,
 } from '@nestjs/common';
 import { z } from 'zod';
+import { AppError } from '../../shared/errors/index.js';
 import { parseBody } from '../../shared/http/validation.js';
-import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
+import type { BrandScope } from '../../shared/scoping/index.js';
+import {
+  CurrentBrandScope,
+  CurrentUser,
+  RequireAnyPermission,
+  RequirePermissions,
+  RequireReauth,
+  type AuthenticatedUser,
+} from '../auth/index.js';
 import { BndService } from './bnd.service.js';
 
 const BRAND_MANAGE = 'brand.manage';
+const MACHINE_VIEW = 'machine.view';
 const BRAND_STATUSES = ['ACTIVE', 'SUSPENDED', 'DISABLED'] as const;
 
 /** openapi.yaml: components.parameters page/pageSize (tối đa 200). */
@@ -53,6 +63,19 @@ const SelfUpdateBody = z.object({
   contactInfo: z.record(z.string(), z.unknown()).optional(),
 });
 
+const PayoutAccountBody = z.object({
+  bankCode: z.string().min(1).max(20),
+  accountNumber: z.string().min(1).max(30),
+  accountHolder: z.string().min(1).max(200),
+});
+
+/** openapi.yaml: BrandLegalProfileUpdate. */
+const LegalProfileBody = z.object({
+  taxCode: z.string().min(10).max(20),
+  businessLicenseNumber: z.string().max(100).optional(),
+  payoutAccount: PayoutAccountBody.optional(),
+});
+
 const SetStatusBody = z.object({
   status: z.enum(BRAND_STATUSES),
 });
@@ -63,10 +86,15 @@ const IdParam = z.string().uuid();
 export class BndController {
   constructor(@Inject(BndService) private readonly brands: BndService) {}
 
-  /** FR-BND-07: Platform Super Admin xem danh sách thương hiệu. */
+  /**
+   * FR-BND-07: nhân sự nền tảng xem danh sách thương hiệu. Super Admin quản lý (brand.manage);
+   * Operations Staff và Inventory Staff chỉ cần tên thương hiệu thuê slot trên máy (machine.view).
+   * Tài khoản thuộc thương hiệu không bao giờ được xem danh sách này (BR-012).
+   */
   @Get()
-  @RequirePermissions(BRAND_MANAGE)
-  async list(@Query() query: unknown) {
+  @RequireAnyPermission(BRAND_MANAGE, MACHINE_VIEW)
+  async list(@CurrentBrandScope() scope: BrandScope, @Query() query: unknown) {
+    if (scope.kind === 'BRAND') throw new AppError('FORBIDDEN_SCOPE', 'auth.missingPermission');
     const filter = parseBody(ListQuery, query);
     const { items, total } = await this.brands.list(filter);
     return { items, meta: { page: filter.page, pageSize: filter.pageSize, total } };
@@ -90,6 +118,12 @@ export class BndController {
   @Patch('me')
   updateMyBrand(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
     return this.brands.updateMyBrand(actor, parseBody(SelfUpdateBody, body));
+  }
+
+  /** FR-BND-09: Brand Admin khai hồ sơ pháp nhân và tài khoản nhận doanh thu. */
+  @Put('me/legal-profile')
+  updateMyBrandLegalProfile(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.brands.updateMyBrandLegalProfile(actor, parseBody(LegalProfileBody, body));
   }
 
   /** FR-BND-07: Platform Super Admin xem chi tiết thương hiệu. */
@@ -116,5 +150,13 @@ export class BndController {
   ) {
     const { status } = parseBody(SetStatusBody, body);
     return this.brands.setStatus(actor, parseBody(IdParam, id), status);
+  }
+
+  /** FR-BND-10: Platform Super Admin ghi nhận đã xác minh pháp nhân. */
+  @Post(':id/legal-verification')
+  @RequirePermissions(BRAND_MANAGE)
+  @RequireReauth()
+  verifyBrandLegal(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+    return this.brands.verifyBrandLegal(actor, parseBody(IdParam, id));
   }
 }

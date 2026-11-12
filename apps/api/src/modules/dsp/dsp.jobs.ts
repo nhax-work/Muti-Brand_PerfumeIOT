@@ -1,6 +1,7 @@
 /**
  * Cửa vào scheduler của DSP (ADR-0003): một nhịp = hủy đơn chờ lượt quá hạn → ghi lệnh cho đơn chờ →
- * publish lệnh chưa gửi → quét lệnh quá hạn. `entrypoints/scheduler.ts` quyết định chu kỳ.
+ * publish lệnh chưa gửi → quét lệnh quá hạn → máy DRAINING hết việc sang MAINTENANCE.
+ * `entrypoints/scheduler.ts` quyết định chu kỳ.
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
@@ -40,6 +41,8 @@ export class DspJobs {
         }
       }
       await this.dsp.sweepTimeouts();
+      // Sau quét: lệnh vừa khép hay vừa UNKNOWN ở nhịp này không còn giữ máy DRAINING lại (FR-MNT-05).
+      await this.dsp.completeDraining();
     } catch (error) {
       this.logger.error(`Nhịp điều phối lỗi: ${describe(error)}`);
     } finally {

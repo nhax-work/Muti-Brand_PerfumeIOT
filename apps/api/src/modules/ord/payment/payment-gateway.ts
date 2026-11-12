@@ -20,6 +20,10 @@ export interface CreatePaymentRequest {
   readonly expiresAt: Date;
   /** Nội dung chuyển khoản / mô tả hiện trên app ngân hàng. */
   readonly description: string;
+  /** URL chuyển hướng khi thanh toán thành công (nếu cổng hỗ trợ). */
+  readonly returnUrl?: string;
+  /** URL chuyển hướng khi hủy thanh toán (nếu cổng hỗ trợ). */
+  readonly cancelUrl?: string;
 }
 
 export interface CreatedPayment {

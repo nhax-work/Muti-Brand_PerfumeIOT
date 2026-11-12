@@ -166,7 +166,8 @@ export class PrdService {
   }
 }
 
-function toDto(record: ProductRecord): Product {
+/** Bản ghi → DTO `Product`; dùng chung với ProductImageService. */
+export function toDto(record: ProductRecord): Product {
   return {
     id: record.id,
     brandId: record.brandId,

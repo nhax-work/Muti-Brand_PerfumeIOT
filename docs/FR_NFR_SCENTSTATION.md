@@ -272,14 +272,14 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-EXP-16 | Hệ thống phải ghi nhận thời điểm thanh lý và hóa đơn nguồn cho mỗi chai bị thanh lý | BR-008, BR-013 | M |
 | FR-EXP-17 | Hệ thống phải cho phép slot tiếp tục tiếp nhận đơn hàng sau khi thanh lý, bán hàng tồn thuộc sở hữu nền tảng | BR-013 | M |
 | FR-EXP-18 | Hệ thống phải cho phép Platform Super Admin đặt giá lượt xịt cho slot đang bán hàng thanh lý | BR-013 | M |
-| FR-EXP-19 | Hệ thống phải thông báo cho Brand Admin khi hàng tồn của họ bị thanh lý, kèm danh sách chai và khối lượng còn lại | BR-013 | M |
+| FR-EXP-19 | Hệ thống phải thông báo cho Brand Admin khi hàng tồn của họ bị thanh lý, kèm danh sách chai và lượng còn lại ước tính (ADR-0019) | BR-013 | M |
 | FR-EXP-20 | Hệ thống phải chấm dứt quyền truy cập của thương hiệu tới dữ liệu giao dịch phát sinh sau thời điểm thanh lý trên slot đó | BR-012, BR-013 | M |
 | FR-EXP-21 | Hệ thống phải ghi nhật ký kiểm toán cho mọi sự kiện chuyển sang ân hạn, gia hạn, thanh lý và đóng hóa đơn | BR-008 | M |
 | FR-EXP-22 | Hệ thống phải áp dụng quy trình ân hạn và thanh lý độc lập cho từng hóa đơn, kể cả khi cùng thương hiệu có nhiều slot trên cùng máy | BR-013 | M |
 | FR-EXP-23 | Hệ thống phải cho phép Brand Admin báo không gia hạn hóa đơn bất cứ lúc nào trước ngày hết hạn, kèm cách nhận hàng trả về: tự đến kho lấy, hoặc nền tảng gửi về địa chỉ thương hiệu và thương hiệu chịu phí vận chuyển (ADR-0014) | BR-013 | M |
 | FR-EXP-24 | Hệ thống phải cho phép Brand Admin rút lại việc báo không gia hạn trước ngày hết hạn (ADR-0014) | BR-013 | M |
 | FR-EXP-25 | Hệ thống phải giữ hóa đơn đã báo không gia hạn ở ACTIVE hoặc EXPIRING tới ngày hết hạn, không chuyển sang GRACE và không tính phí ân hạn; slot tiếp tục bán tới khi Inventory Staff tháo chai, doanh thu tới lúc đó thuộc thương hiệu (ADR-0014) | BR-009, BR-013 | M |
-| FR-EXP-26 | Hệ thống phải lập phiếu trả hàng khi Inventory Staff tháo chai của hóa đơn đã báo không gia hạn, ghi khối lượng còn lại của từng chai, chuyển chai sang RETURNED_TO_BRAND, chuyển hóa đơn sang CLOSED và thông báo cho Brand Admin kèm danh sách chai (ADR-0014) | BR-005, BR-013 | M |
+| FR-EXP-26 | Hệ thống phải lập phiếu trả hàng khi Inventory Staff tháo chai của hóa đơn đã báo không gia hạn, ghi lượng còn lại ước tính của từng chai, chuyển chai sang RETURNED_TO_BRAND, chuyển hóa đơn sang CLOSED và thông báo cho Brand Admin kèm danh sách chai (ADR-0014, ADR-0019) | BR-005, BR-013 | M |
 | FR-EXP-27 | Hệ thống phải cho phép Inventory Staff ghi nhận bàn giao hàng trả về gồm người nhận, thời điểm và mã vận đơn nếu gửi (ADR-0014) | BR-008, BR-013 | M |
 | FR-EXP-28 | Hệ thống phải chuyển quyền sở hữu hàng trả về sang nền tảng như thanh lý (FR-EXP-15, 16) khi quá `RETURN_PICKUP_MAX_DAYS` ngày kể từ lúc hàng sẵn sàng mà thương hiệu chưa nhận, và thông báo cho Brand Admin 3 ngày trước hạn đó (ADR-0014) | BR-013 | M |
 
@@ -303,7 +303,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-02 | Hệ thống phải cho phép đăng ký từng chai nước hoa với một mã định danh duy nhất | BR-005 | M |
 | FR-INV-03 | Hệ thống phải ghi nhận cho mỗi chai chủ sở hữu là một thương hiệu cụ thể hoặc là nền tảng | BR-005, BR-013 | M |
 | FR-INV-04 | Hệ thống phải quản lý trạng thái chai theo tập: IN_STOCK, INSTALLED, LOW, EMPTY, DAMAGED, EXPIRED, LIQUIDATED, RETURNED_TO_BRAND | BR-005, BR-013 | M |
-| FR-INV-05 | Hệ thống phải ghi nhận khối lượng ban đầu của chai tại thời điểm lắp vào slot | BR-005 | M |
+| FR-INV-05 | Hệ thống phải ghi nhận dung tích ban đầu của chai khi đăng ký chai (ADR-0019) | BR-005 | M |
 | FR-INV-06 | Hệ thống phải từ chối gán vào slot chai thuộc thương hiệu không có hóa đơn thuê slot đó | BR-003, BR-012 | M |
 | FR-INV-07 | Hệ thống phải cảnh báo khi Inventory Staff gán chai có sản phẩm không khớp với sản phẩm cấu hình cho slot | BR-005 | M |
 | FR-INV-08 | Hệ thống phải từ chối gán chai đã quá hạn sử dụng vào slot | BR-005 | M |
@@ -311,13 +311,13 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-10 | Hệ thống phải cập nhật lượng còn lại sau mỗi lượt xịt khách hàng hoặc lượt xịt chẩn đoán thành công | BR-005 | M |
 | FR-INV-11 | Hệ thống phải sinh cảnh báo sắp hết khi lượng còn lại xuống dưới ngưỡng đã cấu hình cho slot | BR-005 | M |
 | FR-INV-12 | Hệ thống phải chuyển slot sang trạng thái UNAVAILABLE khi lượng còn lại không đủ cho một lượt xịt | BR-005 | M |
-| FR-INV-13 | Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ, chai mới và khối lượng đo được trước và sau, liên kết với phiếu nạp tương ứng (FR-INV-29) | BR-005, BR-008 | M |
+| FR-INV-13 | Hệ thống phải lưu cho mỗi phiên nạp: người thực hiện, thời điểm, máy, slot, chai cũ và chai mới, liên kết với phiếu nạp tương ứng (FR-INV-29); lượng còn lại của chai cũ lấy theo ước tính (ADR-0019) | BR-005, BR-008 | M |
 | FR-INV-14 | Hệ thống phải cung cấp checklist nạp nước hoa mà Inventory Staff phải hoàn thành trước khi đóng phiếu nạp | BR-005 | M |
-| FR-INV-15 | Hệ thống phải cung cấp quy trình tháo chai khỏi slot và trả về kho, ghi nhận khối lượng còn lại | BR-005, BR-013 | M |
+| FR-INV-15 | Hệ thống phải cung cấp quy trình tháo chai khỏi slot và trả về kho, ghi nhận lượng còn lại ước tính tại thời điểm tháo (ADR-0019) | BR-005, BR-013 | M |
 | FR-INV-16 | Hệ thống phải cho phép ghi nhận điều chỉnh tồn kho kèm lý do bắt buộc | BR-005 | M |
 | FR-INV-17 | Hệ thống phải lưu lịch sử lắp, nạp, tháo, điều chỉnh, thanh lý và hủy bỏ của từng chai | BR-005, BR-008 | M |
-| FR-INV-18 | Hệ thống phải so sánh lượng tiêu thụ tính theo số lượt xịt với số đo từ load cell của cùng slot | BR-005 | S |
-| FR-INV-19 | Hệ thống phải sinh cảnh báo nghi ngờ rò rỉ khi khối lượng đo được giảm quá 20% so với lượng tiêu thụ tính theo số lượt xịt trong cùng khoảng thời gian | BR-005 | S |
+| FR-INV-18 | ~~Hệ thống phải so sánh lượng tiêu thụ tính theo số lượt xịt với số đo từ load cell của cùng slot~~ — bãi bỏ theo ADR-0019; máy không có load cell | BR-005 | X |
+| FR-INV-19 | ~~Hệ thống phải sinh cảnh báo nghi ngờ rò rỉ khi khối lượng đo được giảm quá 20% so với lượng tiêu thụ tính theo số lượt xịt trong cùng khoảng thời gian~~ — bãi bỏ theo ADR-0019; không có số đo khối lượng | BR-005 | X |
 | FR-INV-20 | Hệ thống phải sinh cảnh báo khi lô nước hoa còn dưới 30 ngày là hết hạn | BR-005 | S |
 | FR-INV-21 | Hệ thống phải cho phép tạo báo cáo tồn kho theo thương hiệu, sản phẩm, lô, máy, slot và khoảng thời gian | BR-005, BR-007 | M |
 | FR-INV-22 | Hệ thống phải cho phép Brand Admin khai báo lô hàng gửi đến kho nền tảng, gồm sản phẩm, số lượng chai, dung tích mỗi chai và ngày dự kiến gửi | BR-005 | M |
@@ -431,7 +431,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-IOT-01 | Thiết bị phải gửi bản tin heartbeat tới hệ thống theo chu kỳ 30 giây | BR-004, BR-006 | M |
 | FR-IOT-02 | Hệ thống phải đánh dấu máy là UNSTABLE khi thiếu từ 2 đến 3 bản tin heartbeat liên tiếp | BR-006 | M |
 | FR-IOT-03 | Hệ thống phải đánh dấu máy là OFFLINE khi không nhận được heartbeat trong 90 giây | BR-006 | M |
-| FR-IOT-04 | Thiết bị phải gửi dữ liệu telemetry gồm khối lượng từng slot, trạng thái cửa, trạng thái cơ cấu xịt và trạng thái nguồn điện | BR-005, BR-006 | M |
+| FR-IOT-04 | Thiết bị phải gửi dữ liệu telemetry gồm trạng thái cửa, trạng thái cơ cấu xịt của từng slot và trạng thái nguồn điện; máy không có load cell nên không gửi khối lượng (ADR-0019) | BR-005, BR-006 | M |
 | FR-IOT-05 | Thiết bị phải gửi sự kiện khởi động, tắt máy, kết nối lại, chuyển chế độ bảo trì, lỗi cảm biến và lỗi xịt | BR-006 | M |
 | FR-IOT-06 | Hệ thống phải gửi lệnh xịt, lệnh chẩn đoán, yêu cầu báo cáo trạng thái và cập nhật cấu hình tới thiết bị qua MQTT | BR-004 | M |
 | FR-IOT-07 | Hệ thống phải liên kết mỗi lệnh gửi đi với xác nhận tiếp nhận và kết quả thực hiện tương ứng | BR-002, BR-008 | M |
@@ -674,10 +674,10 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 | Ưu tiên | Số FR |
 |---|---|
 | **M — Must** (phạm vi MVP 13 tuần) | 293 |
-| **S — Should** (làm nếu còn thời gian sau tuần 9) | 24 |
+| **S — Should** (làm nếu còn thời gian sau tuần 9) | 22 |
 | **W — Won't** (chuyển sang Future Work) | 3 |
-| **Tổng FR** (không tính mức X) | **320** |
-| **X — Bãi bỏ** (giữ số hiệu, không tính) | 7 |
+| **Tổng FR** (không tính mức X) | **318** |
+| **X — Bãi bỏ** (giữ số hiệu, không tính) | 9 |
 | **Tổng NFR** | **52** |
 
 **Danh sách W:** FR-PRD-06 chiến dịch khuyến mãi · FR-IOT-15 cập nhật firmware từ xa · FR-ALR-15 cảnh báo vận hành qua kênh ngoài (phần email về tiền và hàng đã tách thành FR-ALR-16 mức M).
@@ -694,7 +694,7 @@ Hệ quả: tổng số vai trò trên nền tảng giảm còn 4 (Platform Supe
 | SLT | 49 | MNT | 17 |
 | EXP | 28 | RPT | 15 |
 | REV | 7 | AUD | 11 |
-| INV | 35 | | |
+| INV | 33 | | |
 
 **Ghi chú bổ sung (2026-09-15).** FR-MCH-15÷17, FR-SLT-19÷29 và FR-INV-22÷28 được thêm để lấp các khoảng trống nghiệp vụ: (1) luồng Brand Admin tự yêu cầu thuê slot và trigger kích hoạt hóa đơn DRAFT→ACTIVE (FR-SLT-19÷26), (2) hành động gán/đổi sản phẩm cho slot như một chức năng tường minh thay vì ràng buộc ngầm định (FR-SLT-27÷29), (3) định nghĩa tường minh điều kiện AVAILABLE/UNAVAILABLE của slot, hợp nhất các ràng buộc rải rác ở FR-SLT-11 và FR-INV-12 (FR-MCH-15÷17), và (4) luồng Brand Admin khai báo và Inventory Staff đối soát lô hàng gửi đến kho nền tảng theo quyết định nghiệp vụ #1 (FR-INV-22÷28).
 
@@ -743,3 +743,11 @@ ngưỡng mới `GRACE_PERIOD_DEFAULT_DAYS`, `RETURN_PICKUP_MAX_DAYS`, `SLOT_SWA
 `BRAND_NOT_VERIFIED`, `QUEUE_TIMEOUT` đã thêm vào `spec/errors.md` (đã chạy `npm run spec:generate`). Thay
 đổi contract (`schema.sql`, `openapi.yaml`, `mqtt.md`) **chưa** áp — làm cùng PR hiện thực của từng ADR.
 Acceptance criteria cho các FR mới chưa viết trong `spec/modules/`.
+
+**Ghi chú bổ sung (2026-10-28).** Áp `spec/decisions/0019-dem-luot-xit-thay-load-cell.md` (**TV1 đã
+duyệt 2026-10-28**): máy không lắp load cell, lượng còn lại của chai theo dõi bằng số lượt xịt thành công
+× liều hiệu chuẩn. Sửa FR-INV-05 (dung tích ban đầu thay khối lượng ban đầu), FR-INV-13, FR-INV-15,
+FR-EXP-19, FR-EXP-26, FR-IOT-04; bãi bỏ FR-INV-18, FR-INV-19 (mức S → X) cùng hằng
+`LEAK_DETECT_THRESHOLD_PCT`. NFR-REL-06 giữ nguyên — cân 0,01g ở đó là dụng cụ kiểm thử trong phòng lab.
+Thống kê: S 24 → 22, tổng FR 320 → 318, mức X 7 → 9; INV 35 → 33. Contract (`schema.sql`, `openapi.yaml`,
+`mqtt.md`, `data-dictionary.md`) đã áp cùng migration `1791400000000_adr-0019-bo-load-cell.sql`.

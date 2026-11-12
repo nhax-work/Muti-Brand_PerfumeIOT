@@ -365,7 +365,7 @@ async function isolationCases(): Promise<void> {
       JOIN machine_slots s ON s.id = r.slot_id`);
   await raw.query(`
     INSERT INTO sensor_readings (machine_id, slot_id, reading_type, numeric_value, measured_at)
-    SELECT machine_id, id, 'LOAD_CELL_G', 100, now() FROM machine_slots`);
+    SELECT machine_id, id, 'ESTIMATED_REMAINING_ML', 48, now() FROM machine_slots`);
 
   const leak = await raw.query(`
     SELECT count(*)::int AS n FROM audit_logs

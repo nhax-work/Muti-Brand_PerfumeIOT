@@ -1,5 +1,5 @@
 /**
- * Quản trị thương hiệu (FR-BND-01..07).
+ * Quản trị thương hiệu (FR-BND-01..07, FR-BND-09, FR-BND-10, ADR-0013).
  *
  * Tầng nghiệp vụ độc lập hoàn toàn với HTTP (QT2, ADR-0003).
  */
@@ -7,6 +7,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
+import { CLOCK, type Clock } from '../../shared/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { decryptJson, encryptJson, PII_KEY_VERSION } from '../../shared/crypto/pii-cipher.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { BndQueries, type BrandFilter, type BrandRecord, type BrandStatus } from './bnd.queries.js';
@@ -34,28 +37,49 @@ export interface SelfUpdateBrandInput {
   readonly contactInfo?: Record<string, unknown>;
 }
 
+export interface UpdateBrandLegalProfileInput {
+  readonly taxCode: string;
+  readonly businessLicenseNumber?: string;
+  readonly payoutAccount?: {
+    readonly bankCode: string;
+    readonly accountNumber: string;
+    readonly accountHolder: string;
+  };
+}
+
 type Queries = Pick<
   BndQueries,
-  'list' | 'findById' | 'findByCode' | 'codeExists' | 'create' | 'update' | 'setStatus'
+  | 'list'
+  | 'findById'
+  | 'findByCode'
+  | 'codeExists'
+  | 'create'
+  | 'update'
+  | 'setStatus'
+  | 'updateLegalProfile'
+  | 'verifyLegal'
 >;
 type Audit = Pick<AuditService, 'log'>;
+type Config = Pick<AppConfig, 'refundAccountEncKey'>;
 
 @Injectable()
 export class BndService {
   constructor(
     @Inject(BndQueries) private readonly queries: Queries,
     @Inject(AuditService) private readonly audit: Audit,
+    @Inject(APP_CONFIG) private readonly config: Config,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async list(filter: BrandFilter): Promise<{ items: Brand[]; total: number }> {
     const { items, total } = await this.queries.list(filter);
-    return { items: items.map(toDto), total };
+    return { items: items.map((r) => this.toDto(r)), total };
   }
 
   async get(actor: AuthenticatedUser, id: string): Promise<Brand> {
     const record = await this.queries.findById(id);
     if (!record) throw notFoundFor(actor);
-    return toDto(record);
+    return this.toDto(record);
   }
 
   /**
@@ -76,7 +100,7 @@ export class BndService {
     const created = await this.queries.findById(id);
     if (!created) throw new Error(`Không đọc lại được thương hiệu vừa tạo ${id}`);
 
-    const dto = toDto(created);
+    const dto = this.toDto(created);
     await this.audit.log({
       actorType: 'USER',
       actorId: actor.userId,
@@ -101,7 +125,7 @@ export class BndService {
     const updated = await this.queries.findById(id);
     if (!updated) throw notFoundFor(actor);
 
-    const dto = toDto(updated);
+    const dto = this.toDto(updated);
     await this.audit.log({
       actorType: 'USER',
       actorId: actor.userId,
@@ -109,7 +133,7 @@ export class BndService {
       action: 'bnd.brand.updated',
       targetType: 'brand',
       targetId: id,
-      before: toDto(before),
+      before: this.toDto(before),
       after: dto,
     });
 
@@ -122,13 +146,13 @@ export class BndService {
   async setStatus(actor: AuthenticatedUser, id: string, status: BrandStatus): Promise<Brand> {
     const before = await this.queries.findById(id);
     if (!before) throw notFoundFor(actor);
-    if (before.status === status) return toDto(before);
+    if (before.status === status) return this.toDto(before);
 
     await this.queries.setStatus(id, status);
     const updated = await this.queries.findById(id);
     if (!updated) throw notFoundFor(actor);
 
-    const dto = toDto(updated);
+    const dto = this.toDto(updated);
     await this.audit.log({
       actorType: 'USER',
       actorId: actor.userId,
@@ -153,7 +177,7 @@ export class BndService {
     }
     const record = await this.queries.findById(actor.brandId);
     if (!record) throw notFoundFor(actor);
-    return toDto(record);
+    return this.toDto(record);
   }
 
   /**
@@ -170,7 +194,7 @@ export class BndService {
     const updated = await this.queries.findById(actor.brandId);
     if (!updated) throw notFoundFor(actor);
 
-    const dto = toDto(updated);
+    const dto = this.toDto(updated);
     await this.audit.log({
       actorType: 'USER',
       actorId: actor.userId,
@@ -178,23 +202,142 @@ export class BndService {
       action: 'bnd.brand.updated',
       targetType: 'brand',
       targetId: actor.brandId,
-      before: toDto(before),
+      before: this.toDto(before),
       after: dto,
     });
 
     return dto;
   }
-}
 
-function toDto(record: BrandRecord): Brand {
-  return {
-    id: record.id,
-    code: record.code,
-    name: record.name,
-    logoUrl: record.logoUrl,
-    description: record.description,
-    contactInfo: record.contactInfo,
-    status: record.status,
-    createdAt: record.createdAt.toISOString(),
-  };
+  /**
+   * FR-BND-09: Brand Admin khai hồ sơ pháp nhân và tài khoản nhận doanh thu (ADR-0013).
+   * Khi cập nhật, trạng thái xác minh trước đó bị xóa (legal_verified_at = null, legal_verified_by = null).
+   */
+  async updateMyBrandLegalProfile(
+    actor: AuthenticatedUser,
+    input: UpdateBrandLegalProfileInput,
+  ): Promise<Brand> {
+    if (!actor.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'bnd.brandAccountOnly');
+    }
+    const before = await this.queries.findById(actor.brandId);
+    if (!before) throw notFoundFor(actor);
+
+    let payoutAccountCiphertext = before.payoutAccountCiphertext;
+    let payoutAccountKeyVersion = before.payoutAccountKeyVersion;
+
+    if (input.payoutAccount !== undefined) {
+      const key = this.config.refundAccountEncKey;
+      if (!key) {
+        throw new Error('Thiếu REFUND_ACCOUNT_ENC_KEY để mã hóa tài khoản nhận tiền.');
+      }
+      payoutAccountCiphertext = encryptJson(key, input.payoutAccount);
+      payoutAccountKeyVersion = PII_KEY_VERSION;
+    }
+
+    await this.queries.updateLegalProfile(actor.brandId, {
+      taxCode: input.taxCode,
+      businessLicenseNumber:
+        input.businessLicenseNumber ?? before.businessLicenseNumber ?? undefined,
+      payoutAccountCiphertext,
+      payoutAccountKeyVersion,
+    });
+
+    const updated = await this.queries.findById(actor.brandId);
+    if (!updated) throw notFoundFor(actor);
+
+    const dto = this.toDto(updated);
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId: actor.brandId,
+      action: 'bnd.brand.legal_profile_updated',
+      targetType: 'brand',
+      targetId: actor.brandId,
+      before: this.toDto(before),
+      after: dto,
+    });
+
+    return dto;
+  }
+
+  /**
+   * FR-BND-10: Platform Super Admin ghi nhận đã xác minh pháp nhân thương hiệu (ADR-0013).
+   * Yêu cầu thương hiệu phải có mã số thuế. Thao tác có tính idempotent.
+   */
+  async verifyBrandLegal(actor: AuthenticatedUser, brandId: string): Promise<Brand> {
+    const brand = await this.queries.findById(brandId);
+    if (!brand) throw notFoundFor(actor);
+
+    if (!brand.taxCode) {
+      throw new AppError('VALIDATION_ERROR', 'bnd.taxCodeRequiredForVerification');
+    }
+
+    // Idempotent: nếu đã xác minh rồi thì trả về luôn không ghi đè hay báo lỗi
+    if (brand.legalVerifiedAt !== null) {
+      return this.toDto(brand);
+    }
+
+    const now = this.clock.now();
+    await this.queries.verifyLegal(brandId, actor.userId, now);
+
+    const updated = await this.queries.findById(brandId);
+    if (!updated) throw notFoundFor(actor);
+
+    const dto = this.toDto(updated);
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      brandId,
+      action: 'bnd.legal.verified',
+      targetType: 'brand',
+      targetId: brandId,
+      after: {
+        legalVerifiedAt: now.toISOString(),
+        legalVerifiedBy: actor.userId,
+      },
+    });
+
+    return dto;
+  }
+
+  private toDto(record: BrandRecord): Brand {
+    let payoutAccountMasked = null;
+    const key = this.config.refundAccountEncKey;
+    if (record.payoutAccountCiphertext && key) {
+      try {
+        const raw = decryptJson<{ bankCode: string; accountNumber: string; accountHolder: string }>(
+          key,
+          record.payoutAccountCiphertext,
+        );
+        const maskedAccountNumber =
+          raw.accountNumber && raw.accountNumber.length > 4
+            ? '****' + raw.accountNumber.slice(-4)
+            : '****';
+        payoutAccountMasked = {
+          bankCode: raw.bankCode,
+          maskedAccountNumber,
+          accountHolder: raw.accountHolder,
+        };
+      } catch {
+        payoutAccountMasked = null;
+      }
+    }
+
+    return {
+      id: record.id,
+      code: record.code,
+      name: record.name,
+      logoUrl: record.logoUrl,
+      description: record.description,
+      contactInfo: record.contactInfo,
+      taxCode: record.taxCode,
+      businessLicenseNumber: record.businessLicenseNumber,
+      hasPayoutAccount: record.payoutAccountCiphertext !== null,
+      payoutAccountMasked,
+      legalVerifiedAt: record.legalVerifiedAt?.toISOString() ?? null,
+      status: record.status,
+      createdAt: record.createdAt.toISOString(),
+    };
+  }
 }

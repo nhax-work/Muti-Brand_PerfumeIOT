@@ -34,8 +34,8 @@ thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 
 | Hằng | Giá trị | FR |
 |---|---|---|
-| `ACTUATOR_MAX_MS` | 3500 | NFR-SAF-01 |
-| `ACTUATOR_RUN_MS` | 3000 | hiệu chuẩn theo từng slot |
+| `ACTUATOR_MAX_MS` | 3500 | NFR-SAF-01; ADR-0020, cần đo trên phần cứng |
+| `ACTUATOR_RUN_MS` | 2000 | mặc định đồng bộ firmware workspace; hiệu chuẩn theo từng slot |
 
 `ACTUATOR_MAX_MS` là hard timeout ở firmware, nằm ngoài mọi logic nghiệp vụ.
 
@@ -49,6 +49,8 @@ thay cho `WEBHOOK_TO_ACTUATION_MAX_SEC` cũ.
 | `LOGIN_LOCKOUT_MIN` | 15 | FR-AUTH-03 |
 | `SESSION_REVOKE_MAX_SEC` | 60 | FR-AUTH-10 |
 | `REAUTH_TOKEN_TTL_SEC` | 300 | FR-AUTH-09 |
+| `BRAND_REGISTER_RATE_LIMIT_PER_MIN` | 5 | FR-USR-06, ADR-0013 |
+| `EMAIL_VERIFICATION_TOKEN_TTL_HOURS` | 24 | FR-USR-07, ADR-0013 |
 
 ## Hóa đơn thuê slot
 
@@ -95,9 +97,17 @@ Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 �
 |---|---|---|
 | `DOOR_OPEN_ALERT_MIN` | 5 | FR-ALR-03 |
 | `CONSECUTIVE_FAIL_ALERT` | 3 | FR-ALR-04 |
-| `LEAK_DETECT_THRESHOLD_PCT` | 20 | FR-INV-19 |
 | `BATCH_EXPIRY_WARN_DAYS` | 30 | FR-INV-20 |
 | `INVENTORY_TOLERANCE_PCT` | 10 | BR-005 |
+| `EMAIL_MAX_ATTEMPTS` | 5 | FR-ALR-16, ADR-0017 |
+| `EMAIL_RETRY_INTERVAL_MIN` | 10 | FR-ALR-16, ADR-0017 |
+
+## Sản phẩm
+
+| Hằng | Giá trị | FR |
+|---|---|---|
+| `PRODUCT_IMAGE_MAX_BYTES` | 5242880 | FR-PRD-01, ADR-0020 |
+| `PRODUCT_IMAGE_MAX_EDGE_PX` | 1200 | FR-PRD-01, ADR-0020 |
 
 ## Kiosk và giới hạn
 

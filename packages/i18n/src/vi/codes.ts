@@ -18,6 +18,8 @@ export const orderCode = {
   REFUND_CLAIM_ACCEPTED: 'Chấp nhận phiếu khiếu nại',
   MANUAL_REFUND_RECORDED: 'Đã ghi nhận hoàn tiền',
   QUEUE_TIMEOUT: 'Chờ lượt quá lâu, máy chưa phục vụ được',
+  FORCED_MAINTENANCE: 'Máy bị ép bảo trì khi đơn đang chờ lượt',
+  MACHINE_FORCED_MAINTENANCE: 'Máy bị ép bảo trì, đơn chờ thanh toán bị hủy',
   PRESS_TIMEOUT: 'Khách không bấm nút kịp',
   ACTUATOR_FAULT: 'Bơm xịt gặp sự cố',
   NO_CURRENT: 'Bơm không chạy',
@@ -49,6 +51,29 @@ export const credentialStatus = {
   ACTIVE: 'Đang dùng',
   REVOKED: 'Đã thu hồi',
   EXPIRED: 'Hết hạn',
+} as const;
+
+/** Trạng thái lệnh xịt (spec/glossary.md — DispenseCommand). */
+export const commandStatus = {
+  CREATED: 'Chờ gửi',
+  SENT: 'Đã gửi',
+  ACKNOWLEDGED: 'Máy đã nhận',
+  SUCCEEDED: 'Thành công',
+  FAILED: 'Thất bại',
+  REJECTED: 'Máy từ chối',
+  EXPIRED: 'Quá hạn chưa gửi',
+  UNKNOWN: 'Không rõ kết quả',
+} as const;
+
+export const dispenseType = {
+  CUSTOMER: 'Khách hàng',
+  DIAGNOSTIC: 'Chẩn đoán',
+} as const;
+
+export const brandPayoutStatus = {
+  DRAFT: 'Đang cộng dồn',
+  CONFIRMED: 'Đã chốt số liệu',
+  PAID: 'Đã chuyển khoản',
 } as const;
 
 /** `machine_status_histories.source`. */

@@ -1,0 +1,651 @@
+/*
+ * Landing page ScentStation — cùng nhận diện với kiosk (apps/kiosk/src/styles/global.css): nền
+ * trắng, chữ đen, nút chính màu đen, serif Playfair Display cho tiêu đề, Be Vietnam Pro cho nội dung.
+ * Màu vàng chỉ dùng cho "đèn nút" — đúng vai trò của nó trên máy thật.
+ */
+:root {
+  --bg: #ffffff;
+  --surface-2: #f5f4f2;
+  --text: #111111;
+  --text-muted: #5c5c5c;
+  --line: rgba(0, 0, 0, 0.12);
+  --action: #111111;
+  --on-action: #ffffff;
+  --accent: #c9a46a;
+  --accent-ink: #7a5a28;
+
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Be Vietnam Pro', system-ui, sans-serif;
+
+  --container: 1120px;
+  --gutter: 24px;
+  --radius: 4px;
+  --header-h: 72px;
+  color-scheme: light;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--header-h) + 16px);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+h1,
+h2 {
+  font-family: var(--font-serif);
+  /* Playfair mặc định dùng số kiểu cổ — giữ số thẳng hàng như kiosk. */
+  font-variant-numeric: lining-nums;
+}
+
+h1 {
+  font-size: clamp(40px, 6vw, 68px);
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: clamp(30px, 4vw, 44px);
+}
+
+h3 {
+  font-size: 19px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin: 0 auto;
+  padding: 0 var(--gutter);
+}
+
+.skip-link {
+  position: absolute;
+  left: 16px;
+  top: -48px;
+  padding: 8px 16px;
+  background: var(--action);
+  color: var(--on-action);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
+.eyebrow {
+  margin-bottom: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+}
+
+.lead {
+  max-width: 34em;
+  margin-top: 20px;
+  font-size: 19px;
+  color: var(--text-muted);
+}
+
+/* --- Nút --- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.btn-small {
+  min-height: 40px;
+  padding: 0 18px;
+  font-size: 15px;
+}
+
+.btn-primary {
+  background: var(--action);
+  color: var(--on-action);
+}
+
+.btn-primary:hover {
+  background: #333333;
+}
+
+.btn-outline {
+  border-color: var(--text);
+  color: var(--text);
+}
+
+.btn-outline:hover {
+  background: var(--surface-2);
+}
+
+.btn-inverse {
+  background: var(--on-action);
+  color: var(--action);
+}
+
+.btn-inverse:hover {
+  background: #e8e6e3;
+}
+
+.btn-outline-inverse {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: var(--on-action);
+}
+
+.btn-outline-inverse:hover {
+  border-color: var(--on-action);
+}
+
+.link-quiet {
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.link-quiet:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* --- Header --- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  height: var(--header-h);
+}
+
+.wordmark {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+}
+
+.wordmark-small {
+  font-size: 20px;
+}
+
+.nav {
+  display: flex;
+  gap: 28px;
+  margin-right: auto;
+}
+
+.nav a {
+  font-size: 15px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* --- Hero --- */
+.hero {
+  padding: 88px 0 96px;
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 64px;
+  align-items: center;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 36px;
+}
+
+.machine {
+  margin: 0;
+}
+
+.machine svg {
+  display: block;
+  width: 100%;
+  max-width: 400px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.machine-caption {
+  margin-top: 16px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.m-body {
+  fill: var(--surface-2);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.m-screen {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+
+.m-line {
+  fill: var(--text);
+}
+
+.m-line-soft {
+  fill: #cfcdc9;
+}
+
+.m-qr {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+
+.m-slot {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+
+.m-bottle {
+  fill: #d9d6d1;
+}
+
+.m-button {
+  fill: var(--bg);
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.m-button-lit {
+  fill: var(--accent);
+  stroke: var(--accent-ink);
+}
+
+.m-glow {
+  fill: var(--accent);
+  opacity: 0.25;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: glow 2.4s ease-in-out infinite;
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    opacity: 0.12;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.05);
+  }
+}
+
+/* --- Các phần --- */
+.section {
+  padding: 96px 0;
+  border-top: 1px solid var(--line);
+}
+
+.section-alt {
+  background: var(--surface-2);
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  margin: 56px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  padding-top: 24px;
+  border-top: 1px solid var(--text);
+}
+
+.step h3 {
+  margin-top: 20px;
+}
+
+.step p {
+  margin-top: 10px;
+  color: var(--text-muted);
+}
+
+.step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--text);
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.step-no-lit {
+  background: var(--accent);
+  border-color: var(--accent-ink);
+}
+
+.brand-grid {
+  display: grid;
+  grid-template-columns: 0.9fr 1.1fr;
+  gap: 64px;
+  align-items: start;
+}
+
+.brand-grid .btn {
+  margin-top: 32px;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.feature {
+  padding: 28px;
+  background: var(--bg);
+}
+
+.feature p {
+  margin-top: 10px;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.onboard-title {
+  margin-top: 72px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.onboard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboard li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.onboard span {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: var(--action);
+  color: var(--on-action);
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.faq-wrap {
+  display: grid;
+  grid-template-columns: 0.6fr 1.4fr;
+  gap: 64px;
+}
+
+.faq details {
+  border-bottom: 1px solid var(--line);
+}
+
+.faq details:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.faq summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 0;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.faq summary::-webkit-details-marker {
+  display: none;
+}
+
+.faq summary::after {
+  content: '+';
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.faq details[open] summary::after {
+  transform: rotate(45deg);
+}
+
+.faq details p {
+  max-width: 40em;
+  padding-bottom: 22px;
+  color: var(--text-muted);
+}
+
+.cta {
+  padding: 96px 0;
+  background: var(--action);
+  color: var(--on-action);
+}
+
+.cta-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+}
+
+.cta h2 {
+  max-width: 16em;
+}
+
+.cta .hero-actions {
+  margin-top: 0;
+}
+
+.site-footer {
+  padding: 32px 0;
+  border-top: 1px solid var(--line);
+}
+
+.footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px 40px;
+}
+
+.footer-nav {
+  display: flex;
+  gap: 24px;
+  margin-right: auto;
+  font-size: 15px;
+}
+
+.footer-nav a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.footer-nav a:hover {
+  color: var(--text);
+}
+
+.footer-copy {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* --- Màn hẹp --- */
+@media (max-width: 960px) {
+  .nav {
+    display: none;
+  }
+
+  .header-actions {
+    margin-left: auto;
+  }
+
+  .hero {
+    padding: 56px 0 72px;
+  }
+
+  .hero-inner,
+  .brand-grid,
+  .faq-wrap {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .machine svg {
+    max-width: 320px;
+  }
+
+  .steps {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+
+  .onboard {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .section,
+  .cta {
+    padding: 72px 0;
+  }
+}
+
+@media (max-width: 560px) {
+  :root {
+    --gutter: 16px;
+    --header-h: 64px;
+  }
+
+  .header-actions .link-quiet {
+    display: none;
+  }
+
+  .features,
+  .onboard {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions .btn {
+    flex: 1 1 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .m-glow {
+    animation: none;
+  }
+}

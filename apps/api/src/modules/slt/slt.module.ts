@@ -7,7 +7,12 @@ import {
 } from './catalog.http.js';
 import { CatalogQueries } from './catalog.queries.js';
 import { CatalogService } from './catalog.service.js';
-import { RentalCheckoutsController, SlotRentalQuoteController, SltController } from './slt.http.js';
+import {
+  AgreementsController,
+  RentalCheckoutsController,
+  SlotRentalQuoteController,
+  SltController,
+} from './slt.http.js';
 import { SltJobs } from './slt.jobs.js';
 import { SltQueries } from './slt.queries.js';
 import { SltService } from './slt.service.js';
@@ -16,6 +21,7 @@ import { SltService } from './slt.service.js';
   // MchModule: PUT /slots/{id}/rent-price trả MachineSlot dựng bằng MchService (FR-SLT-32).
   imports: [MchModule],
   controllers: [
+    AgreementsController,
     SltController,
     RentalCheckoutsController,
     SlotRentalQuoteController,

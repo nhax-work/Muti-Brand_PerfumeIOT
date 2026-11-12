@@ -11,6 +11,8 @@ export type AlertSeverity = "CRITICAL" | "HIGH" | "INFO" | "WARNING";
 
 export type AlertStatus = "ACKNOWLEDGED" | "CLOSED" | "IN_PROGRESS" | "OPEN" | "RESOLVED";
 
+export type BatchAuthenticityStatus = "APPROVED" | "NOT_SUBMITTED" | "PENDING" | "REJECTED";
+
 export type BottleReturnMethod = "SHIP_TO_BRAND" | "WAREHOUSE_PICKUP";
 
 export type BottleStatus = "DAMAGED" | "EMPTY" | "EXPIRED" | "IN_STOCK" | "INSTALLED" | "LIQUIDATED" | "LOW" | "RETURNED_TO_BRAND";
@@ -204,13 +206,18 @@ export interface Bottles {
   brand_id: string;
   created_at: Generated<Timestamp>;
   current_estimated_ml: Numeric;
-  current_measured_weight_g: Numeric | null;
-  empty_weight_g: Numeric | null;
+  /**
+   * Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44).
+   */
+  damage_reason: string | null;
+  /**
+   * Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018).
+   */
+  damaged_at: Timestamp | null;
   expires_at: Timestamp | null;
   fragrance_product_id: string;
   id: Generated<string>;
   identifier: string;
-  initial_measured_weight_g: Numeric | null;
   initial_volume_ml: Numeric;
   installed_at: Timestamp | null;
   liquidated_at: Timestamp | null;
@@ -377,7 +384,6 @@ export interface DispenseResults {
    */
   failure_code: string | null;
   id: Generated<string>;
-  measured_quantity_ml: Numeric | null;
   raw_payload: Json | null;
   received_at: Generated<Timestamp>;
   result_code: string | null;
@@ -444,6 +450,17 @@ export interface InventoryAdjustments {
 }
 
 export interface InventoryBatches {
+  authenticity_document_type: string | null;
+  authenticity_document_url: string | null;
+  authenticity_rejection_reason: string | null;
+  /**
+   * Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0013, ADR-0017). Chỉ chai thuộc lô APPROVED mới được lắp vào slot (BATCH_NOT_APPROVED).
+   */
+  authenticity_status: Generated<BatchAuthenticityStatus>;
+  authenticity_submitted_at: Timestamp | null;
+  authenticity_submitted_by: string | null;
+  authenticity_verified_at: Timestamp | null;
+  authenticity_verified_by: string | null;
   batch_number: string;
   brand_id: string;
   created_at: Generated<Timestamp>;
@@ -594,9 +611,30 @@ export interface Notifications {
   channel: string;
   content: string;
   created_at: Generated<Timestamp>;
+  /**
+   * Số lần đã thử gửi email. Job dừng tự thử khi đạt EMAIL_MAX_ATTEMPTS (FR-ALR-16 AC3).
+   */
+  delivery_attempts: Generated<number>;
   id: Generated<string>;
+  last_attempt_at: Timestamp | null;
+  /**
+   * Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2).
+   */
+  last_error: string | null;
+  /**
+   * Mã thư do dịch vụ email trả về khi nhận gửi (FR-ALR-16 AC2).
+   */
+  provider_message_id: string | null;
   read_at: Timestamp | null;
+  /**
+   * Hòm thư nhận tại thời điểm gửi (FR-ALR-16 AC2) — chụp lại, không đọc lại từ users.
+   */
+  recipient_address: string | null;
   recipient_user_id: string;
+  /**
+   * Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán thuê slot (FR-ALR-16 AC2).
+   */
+  reference_id: string | null;
   sent_at: Timestamp | null;
   status: Generated<NotificationStatus>;
   subject: string | null;
@@ -711,9 +749,13 @@ export interface RefillRequests {
   created_at: Generated<Timestamp>;
   fragrance_product_id: string;
   id: Generated<string>;
+  /**
+   * Ghi chú của Brand Admin khi tạo yêu cầu (RefillRequestCreate.note).
+   */
+  note: string | null;
   reason: RefillRequestReason;
   /**
-   * Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — xem §13.
+   * Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — chk_refill_request_completed_has_session.
    */
   refill_session_id: string | null;
   rejection_reason: string | null;
@@ -727,8 +769,6 @@ export interface RefillRequests {
 }
 
 export interface RefillSessions {
-  after_weight_g: Numeric | null;
-  before_weight_g: Numeric | null;
   brand_id: string;
   /**
    * Cổng chặn của FR-INV-14: phải true trước khi đóng phiếu.

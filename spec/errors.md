@@ -27,6 +27,15 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `FORBIDDEN_SCOPE` | 403 | Ngoài phạm vi slot của thương hiệu |
 | `REAUTH_REQUIRED` | 403 | Thao tác nhạy cảm cần xác thực lại |
 
+## Sản phẩm
+
+Thêm ngày 2026-11-02 theo ADR-0020 (upload ảnh sản phẩm, FR-PRD-01).
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt `PRODUCT_IMAGE_MAX_BYTES` |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải ảnh JPEG, PNG hay WebP hợp lệ — kiểm theo nội dung tệp, không theo đuôi tên hay `Content-Type` |
+
 ## Hóa đơn thuê slot
 
 | Mã | HTTP | Khi nào |
@@ -90,6 +99,23 @@ Thêm ngày 2026-10-14 theo ADR-0013.
 | `SLOT_HAS_ACTIVE_BOTTLE` | 409 | Slot đã có chai đang hoạt động |
 | `ADJUSTMENT_REASON_REQUIRED` | 400 | Điều chỉnh tồn kho thiếu lý do |
 | `REFILL_REQUEST_PENDING` | 409 | Slot đã có yêu cầu chưa hoàn tất |
+| `BATCH_NOT_APPROVED` | 409 | Lắp chai thuộc lô chưa được duyệt giấy tờ chính hãng (FR-INV-35, ADR-0017) |
+| `DOCUMENT_SUBMISSION_EXPIRED` | 409 | Nộp giấy tờ chính hãng khi thương hiệu không còn hóa đơn hiệu lực và mọi hóa đơn chờ nạp hàng đã quá `RENTAL_MAX_STOCKING_DAYS` (FR-INV-33, ADR-0017) |
+| `AUTHENTICITY_NOT_PENDING` | 409 | Duyệt/từ chối giấy tờ của lô không ở `PENDING`, hoặc nộp lại cho lô đã `APPROVED` (FR-INV-34, ADR-0017) |
+| `SHIPMENT_ALREADY_PROCESSED` | 409 | Tiếp nhận khai báo gửi hàng không còn ở `DECLARED` (FR-INV-24, ADR-0017) |
+| `REFILL_SESSION_OPEN` | 409 | Slot đã có phiếu nạp đang mở (FR-INV-29, ADR-0017) |
+| `REFILL_SESSION_NOT_OPEN` | 409 | Đóng phiếu nạp không ở `STARTED` (FR-INV-31, ADR-0017) |
+| `BOTTLE_NOT_IN_STOCK` | 409 | Chai chọn để lắp không ở `IN_STOCK` (FR-INV-31, ADR-0017) |
+
+## Vận hành và thông báo
+
+Thêm ngày 2026-10-24 theo ADR-0017.
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `REASON_REQUIRED` | 400 | Từ chối giấy tờ chính hãng (FR-INV-34) hoặc ép máy bảo trì (FR-MNT-17) mà thiếu lý do |
+| `NOTIFICATION_NOT_RETRYABLE` | 409 | Gửi lại thông báo không phải email ở `FAILED` (FR-ALR-16) |
+| `FORCED_MAINTENANCE` | — | Mã thất bại ghi trên đơn, **không qua HTTP**: đơn đã thanh toán chờ lượt khi máy bị ép bảo trì (FR-MNT-17, ADR-0017) |
 
 ## Phiếu khiếu nại hoàn tiền
 

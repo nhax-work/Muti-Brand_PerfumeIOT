@@ -27,4 +27,5 @@ export const ord = {
     'Chức năng khiếu nại hoàn tiền chưa được bật. Vui lòng liên hệ bộ phận kỹ thuật.',
   assigneeNotOperations: 'Người nhận xử lý phải là Operations Staff đang hoạt động',
   claimRateLimited: 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau một phút.',
+  orderRateLimited: 'Máy đang nhận quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.',
 } as const;

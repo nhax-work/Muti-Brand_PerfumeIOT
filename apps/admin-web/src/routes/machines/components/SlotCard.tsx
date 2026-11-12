@@ -20,6 +20,7 @@ import {
   ExperimentOutlined,
   AlertOutlined,
   CheckCircleFilled,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import type { SlotStatus } from '@scentstation/contracts';
 import { errorMessage } from '@/shared/api';
@@ -45,9 +46,18 @@ interface SlotCardProps {
   readonly brand: Brand | undefined;
   readonly product?: SlotProductInfo | undefined;
   readonly onOpenConfig: (slot: MachineSlot) => void;
+  /** Có khi người xem được xịt chẩn đoán (FR-MNT-09); bỏ trống thì không hiện nút. */
+  readonly onDiagnosticDispense?: ((slot: MachineSlot) => void) | undefined;
 }
 
-export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCardProps) {
+export function SlotCard({
+  slot,
+  rental,
+  brand,
+  product,
+  onOpenConfig,
+  onDiagnosticDispense,
+}: SlotCardProps) {
   const { t } = useI18n();
   const setSlotEnabled = useSetSlotEnabled();
   const [toggleModalOpen, setToggleModalOpen] = useState(false);
@@ -73,8 +83,8 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
         id: slot.id,
         enabled: nextEnabled,
         reason: nextEnabled
-          ? `Admin kích hoạt slot ${slot.slotNumber}`
-          : `Admin tạm dừng slot ${slot.slotNumber}`,
+          ? t('ui.slotEnableReason', { slotNumber: slot.slotNumber })
+          : t('ui.slotDisableReason', { slotNumber: slot.slotNumber }),
       });
       setToggleModalOpen(false);
 
@@ -109,7 +119,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
       });
     } catch (err) {
       notification.error({
-        message: 'Thao tác không thành công',
+        message: t('ui.actionFailed'),
         description: errorMessage(err, t),
         placement: 'topRight',
       });
@@ -152,10 +162,27 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
           </div>
         }
         extra={
-          <Space size={6} style={{ flexShrink: 0 }}>
+          <Space size={6} wrap style={{ flexShrink: 0 }}>
             <Button size="small" icon={<SettingOutlined />} onClick={() => onOpenConfig(slot)}>
               {t('ui.configSlot')}
             </Button>
+
+            {onDiagnosticDispense && (
+              <Tooltip
+                title={
+                  slot.calibratedDosageMl === null ? t('ui.diagnosticNotCalibrated') : undefined
+                }
+              >
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  disabled={slot.calibratedDosageMl === null}
+                  onClick={() => onDiagnosticDispense(slot)}
+                >
+                  {t('ui.diagnosticDispense')}
+                </Button>
+              </Tooltip>
+            )}
 
             {isAvailable ? (
               <Button
@@ -388,7 +415,7 @@ export function SlotCard({ slot, rental, brand, product, onOpenConfig }: SlotCar
                   </Tag>
                 )}
                 {slot.activeBottleId && (
-                  <Tooltip title={`Mã định danh chai: ${slot.activeBottleId}`}>
+                  <Tooltip title={t('ui.bottleIdTooltip', { bottleId: slot.activeBottleId })}>
                     <Tag
                       style={{
                         fontSize: 10,

@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **46 bảng**, **29 kiểu enum**.
+Tổng: **46 bảng**, **30 kiểu enum**.
 
 ---
 
@@ -27,6 +27,7 @@ Tổng: **46 bảng**, **29 kiểu enum**.
 | `agreement_kind` | `FRAMEWORK` · `ANNEX` |
 | `alert_severity` | `INFO` · `WARNING` · `HIGH` · `CRITICAL` |
 | `alert_status` | `OPEN` · `ACKNOWLEDGED` · `IN_PROGRESS` · `RESOLVED` · `CLOSED` |
+| `batch_authenticity_status` | `NOT_SUBMITTED` · `PENDING` · `APPROVED` · `REJECTED` |
 | `bottle_return_method` | `WAREHOUSE_PICKUP` · `SHIP_TO_BRAND` |
 | `bottle_status` | `IN_STOCK` · `INSTALLED` · `LOW` · `EMPTY` · `DAMAGED` · `EXPIRED` · `LIQUIDATED` · `RETURNED_TO_BRAND` |
 | `brand_payout_status` | `DRAFT` · `CONFIRMED` · `PAID` |
@@ -780,6 +781,7 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 - `brand_shipment_declarations_declared_by_fkey` — `FOREIGN KEY (declared_by) REFERENCES users(id)`
 - `brand_shipment_declarations_fragrance_product_id_fkey` — `FOREIGN KEY (fragrance_product_id) REFERENCES fragrance_products(id)`
 - `brand_shipment_declarations_received_by_fkey` — `FOREIGN KEY (received_by) REFERENCES users(id)`
+- `fk_shipment_product_same_brand` — `FOREIGN KEY (fragrance_product_id, brand_id) REFERENCES fragrance_products(id, brand_id)` — *ràng buộc cùng thương hiệu*
 
 **Index**
 
@@ -801,14 +803,27 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `supplier_info` | `jsonb` | có |  |  |
 | `created_by` | `uuid` | — |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `authenticity_status` | `batch_authenticity_status` | — | `'NOT_SUBMITTED'::batch_authenticity_status` | Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0013, ADR-0017). Chỉ chai thuộc lô APPROVED mới được lắp vào slot (BATCH_NOT_APPROVED). |
+| `authenticity_document_url` | `character varying(1000)` | có |  |  |
+| `authenticity_document_type` | `character varying(50)` | có |  |  |
+| `authenticity_submitted_by` | `uuid` | có |  |  |
+| `authenticity_submitted_at` | `timestamp with time zone` | có |  |  |
+| `authenticity_verified_by` | `uuid` | có |  |  |
+| `authenticity_verified_at` | `timestamp with time zone` | có |  |  |
+| `authenticity_rejection_reason` | `text` | có |  |  |
 
 **Ràng buộc kiểm tra**
 
+- `chk_batch_authenticity_rejection` — `CHECK (((authenticity_status = 'REJECTED'::batch_authenticity_status) = (authenticity_rejection_reason IS NOT NULL)))`
+- `chk_batch_authenticity_submitted` — `CHECK (((authenticity_status = 'NOT_SUBMITTED'::batch_authenticity_status) OR ((authenticity_document_url IS NOT NULL) AND (authenticity_submitted_by IS NOT NULL) AND (authenticity_submitted_at IS NOT NULL))))`
+- `chk_batch_authenticity_verified` — `CHECK (((authenticity_status = ANY (ARRAY['APPROVED'::batch_authenticity_status, 'REJECTED'::batch_authenticity_status])) = ((authenticity_verified_by IS NOT NULL) AND (authenticity_verified_at IS NOT NULL))))`
 - `chk_batch_quantity_positive` — `CHECK ((quantity_received > 0))`
 
 **Khóa ngoại**
 
 - `fk_batch_product_same_brand` — `FOREIGN KEY (fragrance_product_id, brand_id) REFERENCES fragrance_products(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `inventory_batches_authenticity_submitted_by_fkey` — `FOREIGN KEY (authenticity_submitted_by) REFERENCES users(id)`
+- `inventory_batches_authenticity_verified_by_fkey` — `FOREIGN KEY (authenticity_verified_by) REFERENCES users(id)`
 - `inventory_batches_brand_id_fkey` — `FOREIGN KEY (brand_id) REFERENCES brands(id)`
 - `inventory_batches_created_by_fkey` — `FOREIGN KEY (created_by) REFERENCES users(id)`
 - `inventory_batches_fragrance_product_id_fkey` — `FOREIGN KEY (fragrance_product_id) REFERENCES fragrance_products(id)`
@@ -816,6 +831,7 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 
 **Index**
 
+- `idx_batches_authenticity` — `USING btree (authenticity_status, brand_id)`
 - `inventory_batches_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_batch_brand_product_number` (UNIQUE) — `USING btree (brand_id, fragrance_product_id, batch_number)`
 - `uq_batch_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
@@ -833,9 +849,6 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `status` | `bottle_status` | — | `'IN_STOCK'::bottle_status` |  |
 | `initial_volume_ml` | `numeric(14,4)` | — |  |  |
 | `current_estimated_ml` | `numeric(14,4)` | — |  |  |
-| `empty_weight_g` | `numeric(14,4)` | có |  |  |
-| `initial_measured_weight_g` | `numeric(14,4)` | có |  |  |
-| `current_measured_weight_g` | `numeric(14,4)` | có |  |  |
 | `opened_at` | `timestamp with time zone` | có |  |  |
 | `installed_at` | `timestamp with time zone` | có |  |  |
 | `removed_at` | `timestamp with time zone` | có |  |  |
@@ -845,6 +858,8 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
 | `bottle_return_id` | `uuid` | có |  | Phiếu trả hàng chứa chai này (FR-EXP-26). Bắt buộc khi status = RETURNED_TO_BRAND. |
+| `damaged_at` | `timestamp with time zone` | có |  | Thời điểm Inventory Staff ghi nhận chai hư hỏng (POST /bottles/{id}/mark-damaged, ADR-0018). |
+| `damage_reason` | `text` | có |  | Lý do hư hỏng do Inventory Staff nhập — căn cứ của khoản bồi thường (FR-SLT-44). |
 
 **Ràng buộc kiểm tra**
 
@@ -885,8 +900,6 @@ Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (F
 | `performed_by` | `uuid` | — |  |  |
 | `status` | `refill_status` | — | `'STARTED'::refill_status` |  |
 | `checklist_completed` | `boolean` | — | `false` | Cổng chặn của FR-INV-14: phải true trước khi đóng phiếu. |
-| `before_weight_g` | `numeric(14,4)` | có |  |  |
-| `after_weight_g` | `numeric(14,4)` | có |  |  |
 | `notes` | `text` | có |  |  |
 | `started_at` | `timestamp with time zone` | — | `now()` |  |
 | `completed_at` | `timestamp with time zone` | có |  |  |
@@ -904,6 +917,7 @@ Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (F
 
 - `idx_refill_sessions_brand_machine` — `USING btree (brand_id, machine_id, started_at)`
 - `refill_sessions_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_slot_open_refill_session` (UNIQUE) — `USING btree (slot_id) WHERE (status = 'STARTED'::refill_status)`
 
 ### `inventory_adjustments`
 
@@ -1234,7 +1248,6 @@ Không lưu thông tin thẻ của khách, và không lưu tài khoản ngân h�
 | `failure_code` | `character varying(100)` | có |  | Chỉ dùng mã trong spec/errors.md §"Lệnh xịt": CMD_INVALID_SIGNATURE, CMD_EXPIRED, CMD_WRONG_MACHINE, CMD_DUPLICATE, DOOR_OPEN, SLOT_EMPTY, ACTUATOR_FAULT, HARD_TIMEOUT, NO_CURRENT. |
 | `executed_at` | `timestamp with time zone` | có |  |  |
 | `received_at` | `timestamp with time zone` | — | `now()` |  |
-| `measured_quantity_ml` | `numeric(10,4)` | có |  |  |
 | `sensor_snapshot` | `jsonb` | có |  |  |
 | `raw_payload` | `jsonb` | có |  |  |
 | `device_event_id` | `character varying(150)` | có |  |  |
@@ -1476,9 +1489,14 @@ Cảnh báo, bảo trì, yêu cầu bổ sung, thông báo và nhật ký kiểm
 | `reviewed_by` | `uuid` | có |  |  |
 | `rejection_reason` | `text` | có |  |  |
 | `scheduled_at` | `timestamp with time zone` | có |  |  |
-| `refill_session_id` | `uuid` | có |  | Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — xem §13. |
+| `refill_session_id` | `uuid` | có |  | Phiên nạp thực tế liên kết (FR-RFQ-08). Chỉ đặt được COMPLETED khi cột này có giá trị (FR-RFQ-09) — chk_refill_request_completed_has_session. |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `note` | `text` | có |  | Ghi chú của Brand Admin khi tạo yêu cầu (RefillRequestCreate.note). |
+
+**Ràng buộc kiểm tra**
+
+- `chk_refill_request_completed_has_session` — `CHECK ((((status)::text <> 'COMPLETED'::text) OR (refill_session_id IS NOT NULL)))`
 
 **Khóa ngoại**
 
@@ -1514,6 +1532,16 @@ Cảnh báo, bảo trì, yêu cầu bổ sung, thông báo và nhật ký kiểm
 | `sent_at` | `timestamp with time zone` | có |  |  |
 | `read_at` | `timestamp with time zone` | có |  |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `recipient_address` | `character varying(320)` | có |  | Hòm thư nhận tại thời điểm gửi (FR-ALR-16 AC2) — chụp lại, không đọc lại từ users. |
+| `reference_id` | `character varying(100)` | có |  | Mã sự kiện nghiệp vụ sinh ra thông báo, ví dụ id phiên thanh toán thuê slot (FR-ALR-16 AC2). |
+| `provider_message_id` | `character varying(255)` | có |  | Mã thư do dịch vụ email trả về khi nhận gửi (FR-ALR-16 AC2). |
+| `delivery_attempts` | `integer` | — | `0` | Số lần đã thử gửi email. Job dừng tự thử khi đạt EMAIL_MAX_ATTEMPTS (FR-ALR-16 AC3). |
+| `last_attempt_at` | `timestamp with time zone` | có |  |  |
+| `last_error` | `text` | có |  | Phản hồi lỗi của dịch vụ email ở lần thử gần nhất (FR-ALR-16 AC2). |
+
+**Ràng buộc kiểm tra**
+
+- `chk_notification_attempts_nonnegative` — `CHECK ((delivery_attempts >= 0))`
 
 **Khóa ngoại**
 
@@ -1522,6 +1550,7 @@ Cảnh báo, bảo trì, yêu cầu bổ sung, thông báo và nhật ký kiểm
 
 **Index**
 
+- `idx_notifications_email_outbox` — `USING btree (status, last_attempt_at) WHERE (((channel)::text = 'EMAIL'::text) AND (status = ANY (ARRAY['PENDING'::notification_status, 'FAILED'::notification_status])))`
 - `idx_notifications_recipient` — `USING btree (recipient_user_id, status, created_at)`
 - `notifications_pkey` (UNIQUE) — `USING btree (id)`
 

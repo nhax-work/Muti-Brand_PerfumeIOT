@@ -114,11 +114,10 @@ Số đo cảm biến (FR-IOT-04).
   "slots": [
     {
       "slot_number": 1,
-      "load_cell_g": 112.4,
       "actuator_status": "IDLE",
       "estimated_remaining_ml": 48.2
     },
-    { "slot_number": 2, "load_cell_g": 98.1, "actuator_status": "IDLE" }
+    { "slot_number": 2, "actuator_status": "IDLE" }
   ]
 }
 ```
@@ -128,22 +127,20 @@ Số đo cảm biến (FR-IOT-04).
 | `door_open` | boolean | có | Nguồn của FR-ALR-03 và của điều kiện từ chối `DOOR_OPEN` |
 | `power_status` | enum | có | `AC` \| `BATTERY` \| `LOW_BATTERY` |
 | `slots[].slot_number` | integer | có | Số hiệu slot trên máy, khớp `machine_slots.slot_number` |
-| `slots[].load_cell_g` | number | không | Khối lượng đo được; thiếu khi máy không có load cell |
 | `slots[].actuator_status` | enum | có | `IDLE` \| `RUNNING` \| `FAULT` |
 
-**Xử lý phía nền tảng.** Mỗi số đo thành một hàng `sensor_readings` (`reading_type` = `LOAD_CELL_G`,
-`DOOR_OPEN`, `POWER_STATUS`…). Sau đó:
+**Xử lý phía nền tảng.** Mỗi số đo thành một hàng `sensor_readings` (`reading_type` = `DOOR_OPEN`,
+`POWER_STATUS`, `ACTUATOR_STATUS`…). Sau đó:
 
 - `door_open = true` liên tục quá `DOOR_OPEN_ALERT_MIN` → cảnh báo FR-ALR-03, **trừ khi** máy đang ở
   chế độ `MAINTENANCE` **hoặc** đang tồn tại `refill_sessions` có `status = STARTED` cho cùng
   máy/slot (FR-INV-30). Hai ngoại lệ, không phải một.
 - `actuator_status = FAULT` → cảnh báo FR-ALR-05.
-- So `load_cell_g` với lượng tiêu thụ tính theo số lượt xịt; lệch quá `LEAK_DETECT_THRESHOLD_PCT`
-  → cảnh báo nghi ngờ rò rỉ (FR-INV-18, FR-INV-19).
 
-Telemetry **không** phải nguồn sự thật của tồn kho. `machine_slots.estimated_remaining_ml` được cập
-nhật theo số lượt xịt thành công và liều lượng đã hiệu chuẩn (FR-INV-09, FR-INV-10); load cell chỉ
-dùng để đối chiếu.
+Máy không có load cell (ADR-0019). Telemetry **không** mang số đo lượng nước hoa và không bao giờ ghi
+đè tồn kho. Nguồn sự thật duy nhất là `bottles.current_estimated_ml` và bản sao
+`machine_slots.estimated_remaining_ml`, trừ một liều `calibrated_dosage_ml` cho mỗi `RESULT` thành
+công (FR-INV-09, FR-INV-10, §4).
 
 ---
 
@@ -306,10 +303,9 @@ toàn lúc bấm không đạt).
   "device_event_id": "M001-1758012603-0043",
   "success": true,
   "executed_at": "2026-09-16T08:30:02Z",
-  "measured_quantity_ml": 0.118,
   "result_code": "OK",
   "failure_code": null,
-  "sensor_snapshot": { "load_cell_before_g": 112.4, "load_cell_after_g": 112.28 }
+  "sensor_snapshot": { "slot_number": 1, "actuator_run_ms": 412, "delivery_sensor_present": false }
 }
 ```
 
@@ -320,7 +316,6 @@ toàn lúc bấm không đạt).
 | `failure_code` | string \| null | khi không thành công | **Chỉ dùng mã trong `spec/errors.md`** |
 | `executed_at` | string | chỉ khi `RESULT` | Thời điểm kích hoạt cơ cấu |
 | `pressed_at` | string | khi `RESULT` của lệnh `CUSTOMER` | Thời điểm khách bấm nút (ADR-0007). `executed_at - pressed_at` ≤ `PRESS_TO_ACTUATION_MAX_MS` |
-| `measured_quantity_ml` | number | không | Suy từ load cell nếu có |
 | `device_event_id` | string | chỉ khi `RESULT` | Để khử trùng khi gửi lại |
 
 ### Ánh xạ sang `dispense_commands.status`
@@ -495,7 +490,6 @@ Không hằng số nào trong tài liệu này được hardcode. Tất cả đ�
 | `ACTUATOR_RUN_MS` | §7 `actuator_run_ms` mặc định |
 | `DEVICE_EVENT_BUFFER_MIN` | §4 dung lượng bộ đệm cục bộ |
 | `DOOR_OPEN_ALERT_MIN` | §3 ngưỡng cảnh báo cửa mở |
-| `LEAK_DETECT_THRESHOLD_PCT` | §3 ngưỡng nghi ngờ rò rỉ |
 | `WEBHOOK_TO_ARMED_MAX_SEC` | §6 từ webhook tới lúc đèn sáng (NFR-PER-03) |
 | `PRESS_TO_ACTUATION_MAX_MS` | §5.2, §6 từ lúc bấm tới lúc kích hoạt (NFR-PER-07) |
 

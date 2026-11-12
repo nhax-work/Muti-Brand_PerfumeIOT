@@ -7,8 +7,15 @@ export type { AuthenticatedUser } from './principal.loader.js';
 export {
   Public,
   RequirePermissions,
+  RequireAnyPermission,
   RequireReauth,
   CurrentUser,
   CurrentBrandScope,
 } from './decorators.js';
 export { hashPassword, generateTemporaryPassword } from './password.js';
+export {
+  EMAIL_VERIFICATION_SENDER,
+  DefaultEmailVerificationSender,
+  LoggingEmailVerificationSender,
+  type EmailVerificationSender,
+} from './email-verification-sender.js';

@@ -102,3 +102,13 @@ export function newRefreshToken(): string {
 export function hashRefreshToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+/** Token xác minh email mới: 32 byte ngẫu nhiên, mã hóa hex (ADR-0013). */
+export function newVerificationToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+/** Băm token xác minh email để lưu CSDL (ADR-0013). */
+export function hashVerificationToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}

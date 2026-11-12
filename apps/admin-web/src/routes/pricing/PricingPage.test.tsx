@@ -1,9 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { I18nProvider } from '@/shared/i18n';
+import { installDomStubs, renderScreen } from '@/test-utils';
 import PricingPage from './PricingPage';
 
 vi.mock('@/app/guards/RequireRole', () => ({
@@ -55,23 +53,7 @@ vi.mock('./api', async () => {
 });
 
 beforeAll(() => {
-  global.ResizeObserver = class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
-  Object.defineProperty(window, 'matchMedia', {
-    writable: true,
-    value: vi.fn().mockImplementation((query: string) => ({
-      matches: false,
-      media: query,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })),
-  });
+  installDomStubs();
 });
 
 afterEach(() => {
@@ -81,15 +63,7 @@ afterEach(() => {
 });
 
 function renderPage() {
-  return render(
-    <QueryClientProvider client={new QueryClient()}>
-      <I18nProvider>
-        <MemoryRouter>
-          <PricingPage />
-        </MemoryRouter>
-      </I18nProvider>
-    </QueryClientProvider>,
-  );
+  return renderScreen(<PricingPage />);
 }
 
 describe('PricingPage — bảng giá thuê slot (FR-SLT-30 ÷ 32)', () => {

@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { message } from 'antd';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
@@ -17,7 +18,9 @@ vi.mock('@/app/guards/RequireRole', () => ({
   RequireRole: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-const mockSave = vi.fn().mockResolvedValue({});
+const mockSave = vi.fn().mockResolvedValue({ id: 'p-new', imageUrl: null });
+const mockUpload = vi.fn().mockResolvedValue({});
+const mockDeleteImage = vi.fn().mockResolvedValue({});
 const mockDiscontinue = vi.fn().mockResolvedValue({});
 vi.mock('./api', async () => ({
   ...(await vi.importActual<typeof import('./api')>('./api')),
@@ -33,6 +36,7 @@ vi.mock('./api', async () => ({
           currency: 'VND',
           fullBottleRetailPrice: '2400000.0000',
           fullBottleVolumeMl: 50,
+          imageUrl: 'https://pub-test.r2.dev/products/p-1-abc.webp',
           status: 'ACTIVE',
         },
       ],
@@ -42,12 +46,31 @@ vi.mock('./api', async () => ({
   }),
   useSaveProduct: () => ({ mutateAsync: mockSave, isPending: false }),
   useDiscontinueProduct: () => ({ mutateAsync: mockDiscontinue, isPending: false }),
+  useUploadProductImage: () => ({ mutateAsync: mockUpload, isPending: false }),
+  useDeleteProductImage: () => ({ mutateAsync: mockDeleteImage, isPending: false }),
 }));
 
-beforeAll(installDomStubs);
+beforeAll(() => {
+  installDomStubs();
+  // jsdom không có URL.createObjectURL — ô xem trước ảnh cần nó.
+  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.revokeObjectURL = vi.fn();
+  // Mock message tĩnh để antd không dựng root React riêng cho hộp thông báo. Root đó không bao giờ
+  // unmount và cập nhật trễ qua Promise: khi runner CI chậm, nhịp render rơi sau lúc jsdom bị gỡ
+  // → "window is not defined" ngoài test, vitest báo unhandled error và thoát mã 1.
+  // Vì thế cũng KHÔNG gọi message.destroy() — chính lời gọi đó dựng root kia.
+  const dummyMessage = Object.assign(Promise.resolve(true), () => {}) as unknown as ReturnType<
+    typeof message.success
+  >;
+  vi.spyOn(message, 'success').mockReturnValue(dummyMessage);
+  vi.spyOn(message, 'error').mockReturnValue(dummyMessage);
+});
+
 afterEach(() => {
   cleanup();
   mockSave.mockClear();
+  mockUpload.mockClear();
+  mockDeleteImage.mockClear();
   mockUser = { id: 'u-1', brandId: 'b-1', roles: ['BRAND_ADMIN'] };
 });
 
@@ -74,11 +97,58 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     );
   });
 
+  it('test_FR_PRD_01_new_product_uploads_chosen_image_after_create', async () => {
+    renderScreen(<ProductsPage />);
+    fireEvent.click(screen.getByText('Thêm sản phẩm'));
+    const dialog = await screen.findByRole('dialog');
+    const [sku, name] = within(dialog).getAllByRole('textbox');
+    fireEvent.change(sku!, { target: { value: 'MA-004' } });
+    fireEvent.change(name!, { target: { value: 'Aurore Nuit' } });
+    fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '45000' } });
+    const file = new File(['x'], 'bottle.jpg', { type: 'image/jpeg' });
+    fireEvent.change(within(dialog).getByTestId('product-image-input'), {
+      target: { files: [file] },
+    });
+    expect(within(dialog).getByAltText('Ảnh sản phẩm').getAttribute('src')).toBe('blob:preview');
+    fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
+    await waitFor(() => expect(mockUpload).toHaveBeenCalledWith({ id: 'p-new', file }));
+    // Ảnh không đi kèm thân tạo sản phẩm — chỉ qua endpoint upload.
+    expect(mockSave.mock.calls[0]![0].body).not.toHaveProperty('imageUrl');
+  });
+
+  it('test_FR_PRD_01_rejects_wrong_type_and_oversized_file_before_upload', async () => {
+    renderScreen(<ProductsPage />);
+    fireEvent.click(screen.getByText('Thêm sản phẩm'));
+    const dialog = await screen.findByRole('dialog');
+    const input = within(dialog).getByTestId('product-image-input');
+    fireEvent.change(input, {
+      target: { files: [new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' })] },
+    });
+    expect(within(dialog).getByText('Chỉ nhận ảnh JPEG, PNG hoặc WebP')).toBeTruthy();
+    const big = new File([new Uint8Array(6 * 1024 * 1024)], 'big.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [big] } });
+    expect(within(dialog).getByText('Ảnh vượt quá 5 MB')).toBeTruthy();
+    expect(within(dialog).queryByAltText('Ảnh sản phẩm')).toBeNull();
+  });
+
+  it('test_FR_PRD_01_remove_existing_image_calls_delete', async () => {
+    mockSave.mockResolvedValueOnce({ id: 'p-1', imageUrl: null });
+    renderScreen(<ProductsPage />);
+    fireEvent.click(screen.getByText('Sửa'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByAltText('Ảnh sản phẩm').getAttribute('src')).toContain('r2.dev');
+    fireEvent.click(within(dialog).getByText('Xóa ảnh'));
+    fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
+    await waitFor(() => expect(mockDeleteImage).toHaveBeenCalledWith('p-1'));
+    expect(mockUpload).not.toHaveBeenCalled();
+  });
+
   it('sửa thì không đổi được SKU', async () => {
     renderScreen(<ProductsPage />);
     fireEvent.click(screen.getByText('Sửa'));
     const dialog = await screen.findByRole('dialog');
     expect((within(dialog).getAllByRole('textbox')[0] as HTMLInputElement).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByText('Hủy'));
   });
 
   it('Super Admin chỉ xem — không có nút thêm, sửa, ngừng kinh doanh', () => {
