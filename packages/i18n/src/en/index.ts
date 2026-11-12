@@ -1752,6 +1752,11 @@ export const en: SameKeysAs<typeof vi> = {
       'The warehouse has received the goods; photos are kept as evidence and can no longer change.',
     declareShipmentSubmit: 'Declare',
     receiveShipmentSubmit: 'Confirm receipt',
+    agreementPublishedOn: 'Published {time}',
+    agreementContentHint:
+      'Start each article with a line "ĐIỀU 1: Article name"; write numbered items as "1. …"; "Label: value" lines at the top show as general information.',
+    agreementPreview: 'Preview as displayed',
+    agreementPreviewEmpty: 'Enter the terms to see a preview.',
   },
 
   kiosk: {

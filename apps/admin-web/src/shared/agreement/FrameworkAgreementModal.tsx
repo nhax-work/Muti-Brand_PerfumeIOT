@@ -1,8 +1,11 @@
+import { FileProtectOutlined } from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
-import { Button, Checkbox, Modal, Spin, Typography, message } from 'antd';
+import { Alert, Button, Checkbox, Modal, Skeleton, Typography, message } from 'antd';
 import { useState } from 'react';
 import { errorMessage } from '@/shared/api';
+import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { AgreementDocument } from './AgreementDocument';
 import { useAcceptAgreement, useCurrentAgreement } from './api';
 
 interface Props {
@@ -28,7 +31,7 @@ export function FrameworkAgreementModal({
   busy = false,
 }: Props) {
   const { t } = useI18n();
-  const { data } = useCurrentAgreement({ enabled: open });
+  const { data, error } = useCurrentAgreement({ enabled: open });
   const agreement = data?.agreement;
   const accept = useAcceptAgreement();
   const [checked, setChecked] = useState(false);
@@ -50,15 +53,48 @@ export function FrameworkAgreementModal({
     }
   };
 
+  const title = (
+    <div className="agreement-modal-header">
+      <span className="agreement-modal-icon" aria-hidden>
+        <FileProtectOutlined />
+      </span>
+      <div className="agreement-modal-heading">
+        <Typography.Title level={5} style={{ margin: 0 }}>
+          {agreement?.title ?? t('ui.frameworkAgreementTitle')}
+        </Typography.Title>
+        {agreement?.publishedAt && (
+          <div className="agreement-modal-meta">
+            <Typography.Text type="secondary">
+              {t('ui.agreementPublishedOn', { time: formatDateTime(agreement.publishedAt) })}
+            </Typography.Text>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Còn bản đã tải thì vẫn cho đọc dù lần tải lại lỗi; chỉ báo lỗi khi chưa có gì để hiện.
+  const body = agreement ? (
+    <AgreementDocument content={agreement.content} />
+  ) : error ? (
+    <Alert type="error" showIcon message={errorMessage(error, t)} />
+  ) : (
+    <div
+      className="agreement-paper agreement-paper--loading"
+      aria-label={t('ui.loadingFrameworkAgreement')}
+    >
+      <Skeleton active title paragraph={{ rows: 8 }} />
+    </div>
+  );
+
   return (
     <Modal
-      title={
-        agreement
-          ? `${agreement.title} (${t('ui.agreementVersion', { version: agreement.version })})`
-          : t('ui.frameworkAgreementTitle')
-      }
+      title={title}
       open={open}
       onCancel={close}
+      centered
+      width={780}
+      className="agreement-modal"
       footer={[
         <Button key="cancel" onClick={close}>
           {t(cancelLabel)}
@@ -73,25 +109,20 @@ export function FrameworkAgreementModal({
           {t('ui.agreementAcceptBtn')}
         </Button>,
       ]}
-      width={700}
     >
-      <Typography.Paragraph type="secondary">{t('ui.frameworkAgreementDesc')}</Typography.Paragraph>
-      <div className="framework-agreement-content">
-        {agreement ? (
-          agreement.content
-        ) : (
-          <div style={{ textAlign: 'center', padding: '30px 0' }}>
-            <Spin tip={t('ui.loadingFrameworkAgreement')} />
-          </div>
-        )}
+      <Typography.Paragraph type="secondary" className="agreement-modal-desc">
+        {t('ui.frameworkAgreementDesc')}
+      </Typography.Paragraph>
+      {body}
+      <div className={`agreement-consent${checked ? ' is-checked' : ''}`}>
+        <Checkbox
+          checked={checked}
+          disabled={!agreement}
+          onChange={(e) => setChecked(e.target.checked)}
+        >
+          {t('ui.agreementCheckbox')}
+        </Checkbox>
       </div>
-      <Checkbox
-        checked={checked}
-        disabled={!agreement}
-        onChange={(e) => setChecked(e.target.checked)}
-      >
-        {t('ui.agreementCheckbox')}
-      </Checkbox>
     </Modal>
   );
 }

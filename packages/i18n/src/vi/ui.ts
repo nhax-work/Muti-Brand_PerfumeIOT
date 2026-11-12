@@ -1316,4 +1316,9 @@ export const ui = {
   shipmentPhotosLocked: 'Kho đã nhận hàng, ảnh được giữ làm bằng chứng và không sửa được nữa.',
   declareShipmentSubmit: 'Khai báo',
   receiveShipmentSubmit: 'Xác nhận tiếp nhận',
+  agreementPublishedOn: 'Công bố lúc {time}',
+  agreementContentHint:
+    'Mỗi điều mở đầu bằng một dòng "ĐIỀU 1: Tên điều"; mục đánh số viết "1. …"; các dòng "Nhãn: giá trị" ở đầu văn bản hiện thành thông tin chung.',
+  agreementPreview: 'Xem trước bản hiển thị',
+  agreementPreviewEmpty: 'Nhập nội dung điều khoản để xem trước.',
 } as const;

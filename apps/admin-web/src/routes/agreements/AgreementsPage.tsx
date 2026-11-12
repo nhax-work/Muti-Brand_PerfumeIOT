@@ -2,7 +2,9 @@ import { CheckCircleOutlined, EyeOutlined, PlusOutlined, SendOutlined } from '@a
 import {
   Alert,
   Button,
+  Collapse,
   Descriptions,
+  Empty,
   Form,
   Input,
   Modal,
@@ -17,6 +19,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
+import { AgreementDocument } from '@/shared/agreement';
 import { ReauthCancelled, useReauth } from '@/shared/auth';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
@@ -47,6 +50,7 @@ export default function AgreementsPage() {
   const [viewingVersion, setViewingVersion] = useState<AgreementVersion | null>(null);
   const [publishingVersion, setPublishingVersion] = useState<AgreementVersion | null>(null);
   const [form] = Form.useForm<AgreementVersionCreate>();
+  const draftContent = Form.useWatch('content', form);
 
   const openCreateModal = () => {
     setCreateOpen(true);
@@ -256,15 +260,29 @@ export default function AgreementsPage() {
             <Form.Item
               name="content"
               label={t('ui.agreementContentLabel')}
+              extra={t('ui.agreementContentHint')}
               rules={[{ required: true, whitespace: true, message: t('validation.required') }]}
             >
-              <Input.TextArea
-                rows={10}
-                placeholder={t('ui.agreementContentPlaceholder')}
-                style={{ fontFamily: 'monospace' }}
-              />
+              <Input.TextArea rows={10} placeholder={t('ui.agreementContentPlaceholder')} />
             </Form.Item>
           </Form>
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'preview',
+                label: t('ui.agreementPreview'),
+                children: draftContent?.trim() ? (
+                  <AgreementDocument content={draftContent} compact />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t('ui.agreementPreviewEmpty')}
+                  />
+                ),
+              },
+            ]}
+          />
         </Modal>
 
         {/* Modal xem toàn văn nội dung phiên bản */}
@@ -273,11 +291,12 @@ export default function AgreementsPage() {
           title={viewingTitle}
           footer={[
             <Button key="close" onClick={() => setViewingVersion(null)}>
-              {t('ui.cancel')}
+              {t('ui.close')}
             </Button>,
           ]}
           onCancel={() => setViewingVersion(null)}
-          width={760}
+          width={780}
+          centered
         >
           {viewingVersion && (
             <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -300,21 +319,7 @@ export default function AgreementsPage() {
                   <Typography.Text code>{viewingVersion.contentHash}</Typography.Text>
                 </Descriptions.Item>
               </Descriptions>
-              <div
-                style={{
-                  maxHeight: 380,
-                  overflowY: 'auto',
-                  padding: 16,
-                  background: '#fafafa',
-                  border: '1px solid #d9d9d9',
-                  borderRadius: 6,
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'monospace',
-                  fontSize: 13,
-                }}
-              >
-                {viewingVersion.content}
-              </div>
+              <AgreementDocument content={viewingVersion.content} />
             </Space>
           )}
         </Modal>

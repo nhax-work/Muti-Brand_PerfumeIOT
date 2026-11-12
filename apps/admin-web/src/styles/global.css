@@ -8,6 +8,12 @@
   --color-offline: #94a3b8;
   --surface-muted: #f1f5f9;
   --line: #e2e8f0;
+  --surface: #ffffff;
+  --surface-fade: rgba(255, 255, 255, 0);
+  --text-main: #1e293b;
+  --text-strong: #0f172a;
+  --text-muted: #64748b;
+  --color-primary-soft: #f0f9ff;
   --radius-lg: 12px;
   --radius-xl: 16px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -76,19 +82,225 @@ body {
   color: #334155;
 }
 
-/* Nội dung hợp đồng khung trong hộp thoại đồng ý */
-.framework-agreement-content {
-  max-height: 350px;
-  min-height: 120px;
+/* Văn bản hợp đồng khung / phụ lục (shared/agreement/AgreementDocument) */
+.agreement-paper {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.agreement-paper-scroll {
+  max-height: min(56vh, 480px);
   overflow-y: auto;
-  padding: 16px;
-  margin-bottom: 16px;
-  background: #f9f9f9;
-  border: 1px solid #e8e8e8;
-  border-radius: 6px;
-  white-space: pre-wrap;
-  font-family: monospace;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.agreement-paper-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.agreement-paper-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, var(--surface-fade), var(--surface));
+}
+
+.agreement-paper--compact .agreement-paper-scroll {
+  max-height: 320px;
+}
+
+.agreement-paper--loading {
+  padding: 32px 40px;
+}
+
+.agreement-doc {
+  padding: 32px 44px 36px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-main);
+}
+
+.agreement-paper--compact .agreement-doc {
+  padding: 20px 24px 24px;
+}
+
+.agreement-doc > :first-child {
+  margin-top: 0;
+}
+
+.agreement-doc-head {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.agreement-doc-title {
+  margin: 0 auto;
+  max-width: 560px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.agreement-doc-rule {
+  display: block;
+  width: 48px;
+  height: 2px;
+  margin: 14px auto 0;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
+.agreement-doc-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 20px;
+  margin: 0 0 8px;
+  padding: 14px 18px;
   font-size: 13px;
+  background: var(--surface-muted);
+  border-radius: 8px;
+}
+
+.agreement-doc-meta dt {
+  color: var(--text-muted);
+}
+
+.agreement-doc-meta dd {
+  margin: 0;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.agreement-doc-article {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 28px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text-strong);
+}
+
+.agreement-doc-article-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.agreement-doc-subheading {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.agreement-doc-paragraph {
+  margin: 0 0 10px;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.agreement-doc-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.agreement-doc-list li {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  margin-bottom: 6px;
+  text-align: justify;
+}
+
+.agreement-doc-list-marker {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.agreement-annex-body {
+  margin-bottom: 16px;
+}
+
+/* Hộp thoại đồng ý hợp đồng khung */
+.agreement-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 24px;
+}
+
+.agreement-modal-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  font-size: 22px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.agreement-modal-heading {
+  min-width: 0;
+}
+
+.agreement-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.agreement-modal .ant-modal-header {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.agreement-modal .ant-modal-footer {
+  margin-top: 20px;
+}
+
+.agreement-modal-desc.ant-typography {
+  margin-bottom: 14px;
+}
+
+.agreement-consent {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.agreement-consent.is-checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 .admin-header {
