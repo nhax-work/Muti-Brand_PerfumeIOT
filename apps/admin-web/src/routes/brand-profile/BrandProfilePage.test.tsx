@@ -10,6 +10,9 @@ vi.mock('@/app/guards/RequireRole', () => ({
 
 const mockUpdate = vi.fn().mockResolvedValue({});
 const mockUpdateLegal = vi.fn().mockResolvedValue({});
+const mockUploadLogo = vi.fn().mockResolvedValue({});
+const mockDeleteLogo = vi.fn().mockResolvedValue({});
+let mockLogoUrl: string | null = null;
 vi.mock('./api', async () => ({
   ...(await vi.importActual<typeof import('./api')>('./api')),
   useMyBrand: () => ({
@@ -17,6 +20,7 @@ vi.mock('./api', async () => ({
       id: 'b-1',
       code: 'MAISON_AURORE',
       name: 'Maison Aurore',
+      logoUrl: mockLogoUrl,
       status: 'ACTIVE',
       contactInfo: { email: 'hello@aurore.vn', website: 'aurore.vn' },
       taxCode: '0123456789',
@@ -33,10 +37,23 @@ vi.mock('./api', async () => ({
   }),
   useUpdateMyBrand: () => ({ mutateAsync: mockUpdate, isPending: false }),
   useUpdateMyBrandLegalProfile: () => ({ mutateAsync: mockUpdateLegal, isPending: false }),
+  useUploadMyBrandLogo: () => ({ mutateAsync: mockUploadLogo, isPending: false }),
+  useDeleteMyBrandLogo: () => ({ mutateAsync: mockDeleteLogo, isPending: false }),
 }));
 
-beforeAll(installDomStubs);
-afterEach(cleanup);
+beforeAll(() => {
+  installDomStubs();
+  // jsdom không có URL.createObjectURL — ô xem trước logo cần nó.
+  URL.createObjectURL = vi.fn(() => 'blob:preview');
+  URL.revokeObjectURL = vi.fn();
+});
+afterEach(() => {
+  cleanup();
+  mockUpdate.mockClear();
+  mockUploadLogo.mockClear();
+  mockDeleteLogo.mockClear();
+  mockLogoUrl = null;
+});
 
 describe('BrandProfilePage (FR-BND-06, FR-BND-09)', () => {
   it('mã thương hiệu chỉ đọc; lưu giữ lại khóa liên hệ màn hình không quản lý', async () => {
@@ -90,5 +107,40 @@ describe('BrandProfilePage (FR-BND-06, FR-BND-09)', () => {
         }),
       ),
     );
+  });
+});
+
+describe('BrandProfilePage — logo thương hiệu (FR-BND-06, ADR-0022)', () => {
+  it('test_FR_BND_06_logo_is_chosen_as_image_not_url_and_uploaded_after_profile_save', async () => {
+    renderScreen(<BrandProfilePage />);
+    expect(screen.queryByPlaceholderText('https://')).toBeNull();
+    const file = new File(['png'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('brand-logo-input'), { target: { files: [file] } });
+    expect(screen.getByAltText('Logo').getAttribute('src')).toBe('blob:preview');
+
+    fireEvent.click(screen.getAllByText('Lưu thay đổi')[0]!);
+    await waitFor(() => expect(mockUploadLogo).toHaveBeenCalledWith(file));
+    expect(mockUpdate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ logoUrl: expect.anything() }),
+    );
+    expect(mockUpdate.mock.invocationCallOrder[0]!).toBeLessThan(
+      mockUploadLogo.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it('test_FR_BND_06_logo_rejects_non_image_in_browser', () => {
+    renderScreen(<BrandProfilePage />);
+    const file = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
+    fireEvent.change(screen.getByTestId('brand-logo-input'), { target: { files: [file] } });
+    expect(screen.getByText('Chỉ nhận ảnh JPEG, PNG hoặc WebP')).toBeTruthy();
+  });
+
+  it('test_FR_BND_06_remove_existing_logo_calls_delete', async () => {
+    mockLogoUrl = 'https://pub-test.r2.dev/brands/b-1-abc.webp';
+    renderScreen(<BrandProfilePage />);
+    fireEvent.click(screen.getByText('Xóa ảnh'));
+    fireEvent.click(screen.getAllByText('Lưu thay đổi')[0]!);
+    await waitFor(() => expect(mockDeleteLogo).toHaveBeenCalled());
+    expect(mockUploadLogo).not.toHaveBeenCalled();
   });
 });

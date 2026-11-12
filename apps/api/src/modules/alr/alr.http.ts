@@ -21,6 +21,10 @@ const ListQuery = z.object({
   channel: z.enum(['IN_APP', 'EMAIL']).optional(),
   type: z.string().max(80).optional(),
   brandId: z.string().uuid().optional(),
+  mine: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 @Controller('notifications')
@@ -32,6 +36,26 @@ export class NotificationsController {
     const query = parseBody(ListQuery, rawQuery);
     const { items, total } = await this.alr.list(actor, query);
     return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
+  }
+
+  /** ADR-0028: số chưa đọc cho chuông — khai báo trước `:id` cho dễ đọc; fastify ưu tiên đường tĩnh. */
+  @Get('unread-count')
+  unreadCount(@CurrentUser() actor: AuthenticatedUser) {
+    return this.alr.countUnread(actor);
+  }
+
+  /** ADR-0028 */
+  @Post('read-all')
+  @HttpCode(200)
+  readAll(@CurrentUser() actor: AuthenticatedUser) {
+    return this.alr.markAllRead(actor);
+  }
+
+  /** ADR-0028 */
+  @Post(':id/read')
+  @HttpCode(200)
+  read(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown) {
+    return this.alr.markRead(actor, parseBody(IdParam, params).id);
   }
 
   /** FR-ALR-16 AC2 */

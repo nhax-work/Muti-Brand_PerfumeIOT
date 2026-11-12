@@ -8,14 +8,17 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
-import { sql, type Kysely, type Transaction } from 'kysely';
+import { sql, type ExpressionBuilder, type Kysely, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
   BatchAuthenticityStatus,
   BottleStatus,
+  RefillRequestReason,
+  RefillRequestStatus,
   RefillStatus,
   RevenueOwnerType,
   ShipmentDeclarationStatus,
+  ShipmentPhotoKind,
   SlotStatus,
 } from '../../shared/db/types.generated.js';
 import {
@@ -41,6 +44,15 @@ export interface ShipmentRecord {
   readonly receivedBy: string | null;
   readonly receivedAt: Date | null;
   readonly resultingBatchId: string | null;
+  readonly createdAt: Date;
+  /** Ảnh thương hiệu gửi kèm khai báo, cũ trước mới sau (ADR-0024). */
+  readonly photos: readonly ShipmentPhotoRecord[];
+}
+
+export interface ShipmentPhotoRecord {
+  readonly id: string;
+  readonly kind: ShipmentPhotoKind;
+  readonly url: string;
   readonly createdAt: Date;
 }
 
@@ -94,6 +106,45 @@ export interface RefillSessionRecord {
   readonly notes: string | null;
   readonly startedAt: Date;
   readonly completedAt: Date | null;
+}
+
+/** Phiếu nạp kèm thông tin hiển thị: số slot, thương hiệu, sản phẩm cần lắp (ADR-0026). */
+export interface RefillSessionView extends RefillSessionRecord {
+  readonly slotNumber: number;
+  readonly brandName: string;
+  readonly fragranceProductId: string | null;
+  readonly productName: string | null;
+}
+
+/** Một dòng của `refillWorklist` — tên cột như CSDL; service xếp loại việc (ADR-0026). */
+export interface RefillWorklistRow {
+  readonly slot_id: string;
+  readonly slot_number: number;
+  readonly active_bottle_id: string | null;
+  readonly estimated_remaining_sprays: number;
+  readonly machine_id: string;
+  readonly machine_name: string;
+  readonly machine_serial: string;
+  readonly location_name: string;
+  readonly slot_rental_id: string;
+  readonly rental_status: string;
+  readonly brand_id: string;
+  readonly brand_name: string;
+  readonly fragrance_product_id: string | null;
+  readonly product_name: string | null;
+  readonly low_stock: boolean;
+  readonly refill_request_id: string | null;
+  readonly refill_request_reason: RefillRequestReason | null;
+  readonly refill_request_status: RefillRequestStatus | null;
+  readonly scheduled_at: Date | null;
+  readonly open_refill_session_id: string | null;
+  readonly suggested_bottle_id: string | null;
+  readonly suggested_bottle_identifier: string | null;
+  readonly suggested_bottle_ml: string | null;
+  readonly suggested_bottle_expires_at: Date | null;
+  readonly available_bottle_count: number;
+  readonly unexpired_bottle_count: number;
+  readonly pending_shipment: boolean;
 }
 
 /** Slot cùng máy và chai đang lắp — đọc khi mở/đóng phiếu nạp. */
@@ -192,6 +243,14 @@ export class InvQueries {
           .select('rb.id')
           .limit(1)
           .as('resulting_batch_id'),
+      )
+      .select(
+        sql<PhotoJson[]>`coalesce((
+          SELECT json_agg(json_build_object('id', p.id, 'kind', p.kind, 'url', p.url,
+                                            'created_at', p.created_at)
+                          ORDER BY p.created_at, p.id)
+            FROM shipment_declaration_photos p
+           WHERE p.declaration_id = d.id), '[]'::json)`.as('photos'),
       );
   }
 
@@ -232,13 +291,25 @@ export class InvQueries {
     brandId: string;
     fragranceProductId: string;
     declaredQuantity: number;
+    declaredBottleVolumeMl: string;
+    productSku: string;
     status: ShipmentDeclarationStatus;
   } | null> {
     const row = await tx
-      .selectFrom('brand_shipment_declarations')
-      .select(['id', 'brand_id', 'fragrance_product_id', 'declared_quantity', 'status'])
-      .where('id', '=', id)
-      .forUpdate()
+      .selectFrom('brand_shipment_declarations as d')
+      .innerJoin('fragrance_products as p', 'p.id', 'd.fragrance_product_id')
+      .select([
+        'd.id',
+        'd.brand_id',
+        'd.fragrance_product_id',
+        'd.declared_quantity',
+        'd.declared_bottle_volume_ml',
+        'd.status',
+        'p.sku',
+      ])
+      .where('d.id', '=', id)
+      // Chỉ khóa khai báo; không khóa sản phẩm để không chặn việc sửa sản phẩm song song.
+      .forUpdate('d')
       .executeTakeFirst();
     return row
       ? {
@@ -246,9 +317,64 @@ export class InvQueries {
           brandId: row.brand_id,
           fragranceProductId: row.fragrance_product_id,
           declaredQuantity: row.declared_quantity,
+          declaredBottleVolumeMl: row.declared_bottle_volume_ml,
+          productSku: row.sku,
           status: row.status,
         }
       : null;
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Ảnh khai báo gửi hàng (ADR-0024)
+  // -----------------------------------------------------------------------------------
+
+  async countShipmentPhotos(
+    declarationId: string,
+    kind: ShipmentPhotoKind,
+    executor: Executor = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('shipment_declaration_photos')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .where('declaration_id', '=', declarationId)
+      .where('kind', '=', kind)
+      .executeTakeFirstOrThrow();
+    return Number(row.n);
+  }
+
+  async insertShipmentPhoto(
+    input: { declarationId: string; kind: ShipmentPhotoKind; url: string; uploadedBy: string },
+    executor: Executor = this.db,
+  ): Promise<string> {
+    const row = await executor
+      .insertInto('shipment_declaration_photos')
+      .values({
+        declaration_id: input.declarationId,
+        kind: input.kind,
+        url: input.url,
+        uploaded_by: input.uploadedBy,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async findShipmentPhoto(
+    declarationId: string,
+    photoId: string,
+    executor: Executor = this.db,
+  ): Promise<ShipmentPhotoRecord | null> {
+    const row = await executor
+      .selectFrom('shipment_declaration_photos')
+      .select(['id', 'kind', 'url', 'created_at'])
+      .where('id', '=', photoId)
+      .where('declaration_id', '=', declarationId)
+      .executeTakeFirst();
+    return row ? { id: row.id, kind: row.kind, url: row.url, createdAt: row.created_at } : null;
+  }
+
+  async deleteShipmentPhoto(photoId: string, executor: Executor = this.db): Promise<void> {
+    await executor.deleteFrom('shipment_declaration_photos').where('id', '=', photoId).execute();
   }
 
   async findProductBrand(productId: string, executor: Executor = this.db): Promise<string | null> {
@@ -531,6 +657,7 @@ export class InvQueries {
     filter: PageFilter & {
       readonly status?: BottleStatus | undefined;
       readonly batchId?: string | undefined;
+      readonly fragranceProductId?: string | undefined;
     },
   ): Promise<{ items: BottleRecord[]; total: number }> {
     const ownedByBrand = scope.kind === 'BRAND';
@@ -538,6 +665,9 @@ export class InvQueries {
     if (ownedByBrand) base = base.where('bt.owner', '=', 'BRAND');
     if (filter.status) base = base.where('bt.status', '=', filter.status);
     if (filter.batchId) base = base.where('bt.batch_id', '=', filter.batchId);
+    if (filter.fragranceProductId) {
+      base = base.where('bt.fragrance_product_id', '=', filter.fragranceProductId);
+    }
     const { total } = await base
       .select((eb) => eb.fn.countAll<string>().as('total'))
       .executeTakeFirstOrThrow();
@@ -547,6 +677,9 @@ export class InvQueries {
       .$if(ownedByBrand, (qb) => qb.where('bt.owner', '=', 'BRAND'))
       .$if(filter.status !== undefined, (qb) => qb.where('bt.status', '=', filter.status!))
       .$if(filter.batchId !== undefined, (qb) => qb.where('bt.batch_id', '=', filter.batchId!))
+      .$if(filter.fragranceProductId !== undefined, (qb) =>
+        qb.where('bt.fragrance_product_id', '=', filter.fragranceProductId!),
+      )
       .orderBy('bt.created_at', 'desc')
       .orderBy('bt.id', 'desc')
       .limit(filter.pageSize)
@@ -576,6 +709,31 @@ export class InvQueries {
           expiresAt: row.expires_at,
         }
       : null;
+  }
+
+  /**
+   * ADR-0025: tạo đủ `quantity_received` chai cho lô vừa nhận, mã `{prefix}{số thứ tự}` đệm 0 tới
+   * `width` chữ số. Một câu INSERT … SELECT generate_series — không vòng lặp, không giới hạn tham số.
+   */
+  async insertBottlesForBatch(
+    data: {
+      readonly batchId: string;
+      readonly identifierPrefix: string;
+      readonly width: number;
+      readonly initialVolumeMl: string;
+    },
+    tx: Executor,
+  ): Promise<number> {
+    const result = await sql`
+      INSERT INTO bottles (brand_id, batch_id, fragrance_product_id, identifier,
+                           initial_volume_ml, current_estimated_ml, expires_at)
+      SELECT b.brand_id, b.id, b.fragrance_product_id,
+             ${data.identifierPrefix} || lpad(g::text, ${data.width}, '0'),
+             ${data.initialVolumeMl}::numeric, ${data.initialVolumeMl}::numeric, b.expires_at
+        FROM inventory_batches b
+       CROSS JOIN generate_series(1, b.quantity_received) AS g
+       WHERE b.id = ${data.batchId}`.execute(tx);
+    return Number(result.numAffectedRows ?? 0n);
   }
 
   async insertBottle(
@@ -854,24 +1012,136 @@ export class InvQueries {
 
     const rows = await base
       .selectAll('rs')
+      .select(refillDisplayColumns)
       .orderBy('rs.started_at', 'desc')
       .orderBy('rs.id', 'desc')
       .limit(filter.pageSize)
       .offset((filter.page - 1) * filter.pageSize)
       .execute();
-    return { items: rows.map(toRefillSession), total: Number(total) };
+    return { items: rows.map(toRefillSessionView), total: Number(total) };
   }
 
   async findRefillSession(
     id: string,
     executor: Executor = this.db,
-  ): Promise<RefillSessionRecord | null> {
+  ): Promise<RefillSessionView | null> {
     const row = await executor
-      .selectFrom('refill_sessions')
-      .selectAll()
-      .where('id', '=', id)
+      .selectFrom('refill_sessions as rs')
+      .selectAll('rs')
+      .select(refillDisplayColumns)
+      .where('rs.id', '=', id)
       .executeTakeFirst();
-    return row ? toRefillSession(row) : null;
+    return row ? toRefillSessionView(row) : null;
+  }
+
+  /**
+   * ADR-0026: mỗi slot có hóa đơn đã thanh toán (đang hiệu lực, hoặc `DRAFT` đã trả tiền chờ lắp chai
+   * đầu tiên) cùng các dữ kiện để service xếp loại việc. Mỗi slot một dòng; slot đang bán bình thường
+   * cũng trả về — service lọc bỏ. Chai gợi ý dùng đúng điều kiện của `assertInstallable` (đúng thương
+   * hiệu, đúng sản phẩm, lô đã duyệt giấy tờ, còn hạn), hết hạn sớm nhất trước — gợi ý không bao giờ
+   * bị máy chủ từ chối khi lắp.
+   */
+  async refillWorklist(scope: BrandScope, now: Date): Promise<RefillWorklistRow[]> {
+    const result = await sql<RefillWorklistRow>`
+      WITH r AS (
+        SELECT DISTINCT ON (sr.slot_id)
+               sr.id, sr.slot_id, sr.brand_id, sr.fragrance_product_id, sr.status
+          FROM slot_rentals sr
+         WHERE (sr.status::text = ANY(${sql.val([...HOLDING_RENTAL_STATUSES])})
+                OR (sr.status = 'DRAFT' AND sr.paid_at IS NOT NULL AND sr.cancelled_at IS NULL))
+           AND ${brandScopedByColumn(scope, 'sr.brand_id')}
+         ORDER BY sr.slot_id, sr.created_at DESC
+      )
+      SELECT s.id                          AS slot_id,
+             s.slot_number,
+             s.active_bottle_id,
+             s.estimated_remaining_sprays,
+             m.id                          AS machine_id,
+             m.display_name                AS machine_name,
+             m.serial_number               AS machine_serial,
+             l.name                        AS location_name,
+             r.id                          AS slot_rental_id,
+             r.status::text                AS rental_status,
+             r.brand_id,
+             b.name                        AS brand_name,
+             r.fragrance_product_id,
+             p.name                        AS product_name,
+             (coalesce((SELECT ab.status IN ('LOW', 'EMPTY') FROM bottles ab
+                         WHERE ab.id = s.active_bottle_id), false)
+              OR (s.low_stock_threshold_ml IS NOT NULL
+                  AND s.estimated_remaining_ml <= s.low_stock_threshold_ml)) AS low_stock,
+             rq.id                         AS refill_request_id,
+             rq.reason::text               AS refill_request_reason,
+             rq.status::text               AS refill_request_status,
+             rq.scheduled_at,
+             rs.id                         AS open_refill_session_id,
+             sb.id                         AS suggested_bottle_id,
+             sb.identifier                 AS suggested_bottle_identifier,
+             sb.current_estimated_ml       AS suggested_bottle_ml,
+             sb.expires_at                 AS suggested_bottle_expires_at,
+             coalesce(stock.installable, 0)::int AS available_bottle_count,
+             coalesce(stock.unexpired, 0)::int   AS unexpired_bottle_count,
+             EXISTS (SELECT 1 FROM brand_shipment_declarations d
+                      WHERE d.brand_id = r.brand_id
+                        AND d.fragrance_product_id = r.fragrance_product_id
+                        AND d.status = 'DECLARED') AS pending_shipment
+        FROM r
+        JOIN machine_slots s ON s.id = r.slot_id
+        JOIN machines m      ON m.id = s.machine_id
+        JOIN locations l     ON l.id = m.location_id
+        JOIN brands b        ON b.id = r.brand_id
+        LEFT JOIN fragrance_products p ON p.id = r.fragrance_product_id
+        LEFT JOIN LATERAL (
+          SELECT q.id, q.reason, q.status, q.scheduled_at
+            FROM refill_requests q
+           WHERE q.slot_id = s.id AND q.status IN ('SUBMITTED', 'ACCEPTED', 'SCHEDULED')
+           ORDER BY q.created_at DESC
+           LIMIT 1
+        ) rq ON true
+        LEFT JOIN LATERAL (
+          SELECT o.id FROM refill_sessions o
+           WHERE o.slot_id = s.id AND o.status = 'STARTED'
+           LIMIT 1
+        ) rs ON true
+        LEFT JOIN LATERAL (
+          SELECT count(*) FILTER (WHERE ib.authenticity_status = 'APPROVED') AS installable,
+                 count(*)                                                    AS unexpired
+            FROM bottles bt
+            JOIN inventory_batches ib ON ib.id = bt.batch_id
+           WHERE bt.brand_id = r.brand_id
+             AND bt.owner = 'BRAND'
+             AND bt.fragrance_product_id = r.fragrance_product_id
+             AND bt.status = 'IN_STOCK'
+             AND (bt.expires_at IS NULL OR bt.expires_at > ${now})
+        ) stock ON true
+        LEFT JOIN LATERAL (
+          SELECT bt.id, bt.identifier, bt.current_estimated_ml, bt.expires_at
+            FROM bottles bt
+            JOIN inventory_batches ib ON ib.id = bt.batch_id
+           WHERE bt.brand_id = r.brand_id
+             AND bt.owner = 'BRAND'
+             AND bt.fragrance_product_id = r.fragrance_product_id
+             AND bt.status = 'IN_STOCK'
+             AND ib.authenticity_status = 'APPROVED'
+             AND (bt.expires_at IS NULL OR bt.expires_at > ${now})
+           ORDER BY bt.expires_at ASC NULLS LAST, bt.identifier
+           LIMIT 1
+        ) sb ON true
+       ORDER BY m.display_name, s.slot_number`.execute(this.db);
+    return result.rows;
+  }
+
+  /** ADR-0028: lý do hủy ghi vào `notes` — bảng không có cột riêng, không đổi lược đồ. */
+  async cancelRefillSession(
+    id: string,
+    data: { readonly notes: string; readonly at: Date },
+    tx: Executor,
+  ): Promise<void> {
+    await tx
+      .updateTable('refill_sessions')
+      .set({ status: 'CANCELLED', notes: data.notes, completed_at: data.at })
+      .where('id', '=', id)
+      .execute();
   }
 
   async lockRefillSession(id: string, tx: Executor): Promise<RefillSessionRecord | null> {
@@ -1115,6 +1385,7 @@ function toShipment(r: {
   received_at: Date | null;
   resulting_batch_id: string | null;
   created_at: Date;
+  photos: PhotoJson[];
 }): ShipmentRecord {
   return {
     id: r.id,
@@ -1131,7 +1402,21 @@ function toShipment(r: {
     receivedAt: r.received_at,
     resultingBatchId: r.resulting_batch_id,
     createdAt: r.created_at,
+    photos: r.photos.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      url: p.url,
+      createdAt: new Date(p.created_at),
+    })),
   };
+}
+
+/** Một ảnh trong cột `photos` dựng bằng json_agg — thời điểm về dạng chuỗi ISO. */
+interface PhotoJson {
+  id: string;
+  kind: ShipmentPhotoKind;
+  url: string;
+  created_at: string;
 }
 
 function toBatch(r: {
@@ -1205,6 +1490,54 @@ function toBottle(r: {
     bottleReturnId: r.bottle_return_id,
     damagedAt: r.damaged_at,
     damageReason: r.damage_reason,
+  };
+}
+
+/**
+ * Số slot, tên thương hiệu và sản phẩm của hóa đơn mới nhất cùng thương hiệu trên slot — sản phẩm
+ * chai cần lắp (ADR-0026). Truy vấn con chứ không JOIN để không nhân dòng phiếu.
+ */
+function refillDisplayColumns(eb: ExpressionBuilder<DB & { rs: DB['refill_sessions'] }, 'rs'>) {
+  const latestRental = () =>
+    eb
+      .selectFrom('slot_rentals as sr')
+      .whereRef('sr.slot_id', '=', 'rs.slot_id')
+      .whereRef('sr.brand_id', '=', 'rs.brand_id')
+      .orderBy('sr.created_at', 'desc')
+      .limit(1);
+  return [
+    eb
+      .selectFrom('machine_slots as ms')
+      .select('ms.slot_number')
+      .whereRef('ms.id', '=', 'rs.slot_id')
+      .as('slot_number'),
+    eb
+      .selectFrom('brands as br')
+      .select('br.name')
+      .whereRef('br.id', '=', 'rs.brand_id')
+      .as('brand_name'),
+    latestRental().select('sr.fragrance_product_id').as('rental_product_id'),
+    latestRental()
+      .innerJoin('fragrance_products as fp', 'fp.id', 'sr.fragrance_product_id')
+      .select('fp.name')
+      .as('rental_product_name'),
+  ];
+}
+
+function toRefillSessionView(
+  r: Parameters<typeof toRefillSession>[0] & {
+    slot_number: number | null;
+    brand_name: string | null;
+    rental_product_id: string | null;
+    rental_product_name: string | null;
+  },
+): RefillSessionView {
+  return {
+    ...toRefillSession(r),
+    slotNumber: r.slot_number ?? 0,
+    brandName: r.brand_name ?? '',
+    fragranceProductId: r.rental_product_id,
+    productName: r.rental_product_name,
   };
 }
 

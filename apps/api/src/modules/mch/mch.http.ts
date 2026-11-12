@@ -17,7 +17,9 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
+import type { BrandScope } from '../../shared/scoping/index.js';
 import {
+  CurrentBrandScope,
   CurrentUser,
   RequirePermissions,
   RequireReauth,
@@ -25,6 +27,7 @@ import {
 } from '../auth/index.js';
 import { MachineModeService } from './machine-mode.service.js';
 import { MchService } from './mch.service.js';
+import { SalesStopsService } from './sales-stops.service.js';
 
 const MACHINE_MANAGE = 'machine.manage';
 const MACHINE_VIEW = 'machine.view';
@@ -313,5 +316,19 @@ export class SlotsController {
   softDelete(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
     const validatedId = parseBody(IdParam, id);
     return this.mch.softDeleteSlot(actor, validatedId);
+  }
+}
+
+/**
+ * ADR-0028: máy đang dừng bán — banner đầu trang. Mọi tài khoản đăng nhập gọi được; phạm vi thương
+ * hiệu lọc ở truy vấn (BR-012).
+ */
+@Controller('machine-sales-stops')
+export class MachineSalesStopsController {
+  constructor(@Inject(SalesStopsService) private readonly salesStops: SalesStopsService) {}
+
+  @Get()
+  async list(@CurrentBrandScope() scope: BrandScope) {
+    return { items: await this.salesStops.list(scope) };
   }
 }

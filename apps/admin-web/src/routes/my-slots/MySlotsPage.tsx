@@ -1,5 +1,6 @@
 import {
   AppstoreAddOutlined,
+  FileTextOutlined,
   InteractionOutlined,
   ReloadOutlined,
   SettingOutlined,
@@ -21,11 +22,14 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { useBrandProducts } from '@/routes/rentals/api';
+import { SlotSetupModal } from '@/routes/rentals/SlotSetupModal';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { CONFIGURE_PARAM, PRODUCT_PARAM } from '@/shared/return-to';
 import {
   HELD_STAGES,
   type BrandSlotReportItem,
@@ -40,11 +44,11 @@ import {
 } from './api';
 import { periodRange, type PeriodKey } from './period';
 
+// Chờ nạp hàng không gắn ở cột Slot: cột "Bán hàng" đã nói điều đó (QUY_TAC_GIAO_DIEN §2.4 cho màu).
 const STAGE_TAGS: Partial<Record<RentalInvoiceStage, { color: string; label: MessageKey }>> = {
-  AWAITING_STOCK: { color: 'cyan', label: 'ui.stageAwaitingStock' },
   ACTIVE: { color: 'green', label: 'ui.stageActive' },
   EXPIRING: { color: 'gold', label: 'ui.stageExpiring' },
-  GRACE: { color: 'magenta', label: 'ui.stageGrace' },
+  GRACE: { color: 'orange', label: 'ui.stageGrace' },
 };
 
 const PERIODS: readonly { value: PeriodKey; label: MessageKey }[] = [
@@ -72,6 +76,19 @@ export default function MySlotsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
+  // `?configure=<hóa đơn>&product=<sản phẩm>`: quay về từ trang tạo sản phẩm hay khai báo gửi hàng —
+  // mở lại modal của đúng slot, chọn sẵn sản phẩm vừa tạo.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [configuringId, setConfiguringId] = useState<string | null>(() =>
+    searchParams.get(CONFIGURE_PARAM),
+  );
+  const [returned] = useState(() => ({
+    rentalId: searchParams.get(CONFIGURE_PARAM),
+    productId: searchParams.get(PRODUCT_PARAM) ?? undefined,
+  }));
+  useEffect(() => {
+    if (searchParams.has(CONFIGURE_PARAM)) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const range = useMemo(() => periodRange(period), [period]);
 
   const rentals = useMyRentals();
@@ -80,12 +97,25 @@ export default function MySlotsPage() {
     [rentals.data],
   );
   const invoices = useInvoices(held.map((r) => r.id));
+  // Sơ đồ máy chỉ có slot đã lắp chai: máy chủ không tính slot chờ nạp hàng là đang khai thác
+  // (`brandHoldsSlotNow`) và trả 403 cho thương hiệu chỉ có slot chờ nạp trên máy đó — không hỏi.
   const machineIds = useMemo(
-    () => [...new Set(held.map((r) => r.machineId).filter(Boolean))],
+    () => [
+      ...new Set(
+        held
+          .filter((r) => r.stage !== 'AWAITING_STOCK')
+          .map((r) => r.machineId)
+          .filter(Boolean),
+      ),
+    ],
     [held],
   ) as string[];
   const maps = useMachineMaps(machineIds);
   const report = useBrandSlotReport(range.from, range.to);
+  // Slot chờ nạp hàng chưa có trên sơ đồ máy: tên sản phẩm vừa gán tra từ danh mục của thương hiệu.
+  const products = useBrandProducts();
+  const productName = (id: string | null | undefined) =>
+    id ? products.data?.items.find((p) => p.id === id)?.name : undefined;
 
   const rows: MySlotRow[] = useMemo(() => {
     const mapBySlot = new Map<string, MachineMapSlot>();
@@ -98,21 +128,23 @@ export default function MySlotsPage() {
       report: reportByRental.get(rental.id),
     }));
   }, [held, invoices, maps, report.data]);
+  // Lấy dòng mới nhất trong danh sách để modal thấy ngay sản phẩm vừa lưu.
+  const configuring = rows.find((r) => r.rental.id === configuringId) ?? null;
 
   const totalOrders = (report.data ?? []).reduce((sum, r) => sum + r.orderCount, 0);
   const totalRevenue = (report.data ?? []).reduce((sum, r) => sum + Number(r.revenue), 0);
 
   const sellingTag = (row: MySlotRow) => {
     const { rental, map } = row;
-    if (rental.stage === 'AWAITING_STOCK') {
-      return <Tag color="cyan">{t('ui.stageAwaitingStock')}</Tag>;
-    }
     if (!rental.pricePerSpray || !rental.fragranceProductId) {
       return (
         <Tooltip title={t('ui.mySlotsNotConfiguredHint')}>
-          <Tag color="orange">{t('ui.mySlotsNotConfigured')}</Tag>
+          <Tag color="gold">{t('ui.mySlotsNotConfigured')}</Tag>
         </Tooltip>
       );
+    }
+    if (rental.stage === 'AWAITING_STOCK') {
+      return <Tag color="blue">{t('ui.stageAwaitingStock')}</Tag>;
     }
     return map?.available ? (
       <Tag color="green">{t('ui.mySlotsOnSale')}</Tag>
@@ -144,7 +176,8 @@ export default function MySlotsPage() {
     {
       title: t('ui.mySlotsProduct'),
       key: 'product',
-      render: (_, { map, report: r }) => map?.productName ?? r?.productName ?? '—',
+      render: (_, { map, report: r, rental }) =>
+        map?.productName ?? r?.productName ?? productName(rental.fragranceProductId) ?? '—',
     },
     {
       title: t('ui.pricePerSpray'),
@@ -158,7 +191,7 @@ export default function MySlotsPage() {
       render: (_, { map }) => (
         <Space size={4}>
           {map?.estimatedRemainingSprays ?? '—'}
-          {map?.lowStock && <Tag color="volcano">{t('ui.mySlotsLowStock')}</Tag>}
+          {map?.lowStock && <Tag color="orange">{t('ui.mySlotsLowStock')}</Tag>}
         </Space>
       ),
     },
@@ -183,24 +216,32 @@ export default function MySlotsPage() {
     {
       title: t('ui.actions'),
       key: 'actions',
-      render: (_, { rental, map }) => (
+      render: (_, row) => (
         <Space size={0} wrap>
           <Button
             type="link"
             size="small"
             icon={<SettingOutlined />}
-            onClick={() => void navigate(`/rentals/${rental.id}`)}
+            onClick={() => setConfiguringId(row.rental.id)}
           >
             {t('ui.mySlotsConfigure')}
           </Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<FileTextOutlined />}
+            onClick={() => void navigate(`/rentals/${row.rental.id}`)}
+          >
+            {t('ui.mySlotsInvoice')}
+          </Button>
           {/* FR-RFQ-03: máy chủ gắn cờ sắp hết, màn hình gợi ý tạo yêu cầu điền sẵn slot. */}
-          {map?.lowStock && (
+          {row.map?.lowStock && (
             <Button
               type="link"
               size="small"
               danger
               icon={<InteractionOutlined />}
-              onClick={() => void navigate(`/refill-requests?rentalId=${rental.id}`)}
+              onClick={() => void navigate(`/refill-requests?rentalId=${row.rental.id}`)}
             >
               {t('ui.mySlotsRequestRefill')}
             </Button>
@@ -289,6 +330,23 @@ export default function MySlotsPage() {
             message={t('ui.mySlotsRevenueNote')}
           />
         </Card>
+
+        {configuring && (
+          <SlotSetupModal
+            open
+            rental={configuring.rental}
+            slotLabel={
+              configuring.invoice
+                ? `${configuring.invoice.machineDisplayName ?? ''} · Slot #${configuring.invoice.slotNumber}`
+                : ''
+            }
+            locationName={configuring.invoice?.locationName ?? undefined}
+            initialProductId={
+              configuring.rental.id === returned.rentalId ? returned.productId : undefined
+            }
+            onClose={() => setConfiguringId(null)}
+          />
+        )}
       </div>
     </RequireRole>
   );

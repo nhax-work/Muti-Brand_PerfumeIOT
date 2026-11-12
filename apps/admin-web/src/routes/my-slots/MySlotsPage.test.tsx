@@ -8,6 +8,8 @@ import MySlotsPage from './MySlotsPage';
 import { periodRange } from './period';
 
 const mockNavigate = vi.fn();
+/** Máy mà trang hỏi sơ đồ (FR-RPT-12) — ghi lại để kiểm không hỏi máy chỉ có slot chờ nạp. */
+const mapRequests: string[][] = [];
 vi.mock('react-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react-router')>()),
   useNavigate: () => mockNavigate,
@@ -36,6 +38,71 @@ const RENTALS = [
   rental('r-selling', 's-1', {}),
   rental('r-unpriced', 's-2', { pricePerSpray: null }),
   rental('r-ended', 's-3', { status: 'CLOSED', stage: 'ENDED' }),
+  // Đã cấu hình nhưng chưa lắp chai: chưa có trên sơ đồ máy, tên sản phẩm tra từ danh mục. Nằm trên
+  // máy khác để kiểm trang không hỏi sơ đồ máy chỉ có slot chờ nạp.
+  rental('r-awaiting', 's-4', {
+    machineId: 'm-2',
+    status: 'DRAFT',
+    stage: 'AWAITING_STOCK',
+    fragranceProductId: 'p-2',
+  }),
+];
+
+vi.mock('@/routes/rentals/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/routes/rentals/api')>()),
+  useBrandProducts: () => ({
+    data: {
+      items: [
+        {
+          id: 'p-1',
+          name: 'Aurore Matinale',
+          sku: 'MA-001',
+          defaultPrice: '35000.0000',
+          status: 'ACTIVE',
+        },
+        {
+          id: 'p-2',
+          name: 'Aurore Soir',
+          sku: 'MA-002',
+          defaultPrice: '40000.0000',
+          status: 'ACTIVE',
+        },
+      ],
+    },
+    isLoading: false,
+  }),
+  useAssignProduct: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+vi.mock('@/routes/shipments/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/routes/shipments/api')>()),
+  useShipmentDeclarations: () => ({ data: { items: [] } }),
+  useInventoryBatches: () => ({ data: { items: [] } }),
+}));
+
+const machineMaps = [
+  {
+    data: [
+      {
+        slotNumber: 1,
+        mine: true,
+        available: true,
+        slotId: 's-1',
+        productName: 'Aurore Matinale',
+        estimatedRemainingSprays: 412,
+      },
+      {
+        slotNumber: 2,
+        mine: true,
+        available: false,
+        slotId: 's-2',
+        productName: 'Aurore Nocturne',
+        estimatedRemainingSprays: 90,
+        lowStock: true,
+      },
+      { slotNumber: 3, mine: false, available: false },
+    ],
+  },
 ];
 
 vi.mock('./api', async () => {
@@ -43,7 +110,7 @@ vi.mock('./api', async () => {
   return {
     ...actual,
     useMyRentals: () => ({
-      data: { items: RENTALS, meta: { page: 1, pageSize: 100, total: 3 } },
+      data: { items: RENTALS, meta: { page: 1, pageSize: 100, total: 4 } },
       isLoading: false,
       refetch: vi.fn(),
     }),
@@ -56,30 +123,10 @@ vi.mock('./api', async () => {
           locationName: 'Vincom Đồng Khởi',
         },
       })),
-    useMachineMaps: () => [
-      {
-        data: [
-          {
-            slotNumber: 1,
-            mine: true,
-            available: true,
-            slotId: 's-1',
-            productName: 'Aurore Matinale',
-            estimatedRemainingSprays: 412,
-          },
-          {
-            slotNumber: 2,
-            mine: true,
-            available: false,
-            slotId: 's-2',
-            productName: 'Aurore Nocturne',
-            estimatedRemainingSprays: 90,
-            lowStock: true,
-          },
-          { slotNumber: 3, mine: false, available: false },
-        ],
-      },
-    ],
+    useMachineMaps: (ids: string[]) => {
+      mapRequests.push([...ids]);
+      return machineMaps;
+    },
     useBrandSlotReport: () => ({
       data: [
         {
@@ -128,11 +175,11 @@ afterEach(() => {
   mockNavigate.mockReset();
 });
 
-function renderPage() {
+function renderPage(initialEntry = '/my-slots') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <I18nProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <MySlotsPage />
         </MemoryRouter>
       </I18nProvider>
@@ -155,14 +202,45 @@ describe('MySlotsPage — Slot của tôi', () => {
     expect(within(unpricedRow).getByText('Chưa cấu hình')).toBeTruthy();
 
     // Hóa đơn đã kết thúc không thuộc "slot của tôi".
-    expect(screen.queryByText('Máy Vincom #1 · Slot #3')).toBeNull();
-    expect(screen.getAllByRole('row')).toHaveLength(3); // tiêu đề + 2 slot
+    expect(screen.queryByText('Máy Vincom #1 · Slot #4')).toBeNull();
+    expect(screen.getAllByRole('row')).toHaveLength(4); // tiêu đề + 3 slot
   });
 
-  it('nút Cấu hình dẫn tới hóa đơn của slot (gán sản phẩm, đặt giá)', () => {
+  it('slot chờ nạp hàng đã cấu hình: tên sản phẩm lấy từ danh mục, nhãn Chờ nạp hàng chỉ hiện một lần', () => {
+    renderPage();
+    const row = screen.getByText('Máy Vincom #1 · Slot #3').closest('tr')!;
+    expect(within(row).getByText('Aurore Soir')).toBeTruthy();
+    expect(within(row).getAllByText('Chờ nạp hàng')).toHaveLength(1);
+  });
+
+  it('chỉ hỏi sơ đồ máy có slot đã lắp chai — máy chỉ có slot chờ nạp trả 403 cho thương hiệu', () => {
+    mapRequests.length = 0;
+    renderPage();
+    expect(mapRequests.at(-1)).toEqual(['m-1']);
+  });
+
+  it('nút Cấu hình mở modal cấu hình ngay tại trang, không rời Slot của tôi', async () => {
     renderPage();
     const row = screen.getByText('Máy Vincom #1 · Slot #2').closest('tr')!;
     fireEvent.click(within(row).getByText('Cấu hình'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Cấu hình slot')).toBeTruthy();
+    expect(within(dialog).getByText('Máy Vincom #1 · Slot #2')).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('quay về từ trang tạo sản phẩm (?configure=&product=) thì modal mở lại với sản phẩm mới chọn sẵn', async () => {
+    renderPage('/my-slots?configure=r-unpriced&product=p-2');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Máy Vincom #1 · Slot #2')).toBeTruthy();
+    expect(within(dialog).getByText('Aurore Soir')).toBeTruthy();
+    expect(within(dialog).getByText('Giá mỗi lượt xịt: 40.000 VND')).toBeTruthy();
+  });
+
+  it('nút Hóa đơn vẫn dẫn tới trang hóa đơn của slot', () => {
+    renderPage();
+    const row = screen.getByText('Máy Vincom #1 · Slot #2').closest('tr')!;
+    fireEvent.click(within(row).getByText('Hóa đơn'));
     expect(mockNavigate).toHaveBeenCalledWith('/rentals/r-unpriced');
   });
 });

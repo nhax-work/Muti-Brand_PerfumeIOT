@@ -1,6 +1,6 @@
 # FR-MCH — Máy và slot
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 18 FR  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 19 FR; FR-MCH-19 thêm ngày 2026-11-12 theo ADR-0028  
 > Trạng thái AC: **một phần** — FR-MCH-09 (soát lại), FR-MCH-15÷17, và FR-MCH-18 (thêm mới theo ADR-0015) đã hoàn thành; FR-MCH-01÷08, 10÷14 dạng CRUD/phát biểu  
 > Phụ trách: TV4 / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu  
@@ -102,3 +102,17 @@
     When máy vẫn hoạt động,  
     Then slot tuyệt đối không tự động mở lại bán hàng cho đến khi Operations Staff kiểm tra, khắc phục và chủ động bật lại thủ công qua API bật slot (FR-MCH-12).
 * **Test:** `test_FR_MCH_18_auto_slot_maintenance_on_consecutive_fails`
+
+## FR-MCH-19 — Báo máy đang dừng bán
+
+**Tuyên bố:** Hệ thống phải cho người dùng web quản trị biết máy nào đang không nhận đơn mới và vì sao, theo đúng luật kiosk áp khi tạo đơn (ADR-0028).
+
+**Dấu vết:** BR-006, BR-012 · **Ưu tiên:** M · ADR-0028 · **API:** `GET /machine-sales-stops`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Cùng luật với kiosk): Cho máy mà kiosk đang từ chối tạo đơn (mất kết nối, chế độ khác `NORMAL`, hoặc có phiếu nạp mở), Khi xem danh sách máy dừng bán, Thì máy có mặt kèm lý do; máy đang nhận đơn thì không có mặt.
+- AC2 (Thứ tự lý do): Cho máy vừa mất kết nối vừa ở chế độ khác `NORMAL` vừa có phiếu nạp mở, Khi xem danh sách, Thì lý do là `OFFLINE`; không mất kết nối thì là chế độ; chỉ có phiếu nạp mở thì là `REFILL_SESSION`.
+- AC3 (Phạm vi thương hiệu): Cho Brand Admin, Khi xem danh sách, Thì chỉ có máy mà thương hiệu đang khai thác slot, và không kèm thông tin phiếu nạp (người mở, slot); tài khoản nền tảng thấy mọi máy kèm phiếu nạp đang mở.
+
+**Kiểm tra:** `test_FR_MCH_19_*` (`tests/integration/test_adr_0028_sales_stop_cancel_bell.test.ts`)

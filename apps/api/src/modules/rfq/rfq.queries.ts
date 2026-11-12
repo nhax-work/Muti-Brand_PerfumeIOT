@@ -233,6 +233,22 @@ export class RfqQueries {
       .execute();
   }
 
+  /** ADR-0028: phiếu nạp bị hủy — yêu cầu còn mở trở lại chưa gắn phiếu, trả về những yêu cầu đã gỡ. */
+  async unlinkOpenBySession(
+    sessionId: string,
+    at: Date,
+    tx: Executor,
+  ): Promise<{ id: string; brandId: string }[]> {
+    const rows = await tx
+      .updateTable('refill_requests')
+      .set({ refill_session_id: null, updated_at: at })
+      .where('refill_session_id', '=', sessionId)
+      .where('status', 'in', ['ACCEPTED', 'SCHEDULED'])
+      .returning(['id', 'brand_id'])
+      .execute();
+    return rows.map((r) => ({ id: r.id, brandId: r.brand_id }));
+  }
+
   /** Yêu cầu còn mở đang liên kết với phiên nạp — khóa để chuyển COMPLETED (FR-RFQ-09). */
   async lockOpenBySession(
     sessionId: string,

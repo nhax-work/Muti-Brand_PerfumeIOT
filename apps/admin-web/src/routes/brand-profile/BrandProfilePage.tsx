@@ -14,12 +14,24 @@ import {
   Typography,
   message,
 } from 'antd';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
-import { type Brand, useMyBrand, useUpdateMyBrand, useUpdateMyBrandLegalProfile } from './api';
+import { ImageField } from '@/shared/ImageField';
+import { bytesToMb, type ImageChange } from '@/shared/image-upload';
+import {
+  type Brand,
+  useDeleteMyBrandLogo,
+  useMyBrand,
+  useUpdateMyBrand,
+  useUpdateMyBrandLegalProfile,
+  useUploadMyBrandLogo,
+} from './api';
+
+const LOGO_MAX_BYTES = SPEC_CONSTRAINTS.BRAND_LOGO_MAX_BYTES;
 
 const STATUS_LABELS: Record<Brand['status'], MessageKey> = {
   ACTIVE: 'ui.brandActive',
@@ -29,7 +41,6 @@ const STATUS_LABELS: Record<Brand['status'], MessageKey> = {
 
 interface ProfileForm {
   name: string;
-  logoUrl?: string;
   description?: string;
   email?: string;
   phone?: string;
@@ -59,6 +70,9 @@ export default function BrandProfilePage() {
   const { data: brand, isLoading } = useMyBrand();
   const update = useUpdateMyBrand();
   const updateLegal = useUpdateMyBrandLegalProfile();
+  const uploadLogo = useUploadMyBrandLogo();
+  const deleteLogo = useDeleteMyBrandLogo();
+  const [logoChange, setLogoChange] = useState<ImageChange>({ kind: 'keep' });
   const [form] = Form.useForm<ProfileForm>();
   const [legalForm] = Form.useForm<LegalForm>();
 
@@ -66,7 +80,6 @@ export default function BrandProfilePage() {
     if (brand) {
       form.setFieldsValue({
         name: brand.name,
-        logoUrl: brand.logoUrl ?? undefined,
         description: brand.description ?? undefined,
         ...contactOf(brand),
       });
@@ -91,16 +104,26 @@ export default function BrandProfilePage() {
       address: v.address || undefined,
     };
     try {
+      // logoUrl không gửi kèm: logo đổi qua endpoint riêng bên dưới (ADR-0022).
       await update.mutateAsync({
         name: v.name,
-        logoUrl: v.logoUrl || undefined,
         description: v.description,
         contactInfo,
       });
-      message.success(t('ui.brandSaved'));
     } catch (error) {
       message.error(errorMessage(error, t));
+      return;
     }
+    // Thông tin đã lưu; logo lỗi thì báo riêng và giữ lựa chọn để người dùng bấm Lưu lại.
+    try {
+      if (logoChange.kind === 'upload') await uploadLogo.mutateAsync(logoChange.file);
+      else if (logoChange.kind === 'remove') await deleteLogo.mutateAsync();
+    } catch (error) {
+      message.error(t('ui.brandLogoSaveFailed', { reason: errorMessage(error, t) }));
+      return;
+    }
+    setLogoChange({ kind: 'keep' });
+    message.success(t('ui.brandSaved'));
   };
 
   const submitLegal = async () => {
@@ -186,12 +209,17 @@ export default function BrandProfilePage() {
             >
               <Input maxLength={200} />
             </Form.Item>
-            <Form.Item
-              name="logoUrl"
-              label={t('ui.brandLogoUrl')}
-              rules={[{ type: 'url', message: t('validation.invalidUrl') }]}
-            >
-              <Input placeholder="https://" />
+            <Form.Item label={t('ui.brandLogo')}>
+              <ImageField
+                currentUrl={brand.logoUrl}
+                value={logoChange}
+                onChange={setLogoChange}
+                maxBytes={LOGO_MAX_BYTES}
+                aspectRatio="1 / 1"
+                alt={t('ui.brandLogo')}
+                hint={t('ui.brandLogoHint', { maxMb: bytesToMb(LOGO_MAX_BYTES) })}
+                testId="brand-logo-input"
+              />
             </Form.Item>
             <Form.Item name="description" label={t('ui.pricingDescription')}>
               <Input.TextArea rows={3} />
@@ -209,7 +237,11 @@ export default function BrandProfilePage() {
             <Form.Item name="address" label={t('ui.brandAddress')}>
               <Input />
             </Form.Item>
-            <Button type="primary" htmlType="submit" loading={update.isPending}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={update.isPending || uploadLogo.isPending || deleteLogo.isPending}
+            >
               {t('ui.save')}
             </Button>
           </Form>

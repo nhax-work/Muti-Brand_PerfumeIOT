@@ -92,7 +92,7 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
 
 class FakeSltQueries {
   rentals: SlotRentalRecord[] = [];
-  products: Array<{ id: string; brandId: string; status: string }> = [];
+  products: Array<{ id: string; brandId: string; status: string; defaultPrice: string }> = [];
   lastFilter: SlotRentalFilter | null = null;
   currentAgreement: AgreementVersionRecord | null = {
     id: 'ag-1',
@@ -489,6 +489,7 @@ class FakeSltQueries {
     scope: BrandScope,
     id: string,
     fragranceProductId: string,
+    pricePerSpray: string,
   ): Promise<SlotRentalRecord | null> {
     const index = this.rentals.findIndex((r) => r.id === id);
     if (index === -1) return null;
@@ -496,6 +497,7 @@ class FakeSltQueries {
     const updated: SlotRentalRecord = {
       ...current,
       fragranceProductId,
+      pricePerSpray,
       productAssignedAt: new Date(),
     };
     this.rentals[index] = updated;
@@ -509,11 +511,7 @@ class FakeSltQueries {
   ): Promise<SlotRentalRecord | null> {
     const index = this.rentals.findIndex((r) => r.id === id);
     if (index === -1) return null;
-    const current = this.rentals[index]!;
-    const updated: SlotRentalRecord = {
-      ...current,
-      pricePerSpray,
-    };
+    const updated: SlotRentalRecord = { ...this.rentals[index]!, pricePerSpray };
     this.rentals[index] = updated;
     return updated;
   }
@@ -745,9 +743,9 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     const rPaid = rental('r-paid', { paidAt: new Date(), status: 'DRAFT' });
     queries.rentals = [rPaid];
     queries.products = [
-      { id: 'p-1', brandId: BRAND_A, status: 'ACTIVE' },
-      { id: 'p-other', brandId: BRAND_B, status: 'ACTIVE' },
-      { id: 'p-discontinued', brandId: BRAND_A, status: 'DISCONTINUED' },
+      { id: 'p-1', brandId: BRAND_A, status: 'ACTIVE', defaultPrice: '25000.0000' },
+      { id: 'p-other', brandId: BRAND_B, status: 'ACTIVE', defaultPrice: '30000.0000' },
+      { id: 'p-discontinued', brandId: BRAND_A, status: 'DISCONTINUED', defaultPrice: '1.0000' },
     ];
 
     // Gán thành công
@@ -758,6 +756,8 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       'p-1',
     );
     expect(updated.fragranceProductId).toBe('p-1');
+    // ADR-0023: slot lấy giá của sản phẩm ngay khi gán.
+    expect(updated.pricePerSpray).toBe('25000.0000');
 
     // Sản phẩm của thương hiệu khác -> PRODUCT_NOT_OWNED (403)
     await expect(
@@ -772,23 +772,39 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
   });
 
-  it('test_FR_SLT_08_free_pricing', async () => {
+  it('test_FR_SLT_08_brand_cannot_set_slot_price_price_follows_product', async () => {
     const rPaid = rental('r-paid', { paidAt: new Date(), status: 'DRAFT' });
     queries.rentals = [rPaid];
 
-    // Đặt giá tự do > 0 -> Thành công
+    // ADR-0023: thương hiệu không đặt giá riêng cho slot — giá lấy theo sản phẩm.
+    await expect(
+      service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '25000'),
+    ).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      messageKey: 'slt.pricePerSprayFollowsProduct',
+    });
+    expect(queries.rentals[0]!.pricePerSpray).toBe(rPaid.pricePerSpray);
+  });
+
+  it('test_FR_EXP_18_platform_admin_sets_liquidation_price', async () => {
+    queries.rentals = [rental('r-liq', { paidAt: new Date(), status: 'LIQUIDATED' })];
+
     const updated = await service.setPricePerSpray(
       brandAdmin,
-      { kind: 'BRAND', brandId: BRAND_A },
-      'r-paid',
-      '25000',
+      { kind: 'UNRESTRICTED' },
+      'r-liq',
+      '12000',
     );
-    expect(updated.pricePerSpray).toBe('25000.0000');
+    expect(updated.pricePerSpray).toBe('12000.0000');
 
-    // Giá <= 0 -> VALIDATION_ERROR (400)
+    // AC2: thương hiệu cũ không đổi được giá hàng thanh lý.
     await expect(
-      service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-paid', '0'),
-    ).rejects.toThrow();
+      service.setPricePerSpray(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-liq', '1'),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN_SCOPE' });
+    // Giá <= 0 bị từ chối.
+    await expect(
+      service.setPricePerSpray(brandAdmin, { kind: 'UNRESTRICTED' }, 'r-liq', '0'),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 
   it('test_FR_SLT_48_get_current_agreement', async () => {

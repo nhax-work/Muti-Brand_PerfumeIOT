@@ -137,23 +137,27 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 
 ---
 
-## FR-SLT-08 — Thương hiệu tự do đặt giá mỗi lượt xịt
-* **Statement:** Hệ thống phải cho phép Brand Admin tự do đặt giá mỗi lượt xịt cho slot mình thuê, không bị giới hạn bởi giá sàn hay giá trần.
+## FR-SLT-08 — Thương hiệu tự do đặt giá mỗi lượt xịt, theo sản phẩm
+* **Statement:** Hệ thống phải cho phép Brand Admin tự do đặt giá mỗi lượt xịt cho từng sản phẩm của thương hiệu mình, không bị giới hạn bởi giá sàn hay giá trần; mọi slot bán sản phẩm đó áp dụng cùng một giá (ADR-0023).
 * **Traces:** BR-009, BR-011 · **Priority:** M
+* **API:** `POST /products`, `PATCH /products/{id}` (`defaultPrice`), `PUT /slot-rentals/{id}/product`
 * **Acceptance criteria:**
-  * **AC1:** Given Brand Admin của thương hiệu `B`, slot `S` có hóa đơn của `B` đã thanh toán (đang chờ nạp hàng hoặc đã hiệu lực),  
-    When đặt giá bất kỳ lớn hơn 0 (ví dụ: 1,000 VND hoặc 500,000 VND) cho slot `S`,  
-    Then hệ thống chấp nhận cập nhật giá và ghi AuditLog.
-  * **AC2:** Given Brand Admin của thương hiệu `B`, slot `S` đang thuộc thương hiệu khác `C`,  
-    When đặt giá cho slot `S`,  
-    Then hệ thống từ chối với HTTP 403 `FORBIDDEN_SCOPE`.
-  * **AC3 (Ca biên - Giá không hợp lệ):** Given Brand Admin đặt giá `<= 0`,  
-    When gửi yêu cầu cập nhật giá,  
+  * **AC1:** Given Brand Admin của thương hiệu `B` tạo hoặc sửa sản phẩm `P` với giá bất kỳ lớn hơn 0 (ví dụ: 1,000 VND hoặc 500,000 VND),  
+    When lưu,  
+    Then hệ thống chấp nhận giá và ghi AuditLog.
+  * **AC2 (Gán sản phẩm lấy giá):** Given hóa đơn `H` của `B` đã thanh toán và sản phẩm `P` có giá `G`,  
+    When Brand Admin gán `P` vào `H`,  
+    Then `H.price_per_spray = G`.
+  * **AC3 (Đổi giá áp cho mọi slot):** Given `P` đang được bán ở các hóa đơn `H1`, `H2` (`DRAFT` đã thanh toán, `ACTIVE`, `EXPIRING` hoặc `GRACE`),  
+    When Brand Admin đổi giá `P` thành `G2`,  
+    Then trong cùng giao dịch `H1.price_per_spray = H2.price_per_spray = G2`; hóa đơn `LIQUIDATED` không đổi.
+  * **AC4 (Ca biên - Giá không hợp lệ):** Given Brand Admin đặt giá sản phẩm `<= 0`,  
+    When gửi yêu cầu,  
     Then hệ thống từ chối với HTTP 400.
-  * **AC4 (Chưa thanh toán):** Given hóa đơn của slot `S` còn ở `DRAFT` chưa thanh toán,  
-    When Brand Admin đặt giá,  
-    Then hệ thống từ chối với HTTP 409 `RENTAL_NOT_ACTIVE`.
-* **Test:** `test_FR_SLT_08_free_pricing`
+  * **AC5 (Không đặt giá riêng cho slot):** Given hóa đơn `H` của `B` không ở `LIQUIDATED`,  
+    When gọi `PUT /slot-rentals/{id}/price`,  
+    Then hệ thống từ chối với HTTP 400 `VALIDATION_ERROR` và giá của `H` không đổi.
+* **Test:** `test_FR_SLT_08_brand_cannot_set_slot_price_price_follows_product`, `test_FR_SLT_27_assign_product_to_slot`
 
 ---
 

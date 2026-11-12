@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **46 bảng**, **30 kiểu enum**.
+Tổng: **47 bảng**, **31 kiểu enum**.
 
 ---
 
@@ -47,6 +47,7 @@ Tổng: **46 bảng**, **30 kiểu enum**.
 | `refund_claim_status` | `OPEN` · `REFUNDED` · `REJECTED` · `EXPIRED` |
 | `revenue_owner_type` | `BRAND` · `PLATFORM` |
 | `shipment_declaration_status` | `DECLARED` · `RECEIVED` · `DISCREPANCY` · `CANCELLED` |
+| `shipment_photo_kind` | `BEFORE_PACKING` · `PACKED` |
 | `slot_rental_request_status` | `REQUESTED` · `APPROVED` · `REJECTED` · `CONVERTED` · `CANCELLED` |
 | `slot_rental_status` | `DRAFT` · `ACTIVE` · `EXPIRING` · `GRACE` · `RENEWED` · `LIQUIDATED` · `CLOSED` · `TERMINATED` · `CANCELLED` |
 | `slot_status` | `AVAILABLE` · `UNAVAILABLE` · `MAINTENANCE` · `DISABLED` |
@@ -787,6 +788,29 @@ Brand Admin khai báo lô hàng gửi đến kho nền tảng; Inventory Staff �
 
 - `brand_shipment_declarations_pkey` (UNIQUE) — `USING btree (id)`
 - `idx_shipment_decl_brand` — `USING btree (brand_id, status, created_at)`
+
+### `shipment_declaration_photos`
+
+Ảnh lô hàng trước khi đóng gói và kiện hàng đã đóng gói của một khai báo gửi hàng (FR-INV-22, ADR-0024). Chỉ thêm/xóa khi khai báo còn DECLARED.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `declaration_id` | `uuid` | — |  |  |
+| `kind` | `shipment_photo_kind` | — |  |  |
+| `url` | `text` | — |  | URL tuyệt đối trên kho ảnh, khóa shipments/{declaration_id}-{hash}.webp (ADR-0024). |
+| `uploaded_by` | `uuid` | — |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Khóa ngoại**
+
+- `shipment_declaration_photos_declaration_id_fkey` — `FOREIGN KEY (declaration_id) REFERENCES brand_shipment_declarations(id) ON DELETE CASCADE`
+- `shipment_declaration_photos_uploaded_by_fkey` — `FOREIGN KEY (uploaded_by) REFERENCES users(id)`
+
+**Index**
+
+- `idx_shipment_photo_declaration` — `USING btree (declaration_id, kind, created_at)`
+- `shipment_declaration_photos_pkey` (UNIQUE) — `USING btree (id)`
 
 ### `inventory_batches`
 

@@ -5,9 +5,12 @@ import {
   ToolOutlined,
 } from '@ant-design/icons';
 import { Card, Space, Tabs, Typography } from 'antd';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
+import { PRODUCT_PARAM, RETURN_TO_PARAM, safeReturnTo } from '@/shared/return-to';
 import { BatchesTab } from './BatchesTab';
 import { InventoryReportTab } from './InventoryReportTab';
 import { RefillTab } from './RefillTab';
@@ -24,6 +27,24 @@ export default function ShipmentsPage() {
   const can = (permission: string) => user?.permissions.includes(permission) ?? false;
   const isBrand = user?.brandId != null;
 
+  // Tới từ modal cấu hình slot: `?declare=1&product=…&returnTo=…` mở sẵn pop-up khai báo,
+  // `?tab=batches` mở thẳng tab lô hàng để nộp giấy tờ. Đọc một lần rồi xóa khỏi URL. Thủ Kho vào thẳng
+  // tab nạp, nơi có danh sách việc cần nạp (ADR-0026).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [entry] = useState(() => ({
+    tab: searchParams.get('tab') ?? (!isBrand && can('inventory.manage') ? 'refill' : 'shipments'),
+    declare:
+      searchParams.get('declare') === '1'
+        ? {
+            productId: searchParams.get(PRODUCT_PARAM) ?? undefined,
+            returnTo: safeReturnTo(searchParams.get(RETURN_TO_PARAM)),
+          }
+        : undefined,
+  }));
+  useEffect(() => {
+    if (searchParams.size > 0) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   return (
     <RequireRole
       allow={['PLATFORM_SUPER_ADMIN', 'OPERATIONS_STAFF', 'INVENTORY_STAFF', 'BRAND_ADMIN']}
@@ -37,6 +58,7 @@ export default function ShipmentsPage() {
         </div>
         <Card>
           <Tabs
+            defaultActiveKey={entry.tab}
             items={[
               {
                 key: 'shipments',
@@ -49,6 +71,7 @@ export default function ShipmentsPage() {
                   <ShipmentsTab
                     canDeclare={isBrand && can('inventory.declare')}
                     canReceive={can('inventory.manage')}
+                    initialDeclare={entry.declare}
                   />
                 ),
               },

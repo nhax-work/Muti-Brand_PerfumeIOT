@@ -77,6 +77,8 @@ export const slt = {
   compensationPaidSubject: 'Đã chi trả bồi thường chai {bottle}',
   compensationPaidContent:
     'Khoản bồi thường {amount} đ cho chai {bottle} đã được chuyển khoản. Mã giao dịch: {reference}.',
+  pricePerSprayFollowsProduct:
+    'Giá mỗi lượt xịt đặt theo sản phẩm. Sửa giá ở trang Sản phẩm, mọi slot bán sản phẩm đó đổi theo.',
 } as const;
 
 export const storageCompensationStatus = {
