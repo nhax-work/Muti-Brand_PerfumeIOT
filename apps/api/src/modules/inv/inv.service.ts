@@ -759,6 +759,12 @@ export function toShipmentDto(r: ShipmentRecord): ShipmentDeclaration {
     receivedAt: iso(r.receivedAt),
     resultingBatchId: r.resultingBatchId,
     createdAt: r.createdAt.toISOString(),
+    photos: r.photos.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      url: p.url,
+      createdAt: p.createdAt.toISOString(),
+    })),
   };
 }
 

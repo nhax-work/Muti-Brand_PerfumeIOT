@@ -345,6 +345,8 @@ export const en: SameKeysAs<typeof vi> = {
     compensationPaidSubject: 'Compensation for bottle {bottle} paid',
     compensationPaidContent:
       'The compensation of {amount} VND for bottle {bottle} has been transferred. Transaction reference: {reference}.',
+    pricePerSprayFollowsProduct:
+      'The price per spray is set per product. Change it on the Products page; every slot selling that product follows.',
   },
 
   storageCompensationStatus: {
@@ -806,7 +808,7 @@ export const en: SameKeysAs<typeof vi> = {
     mySlotsPaused: 'Paused',
     mySlotsNotConfigured: 'Not configured',
     mySlotsNotConfiguredHint:
-      'A slot needs a product and a price per spray before the kiosk sells it. Click "Configure" to finish.',
+      'A slot needs a product assigned before the kiosk sells it. Click "Configure" to finish.',
     mySlotsRemainingSprays: 'Sprays left',
     mySlotsOrders: 'Orders in period',
     mySlotsRevenue: 'Revenue in period',
@@ -821,9 +823,9 @@ export const en: SameKeysAs<typeof vi> = {
     productAdd: 'Add product',
     productEdit: 'Edit product',
     productName: 'Product name',
-    productDefaultPrice: 'Suggested price per spray',
+    productDefaultPrice: 'Price per spray',
     productDefaultPriceHint:
-      'A suggested price for your slots. The actual selling price of each slot is set on its rental invoice page.',
+      'Applies to every slot selling this product. New kiosk orders use the new price once changed.',
     productRetailPrice: 'Full-bottle retail price',
     productRetailPriceHint:
       'Used to calculate storage fees after the rental ends and compensation if a bottle is damaged.',
@@ -1562,27 +1564,66 @@ export const en: SameKeysAs<typeof vi> = {
     productNoImage: 'No image',
     slotSetupSave: 'Save configuration',
     slotSetupSaved: 'Slot configuration saved',
-    slotSetupStepProduct: 'Choose product',
-    slotSetupStepPrice: 'Set price',
-    slotSetupStepStock: 'Install bottle',
-    slotSetupStockWaiting: 'Platform staff will install the bottle',
+    slotSetupStepProduct: 'Assign product',
     slotSetupProductLabel: 'Product sold in this slot',
-    slotSetupProductMeta: 'SKU {sku} · Suggested {price}',
+    slotSetupProductMeta: 'SKU {sku} · {price} per spray',
     slotSetupNoProducts:
-      'The brand has no products yet. Create a product first, then come back to assign it to the slot.',
+      'The brand has no products yet. Create a product first; you will be brought back here to assign it to the slot.',
     slotSetupCreateProduct: 'Create product',
-    slotSetupSuggestedPrice: 'Suggested price for this product: {price}',
-    slotSetupUseSuggested: 'Use suggested price',
-    slotSetupMissing: 'The kiosk only sells a slot that has both a product and a price per spray.',
-    slotSetupReadyAwaitingStock:
-      'The slot has a product and a price. The kiosk starts selling as soon as staff install the bottle.',
-    slotSetupReadySelling:
-      'The slot has a product and a price. Changes take effect on the kiosk immediately.',
+    slotSetupProductPrice: 'Price per spray: {price}',
+    slotSetupProductPriceHint: 'The price is set per product and applies to every slot selling it.',
+    slotSetupChangePrice: 'Change it on the Products page',
+    slotSetupProgressTitle: 'Steps before the slot starts selling',
+    slotSetupAssignPending: 'Choose a product above, then press "Save configuration".',
+    slotSetupStepShip: 'Ship goods to the warehouse',
+    slotSetupShipNone:
+      'Declare the shipment to the platform warehouse, with photos of the batch and the package.',
+    slotSetupShipDeclared: 'Declared, waiting for the warehouse to receive it.',
+    slotSetupShipReceived: 'The warehouse has received the goods.',
+    slotSetupDeclareShipment: 'Declare shipment',
+    slotSetupStepDocs: 'Authenticity documents',
+    slotSetupDocsWaitingBatch: 'Submit after the warehouse receives the goods and creates a batch.',
+    slotSetupDocsMissing:
+      'The batch needs approved authenticity documents before bottles are installed.',
+    slotSetupDocsPending: 'Waiting for the platform to review the documents.',
+    slotSetupDocsApproved: 'Documents approved.',
+    slotSetupSubmitDocs: 'Submit documents',
+    slotSetupStepInstall: 'Install bottle and start selling',
+    slotSetupInstallWaiting:
+      'Platform staff install the bottle; the kiosk starts selling right after.',
+    slotSetupInstallDone: 'The bottle is installed.',
     mySlotsInvoice: 'Invoice',
     brandLogo: 'Logo',
     brandLogoHint:
       'JPEG, PNG or WebP, up to {maxMb} MB. Square images on a plain background look best.',
     brandLogoSaveFailed: 'The profile was saved but the logo was not updated: {reason}',
+    backToSlotSetup: 'Back to slot configuration',
+    productReturnToSlotHint:
+      'After the product is created you will return to the slot configuration.',
+    shipmentReturnToSlotHint: 'After declaring you will return to the slot configuration.',
+    shipmentPhotoBeforePacking: 'Batch photo before packing',
+    shipmentPhotoBeforePackingHint:
+      'Show every bottle and its label clearly. Up to {max} photos, {maxMb} MB each.',
+    shipmentPhotoPacked: 'Packed parcel photo',
+    shipmentPhotoPackedHint:
+      'Show the sealed parcel with its shipping label. Up to {max} photos, {maxMb} MB each.',
+    shipmentPhotoRequired: 'At least 1 photo is required',
+    shipmentPhotoAdd: 'Add photo',
+    shipmentPhotos: 'Photos',
+    shipmentPhotosCount: '{count} photos',
+    shipmentPhotosMissing: 'Missing photos',
+    shipmentPhotosManage: 'Shipment declaration photos',
+    shipmentPhotosManageButton: 'Add photos',
+    shipmentPhotosView: 'View photos',
+    shipmentPhotosNone: 'No photos yet',
+    shipmentPhotoUploadFailed:
+      'The declaration was created but its photos were not sent: {reason}. Add them with "Add photos" in the Photos column.',
+    shipmentPhotosMissingWarning:
+      'The brand has not sent both batch and parcel photos. Note it while reconciling if the goods differ from the declaration.',
+    shipmentPhotosLocked:
+      'The warehouse has received the goods; photos are kept as evidence and can no longer change.',
+    declareShipmentSubmit: 'Declare',
+    receiveShipmentSubmit: 'Confirm receipt',
   },
 
   kiosk: {
@@ -1704,6 +1745,11 @@ export const en: SameKeysAs<typeof vi> = {
     productNotOwned: 'The product does not belong to your brand',
     shipmentNotFound: 'Shipment declaration not found',
     shipmentAlreadyProcessed: 'This declaration has already been received or cancelled',
+    shipmentPhotoFileRequired: 'Choose an image file to upload',
+    shipmentPhotoTooLarge: 'The image is larger than {maxMb} MB',
+    shipmentPhotoUnsupported: 'Only valid JPEG, PNG or WebP images are accepted',
+    shipmentPhotoLimit: 'At most {max} photos per kind',
+    shipmentPhotoNotFound: 'Photo of the declaration not found',
     discrepancyNotesRequired:
       'Received quantity differs from the declaration — a discrepancy note is required',
     batchNumberTaken: "This batch number already exists for the brand's product",

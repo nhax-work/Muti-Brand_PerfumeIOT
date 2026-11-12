@@ -16,6 +16,7 @@ import type {
   RefillStatus,
   RevenueOwnerType,
   ShipmentDeclarationStatus,
+  ShipmentPhotoKind,
   SlotStatus,
 } from '../../shared/db/types.generated.js';
 import {
@@ -41,6 +42,15 @@ export interface ShipmentRecord {
   readonly receivedBy: string | null;
   readonly receivedAt: Date | null;
   readonly resultingBatchId: string | null;
+  readonly createdAt: Date;
+  /** Ảnh thương hiệu gửi kèm khai báo, cũ trước mới sau (ADR-0024). */
+  readonly photos: readonly ShipmentPhotoRecord[];
+}
+
+export interface ShipmentPhotoRecord {
+  readonly id: string;
+  readonly kind: ShipmentPhotoKind;
+  readonly url: string;
   readonly createdAt: Date;
 }
 
@@ -192,6 +202,14 @@ export class InvQueries {
           .select('rb.id')
           .limit(1)
           .as('resulting_batch_id'),
+      )
+      .select(
+        sql<PhotoJson[]>`coalesce((
+          SELECT json_agg(json_build_object('id', p.id, 'kind', p.kind, 'url', p.url,
+                                            'created_at', p.created_at)
+                          ORDER BY p.created_at, p.id)
+            FROM shipment_declaration_photos p
+           WHERE p.declaration_id = d.id), '[]'::json)`.as('photos'),
       );
   }
 
@@ -249,6 +267,59 @@ export class InvQueries {
           status: row.status,
         }
       : null;
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Ảnh khai báo gửi hàng (ADR-0024)
+  // -----------------------------------------------------------------------------------
+
+  async countShipmentPhotos(
+    declarationId: string,
+    kind: ShipmentPhotoKind,
+    executor: Executor = this.db,
+  ): Promise<number> {
+    const row = await executor
+      .selectFrom('shipment_declaration_photos')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .where('declaration_id', '=', declarationId)
+      .where('kind', '=', kind)
+      .executeTakeFirstOrThrow();
+    return Number(row.n);
+  }
+
+  async insertShipmentPhoto(
+    input: { declarationId: string; kind: ShipmentPhotoKind; url: string; uploadedBy: string },
+    executor: Executor = this.db,
+  ): Promise<string> {
+    const row = await executor
+      .insertInto('shipment_declaration_photos')
+      .values({
+        declaration_id: input.declarationId,
+        kind: input.kind,
+        url: input.url,
+        uploaded_by: input.uploadedBy,
+      })
+      .returning('id')
+      .executeTakeFirstOrThrow();
+    return row.id;
+  }
+
+  async findShipmentPhoto(
+    declarationId: string,
+    photoId: string,
+    executor: Executor = this.db,
+  ): Promise<ShipmentPhotoRecord | null> {
+    const row = await executor
+      .selectFrom('shipment_declaration_photos')
+      .select(['id', 'kind', 'url', 'created_at'])
+      .where('id', '=', photoId)
+      .where('declaration_id', '=', declarationId)
+      .executeTakeFirst();
+    return row ? { id: row.id, kind: row.kind, url: row.url, createdAt: row.created_at } : null;
+  }
+
+  async deleteShipmentPhoto(photoId: string, executor: Executor = this.db): Promise<void> {
+    await executor.deleteFrom('shipment_declaration_photos').where('id', '=', photoId).execute();
   }
 
   async findProductBrand(productId: string, executor: Executor = this.db): Promise<string | null> {
@@ -1115,6 +1186,7 @@ function toShipment(r: {
   received_at: Date | null;
   resulting_batch_id: string | null;
   created_at: Date;
+  photos: PhotoJson[];
 }): ShipmentRecord {
   return {
     id: r.id,
@@ -1131,7 +1203,21 @@ function toShipment(r: {
     receivedAt: r.received_at,
     resultingBatchId: r.resulting_batch_id,
     createdAt: r.created_at,
+    photos: r.photos.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      url: p.url,
+      createdAt: new Date(p.created_at),
+    })),
   };
+}
+
+/** Một ảnh trong cột `photos` dựng bằng json_agg — thời điểm về dạng chuỗi ISO. */
+interface PhotoJson {
+  id: string;
+  kind: ShipmentPhotoKind;
+  url: string;
+  created_at: string;
 }
 
 function toBatch(r: {

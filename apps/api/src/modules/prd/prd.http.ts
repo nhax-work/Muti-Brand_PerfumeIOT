@@ -47,6 +47,9 @@ const ListQuery = z.object({
 /** Money regex: chuỗi số thập phân dương tối đa 4 chữ số sau dấu chấm. */
 const moneySchema = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Giá phải là chuỗi số thập phân');
 
+/** ADR-0023: giá mỗi lượt xịt của sản phẩm là giá bán thật trên slot, nên phải lớn hơn 0. */
+const pricePerSpraySchema = moneySchema.refine((v) => Number(v) > 0, 'Giá phải lớn hơn 0');
+
 /** openapi.yaml: ProductCreate. */
 const CreateBody = z.object({
   sku: z.string().min(1).max(100),
@@ -54,7 +57,7 @@ const CreateBody = z.object({
   description: z.string().optional(),
   fragranceNotes: z.record(z.string(), z.unknown()).optional(),
   imageUrl: z.string().url().optional(),
-  defaultPrice: moneySchema,
+  defaultPrice: pricePerSpraySchema,
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.optional(),
   fullBottleVolumeMl: z.coerce.number().positive().optional(),
@@ -65,7 +68,7 @@ const UpdateBody = z.object({
   description: z.string().nullable().optional(),
   fragranceNotes: z.record(z.string(), z.unknown()).nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
-  defaultPrice: moneySchema.optional(),
+  defaultPrice: pricePerSpraySchema.optional(),
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.nullable().optional(),
   fullBottleVolumeMl: z.coerce.number().positive().nullable().optional(),

@@ -458,7 +458,13 @@ export class SltService {
       throw invalidField('fragranceProductId', 'slt.productDiscontinued');
     }
 
-    const updated = await this.queries.updateProduct(scope, id, fragranceProductId);
+    // ADR-0023: slot bán đúng giá của sản phẩm.
+    const updated = await this.queries.updateProduct(
+      scope,
+      id,
+      fragranceProductId,
+      product.defaultPrice,
+    );
     const dto = toDto(updated!);
 
     await this.audit.log({
@@ -467,14 +473,22 @@ export class SltService {
       action: 'slt.slot_rental.product_assigned',
       targetType: 'SlotRental',
       targetId: id,
-      before: { fragranceProductId: rental.fragranceProductId },
-      after: { fragranceProductId },
+      before: {
+        fragranceProductId: rental.fragranceProductId,
+        pricePerSpray: rental.pricePerSpray,
+      },
+      after: { fragranceProductId, pricePerSpray: dto.pricePerSpray },
     });
 
     return dto;
   }
 
-  /** FR-SLT-08: Đặt giá mỗi lượt xịt. */
+  /**
+   * Giá riêng của một slot. Từ ADR-0023 giá thương hiệu bán đặt ở sản phẩm và slot lấy theo khi gán
+   * sản phẩm, nên endpoint này chỉ còn cho Platform Super Admin đặt giá slot đang bán hàng thanh lý
+   * (FR-EXP-18) — hàng đó đã thuộc nền tảng. Mọi trường hợp khác bị từ chối để không có giá slot lệch
+   * với sản phẩm.
+   */
   async setPricePerSpray(
     actor: AuthenticatedUser,
     scope: BrandScope,
@@ -484,8 +498,12 @@ export class SltService {
     const rental = await this.queries.findById(scope, id);
     if (!rental) throw notFoundFor(actor);
 
-    if (!rental.paidAt || ['CLOSED', 'TERMINATED', 'CANCELLED'].includes(rental.status)) {
-      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    if (rental.status !== 'LIQUIDATED') {
+      throw invalidField('pricePerSpray', 'slt.pricePerSprayFollowsProduct');
+    }
+    // FR-EXP-18 AC2: thương hiệu cũ không đổi được giá hàng đã thanh lý.
+    if (scope.kind === 'BRAND') {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
     }
 
     const numericPrice = Number(pricePerSpray);
