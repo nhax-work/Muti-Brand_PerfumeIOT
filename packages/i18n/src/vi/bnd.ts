@@ -5,4 +5,7 @@ export const bnd = {
   taxCodeRequiredForVerification: 'Thương hiệu chưa khai mã số thuế, không thể xác minh pháp nhân',
   legalProfileSaved: 'Đã lưu hồ sơ pháp nhân và tài khoản nhận doanh thu',
   legalVerifiedSuccess: 'Đã ghi nhận xác minh pháp nhân',
+  logoFileRequired: 'Chọn một tệp ảnh làm logo',
+  logoTooLarge: 'Logo vượt quá {maxMb} MB',
+  logoUnsupported: 'Logo chỉ nhận ảnh JPEG, PNG hoặc WebP hợp lệ',
 } as const;

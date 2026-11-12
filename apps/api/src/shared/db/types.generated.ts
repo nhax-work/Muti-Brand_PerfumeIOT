@@ -69,6 +69,8 @@ export type RevenueOwnerType = "BRAND" | "PLATFORM";
 
 export type ShipmentDeclarationStatus = "CANCELLED" | "DECLARED" | "DISCREPANCY" | "RECEIVED";
 
+export type ShipmentPhotoKind = "BEFORE_PACKING" | "PACKED";
+
 export type SlotRentalRequestStatus = "APPROVED" | "CANCELLED" | "CONVERTED" | "REJECTED" | "REQUESTED";
 
 export type SlotRentalStatus = "ACTIVE" | "CANCELLED" | "CLOSED" | "DRAFT" | "EXPIRING" | "GRACE" | "LIQUIDATED" | "RENEWED" | "TERMINATED";
@@ -920,6 +922,18 @@ export interface SensorReadings {
   unit: string | null;
 }
 
+export interface ShipmentDeclarationPhotos {
+  created_at: Generated<Timestamp>;
+  declaration_id: string;
+  id: Generated<string>;
+  kind: ShipmentPhotoKind;
+  uploaded_by: string;
+  /**
+   * URL tuyệt đối trên kho ảnh, khóa shipments/{declaration_id}-{hash}.webp (ADR-0024).
+   */
+  url: string;
+}
+
 export interface SlotRentalRequests {
   brand_id: string;
   created_at: Generated<Timestamp>;
@@ -1150,6 +1164,7 @@ export interface DB {
   role_permissions: RolePermissions;
   roles: Roles;
   sensor_readings: SensorReadings;
+  shipment_declaration_photos: ShipmentDeclarationPhotos;
   slot_rental_requests: SlotRentalRequests;
   slot_rentals: SlotRentals;
   storage_compensations: StorageCompensations;

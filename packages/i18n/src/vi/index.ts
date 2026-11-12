@@ -25,11 +25,20 @@ import {
   bottleStatus,
   inv,
   refillSessionStatus,
+  refillWorkBlocker,
+  refillWorkKind,
   shipmentStatus,
 } from './inv.js';
 import { dsp } from './dsp.js';
 import { kiosk } from './kiosk.js';
-import { machineOperatingMode, machineStatus, mch, slotRentalStatus, slotStatus } from './mch.js';
+import {
+  machineOperatingMode,
+  machineStatus,
+  mch,
+  salesStopReason,
+  slotRentalStatus,
+  slotStatus,
+} from './mch.js';
 import { bottleReturnMethod, exp } from './exp.js';
 import { mnt, ticketPriority, ticketStatus } from './mnt.js';
 import { ord } from './ord.js';
@@ -54,6 +63,7 @@ export const vi = {
   slotStatus,
   machineStatus,
   machineOperatingMode,
+  salesStopReason,
   slotRentalStatus,
   orderCode,
   actorType,
@@ -77,6 +87,8 @@ export const vi = {
   shipmentStatus,
   authenticityStatus,
   refillSessionStatus,
+  refillWorkKind,
+  refillWorkBlocker,
   bottleStatus,
   rfq,
   refillRequestStatus,

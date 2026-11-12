@@ -158,7 +158,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-PRD-01 | Hệ thống phải cho phép Brand Admin tạo sản phẩm nước hoa với tên, mô tả, hình ảnh, tầng hương và trạng thái kinh doanh | BR-007, BR-011 | M |
 | FR-PRD-02 | Hệ thống phải cho phép Brand Admin cập nhật và ngừng kinh doanh sản phẩm của thương hiệu mình | BR-011 | M |
 | FR-PRD-03 | Hệ thống phải liên kết mỗi sản phẩm với đúng một thương hiệu sở hữu | BR-003 | M |
-| FR-PRD-04 | Hệ thống phải cho phép Brand Admin cấu hình giá tham chiếu mặc định cho sản phẩm, dùng làm gợi ý khi đặt giá slot | BR-009 | S |
+| FR-PRD-04 | Hệ thống phải lưu giá mỗi lượt xịt của sản phẩm và áp dụng cho slot khi gán sản phẩm (ADR-0023, gộp vào FR-SLT-08) | BR-009 | S |
 | FR-PRD-05 | Hệ thống phải cho phép Brand Admin ghi nhận giá bán lẻ và dung tích của chai đầy đủ, phục vụ tính phí lưu kho khi ân hạn | BR-013 | M |
 | FR-PRD-06 | Hệ thống phải cho phép Brand Admin tạo chiến dịch khuyến mãi hoặc giá tạm thời theo khoảng thời gian | BR-007 | W |
 
@@ -200,7 +200,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-SLT-05 | Hệ thống phải từ chối tạo hóa đơn có kỳ hạn chồng lấn với hóa đơn đang tồn tại trên cùng slot | BR-009 | M |
 | FR-SLT-06 | Hệ thống phải quản lý trạng thái hóa đơn theo tập: DRAFT, ACTIVE, EXPIRING, GRACE, RENEWED, LIQUIDATED, CLOSED, TERMINATED, CANCELLED | BR-009, BR-013 | M |
 | FR-SLT-07 | Hệ thống phải chỉ cho phép gán vào slot sản phẩm thuộc thương hiệu đang có hóa đơn thuê slot đó | BR-003, BR-012 | M |
-| FR-SLT-08 | Hệ thống phải cho phép Brand Admin tự do đặt giá mỗi lượt xịt cho slot mình thuê, không bị giới hạn bởi giá sàn hay giá trần | BR-009, BR-011 | M |
+| FR-SLT-08 | Hệ thống phải cho phép Brand Admin tự do đặt giá mỗi lượt xịt cho từng sản phẩm của thương hiệu mình, không bị giới hạn bởi giá sàn hay giá trần; mọi slot bán sản phẩm đó áp dụng cùng một giá (ADR-0023) | BR-009, BR-011 | M |
 | FR-SLT-09 | Hệ thống phải áp dụng giá mới cho các đơn hàng tạo sau thời điểm thay đổi, không ảnh hưởng đơn hàng đang chờ thanh toán | BR-002, BR-009 | M |
 | FR-SLT-10 | Hệ thống phải từ chối tạo đơn hàng mới trên slot không có hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED | BR-002, BR-009 | M |
 | FR-SLT-11 | Hệ thống phải chuyển slot sang trạng thái UNAVAILABLE khi hóa đơn chuyển sang TERMINATED hoặc CLOSED | BR-009 | M |

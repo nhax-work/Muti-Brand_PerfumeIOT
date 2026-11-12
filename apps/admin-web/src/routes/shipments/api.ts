@@ -4,10 +4,13 @@ import { api, unwrap } from '@/shared/api';
 
 export type ShipmentDeclaration = components['schemas']['ShipmentDeclaration'];
 export type ShipmentStatus = components['schemas']['ShipmentDeclarationStatus'];
+export type ShipmentPhoto = components['schemas']['ShipmentPhoto'];
+export type ShipmentPhotoKind = components['schemas']['ShipmentPhotoKind'];
 export type InventoryBatch = components['schemas']['InventoryBatch'];
 export type AuthenticityStatus = components['schemas']['BatchAuthenticityStatus'];
 export type Bottle = components['schemas']['Bottle'];
 export type RefillSession = components['schemas']['RefillSession'];
+export type RefillWorkItem = components['schemas']['RefillWorkItem'];
 export type RefillStatus = components['schemas']['RefillStatus'];
 export type Product = components['schemas']['Product'];
 export type Machine = components['schemas']['Machine'];
@@ -35,6 +38,41 @@ export function useCreateShipmentDeclaration() {
   return useMutation({
     mutationFn: (body: components['schemas']['ShipmentDeclarationCreate']) =>
       unwrap(api.POST('/shipment-declarations', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
+  });
+}
+
+/**
+ * Thêm ảnh lô hàng / kiện hàng cho khai báo (FR-INV-22, ADR-0024). Gửi FormData nguyên trạng —
+ * openapi-fetch để trình duyệt tự đặt Content-Type kèm boundary.
+ */
+export function useAddShipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, kind, file }: { id: string; kind: ShipmentPhotoKind; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.POST('/shipment-declarations/{id}/photos', {
+          params: { path: { id }, query: { kind } },
+          body: form as unknown as { file: string },
+        }),
+      );
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
+  });
+}
+
+/** Xóa một ảnh khi khai báo còn DECLARED (ADR-0024). */
+export function useDeleteShipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, photoId }: { id: string; photoId: string }) =>
+      unwrap(
+        api.DELETE('/shipment-declarations/{id}/photos/{photoId}', {
+          params: { path: { id, photoId } },
+        }),
+      ),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
   });
 }
@@ -123,6 +161,15 @@ export function useRefillSessions() {
   });
 }
 
+/** ADR-0026: việc cần nạp — máy chủ tính, chỉ người có `inventory.manage` gọi được. */
+export function useRefillWorklist(enabled: boolean) {
+  return useQuery({
+    queryKey: ['refill-worklist'],
+    enabled,
+    queryFn: () => unwrap(api.GET('/refill-worklist')),
+  });
+}
+
 /** FR-INV-29: máy suy từ slot. */
 export function useOpenRefillSession() {
   const queryClient = useQueryClient();
@@ -131,6 +178,8 @@ export function useOpenRefillSession() {
       unwrap(api.POST('/refill-sessions', { body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['refill-sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['refill-worklist'] });
+      void queryClient.invalidateQueries({ queryKey: ['machine-sales-stops'] });
       void queryClient.invalidateQueries({ queryKey: ['bottles'] });
     },
   });
@@ -144,20 +193,48 @@ export function useCloseRefillSession() {
       unwrap(api.POST('/refill-sessions/{id}/close', { params: { path: { id } }, body })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['refill-sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['refill-worklist'] });
+      void queryClient.invalidateQueries({ queryKey: ['machine-sales-stops'] });
       void queryClient.invalidateQueries({ queryKey: ['bottles'] });
     },
   });
 }
 
-/** Chai trong kho — để chọn chai lắp khi đóng phiếu nạp. */
-export function useStockBottles(enabled: boolean) {
+/** ADR-0028: hủy phiếu mở mà không lắp chai — máy bán lại ngay. */
+export function useCancelRefillSession() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      unwrap(
+        api.POST('/refill-sessions/{id}/cancel', { params: { path: { id } }, body: { reason } }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['refill-sessions'] });
+      void queryClient.invalidateQueries({ queryKey: ['refill-worklist'] });
+      void queryClient.invalidateQueries({ queryKey: ['machine-sales-stops'] });
+    },
+  });
+}
+
+/**
+ * Chai trong kho của đúng sản phẩm cần lắp — để chọn khi đóng phiếu nạp. Lọc ở máy chủ (ADR-0026):
+ * mỗi lô tự sinh hàng trăm chai, lấy cả kho rồi lọc ở trình duyệt thì trang đầu có thể thiếu chai cần.
+ */
+export function useStockBottles(fragranceProductId: string | null | undefined) {
   return useQuery({
-    queryKey: ['bottles', 'IN_STOCK'],
-    enabled,
+    queryKey: ['bottles', 'IN_STOCK', fragranceProductId],
+    enabled: Boolean(fragranceProductId),
     queryFn: () =>
       unwrap(
         api.GET('/bottles', {
-          params: { query: { page: 1, pageSize: LIST_PAGE_SIZE, status: 'IN_STOCK' } },
+          params: {
+            query: {
+              page: 1,
+              pageSize: LIST_PAGE_SIZE,
+              status: 'IN_STOCK',
+              fragranceProductId: fragranceProductId!,
+            },
+          },
         }),
       ),
   });

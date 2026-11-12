@@ -9,6 +9,12 @@ export {
   type MediaObject,
   type MediaStorage,
 } from './media-storage.js';
+export {
+  detectImageKind,
+  normalizeImage,
+  type ImageKind,
+  type NormalizedImage,
+} from './normalize-image.js';
 export { LocalMediaStorage } from './local-media-storage.js';
 export { R2MediaStorage, r2Endpoint, type S3Sender } from './r2-media-storage.js';
 export { LOCAL_MEDIA_ROUTE, registerMediaRoutes } from './register-media-routes.js';

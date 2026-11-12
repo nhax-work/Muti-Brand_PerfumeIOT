@@ -214,6 +214,28 @@ export class RfqService {
     await this.queries.linkSession(request.id, input.sessionId, this.clock.now(), tx);
   }
 
+  /**
+   * ADR-0028: gọi trong transaction hủy phiếu nạp — yêu cầu đã gắn phiếu giữ trạng thái, gỡ liên kết
+   * để gắn được với phiếu sau (`linkToSession` từ chối yêu cầu đã có phiếu).
+   */
+  async unlinkFromSession(tx: Executor, sessionId: string, actorId: string): Promise<void> {
+    for (const request of await this.queries.unlinkOpenBySession(sessionId, this.clock.now(), tx)) {
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId,
+          brandId: request.brandId,
+          action: 'rfq.request.session_unlinked',
+          targetType: 'refill_request',
+          targetId: request.id,
+          before: { refillSessionId: sessionId },
+          after: { refillSessionId: null },
+        },
+        tx,
+      );
+    }
+  }
+
   /** FR-RFQ-09 AC1: gọi trong transaction đóng phiếu nạp — yêu cầu liên kết sang COMPLETED. */
   async completeForSession(tx: Executor, sessionId: string, actorId: string): Promise<void> {
     const now = this.clock.now();

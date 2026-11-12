@@ -55,6 +55,9 @@ export interface UpdateProductData {
   readonly fullBottleVolumeMl?: number | null;
 }
 
+/** Trạng thái hóa đơn còn giữ slot và bán theo giá sản phẩm (ADR-0023). */
+const HELD_RENTAL_STATUSES = ['DRAFT', 'ACTIVE', 'EXPIRING', 'GRACE'] as const;
+
 @Injectable()
 export class PrdQueries {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
@@ -159,7 +162,18 @@ export class PrdQueries {
         input.fullBottleVolumeMl !== null ? String(input.fullBottleVolumeMl) : null;
     }
 
-    await this.db.updateTable('fragrance_products').set(values).where('id', '=', id).execute();
+    await this.db.transaction().execute(async (tx) => {
+      await tx.updateTable('fragrance_products').set(values).where('id', '=', id).execute();
+      if (input.defaultPrice === undefined) return;
+      // ADR-0023: giá thuộc sản phẩm — mọi hóa đơn đang giữ slot bán sản phẩm này đổi theo, trong
+      // cùng giao dịch. Hóa đơn LIQUIDATED giữ nguyên vì hàng đã thuộc nền tảng (BR-013).
+      await tx
+        .updateTable('slot_rentals')
+        .set({ price_per_spray: input.defaultPrice, updated_at: new Date() })
+        .where('fragrance_product_id', '=', id)
+        .where('status', 'in', [...HELD_RENTAL_STATUSES])
+        .execute();
+    });
   }
 
   async setStatus(id: string, status: ProductStatus): Promise<void> {

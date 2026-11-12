@@ -14,9 +14,23 @@ export function useProducts(params: { page: number; pageSize: number; status?: P
   });
 }
 
+/**
+ * Sản phẩm đổi thì danh mục chọn ở modal cấu hình slot cũng đổi; giá đổi thì giá trên mọi slot bán
+ * sản phẩm đó đổi theo (ADR-0023) — làm mới cả các màn slot.
+ */
 function useInvalidateProducts() {
   const queryClient = useQueryClient();
-  return () => void queryClient.invalidateQueries({ queryKey: ['products'] });
+  return () => {
+    for (const queryKey of [
+      ['products'],
+      ['brand-products'],
+      ['slot-rentals'],
+      ['slot-rental'],
+      ['rental-invoice'],
+    ]) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  };
 }
 
 /** Tạo (FR-PRD-01) hoặc sửa (FR-PRD-02). SKU chỉ đặt lúc tạo — máy chủ bỏ qua khi sửa. */

@@ -629,22 +629,29 @@ export class SltQueries {
 
   async findProductById(
     id: string,
-  ): Promise<{ id: string; brandId: string; status: string } | null> {
+  ): Promise<{ id: string; brandId: string; status: string; defaultPrice: string } | null> {
     const row = await this.db
       .selectFrom('fragrance_products')
-      .select(['id', 'brand_id', 'status'])
+      .select(['id', 'brand_id', 'status', 'default_price'])
       .where('id', '=', id)
       .where('deleted_at', 'is', null)
       .executeTakeFirst();
 
     if (!row) return null;
-    return { id: row.id, brandId: row.brand_id, status: row.status };
+    return {
+      id: row.id,
+      brandId: row.brand_id,
+      status: row.status,
+      defaultPrice: String(row.default_price),
+    };
   }
 
+  /** Gán sản phẩm kèm giá của sản phẩm trong cùng một câu lệnh (ADR-0023). */
   async updateProduct(
     scope: BrandScope,
     id: string,
     fragranceProductId: string,
+    pricePerSpray: string,
   ): Promise<SlotRentalRecord | null> {
     const now = new Date();
     await this.db
@@ -652,6 +659,7 @@ export class SltQueries {
       .set({
         fragrance_product_id: fragranceProductId,
         product_assigned_at: now,
+        price_per_spray: pricePerSpray,
         updated_at: now,
       })
       .where('id', '=', id)
@@ -661,18 +669,15 @@ export class SltQueries {
     return this.findById(scope, id);
   }
 
+  /** Giá riêng của slot — chỉ còn dùng cho hàng thanh lý (FR-EXP-18, ADR-0023). */
   async updatePricePerSpray(
     scope: BrandScope,
     id: string,
     pricePerSpray: string,
   ): Promise<SlotRentalRecord | null> {
-    const now = new Date();
     await this.db
       .updateTable('slot_rentals')
-      .set({
-        price_per_spray: pricePerSpray,
-        updated_at: now,
-      })
+      .set({ price_per_spray: pricePerSpray, updated_at: new Date() })
       .where('id', '=', id)
       .where(brandScopedByColumn(scope, 'brand_id'))
       .execute();

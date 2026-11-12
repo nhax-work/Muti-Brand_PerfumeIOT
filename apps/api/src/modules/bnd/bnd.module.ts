@@ -2,10 +2,11 @@ import { Module } from '@nestjs/common';
 import { BndController } from './bnd.http.js';
 import { BndQueries } from './bnd.queries.js';
 import { BndService } from './bnd.service.js';
+import { BrandLogoService } from './brand-logo.service.js';
 
 @Module({
   controllers: [BndController],
-  providers: [BndService, BndQueries],
+  providers: [BndService, BrandLogoService, BndQueries],
   exports: [BndService],
 })
 export class BndModule {}
