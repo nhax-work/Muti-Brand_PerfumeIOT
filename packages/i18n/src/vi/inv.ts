@@ -26,6 +26,14 @@ export const inv = {
   shipmentPhotoNotFound: 'Không tìm thấy ảnh của khai báo',
   discrepancyNotesRequired: 'Số thực nhận lệch số khai báo — bắt buộc ghi chú lý do',
   batchNumberTaken: 'Số lô này đã tồn tại cho sản phẩm của thương hiệu',
+  brandNotFound: 'Không tìm thấy thương hiệu',
+  productNotFound: 'Không tìm thấy sản phẩm nước hoa',
+  expiresBeforeReceived: 'Hạn sử dụng phải sau ngày nhập lô',
+  slotEmpty: 'Slot hiện không có chai nào đang lắp',
+  rentalNonRenewalUseReturn:
+    'Hóa đơn đã báo không gia hạn — vui lòng tháo chai qua luồng lập phiếu trả hàng',
+  adjustmentReasonRequired: 'Bắt buộc nhập lý do điều chỉnh tồn kho',
+  adjustmentSlotMismatch: 'Slot được chọn không khớp với slot mà chai đang lắp',
   batchBottleIdentifierTaken:
     'Mã chai sinh từ số lô này trùng với chai đã đăng ký trước — hãy dùng số lô khác',
   bottleIdentifierTooLong: 'Mã sản phẩm và số lô quá dài để sinh mã chai — hãy rút ngắn số lô',

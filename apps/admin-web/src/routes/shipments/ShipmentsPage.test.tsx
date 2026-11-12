@@ -253,6 +253,20 @@ vi.mock('./api', async (importOriginal) => ({
   useOpenRefillSession: () => ({ mutateAsync: mockOpenRefill, isPending: false }),
   useCloseRefillSession: () => ({ mutateAsync: mockCloseRefill, isPending: false }),
   useCancelRefillSession: () => ({ mutateAsync: mockCancelRefill, isPending: false }),
+  useAllBrands: () => ({ data: { items: [] }, isLoading: false }),
+  useBottles: () => ({
+    data: { items: [], meta: { page: 1, pageSize: 20, total: 0 } },
+    isLoading: false,
+  }),
+  useBottleHistory: () => ({
+    data: { items: [], meta: { page: 1, pageSize: 20, total: 0 } },
+    isLoading: false,
+    error: null,
+  }),
+  useCreateInventoryBatch: () => mutation(),
+  useRegisterBottle: () => mutation(),
+  useRemoveBottleFromSlot: () => mutation(),
+  useCreateInventoryAdjustment: () => mutation(),
 }));
 
 function openTab(name: RegExp) {

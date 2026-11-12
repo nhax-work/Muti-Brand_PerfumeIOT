@@ -3,10 +3,12 @@ import { RfqModule } from '../rfq/index.js';
 import { SltCompensationModule, SltModule } from '../slt/index.js';
 import {
   BottlesController,
+  InventoryAdjustmentsController,
   InventoryBatchesController,
   RefillSessionsController,
   RefillWorklistController,
   ShipmentDeclarationsController,
+  SlotBottleController,
 } from './inv.http.js';
 import { InvQueries } from './inv.queries.js';
 import { InvService } from './inv.service.js';
@@ -21,6 +23,8 @@ import { ShipmentPhotoService } from './shipment-photo.service.js';
     InventoryBatchesController,
     BottlesController,
     RefillSessionsController,
+    SlotBottleController,
+    InventoryAdjustmentsController,
     RefillWorklistController,
   ],
   providers: [InvQueries, InvService, ShipmentPhotoService],

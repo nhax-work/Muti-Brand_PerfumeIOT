@@ -43,6 +43,11 @@ const INVENTORY_ADJUST = 'inventory.adjust';
 
 const IdParam = z.object({ id: z.string().uuid() });
 const IsoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const IsoDateTime = z
+  .string()
+  .datetime({ offset: true })
+  .or(z.string().datetime())
+  .transform((value) => new Date(value));
 
 const Page = {
   page: z.coerce.number().int().min(1).default(1),
@@ -116,6 +121,31 @@ const BottleCreateBody = z.object({
   identifier: z.string().trim().min(1).max(150),
   initialVolumeMl: z.number().positive(),
   expiresAt: z.coerce.date().optional(),
+});
+
+/** openapi `InventoryBatchCreate` (FR-INV-01). */
+const BatchCreateBody = z.object({
+  brandId: z.string().uuid(),
+  fragranceProductId: z.string().uuid(),
+  batchNumber: z.string().trim().min(1).max(100),
+  receivedAt: IsoDateTime,
+  expiresAt: IsoDateTime.optional(),
+  quantityReceived: z.number().int().min(1),
+  supplierInfo: z.record(z.string(), z.unknown()).optional(),
+});
+
+const BottleHistoryQuery = z.object({ ...Page });
+
+const BottleRemovalBody = z.object({
+  notes: z.string().trim().max(500).optional(),
+});
+
+/** openapi `InventoryAdjustmentCreate` — thiếu lý do trả `ADJUSTMENT_REASON_REQUIRED`. */
+const AdjustmentCreateBody = z.object({
+  bottleId: z.string().uuid(),
+  slotId: z.string().uuid().optional(),
+  afterQuantityMl: z.number().finite().min(0),
+  reason: z.string().nullable().optional(),
 });
 
 const RefillQuery = z.object({
@@ -228,6 +258,13 @@ export class InventoryBatchesController {
     return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
   }
 
+  /** FR-INV-01 */
+  @Post()
+  @RequirePermissions(INVENTORY_MANAGE)
+  create(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.inv.createBatch(actor, parseBody(BatchCreateBody, body));
+  }
+
   /** FR-INV-33 */
   @Post(':id/authenticity-documents')
   @HttpCode(200)
@@ -296,6 +333,24 @@ export class BottlesController {
     const { reason } = parseBody(BottleDamageBody, body);
     return this.inv.markBottleDamaged(actor, parseBody(IdParam, params).id, reason);
   }
+
+  /** FR-INV-17 */
+  @Get(':id/history')
+  async history(
+    @CurrentUser() actor: AuthenticatedUser,
+    @CurrentBrandScope() scope: BrandScope,
+    @Param() params: unknown,
+    @Query() rawQuery: unknown,
+  ) {
+    const query = parseBody(BottleHistoryQuery, rawQuery);
+    const { items, total } = await this.inv.getBottleHistory(
+      actor,
+      scope,
+      parseBody(IdParam, params).id,
+      query,
+    );
+    return { items, meta: { page: query.page, pageSize: query.pageSize, total } };
+  }
 }
 
 @Controller('refill-sessions')
@@ -354,5 +409,35 @@ export class RefillWorklistController {
   @RequirePermissions(INVENTORY_MANAGE)
   async list(@CurrentBrandScope() scope: BrandScope) {
     return { items: await this.inv.refillWorklist(scope) };
+  }
+}
+
+@Controller('slots')
+export class SlotBottleController {
+  constructor(@Inject(InvService) private readonly inv: InvService) {}
+
+  /** FR-INV-15: Tháo chai khỏi slot về kho (ADR-0019, FR-MCH-17). */
+  @Delete(':id/bottle')
+  @RequirePermissions(INVENTORY_MANAGE)
+  removeBottle(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { notes } = parseBody(BottleRemovalBody, body ?? {});
+    return this.inv.removeBottleFromSlot(actor, parseBody(IdParam, params).id, notes);
+  }
+}
+
+@Controller('inventory-adjustments')
+export class InventoryAdjustmentsController {
+  constructor(@Inject(InvService) private readonly inv: InvService) {}
+
+  /** FR-INV-16: Điều chỉnh tồn kho kèm lý do bắt buộc (FR-AUTH-09). */
+  @Post()
+  @RequirePermissions(INVENTORY_ADJUST)
+  @RequireReauth()
+  create(@CurrentUser() actor: AuthenticatedUser, @Body() body: unknown) {
+    return this.inv.createAdjustment(actor, parseBody(AdjustmentCreateBody, body));
   }
 }
