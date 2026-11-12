@@ -1076,8 +1076,8 @@ export interface paths {
         };
         get?: never;
         /**
-         * Đặt giá mỗi lượt xịt
-         * @description FR-SLT-08, FR-SLT-09: Brand Admin tự do đặt giá, không có giá sàn hay giá trần. Giá mới chỉ áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ giá đã chụp (FR-ORD-06). Hóa đơn đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Mở ngay sau khi thanh toán; hóa đơn DRAFT chưa thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006). Ghi nhật ký (FR-AUD-04).
+         * Đặt giá slot đang bán hàng thanh lý
+         * @description FR-EXP-18, ADR-0023: Platform Super Admin đặt giá mỗi lượt xịt cho slot có hóa đơn LIQUIDATED. Giá thương hiệu bán đặt ở sản phẩm (`Product.defaultPrice`) và slot lấy theo khi gán sản phẩm, nên hóa đơn ở trạng thái khác trả VALIDATION_ERROR; thương hiệu gọi cho hóa đơn LIQUIDATED nhận FORBIDDEN_SCOPE. Giá mới chỉ áp cho đơn tạo sau thời điểm đổi (FR-SLT-09). Ghi nhật ký (FR-AUD-04).
          */
         put: operations["setSlotRentalPrice"];
         post?: never;
@@ -1744,6 +1744,51 @@ export interface paths {
          */
         post: operations["receiveShipmentDeclaration"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shipment-declarations/{id}/photos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Thêm ảnh cho khai báo gửi hàng
+         * @description FR-INV-22, ADR-0024: Brand Admin thêm ảnh lô hàng trước khi đóng gói hoặc kiện hàng đã đóng gói cho khai báo của thương hiệu mình. Chỉ nhận JPEG, PNG, WebP (kiểm theo nội dung tệp), tối đa `SHIPMENT_PHOTO_MAX_BYTES`; máy chủ mã hóa lại sang WebP, cạnh dài nhất tối đa `SHIPMENT_PHOTO_MAX_EDGE_PX`, bỏ metadata. Mỗi loại tối đa `SHIPMENT_PHOTO_MAX_PER_KIND` ảnh (vượt thì VALIDATION_ERROR). Khai báo không còn DECLARED trả SHIPMENT_ALREADY_PROCESSED. Ghi nhật ký.
+         */
+        post: operations["addShipmentDeclarationPhoto"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/shipment-declarations/{id}/photos/{photoId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+                photoId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Xóa ảnh của khai báo gửi hàng
+         * @description FR-INV-22, ADR-0024: xóa một ảnh khi khai báo còn DECLARED; sau khi kho đã nhận, ảnh là bằng chứng nên bị khóa (SHIPMENT_ALREADY_PROCESSED).
+         */
+        delete: operations["deleteShipmentDeclarationPhoto"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3383,6 +3428,11 @@ export interface components {
         /** @enum {string} */
         ShipmentDeclarationStatus: "DECLARED" | "RECEIVED" | "DISCREPANCY" | "CANCELLED";
         /**
+         * @description BEFORE_PACKING — ảnh lô hàng trước khi đóng gói (thấy số chai và nhãn); PACKED — ảnh kiện hàng đã đóng gói (ADR-0024).
+         * @enum {string}
+         */
+        ShipmentPhotoKind: "BEFORE_PACKING" | "PACKED";
+        /**
          * @description Xác minh giấy tờ chính hãng của lô (FR-INV-33 ÷ 35, ADR-0017). Chỉ chai thuộc lô APPROVED mới được lắp vào slot.
          * @enum {string}
          */
@@ -3596,6 +3646,7 @@ export interface components {
             } | null;
             /** @description URL tuyệt đối của ảnh sản phẩm. Ảnh upload qua `POST /products/{id}/image` nằm trên kho ảnh công khai (Cloudflare R2), khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0020). */
             imageUrl?: string | null;
+            /** @description Giá mỗi lượt xịt của sản phẩm (ADR-0023, FR-SLT-08). Mọi slot bán sản phẩm này dùng đúng giá này: gán sản phẩm thì slot nhận giá, sửa giá thì mọi hóa đơn đang giữ slot đổi theo. */
             defaultPrice: components["schemas"]["Money"];
             currency: components["schemas"]["Currency"];
             /** @description Giá bán lẻ chai đầy, dùng tính phí lưu kho khi ân hạn (FR-PRD-05, FR-EXP-10). */
@@ -3613,6 +3664,7 @@ export interface components {
             };
             /** @description URL tuyệt đối do người dùng tự nhập. Muốn đưa ảnh lên kho của nền tảng thì dùng `POST /products/{id}/image` (ADR-0020). */
             imageUrl?: string;
+            /** @description Giá mỗi lượt xịt, lớn hơn 0 (ADR-0023). */
             defaultPrice: components["schemas"]["Money"];
             currency?: components["schemas"]["Currency"];
             fullBottleRetailPrice?: components["schemas"]["Money"];
@@ -3773,7 +3825,7 @@ export interface components {
             endsAt: string;
             /** Format: date-time */
             graceEndsAt?: string | null;
-            /** @description Null cho tới khi Brand Admin đặt giá ở bước cấu hình slot (FR-SLT-08). Slot chưa có giá không nhận đơn (FR-SLT-29). */
+            /** @description Giá bán trên slot. Null cho tới khi Brand Admin gán sản phẩm; từ đó luôn bằng giá của sản phẩm (`Product.defaultPrice`, ADR-0023), trừ slot đang bán hàng thanh lý do Platform Super Admin đặt giá (FR-EXP-18). Slot chưa có giá không nhận đơn (FR-SLT-29). */
             pricePerSpray?: components["schemas"]["Money"] | null;
             currency: components["schemas"]["Currency"];
             /**
@@ -4399,6 +4451,17 @@ export interface components {
             receivedAt?: string | null;
             /** Format: uuid */
             resultingBatchId?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Ảnh thương hiệu gửi kèm khai báo, cũ trước mới sau (ADR-0024). */
+            photos?: components["schemas"]["ShipmentPhoto"][];
+        };
+        ShipmentPhoto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["ShipmentPhotoKind"];
+            /** @description URL tuyệt đối trên kho ảnh, khóa đổi theo nội dung (ADR-0024). */
+            url: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -7951,6 +8014,85 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    addShipmentDeclarationPhoto: {
+        parameters: {
+            query: {
+                kind: components["schemas"]["ShipmentPhotoKind"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã thêm ảnh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentDeclaration"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Tệp vượt `SHIPMENT_PHOTO_MAX_BYTES` (FILE_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE) */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteShipmentDeclarationPhoto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+                photoId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã xóa ảnh */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShipmentDeclaration"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
     };

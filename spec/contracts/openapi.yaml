@@ -369,6 +369,12 @@ components:
     ShipmentDeclarationStatus:
       type: string
       enum: [DECLARED, RECEIVED, DISCREPANCY, CANCELLED]
+    ShipmentPhotoKind:
+      type: string
+      enum: [BEFORE_PACKING, PACKED]
+      description: >-
+        BEFORE_PACKING — ảnh lô hàng trước khi đóng gói (thấy số chai và nhãn); PACKED — ảnh kiện
+        hàng đã đóng gói (ADR-0024).
     BatchAuthenticityStatus:
       type: string
       enum: [NOT_SUBMITTED, PENDING, APPROVED, REJECTED]
@@ -639,7 +645,11 @@ components:
           description: >-
             URL tuyệt đối của ảnh sản phẩm. Ảnh upload qua `POST /products/{id}/image` nằm trên kho
             ảnh công khai (Cloudflare R2), khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0020).
-        defaultPrice: { $ref: '#/components/schemas/Money' }
+        defaultPrice:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            Giá mỗi lượt xịt của sản phẩm (ADR-0023, FR-SLT-08). Mọi slot bán sản phẩm này dùng đúng
+            giá này: gán sản phẩm thì slot nhận giá, sửa giá thì mọi hóa đơn đang giữ slot đổi theo.
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice:
           oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
@@ -659,7 +669,9 @@ components:
           description: >-
             URL tuyệt đối do người dùng tự nhập. Muốn đưa ảnh lên kho của nền tảng thì dùng
             `POST /products/{id}/image` (ADR-0020).
-        defaultPrice: { $ref: '#/components/schemas/Money' }
+        defaultPrice:
+          $ref: '#/components/schemas/Money'
+          description: Giá mỗi lượt xịt, lớn hơn 0 (ADR-0023).
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice: { $ref: '#/components/schemas/Money' }
         fullBottleVolumeMl: { type: number, minimum: 0 }
@@ -862,8 +874,9 @@ components:
         pricePerSpray:
           oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
           description: >-
-            Null cho tới khi Brand Admin đặt giá ở bước cấu hình slot (FR-SLT-08). Slot chưa có giá
-            không nhận đơn (FR-SLT-29).
+            Giá bán trên slot. Null cho tới khi Brand Admin gán sản phẩm; từ đó luôn bằng giá của sản
+            phẩm (`Product.defaultPrice`, ADR-0023), trừ slot đang bán hàng thanh lý do Platform Super
+            Admin đặt giá (FR-EXP-18). Slot chưa có giá không nhận đơn (FR-SLT-29).
         currency: { $ref: '#/components/schemas/Currency' }
         fixedFee:
           $ref: '#/components/schemas/Money'
@@ -1580,6 +1593,20 @@ components:
         receivedBy: { type: [string, 'null'], format: uuid }
         receivedAt: { type: [string, 'null'], format: date-time }
         resultingBatchId: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+        photos:
+          type: array
+          description: Ảnh thương hiệu gửi kèm khai báo, cũ trước mới sau (ADR-0024).
+          items: { $ref: '#/components/schemas/ShipmentPhoto' }
+    ShipmentPhoto:
+      type: object
+      required: [id, kind, url, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/ShipmentPhotoKind' }
+        url:
+          type: string
+          description: URL tuyệt đối trên kho ảnh, khóa đổi theo nội dung (ADR-0024).
         createdAt: { type: string, format: date-time }
     ShipmentDeclarationCreate:
       type: object
@@ -3914,13 +3941,13 @@ paths:
       - $ref: '#/components/parameters/idPath'
     put:
       tags: [SLT]
-      summary: Đặt giá mỗi lượt xịt
+      summary: Đặt giá slot đang bán hàng thanh lý
       operationId: setSlotRentalPrice
       description: >-
-        FR-SLT-08, FR-SLT-09: Brand Admin tự do đặt giá, không có giá sàn hay giá trần. Giá mới chỉ
-        áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ giá đã chụp (FR-ORD-06).
-        Hóa đơn đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Mở ngay sau
-        khi thanh toán; hóa đơn DRAFT chưa thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006). Ghi nhật ký
+        FR-EXP-18, ADR-0023: Platform Super Admin đặt giá mỗi lượt xịt cho slot có hóa đơn LIQUIDATED.
+        Giá thương hiệu bán đặt ở sản phẩm (`Product.defaultPrice`) và slot lấy theo khi gán sản phẩm,
+        nên hóa đơn ở trạng thái khác trả VALIDATION_ERROR; thương hiệu gọi cho hóa đơn LIQUIDATED
+        nhận FORBIDDEN_SCOPE. Giá mới chỉ áp cho đơn tạo sau thời điểm đổi (FR-SLT-09). Ghi nhật ký
         (FR-AUD-04).
       requestBody:
         required: true
@@ -4817,6 +4844,79 @@ paths:
                       - type: 'null'
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /shipment-declarations/{id}/photos:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Thêm ảnh cho khai báo gửi hàng
+      operationId: addShipmentDeclarationPhoto
+      description: >-
+        FR-INV-22, ADR-0024: Brand Admin thêm ảnh lô hàng trước khi đóng gói hoặc kiện hàng đã đóng
+        gói cho khai báo của thương hiệu mình. Chỉ nhận JPEG, PNG, WebP (kiểm theo nội dung tệp), tối
+        đa `SHIPMENT_PHOTO_MAX_BYTES`; máy chủ mã hóa lại sang WebP, cạnh dài nhất tối đa
+        `SHIPMENT_PHOTO_MAX_EDGE_PX`, bỏ metadata. Mỗi loại tối đa `SHIPMENT_PHOTO_MAX_PER_KIND` ảnh
+        (vượt thì VALIDATION_ERROR). Khai báo không còn DECLARED trả SHIPMENT_ALREADY_PROCESSED. Ghi
+        nhật ký.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ShipmentPhotoKind' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Đã thêm ảnh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentDeclaration' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: Tệp vượt `SHIPMENT_PHOTO_MAX_BYTES` (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /shipment-declarations/{id}/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - name: photoId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [INV]
+      summary: Xóa ảnh của khai báo gửi hàng
+      operationId: deleteShipmentDeclarationPhoto
+      description: >-
+        FR-INV-22, ADR-0024: xóa một ảnh khi khai báo còn DECLARED; sau khi kho đã nhận, ảnh là bằng
+        chứng nên bị khóa (SHIPMENT_ALREADY_PROCESSED).
+      responses:
+        '200':
+          description: Đã xóa ảnh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentDeclaration' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /inventory-batches:

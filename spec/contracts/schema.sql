@@ -6,7 +6,7 @@
 --
 -- Nguồn thiết kế : seed_document/DB_DIAGRAM_MERMAID.md
 -- Chuẩn đặt tên  : spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md
--- Quy mô         : 29 enum · 45 bảng · 4 partial unique index bắt buộc · 1 exclusion constraint
+-- Quy mô         : 31 enum · 46 bảng · 4 partial unique index bắt buộc · 1 exclusion constraint
 -- Cập nhật       : ADR-0006 (thuê slot theo gói trả trước, hóa đơn, bảo hiểm hàng hóa) — áp bằng
 --                  migrations/1790665900000_slot-rental-status-cancelled.sql và
 --                  migrations/1790665960000_prepaid-rental-packages.sql. Cột thêm bằng ALTER TABLE
@@ -37,6 +37,8 @@
 --                  ADR-0019 (đếm lượt xịt, bỏ load cell) — xóa cột khối lượng trên bottles,
 --                  refill_sessions và dispense_results.measured_quantity_ml; áp bằng
 --                  migrations/1791400000000_*.
+--                  ADR-0024 (ảnh khai báo gửi hàng) — enum shipment_photo_kind, bảng
+--                  shipment_declaration_photos; áp bằng migrations/1791600000000_*.
 --
 -- Bố cục file:
 --   §1  Extension
@@ -149,6 +151,8 @@ CREATE TYPE slot_rental_request_status AS ENUM (
 CREATE TYPE shipment_declaration_status AS ENUM (
     'DECLARED', 'RECEIVED', 'DISCREPANCY', 'CANCELLED'
 );
+
+CREATE TYPE shipment_photo_kind AS ENUM ('BEFORE_PACKING', 'PACKED');
 
 CREATE TYPE storage_compensation_status AS ENUM ('PENDING', 'PAID');
 
@@ -762,6 +766,25 @@ COMMENT ON TABLE brand_shipment_declarations IS
     '(FR-INV-22 đến FR-INV-28). Lô sinh ra trỏ ngược về đây qua inventory_batches.source_declaration_id.';
 COMMENT ON COLUMN brand_shipment_declarations.discrepancy_notes IS
     'Bắt buộc khi received_quantity khác declared_quantity (FR-INV-25).';
+
+CREATE TABLE shipment_declaration_photos (
+    id              uuid                PRIMARY KEY DEFAULT gen_random_uuid(),
+    declaration_id  uuid                NOT NULL REFERENCES brand_shipment_declarations (id)
+                                            ON DELETE CASCADE,
+    kind            shipment_photo_kind NOT NULL,
+    url             text                NOT NULL,
+    uploaded_by     uuid                NOT NULL REFERENCES users (id),
+    created_at      timestamptz         NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_shipment_photo_declaration
+    ON shipment_declaration_photos (declaration_id, kind, created_at);
+
+COMMENT ON TABLE shipment_declaration_photos IS
+    'Ảnh lô hàng trước khi đóng gói và kiện hàng đã đóng gói của một khai báo gửi hàng (FR-INV-22, '
+    'ADR-0024). Chỉ thêm/xóa khi khai báo còn DECLARED.';
+COMMENT ON COLUMN shipment_declaration_photos.url IS
+    'URL tuyệt đối trên kho ảnh, khóa shipments/{declaration_id}-{hash}.webp (ADR-0024).';
 
 CREATE TABLE inventory_batches (
     id                    uuid         PRIMARY KEY DEFAULT gen_random_uuid(),

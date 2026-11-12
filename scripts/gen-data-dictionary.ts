@@ -67,6 +67,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'là phiếu nạp của FR-INV-29..31, không phải một bảng riêng.',
     tables: [
       'brand_shipment_declarations',
+      'shipment_declaration_photos',
       'inventory_batches',
       'bottles',
       'refill_sessions',
