@@ -203,7 +203,7 @@ describe('Việc cần nạp (ADR-0026)', () => {
         WHERE id = $1`,
       [fx.slots[0]],
     );
-    expect(await itemFor(fx.slots[0])).toMatchObject({
+    expect(await itemFor(fx.slots[0]!)).toMatchObject({
       kind: 'LOW_STOCK',
       blocker: null,
       estimatedRemainingSprays: 25,
@@ -222,7 +222,7 @@ describe('Việc cần nạp (ADR-0026)', () => {
     });
     expect(created.statusCode, created.body).toBe(201);
     const request = created.json<{ id: string }>();
-    expect(await itemFor(fx.slots[0])).toMatchObject({
+    expect(await itemFor(fx.slots[0]!)).toMatchObject({
       kind: 'REFILL_REQUEST',
       blocker: 'REQUEST_NOT_APPROVED',
       refillRequestId: request.id,
@@ -232,7 +232,7 @@ describe('Việc cần nạp (ADR-0026)', () => {
     await client.query(`UPDATE refill_requests SET status = 'ACCEPTED' WHERE id = $1`, [
       request.id,
     ]);
-    expect(await itemFor(fx.slots[0])).toMatchObject({
+    expect(await itemFor(fx.slots[0]!)).toMatchObject({
       kind: 'REFILL_REQUEST',
       blocker: null,
       refillRequestStatus: 'ACCEPTED',
