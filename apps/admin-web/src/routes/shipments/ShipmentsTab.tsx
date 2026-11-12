@@ -4,10 +4,12 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   ExclamationCircleOutlined,
+  PictureOutlined,
   PlusOutlined,
 } from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
+  Alert,
   Button,
   DatePicker,
   Descriptions,
@@ -21,19 +23,25 @@ import {
   Tag,
   Typography,
   message,
+  type UploadFile,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 import { errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 import {
   type ShipmentDeclaration,
+  type ShipmentPhotoKind,
   type ShipmentStatus,
+  useAddShipmentPhoto,
   useBrandProducts,
   useCreateShipmentDeclaration,
   useReceiveShipment,
   useShipmentDeclarations,
 } from './api';
+import { hasAllPhotoKinds, usePhotoKindText } from './shipment-photos';
+import { PhotoPicker, ShipmentPhotoGallery, ShipmentPhotosModal } from './ShipmentPhotos';
 
 const STATUS_TAGS: Record<ShipmentStatus, { color: string; icon: React.ReactNode }> = {
   DECLARED: { color: 'blue', icon: <ClockCircleOutlined /> },
@@ -53,6 +61,9 @@ interface DeclareValues {
   declaredQuantity: number;
   declaredBottleVolumeMl: number;
   expectedShipDate?: PickedDate;
+  /** Ảnh giữ ở trình duyệt tới khi khai báo được tạo (ADR-0024). */
+  beforePacking: UploadFile[];
+  packed: UploadFile[];
 }
 
 interface ReceiveValues {
@@ -62,22 +73,34 @@ interface ReceiveValues {
   discrepancyNotes?: string;
 }
 
-/** FR-INV-22 ÷ 27 */
+const PHOTO_FIELDS: readonly { kind: ShipmentPhotoKind; name: 'beforePacking' | 'packed' }[] = [
+  { kind: 'BEFORE_PACKING', name: 'beforePacking' },
+  { kind: 'PACKED', name: 'packed' },
+];
+
+/** FR-INV-22 ÷ 27; ảnh lô hàng và kiện hàng theo ADR-0024. */
 export function ShipmentsTab({
   canDeclare,
   canReceive,
+  initialDeclare,
 }: {
   readonly canDeclare: boolean;
   readonly canReceive: boolean;
+  /** Tới từ modal cấu hình slot: mở sẵn pop-up khai báo, khai báo xong quay về slot. */
+  readonly initialDeclare?: { readonly productId?: string; readonly returnTo: string | null };
 }) {
   const { t } = useI18n();
+  const navigate = useNavigate();
+  const kindText = usePhotoKindText();
   const shipments = useShipmentDeclarations();
   const products = useBrandProducts(canDeclare);
   const create = useCreateShipmentDeclaration();
   const receive = useReceiveShipment();
+  const addPhoto = useAddShipmentPhoto();
 
-  const [declareOpen, setDeclareOpen] = useState(false);
+  const [declareOpen, setDeclareOpen] = useState(() => canDeclare && initialDeclare !== undefined);
   const [declareForm] = Form.useForm<DeclareValues>();
+  const [photosOf, setPhotosOf] = useState<string | null>(null);
   const [receiving, setReceiving] = useState<ShipmentDeclaration | null>(null);
   const [receiveForm] = Form.useForm<ReceiveValues>();
   const receivedQuantity = Form.useWatch('receivedQuantity', receiveForm);
@@ -85,8 +108,9 @@ export function ShipmentsTab({
   const handleDeclare = async () => {
     const values = await declareForm.validateFields().catch(() => null);
     if (!values) return;
+    let declared: ShipmentDeclaration;
     try {
-      await create.mutateAsync({
+      declared = await create.mutateAsync({
         fragranceProductId: values.fragranceProductId,
         declaredQuantity: values.declaredQuantity,
         declaredBottleVolumeMl: values.declaredBottleVolumeMl,
@@ -94,12 +118,27 @@ export function ShipmentsTab({
           ? { expectedShipDate: values.expectedShipDate.format('YYYY-MM-DD') }
           : {}),
       });
-      void message.success(t('inv.shipmentDeclared'));
-      setDeclareOpen(false);
-      declareForm.resetFields();
     } catch (error) {
       void message.error(errorMessage(error, t));
+      return;
     }
+    // Khai báo đã có id mới gắn ảnh được. Ảnh lỗi thì khai báo vẫn còn: báo rõ và để thương hiệu bổ
+    // sung từ cột Ảnh, không tạo trùng khai báo.
+    try {
+      for (const { kind, name } of PHOTO_FIELDS) {
+        for (const f of values[name]) {
+          if (f.originFileObj) {
+            await addPhoto.mutateAsync({ id: declared.id, kind, file: f.originFileObj });
+          }
+        }
+      }
+      void message.success(t('inv.shipmentDeclared'));
+    } catch (error) {
+      void message.error(t('ui.shipmentPhotoUploadFailed', { reason: errorMessage(error, t) }));
+    }
+    setDeclareOpen(false);
+    declareForm.resetFields();
+    if (initialDeclare?.returnTo) void navigate(initialDeclare.returnTo);
   };
 
   const handleReceive = async () => {
@@ -160,6 +199,28 @@ export function ShipmentsTab({
       ),
     },
     {
+      title: t('ui.shipmentPhotos'),
+      key: 'photos',
+      render: (_: unknown, record: ShipmentDeclaration) => {
+        const missing = record.status === 'DECLARED' && !hasAllPhotoKinds(record);
+        return (
+          <Space size={4} wrap>
+            <Button
+              type="link"
+              size="small"
+              icon={<PictureOutlined />}
+              onClick={() => setPhotosOf(record.id)}
+            >
+              {canDeclare && missing
+                ? t('ui.shipmentPhotosManageButton')
+                : t('ui.shipmentPhotosCount', { count: record.photos?.length ?? 0 })}
+            </Button>
+            {missing && <Tag color="gold">{t('ui.shipmentPhotosMissing')}</Tag>}
+          </Space>
+        );
+      },
+    },
+    {
       title: t('ui.discrepancyNotes'),
       dataIndex: 'discrepancyNotes',
       key: 'discrepancyNotes',
@@ -203,17 +264,38 @@ export function ShipmentsTab({
         rowKey="id"
         loading={shipments.isLoading}
         pagination={{ pageSize: 10 }}
+        scroll={{ x: 'max-content' }}
       />
 
       <Modal
         title={t('ui.declareShipment')}
         open={declareOpen}
         onOk={handleDeclare}
-        confirmLoading={create.isPending}
+        okText={t('ui.declareShipmentSubmit')}
+        cancelText={t('ui.cancel')}
+        confirmLoading={create.isPending || addPhoto.isPending}
         onCancel={() => setDeclareOpen(false)}
-        destroyOnClose
+        width={640}
+        destroyOnHidden
       >
-        <Form form={declareForm} layout="vertical" initialValues={{ declaredBottleVolumeMl: 50 }}>
+        {initialDeclare?.returnTo && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('ui.shipmentReturnToSlotHint')}
+          />
+        )}
+        <Form
+          form={declareForm}
+          layout="vertical"
+          initialValues={{
+            declaredBottleVolumeMl: 50,
+            fragranceProductId: initialDeclare?.productId,
+            beforePacking: [],
+            packed: [],
+          }}
+        >
           <Form.Item
             name="fragranceProductId"
             label={t('ui.invProduct')}
@@ -242,16 +324,39 @@ export function ShipmentsTab({
           <Form.Item name="expectedShipDate" label={t('ui.expectedShipDate')}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
+          {PHOTO_FIELDS.map(({ kind, name }) => (
+            <Form.Item
+              key={kind}
+              name={name}
+              label={kindText.label(kind)}
+              extra={kindText.hint(kind)}
+              valuePropName="fileList"
+              rules={[
+                { required: true, type: 'array', min: 1, message: t('ui.shipmentPhotoRequired') },
+              ]}
+            >
+              <PhotoPicker testId={`photo-${name}`} />
+            </Form.Item>
+          ))}
         </Form>
       </Modal>
+
+      <ShipmentPhotosModal
+        declaration={(shipments.data?.items ?? []).find((d) => d.id === photosOf) ?? null}
+        canEdit={canDeclare}
+        onClose={() => setPhotosOf(null)}
+      />
 
       <Modal
         title={t('ui.receiveShipment')}
         open={receiving !== null}
         onOk={handleReceive}
+        okText={t('ui.receiveShipmentSubmit')}
+        cancelText={t('ui.cancel')}
         confirmLoading={receive.isPending}
         onCancel={() => setReceiving(null)}
-        destroyOnClose
+        width={640}
+        destroyOnHidden
       >
         {receiving && (
           <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
@@ -262,6 +367,14 @@ export function ShipmentsTab({
               {receiving.declaredQuantity}
             </Descriptions.Item>
           </Descriptions>
+        )}
+        {receiving && (
+          <Space orientation="vertical" size="middle" style={{ width: '100%', marginBottom: 16 }}>
+            {!hasAllPhotoKinds(receiving) && (
+              <Alert type="warning" showIcon title={t('ui.shipmentPhotosMissingWarning')} />
+            )}
+            <ShipmentPhotoGallery photos={receiving.photos ?? []} />
+          </Space>
         )}
         <Form form={receiveForm} layout="vertical">
           <Form.Item

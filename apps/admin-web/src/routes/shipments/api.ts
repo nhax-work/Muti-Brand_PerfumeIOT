@@ -4,6 +4,8 @@ import { api, unwrap } from '@/shared/api';
 
 export type ShipmentDeclaration = components['schemas']['ShipmentDeclaration'];
 export type ShipmentStatus = components['schemas']['ShipmentDeclarationStatus'];
+export type ShipmentPhoto = components['schemas']['ShipmentPhoto'];
+export type ShipmentPhotoKind = components['schemas']['ShipmentPhotoKind'];
 export type InventoryBatch = components['schemas']['InventoryBatch'];
 export type AuthenticityStatus = components['schemas']['BatchAuthenticityStatus'];
 export type Bottle = components['schemas']['Bottle'];
@@ -35,6 +37,41 @@ export function useCreateShipmentDeclaration() {
   return useMutation({
     mutationFn: (body: components['schemas']['ShipmentDeclarationCreate']) =>
       unwrap(api.POST('/shipment-declarations', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
+  });
+}
+
+/**
+ * Thêm ảnh lô hàng / kiện hàng cho khai báo (FR-INV-22, ADR-0024). Gửi FormData nguyên trạng —
+ * openapi-fetch để trình duyệt tự đặt Content-Type kèm boundary.
+ */
+export function useAddShipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, kind, file }: { id: string; kind: ShipmentPhotoKind; file: File }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.POST('/shipment-declarations/{id}/photos', {
+          params: { path: { id }, query: { kind } },
+          body: form as unknown as { file: string },
+        }),
+      );
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
+  });
+}
+
+/** Xóa một ảnh khi khai báo còn DECLARED (ADR-0024). */
+export function useDeleteShipmentPhoto() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, photoId }: { id: string; photoId: string }) =>
+      unwrap(
+        api.DELETE('/shipment-declarations/{id}/photos/{photoId}', {
+          params: { path: { id, photoId } },
+        }),
+      ),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['shipments'] }),
   });
 }

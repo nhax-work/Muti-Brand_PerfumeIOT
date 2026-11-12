@@ -225,21 +225,6 @@ export function useAssignProduct() {
   });
 }
 
-/** Đặt giá mỗi lượt xịt (FR-SLT-08). */
-export function useSetPricePerSpray() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ rentalId, pricePerSpray }: { rentalId: string; pricePerSpray: string }) =>
-      unwrap(
-        api.PUT('/slot-rentals/{id}/price', {
-          params: { path: { id: rentalId } },
-          body: { pricePerSpray },
-        }),
-      ),
-    onSuccess: (_, { rentalId }) => invalidateSlotSetup(queryClient, rentalId),
-  });
-}
-
 /** Lấy thông tin một hóa đơn/hợp đồng thuê slot (FR-SLT-15). */
 export function useSlotRental(id: string | undefined) {
   return useQuery({

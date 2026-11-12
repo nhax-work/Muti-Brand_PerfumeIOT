@@ -1,5 +1,8 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { I18nProvider } from '@/shared/i18n';
 import { installDomStubs, renderScreen } from '@/test-utils';
 import ShipmentsPage from './ShipmentsPage';
 import type { InventoryBatch, RefillSession, ShipmentDeclaration } from './api';
@@ -134,6 +137,8 @@ const list = <T,>(items: T[]) => ({
   isLoading: false,
 });
 const mutation = () => ({ mutateAsync: vi.fn(), isPending: false });
+const mockCreate = vi.fn().mockResolvedValue({ id: 'decl-new' });
+const mockAddPhoto = vi.fn().mockResolvedValue({});
 
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
@@ -141,11 +146,13 @@ vi.mock('./api', async (importOriginal) => ({
   useInventoryBatches: () => list(batches),
   useRefillSessions: () => list(sessions),
   useStockBottles: () => list([]),
-  useBrandProducts: () => list([]),
+  useBrandProducts: () => list([{ id: 'prod-1', name: 'Aurore Matinale' }]),
   useMachinesForRefill: () =>
     list([{ id: 'mch-1', displayName: 'Kiosk Crescent', serialNumber: 'M001' }]),
   useMachineSlots: () => ({ data: [], isLoading: false }),
-  useCreateShipmentDeclaration: () => mutation(),
+  useCreateShipmentDeclaration: () => ({ mutateAsync: mockCreate, isPending: false }),
+  useAddShipmentPhoto: () => ({ mutateAsync: mockAddPhoto, isPending: false }),
+  useDeleteShipmentPhoto: () => mutation(),
   useReceiveShipment: () => mutation(),
   useSubmitAuthenticity: () => mutation(),
   useApproveAuthenticity: () => mutation(),
@@ -253,5 +260,88 @@ describe('ShipmentsPage', () => {
     expect(screen.getByText('Tổng số mặt hàng')).toBeTruthy();
     expect(screen.getByText('Vị trí sắp hết')).toBeTruthy();
     expect(screen.getAllByText('Aurore Matinale').length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('ShipmentsPage — ảnh khai báo gửi hàng (FR-INV-22, ADR-0024)', () => {
+  beforeAll(installDomStubs);
+  afterEach(() => {
+    cleanup();
+    mockUser = INVENTORY_STAFF;
+    mockCreate.mockClear();
+    mockAddPhoto.mockClear();
+  });
+
+  function renderAt(entry: string) {
+    return render(
+      <QueryClientProvider client={new QueryClient()}>
+        <I18nProvider>
+          <MemoryRouter initialEntries={[entry]}>
+            <ShipmentsPage />
+          </MemoryRouter>
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+  }
+
+  /** Điền phần số liệu của pop-up khai báo (sản phẩm đã chọn sẵn qua `?product=`). */
+  function fillNumbers(dialog: HTMLElement) {
+    fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '4' } });
+  }
+
+  it('test_FR_INV_22_declare_requires_both_photo_kinds', async () => {
+    mockUser = BRAND_ADMIN;
+    renderAt('/shipments?declare=1&product=prod-1');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Ảnh lô hàng trước khi đóng gói')).toBeTruthy();
+    expect(within(dialog).getByText('Ảnh kiện hàng đã đóng gói')).toBeTruthy();
+    fillNumbers(dialog);
+    fireEvent.click(within(dialog).getByText('Khai báo'));
+    await waitFor(() => expect(within(dialog).getAllByText('Cần ít nhất 1 ảnh')).toHaveLength(2));
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('test_FR_INV_22_declare_uploads_photos_after_creating_declaration', async () => {
+    mockUser = BRAND_ADMIN;
+    renderAt('/shipments?declare=1&product=prod-1');
+    const dialog = await screen.findByRole('dialog');
+    fillNumbers(dialog);
+    const inputs = dialog.querySelectorAll<HTMLInputElement>('input[type=file]');
+    const before = new File(['a'], 'lo-hang.jpg', { type: 'image/jpeg' });
+    const packed = new File(['b'], 'kien-hang.png', { type: 'image/png' });
+    fireEvent.change(inputs[0]!, { target: { files: [before] } });
+    fireEvent.change(inputs[1]!, { target: { files: [packed] } });
+    await waitFor(() => expect(within(dialog).getByText('lo-hang.jpg')).toBeTruthy());
+
+    fireEvent.click(within(dialog).getByText('Khai báo'));
+    await waitFor(() => expect(mockAddPhoto).toHaveBeenCalledTimes(2));
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ fragranceProductId: 'prod-1', declaredQuantity: 4 }),
+    );
+    expect(mockAddPhoto).toHaveBeenNthCalledWith(1, {
+      id: 'decl-new',
+      kind: 'BEFORE_PACKING',
+      file: before,
+    });
+    expect(mockAddPhoto).toHaveBeenNthCalledWith(2, {
+      id: 'decl-new',
+      kind: 'PACKED',
+      file: packed,
+    });
+  });
+
+  it('test_FR_INV_22_declaration_missing_photos_flagged_and_warned_on_receive', async () => {
+    renderScreen(<ShipmentsPage />);
+    // decl-1 còn DECLARED, chưa có ảnh: gắn cờ Thiếu ảnh.
+    expect(screen.getAllByText('Thiếu ảnh')).toHaveLength(1);
+    fireEvent.click(buttonsLabelled('Tiếp nhận & Đối soát')[0]!);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/chưa gửi đủ ảnh lô hàng và kiện hàng/)).toBeTruthy();
+  });
+
+  it('test_FR_INV_22_brand_sees_add_photos_button_for_declared_without_photos', () => {
+    mockUser = BRAND_ADMIN;
+    renderScreen(<ShipmentsPage />);
+    expect(buttonsLabelled('Bổ sung ảnh')).toHaveLength(1);
   });
 });

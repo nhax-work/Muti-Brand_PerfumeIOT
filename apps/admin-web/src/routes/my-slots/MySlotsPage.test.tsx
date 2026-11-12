@@ -68,7 +68,12 @@ vi.mock('@/routes/rentals/api', async (importOriginal) => ({
     isLoading: false,
   }),
   useAssignProduct: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useSetPricePerSpray: () => ({ mutateAsync: vi.fn(), isPending: false }),
+}));
+
+vi.mock('@/routes/shipments/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/routes/shipments/api')>()),
+  useShipmentDeclarations: () => ({ data: { items: [] } }),
+  useInventoryBatches: () => ({ data: { items: [] } }),
 }));
 
 vi.mock('./api', async () => {
@@ -161,11 +166,11 @@ afterEach(() => {
   mockNavigate.mockReset();
 });
 
-function renderPage() {
+function renderPage(initialEntry = '/my-slots') {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <I18nProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <MySlotsPage />
         </MemoryRouter>
       </I18nProvider>
@@ -207,6 +212,14 @@ describe('MySlotsPage — Slot của tôi', () => {
     expect(within(dialog).getByText('Cấu hình slot')).toBeTruthy();
     expect(within(dialog).getByText('Máy Vincom #1 · Slot #2')).toBeTruthy();
     expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('quay về từ trang tạo sản phẩm (?configure=&product=) thì modal mở lại với sản phẩm mới chọn sẵn', async () => {
+    renderPage('/my-slots?configure=r-unpriced&product=p-2');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Máy Vincom #1 · Slot #2')).toBeTruthy();
+    expect(within(dialog).getByText('Aurore Soir')).toBeTruthy();
+    expect(within(dialog).getByText('Giá mỗi lượt xịt: 40.000 VND')).toBeTruthy();
   });
 
   it('nút Hóa đơn vẫn dẫn tới trang hóa đơn của slot', () => {

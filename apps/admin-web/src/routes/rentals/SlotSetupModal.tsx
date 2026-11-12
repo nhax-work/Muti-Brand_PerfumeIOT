@@ -1,11 +1,9 @@
 import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  Alert,
   Button,
   Card,
   Empty,
   Form,
-  InputNumber,
   Modal,
   Select,
   Space,
@@ -14,27 +12,31 @@ import {
   Typography,
   message,
 } from 'antd';
-import { useNavigate } from 'react-router';
+import type { ReactNode } from 'react';
+import { useLocation, useNavigate } from 'react-router';
+import { useInventoryBatches, useShipmentDeclarations } from '@/routes/shipments/api';
 import { errorMessage } from '@/shared/api';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import {
-  useAssignProduct,
-  useBrandProducts,
-  useSetPricePerSpray,
-  type Product,
-  type SlotRental,
-} from './api';
+  PRODUCT_PARAM,
+  RETURN_TO_PARAM,
+  slotSetupReturnPath,
+  withParams,
+} from '@/shared/return-to';
+import { useAssignProduct, useBrandProducts, type Product, type SlotRental } from './api';
 
 interface SetupForm {
   productId?: string;
-  price?: number | null;
 }
 
-/** Hiện số tiền có dấu chấm ngăn nghìn trong ô nhập (25000 → 25.000). */
-const groupThousands = (value: string | number | undefined) =>
-  `${value ?? ''}`.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-const ungroupThousands = (value: string | undefined) => (value ?? '').replace(/\./g, '');
+type StepStatus = 'wait' | 'process' | 'finish';
+
+interface StepView {
+  readonly title: string;
+  readonly status: StepStatus;
+  readonly content?: ReactNode;
+}
 
 function ProductThumb({ product }: { product: Product }) {
   return (
@@ -48,10 +50,20 @@ function ProductThumb({ product }: { product: Product }) {
   );
 }
 
+/** Một dòng mô tả của bước, kèm nút hành động nếu thương hiệu cần làm gì đó. */
+function StepNote({ text, action }: { text: string; action?: ReactNode }) {
+  return (
+    <Space orientation="vertical" size={4}>
+      <Typography.Text type="secondary">{text}</Typography.Text>
+      {action}
+    </Space>
+  );
+}
+
 /**
- * Cấu hình một slot đang thuê: chọn sản phẩm (FR-SLT-27, FR-SLT-28) và giá mỗi lượt xịt (FR-SLT-08)
- * trong một hộp thoại. Thanh bước chỉ đọc dữ liệu máy chủ (FE5) để Brand Admin thấy slot còn thiếu
- * gì trước khi kiosk bán được (FR-SLT-29).
+ * Cấu hình một slot đang thuê: gán sản phẩm (FR-SLT-27, FR-SLT-28) — giá đi theo sản phẩm (ADR-0023).
+ * Danh sách bước dẫn Brand Admin tới lúc slot bán được (FR-SLT-29): gửi hàng về kho (FR-INV-22), giấy
+ * tờ chính hãng của lô (FR-INV-33) và lắp chai. Trạng thái từng bước chỉ đọc dữ liệu máy chủ (FE5).
  */
 export function SlotSetupModal({
   rental,
@@ -59,42 +71,43 @@ export function SlotSetupModal({
   locationName,
   open,
   onClose,
+  initialProductId,
 }: {
   rental: SlotRental;
   slotLabel: string;
   locationName?: string;
   open: boolean;
   onClose: () => void;
+  /** Sản phẩm vừa tạo từ nút "Tạo sản phẩm" — chọn sẵn để chỉ cần bấm Lưu. */
+  initialProductId?: string;
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const [form] = Form.useForm<SetupForm>();
   const { data: productsData, isLoading: productsLoading } = useBrandProducts();
+  const shipments = useShipmentDeclarations();
+  const batches = useInventoryBatches();
   const assignProduct = useAssignProduct();
-  const setPrice = useSetPricePerSpray();
 
   // Sản phẩm ngừng kinh doanh không gán được nữa — chỉ giữ lại nếu slot đang dùng nó.
   const products = (productsData?.items ?? []).filter(
     (p) => p.status !== 'DISCONTINUED' || p.id === rental.fragranceProductId,
   );
   const selectedId = Form.useWatch('productId', form);
-  const priceValue = Form.useWatch('price', form);
   const selected = products.find((p) => p.id === selectedId);
+  const noProducts = !productsLoading && products.length === 0;
 
-  const hasProduct = Boolean(rental.fragranceProductId);
-  const hasPrice = Boolean(rental.pricePerSpray);
-  const awaitingStock = rental.stage === 'AWAITING_STOCK';
-  const saving = assignProduct.isPending || setPrice.isPending;
+  const returnTo = slotSetupReturnPath(location.pathname, rental.id);
+  const goCreateProduct = () =>
+    void navigate(withParams('/products', { new: '1', [RETURN_TO_PARAM]: returnTo }));
 
   const save = async () => {
     const v = await form.validateFields().catch(() => null);
-    if (!v || !v.productId || v.price == null) return;
+    if (!v?.productId) return;
     try {
       if (v.productId !== rental.fragranceProductId) {
         await assignProduct.mutateAsync({ rentalId: rental.id, fragranceProductId: v.productId });
-      }
-      if (!rental.pricePerSpray || Number(rental.pricePerSpray) !== v.price) {
-        await setPrice.mutateAsync({ rentalId: rental.id, pricePerSpray: String(v.price) });
       }
       message.success(t('ui.slotSetupSaved'));
       onClose();
@@ -103,7 +116,127 @@ export function SlotSetupModal({
     }
   };
 
-  const noProducts = !productsLoading && products.length === 0;
+  const steps = buildSteps();
+
+  function buildSteps(): StepView[] {
+    const productId = rental.fragranceProductId;
+    const installed = rental.stage !== 'AWAITING_STOCK';
+    const declarations = (shipments.data?.items ?? []).filter(
+      (d) => d.fragranceProductId === productId && d.status !== 'CANCELLED',
+    );
+    const received = declarations.some(
+      (d) => d.status === 'RECEIVED' || d.status === 'DISCREPANCY',
+    );
+    const declared = declarations.some((d) => d.status === 'DECLARED');
+    const productBatches = (batches.data?.items ?? []).filter(
+      (b) => b.fragranceProductId === productId,
+    );
+    const approved = productBatches.some((b) => b.authenticityStatus === 'APPROVED');
+    const pending = productBatches.some((b) => b.authenticityStatus === 'PENDING');
+
+    const assign: StepView = {
+      title: t('ui.slotSetupStepProduct'),
+      status: productId ? 'finish' : 'process',
+      content: productId ? undefined : <StepNote text={t('ui.slotSetupAssignPending')} />,
+    };
+    if (installed && productId) {
+      return [
+        assign,
+        { title: t('ui.slotSetupStepShip'), status: 'finish' },
+        { title: t('ui.slotSetupStepDocs'), status: 'finish' },
+        {
+          title: t('ui.slotSetupStepInstall'),
+          status: 'finish',
+          content: <StepNote text={t('ui.slotSetupInstallDone')} />,
+        },
+      ];
+    }
+
+    const declareLink = productId
+      ? withParams('/shipments', {
+          declare: '1',
+          [PRODUCT_PARAM]: productId,
+          [RETURN_TO_PARAM]: returnTo,
+        })
+      : null;
+    const ship: StepView = !productId
+      ? { title: t('ui.slotSetupStepShip'), status: 'wait' }
+      : received
+        ? {
+            title: t('ui.slotSetupStepShip'),
+            status: 'finish',
+            content: <StepNote text={t('ui.slotSetupShipReceived')} />,
+          }
+        : declared
+          ? {
+              title: t('ui.slotSetupStepShip'),
+              status: 'process',
+              content: <StepNote text={t('ui.slotSetupShipDeclared')} />,
+            }
+          : {
+              title: t('ui.slotSetupStepShip'),
+              status: 'process',
+              content: (
+                <StepNote
+                  text={t('ui.slotSetupShipNone')}
+                  action={
+                    <Button size="small" onClick={() => void navigate(declareLink!)}>
+                      {t('ui.slotSetupDeclareShipment')}
+                    </Button>
+                  }
+                />
+              ),
+            };
+
+    const docs: StepView = approved
+      ? {
+          title: t('ui.slotSetupStepDocs'),
+          status: 'finish',
+          content: <StepNote text={t('ui.slotSetupDocsApproved')} />,
+        }
+      : pending
+        ? {
+            title: t('ui.slotSetupStepDocs'),
+            status: 'process',
+            content: <StepNote text={t('ui.slotSetupDocsPending')} />,
+          }
+        : productBatches.length > 0
+          ? {
+              title: t('ui.slotSetupStepDocs'),
+              status: 'process',
+              content: (
+                <StepNote
+                  text={t('ui.slotSetupDocsMissing')}
+                  action={
+                    <Button
+                      size="small"
+                      onClick={() => void navigate(withParams('/shipments', { tab: 'batches' }))}
+                    >
+                      {t('ui.slotSetupSubmitDocs')}
+                    </Button>
+                  }
+                />
+              ),
+            }
+          : {
+              title: t('ui.slotSetupStepDocs'),
+              status: 'wait',
+              content: productId ? (
+                <StepNote text={t('ui.slotSetupDocsWaitingBatch')} />
+              ) : undefined,
+            };
+
+    return [
+      assign,
+      ship,
+      docs,
+      {
+        title: t('ui.slotSetupStepInstall'),
+        status: 'wait',
+        content: <StepNote text={t('ui.slotSetupInstallWaiting')} />,
+      },
+    ];
+  }
 
   return (
     <Modal
@@ -119,8 +252,8 @@ export function SlotSetupModal({
         <Button
           key="save"
           type="primary"
-          loading={saving}
-          disabled={noProducts}
+          loading={assignProduct.isPending}
+          disabled={noProducts || !selectedId || selectedId === rental.fragranceProductId}
           onClick={() => void save()}
         >
           {t('ui.slotSetupSave')}
@@ -137,53 +270,38 @@ export function SlotSetupModal({
               </div>
             )}
           </div>
-          {awaitingStock && <Tag color="blue">{t('ui.stageAwaitingStock')}</Tag>}
+          {rental.stage === 'AWAITING_STOCK' && (
+            <Tag color="blue">{t('ui.stageAwaitingStock')}</Tag>
+          )}
         </div>
 
-        <Steps
+        <Card
           size="small"
-          items={[
-            {
-              title: t('ui.slotSetupStepProduct'),
-              status: hasProduct ? 'finish' : 'process',
-            },
-            {
-              title: t('ui.slotSetupStepPrice'),
-              status: hasPrice ? 'finish' : hasProduct ? 'process' : 'wait',
-            },
-            {
-              title: t('ui.slotSetupStepStock'),
-              content: awaitingStock ? t('ui.slotSetupStockWaiting') : undefined,
-              status: awaitingStock ? 'wait' : 'finish',
-            },
-          ]}
-        />
-
-        <Form
-          form={form}
-          layout="vertical"
-          requiredMark
-          initialValues={{
-            productId: rental.fragranceProductId ?? undefined,
-            price: rental.pricePerSpray ? Number(rental.pricePerSpray) : undefined,
-          }}
+          title={t('ui.slotSetupProductLabel')}
+          extra={
+            <Button type="link" size="small" icon={<PlusOutlined />} onClick={goCreateProduct}>
+              {t('ui.slotSetupCreateProduct')}
+            </Button>
+          }
         >
-          <Card size="small" title={t('ui.slotSetupProductLabel')} className="slot-setup-section">
-            {noProducts ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('ui.slotSetupNoProducts')}>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => void navigate('/products?new=1')}
-                >
-                  {t('ui.slotSetupCreateProduct')}
-                </Button>
-              </Empty>
-            ) : (
+          {noProducts ? (
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('ui.slotSetupNoProducts')}>
+              <Button type="primary" icon={<PlusOutlined />} onClick={goCreateProduct}>
+                {t('ui.slotSetupCreateProduct')}
+              </Button>
+            </Empty>
+          ) : (
+            <Form
+              form={form}
+              layout="vertical"
+              initialValues={{
+                productId: initialProductId ?? rental.fragranceProductId ?? undefined,
+              }}
+            >
               <Form.Item
                 name="productId"
                 rules={[{ required: true, message: t('validation.required') }]}
-                style={{ marginBottom: 0 }}
+                style={{ marginBottom: selected ? 8 : 0 }}
               >
                 <Select
                   showSearch
@@ -216,58 +334,26 @@ export function SlotSetupModal({
                   }}
                 />
               </Form.Item>
-            )}
-          </Card>
+              {selected && (
+                <div className="slot-setup-price">
+                  <Typography.Text strong>
+                    {t('ui.slotSetupProductPrice', { price: formatVnd(selected.defaultPrice) })}
+                  </Typography.Text>
+                  <Typography.Text type="secondary">
+                    {t('ui.slotSetupProductPriceHint')}{' '}
+                    <Typography.Link onClick={() => void navigate('/products')}>
+                      {t('ui.slotSetupChangePrice')}
+                    </Typography.Link>
+                  </Typography.Text>
+                </div>
+              )}
+            </Form>
+          )}
+        </Card>
 
-          <Card size="small" title={t('ui.pricePerSpray')} className="slot-setup-section">
-            <Form.Item
-              name="price"
-              rules={[{ required: true, message: t('validation.required') }]}
-              style={{ marginBottom: 0 }}
-              extra={
-                selected && (
-                  <Space size={4} wrap>
-                    {t('ui.slotSetupSuggestedPrice', { price: formatVnd(selected.defaultPrice) })}
-                    {Number(selected.defaultPrice) !== priceValue && (
-                      <Button
-                        type="link"
-                        size="small"
-                        style={{ padding: 0 }}
-                        onClick={() => form.setFieldValue('price', Number(selected.defaultPrice))}
-                      >
-                        {t('ui.slotSetupUseSuggested')}
-                      </Button>
-                    )}
-                  </Space>
-                )
-              }
-            >
-              <InputNumber<number>
-                min={1}
-                step={1000}
-                precision={0}
-                suffix="VND"
-                placeholder="25.000"
-                formatter={groupThousands}
-                parser={(v) => Number(ungroupThousands(v))}
-                style={{ width: '100%' }}
-                disabled={noProducts}
-              />
-            </Form.Item>
-          </Card>
-        </Form>
-
-        <Alert
-          type={hasProduct && hasPrice ? 'success' : 'info'}
-          showIcon
-          title={
-            hasProduct && hasPrice
-              ? awaitingStock
-                ? t('ui.slotSetupReadyAwaitingStock')
-                : t('ui.slotSetupReadySelling')
-              : t('ui.slotSetupMissing')
-          }
-        />
+        <Card size="small" title={t('ui.slotSetupProgressTitle')}>
+          <Steps orientation="vertical" size="small" items={steps} />
+        </Card>
       </Space>
     </Modal>
   );

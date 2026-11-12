@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -37,6 +37,7 @@ import { useMyBrand } from '@/routes/brand-profile/api';
 import { useRentalPackages, useStoragePlans } from '@/routes/pricing/api';
 import { errorMessage } from '@/shared/api';
 import { formatVnd } from '@/shared/format';
+import { CONFIGURE_PARAM, PRODUCT_PARAM } from '@/shared/return-to';
 import { useAuth } from '@/shared/auth';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
@@ -94,7 +95,15 @@ export default function RentalDetailPage() {
   const liquidateRental = useLiquidateSlotRental();
   const closeRental = useCloseSlotRental();
 
-  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
+  // `?configure=<id>&product=<sản phẩm>`: quay về từ trang tạo sản phẩm hay khai báo gửi hàng.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(
+    () => searchParams.get(CONFIGURE_PARAM) === id,
+  );
+  const [returnedProductId] = useState(() => searchParams.get(PRODUCT_PARAM) ?? undefined);
+  useEffect(() => {
+    if (searchParams.has(CONFIGURE_PARAM)) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isNonRenewalModalOpen, setIsNonRenewalModalOpen] = useState(false);
   const [returnMethod, setReturnMethod] = useState<BottleReturnMethod>('WAREHOUSE_PICKUP');
@@ -566,6 +575,7 @@ export default function RentalDetailPage() {
             rental={rental}
             slotLabel={`${invoice.machineDisplayName ?? ''} · Slot #${invoice.slotNumber}`}
             locationName={invoice.locationName ?? undefined}
+            initialProductId={returnedProductId}
             onClose={() => setIsSetupModalOpen(false)}
           />
         )}

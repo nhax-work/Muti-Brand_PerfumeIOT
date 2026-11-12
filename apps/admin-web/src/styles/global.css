@@ -427,8 +427,10 @@ body {
   gap: 16px;
 }
 
-.slot-setup-section + .slot-setup-section {
-  margin-top: 16px;
+.slot-setup-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .slot-setup-option {
@@ -496,4 +498,35 @@ body {
 .image-field-placeholder {
   font-size: 32px;
   color: var(--color-offline);
+}
+
+/* Ảnh khai báo gửi hàng (ShipmentPhotos, ADR-0024). */
+.shipment-photo-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.shipment-photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.shipment-photo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.shipment-photo-image {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  object-fit: cover;
 }

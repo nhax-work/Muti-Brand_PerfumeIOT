@@ -17,6 +17,12 @@ vi.mock('@/shared/auth', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/shared/auth')>()),
   useAuth: () => ({ user: mockUser }),
 }));
+const mockNavigate = vi.fn();
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router')>()),
+  useNavigate: () => mockNavigate,
+}));
+
 vi.mock('@/app/guards/RequireRole', () => ({
   RequireRole: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
@@ -163,16 +169,40 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
   });
 
   it('mở từ nút Tạo sản phẩm của modal cấu hình slot (?new=1) thì pop-up tạo sản phẩm mở sẵn', async () => {
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <I18nProvider>
-          <MemoryRouter initialEntries={['/products?new=1']}>
-            <ProductsPage />
-          </MemoryRouter>
-        </I18nProvider>
-      </QueryClientProvider>,
-    );
+    renderAt('/products?new=1');
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Thêm sản phẩm')).toBeTruthy();
   });
+
+  it('tạo xong thì quay về đúng slot đang cấu hình, chọn sẵn sản phẩm vừa tạo', async () => {
+    renderAt(`/products?new=1&returnTo=${encodeURIComponent('/my-slots?configure=r-1')}`);
+    expect(screen.getByText('Tạo sản phẩm xong sẽ tự quay lại cấu hình slot.')).toBeTruthy();
+    const dialog = await screen.findByRole('dialog');
+    const [sku, name] = within(dialog).getAllByRole('textbox');
+    fireEvent.change(sku!, { target: { value: 'MA-009' } });
+    fireEvent.change(name!, { target: { value: 'Aurore Nuit' } });
+    fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '30000' } });
+    fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/my-slots?configure=r-1&product=p-new'),
+    );
+  });
+
+  it('bỏ qua returnTo trỏ ra ngoài trang web (chống chuyển hướng mở)', async () => {
+    renderAt(`/products?new=1&returnTo=${encodeURIComponent('//evil.example/x')}`);
+    await screen.findByRole('dialog');
+    expect(screen.queryByText('Quay lại cấu hình slot')).toBeNull();
+  });
 });
+
+function renderAt(entry: string) {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <I18nProvider>
+        <MemoryRouter initialEntries={[entry]}>
+          <ProductsPage />
+        </MemoryRouter>
+      </I18nProvider>
+    </QueryClientProvider>,
+  );
+}

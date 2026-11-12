@@ -22,13 +22,14 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useBrandProducts } from '@/routes/rentals/api';
 import { SlotSetupModal } from '@/routes/rentals/SlotSetupModal';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { CONFIGURE_PARAM, PRODUCT_PARAM } from '@/shared/return-to';
 import {
   HELD_STAGES,
   type BrandSlotReportItem,
@@ -75,7 +76,19 @@ export default function MySlotsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [period, setPeriod] = useState<PeriodKey>('thisMonth');
-  const [configuring, setConfiguring] = useState<MySlotRow | null>(null);
+  // `?configure=<hóa đơn>&product=<sản phẩm>`: quay về từ trang tạo sản phẩm hay khai báo gửi hàng —
+  // mở lại modal của đúng slot, chọn sẵn sản phẩm vừa tạo.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [configuringId, setConfiguringId] = useState<string | null>(() =>
+    searchParams.get(CONFIGURE_PARAM),
+  );
+  const [returned] = useState(() => ({
+    rentalId: searchParams.get(CONFIGURE_PARAM),
+    productId: searchParams.get(PRODUCT_PARAM) ?? undefined,
+  }));
+  useEffect(() => {
+    if (searchParams.has(CONFIGURE_PARAM)) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const range = useMemo(() => periodRange(period), [period]);
 
   const rentals = useMyRentals();
@@ -106,6 +119,8 @@ export default function MySlotsPage() {
       report: reportByRental.get(rental.id),
     }));
   }, [held, invoices, maps, report.data]);
+  // Lấy dòng mới nhất trong danh sách để modal thấy ngay sản phẩm vừa lưu.
+  const configuring = rows.find((r) => r.rental.id === configuringId) ?? null;
 
   const totalOrders = (report.data ?? []).reduce((sum, r) => sum + r.orderCount, 0);
   const totalRevenue = (report.data ?? []).reduce((sum, r) => sum + Number(r.revenue), 0);
@@ -198,7 +213,7 @@ export default function MySlotsPage() {
             type="link"
             size="small"
             icon={<SettingOutlined />}
-            onClick={() => setConfiguring(row)}
+            onClick={() => setConfiguringId(row.rental.id)}
           >
             {t('ui.mySlotsConfigure')}
           </Button>
@@ -310,17 +325,17 @@ export default function MySlotsPage() {
         {configuring && (
           <SlotSetupModal
             open
-            // Lấy bản mới nhất trong danh sách để modal thấy ngay giá/sản phẩm vừa lưu.
-            rental={
-              rows.find((r) => r.rental.id === configuring.rental.id)?.rental ?? configuring.rental
-            }
+            rental={configuring.rental}
             slotLabel={
               configuring.invoice
                 ? `${configuring.invoice.machineDisplayName ?? ''} · Slot #${configuring.invoice.slotNumber}`
                 : ''
             }
             locationName={configuring.invoice?.locationName ?? undefined}
-            onClose={() => setConfiguring(null)}
+            initialProductId={
+              configuring.rental.id === returned.rentalId ? returned.productId : undefined
+            }
+            onClose={() => setConfiguringId(null)}
           />
         )}
       </div>
