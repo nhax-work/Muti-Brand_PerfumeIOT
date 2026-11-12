@@ -1,6 +1,6 @@
 # FR-ALR — Cảnh báo
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A14 · 16 FR  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A14 · 17 FR; FR-ALR-17 thêm ngày 2026-11-12 theo ADR-0028  
 > Trạng thái AC: **hoàn thành** (FR-ALR-04, 15 soát lại và FR-ALR-16 thêm ngày 2026-10-17 theo ADR-0013, ADR-0015)  
 > Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
@@ -234,3 +234,18 @@
 - AC3 (Chống thất lạc): Cho trường hợp dịch vụ gửi email tạm thời gián đoạn, Khi gửi thất bại, Thì bản ghi được đánh dấu `FAILED` và job định kỳ tự động thử gửi lại để bảo đảm quyền lợi thông tin của thương hiệu.
 
 **Kiểm tra:** `test_FR_ALR_16_send_brand_email_notifications`
+
+## FR-ALR-17 — Chuông thông báo chưa đọc
+
+**Tuyên bố:** Hệ thống phải cho mọi người dùng web quản trị thấy số thông báo trong ứng dụng chưa đọc của mình trên mọi trang, và đánh dấu đã đọc (ADR-0028).
+
+**Dấu vết:** BR-006 · **Ưu tiên:** M · ADR-0028 · **API:** `GET /notifications/unread-count`, `POST /notifications/{id}/read`, `POST /notifications/read-all`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Đếm của chính mình): Cho người dùng có thông báo `IN_APP` chưa đọc và thông báo `EMAIL`, Khi hỏi số chưa đọc, Thì chỉ đếm thông báo `IN_APP` gửi cho người đó mà chưa đọc.
+- AC2 (Đánh dấu đã đọc): Cho thông báo `IN_APP` của người dùng, Khi đánh dấu đã đọc, Thì thông báo chuyển `READ`, số chưa đọc giảm; đánh dấu lần nữa thì giữ thời điểm đọc đầu tiên.
+- AC3 (Không đọc hộ): Cho thông báo của người khác, Khi một người dùng — kể cả Super Admin — đánh dấu đã đọc, Thì hệ thống trả 404.
+- AC4 (Đọc hết): Cho người dùng có nhiều thông báo chưa đọc, Khi đánh dấu đã đọc tất cả, Thì số chưa đọc về 0.
+
+**Kiểm tra:** `test_FR_ALR_17_*` (`tests/integration/test_adr_0028_sales_stop_cancel_bell.test.ts`)
