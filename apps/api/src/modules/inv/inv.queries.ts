@@ -8,6 +8,7 @@
  */
 
 import { Inject, Injectable } from '@nestjs/common';
+import type { Schema } from '@scentstation/contracts';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type {
@@ -100,8 +101,33 @@ export interface RefillSessionRecord {
 export interface SlotForRefill {
   readonly id: string;
   readonly machineId: string;
+  readonly slotStatus: SlotStatus;
   readonly activeBottleId: string | null;
   readonly calibratedDosageMl: string | null;
+  readonly lowStockThresholdMl: string | null;
+}
+
+/** Bản ghi chai được khóa để điều chỉnh tồn kho (FR-INV-16). */
+export interface BottleAdjustmentTarget {
+  readonly id: string;
+  readonly brandId: string;
+  readonly owner: RevenueOwnerType;
+  readonly status: BottleStatus;
+  readonly currentEstimatedMl: string;
+}
+
+/** Bản ghi điều chỉnh tồn kho (FR-INV-16). */
+export interface InventoryAdjustmentRecord {
+  readonly id: string;
+  readonly brandId: string;
+  readonly bottleId: string;
+  readonly slotId: string | null;
+  readonly beforeQuantityMl: string;
+  readonly afterQuantityMl: string;
+  readonly differenceMl: string;
+  readonly reason: string;
+  readonly adjustedBy: string;
+  readonly createdAt: Date;
 }
 
 /** Slot kèm chai đang lắp, đọc dưới khóa trước khi trừ một liều (FR-INV-10, ADR-0019). */
@@ -386,15 +412,25 @@ export class InvQueries {
     return row ? { id: row.id, brandId: row.brand_id, status: row.authenticity_status } : null;
   }
 
+  async brandExists(brandId: string, executor: Executor = this.db): Promise<boolean> {
+    const row = await executor
+      .selectFrom('brands')
+      .select('id')
+      .where('id', '=', brandId)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
   async insertBatch(
     data: {
       readonly brandId: string;
       readonly fragranceProductId: string;
-      readonly sourceDeclarationId: string;
+      readonly sourceDeclarationId: string | null;
       readonly batchNumber: string;
       readonly receivedAt: Date;
       readonly expiresAt: Date | null;
       readonly quantityReceived: number;
+      readonly supplierInfo?: Record<string, unknown> | null;
       readonly createdBy: string;
     },
     tx: Executor,
@@ -409,6 +445,9 @@ export class InvQueries {
         received_at: data.receivedAt,
         expires_at: data.expiresAt,
         quantity_received: data.quantityReceived,
+        ...(data.supplierInfo !== undefined
+          ? { supplier_info: data.supplierInfo ? JSON.stringify(data.supplierInfo) : null }
+          : {}),
         created_by: data.createdBy,
       })
       .returning('id')
@@ -723,11 +762,26 @@ export class InvQueries {
     return row?.id ?? null;
   }
 
-  /** Gỡ chai hỏng khỏi slot: slot không còn gì để bán (ADR-0018). */
-  async clearSlotBottle(slotId: string, tx: Executor): Promise<void> {
+  /** Gỡ chai khỏi slot: xóa chai đang lắp và chuyển AVAILABLE sang UNAVAILABLE khi tháo về kho. */
+  async clearSlotBottle(
+    slotId: string,
+    tx: Executor,
+    options?: { readonly markUnavailableIfAvailable?: boolean },
+  ): Promise<void> {
     await tx
       .updateTable('machine_slots')
-      .set({ active_bottle_id: null, estimated_remaining_ml: '0', estimated_remaining_sprays: 0 })
+      .set({
+        active_bottle_id: null,
+        estimated_remaining_ml: '0',
+        estimated_remaining_sprays: 0,
+        ...(options?.markUnavailableIfAvailable
+          ? {
+              status: sql<SlotStatus>`CASE WHEN status = 'AVAILABLE'::slot_status THEN 'UNAVAILABLE'::slot_status ELSE status END`,
+              version: sql<number>`version + 1`,
+              updated_at: new Date(),
+            }
+          : {}),
+      })
       .where('id', '=', slotId)
       .execute();
   }
@@ -754,11 +808,15 @@ export class InvQueries {
     await tx
       .updateTable('bottles')
       .set({
-        status: sql<BottleStatus>`CASE WHEN current_estimated_ml > 0 THEN 'IN_STOCK' ELSE 'EMPTY' END::bottle_status`,
+        status: sql<BottleStatus>`CASE
+          WHEN status IN ('LIQUIDATED'::bottle_status, 'EXPIRED'::bottle_status, 'DAMAGED'::bottle_status) THEN status
+          WHEN current_estimated_ml > 0 THEN 'IN_STOCK'::bottle_status
+          ELSE 'EMPTY'::bottle_status
+        END`,
         removed_at: at,
       })
       .where('id', '=', id)
-      .where('status', 'in', ['INSTALLED', 'LOW', 'EMPTY'])
+      .where('status', 'in', ['INSTALLED', 'LOW', 'EMPTY', 'LIQUIDATED', 'EXPIRED'])
       .execute();
   }
 
@@ -903,15 +961,24 @@ export class InvQueries {
       .execute();
     const locked = await tx
       .selectFrom('machine_slots')
-      .select(['id', 'machine_id', 'active_bottle_id', 'calibrated_dosage_ml'])
+      .select([
+        'id',
+        'machine_id',
+        'status',
+        'active_bottle_id',
+        'calibrated_dosage_ml',
+        'low_stock_threshold_ml',
+      ])
       .where('id', '=', slotId)
       .forUpdate()
       .executeTakeFirstOrThrow();
     return {
       id: locked.id,
       machineId: locked.machine_id,
+      slotStatus: locked.status,
       activeBottleId: locked.active_bottle_id,
       calibratedDosageMl: locked.calibrated_dosage_ml,
+      lowStockThresholdMl: locked.low_stock_threshold_ml,
     };
   }
 
@@ -1093,6 +1160,150 @@ export class InvQueries {
       )
       .execute();
     return rows.map((r) => r.id);
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Tháo chai về kho, điều chỉnh tồn kho & lịch sử chai (FR-INV-15, 16, 17)
+  // -----------------------------------------------------------------------------------
+
+  async findBottleScoped(
+    id: string,
+    scope: BrandScope,
+    executor: Executor = this.db,
+  ): Promise<BottleRecord | null> {
+    const row = await this.bottleQuery(executor)
+      .where('bt.id', '=', id)
+      .where(brandScopedByColumn(scope, 'bt.brand_id'))
+      .executeTakeFirst();
+    return row ? toBottle(row) : null;
+  }
+
+  /** Hóa đơn đang chiếm slot đã báo không gia hạn thì tháo qua luồng trả hàng (FR-EXP-26). */
+  async slotHasNonRenewalRental(slotId: string, tx: Executor): Promise<boolean> {
+    const row = await tx
+      .selectFrom('slot_rentals')
+      .select('id')
+      .where('slot_id', '=', slotId)
+      .where('status', 'in', [...HOLDING_RENTAL_STATUSES])
+      .where('non_renewal_requested_at', 'is not', null)
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async lockBottleForAdjustment(
+    id: string,
+    tx: Executor,
+  ): Promise<BottleAdjustmentTarget | null> {
+    const row = await tx
+      .selectFrom('bottles')
+      .select(['id', 'brand_id', 'owner', 'status', 'current_estimated_ml'])
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          brandId: row.brand_id,
+          owner: row.owner,
+          status: row.status,
+          currentEstimatedMl: row.current_estimated_ml,
+        }
+      : null;
+  }
+
+  async insertAdjustment(
+    data: {
+      readonly brandId: string;
+      readonly bottleId: string;
+      readonly slotId: string | null;
+      readonly beforeQuantityMl: string;
+      readonly afterQuantityMl: string;
+      readonly differenceMl: string;
+      readonly reason: string;
+      readonly adjustedBy: string;
+    },
+    tx: Executor,
+  ): Promise<InventoryAdjustmentRecord> {
+    const row = await tx
+      .insertInto('inventory_adjustments')
+      .values({
+        brand_id: data.brandId,
+        bottle_id: data.bottleId,
+        slot_id: data.slotId,
+        before_quantity_ml: data.beforeQuantityMl,
+        after_quantity_ml: data.afterQuantityMl,
+        difference_ml: data.differenceMl,
+        reason: data.reason,
+        adjusted_by: data.adjustedBy,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return {
+      id: row.id,
+      brandId: row.brand_id,
+      bottleId: row.bottle_id,
+      slotId: row.slot_id,
+      beforeQuantityMl: row.before_quantity_ml,
+      afterQuantityMl: row.after_quantity_ml,
+      differenceMl: row.difference_ml,
+      reason: row.reason,
+      adjustedBy: row.adjusted_by,
+      createdAt: row.created_at,
+    };
+  }
+
+  async listBottleHistory(
+    bottleId: string,
+    filter: PageFilter,
+    executor: Executor = this.db,
+  ): Promise<{ items: Schema<'AuditLogEntry'>[]; total: number }> {
+    const base = executor
+      .selectFrom('audit_logs')
+      .where('target_type', '=', 'Bottle')
+      .where('target_id', '=', bottleId);
+
+    const { total } = await base
+      .select((eb) => eb.fn.countAll<string>().as('total'))
+      .executeTakeFirstOrThrow();
+
+    const rows = await base
+      .select([
+        'id',
+        'brand_id',
+        'actor_type',
+        'actor_id',
+        'action',
+        'target_type',
+        'target_id',
+        'source_ip',
+        'severity',
+        'before_data',
+        'after_data',
+        'occurred_at',
+      ])
+      .orderBy('occurred_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(filter.pageSize)
+      .offset((filter.page - 1) * filter.pageSize)
+      .execute();
+
+    return {
+      items: rows.map((r) => ({
+        id: r.id,
+        brandId: r.brand_id,
+        actorType: r.actor_type as Schema<'AuditLogEntry'>['actorType'],
+        actorId: r.actor_id,
+        action: r.action,
+        targetType: r.target_type,
+        targetId: r.target_id,
+        sourceIp: r.source_ip,
+        severity: r.severity as Schema<'AuditLogEntry'>['severity'],
+        beforeData: (r.before_data as Record<string, unknown> | null) ?? null,
+        afterData: (r.after_data as Record<string, unknown> | null) ?? null,
+        occurredAt: r.occurred_at.toISOString(),
+      })),
+      total: Number(total),
+    };
   }
 }
 

@@ -1,5 +1,6 @@
 import {
   BarChartOutlined,
+  ExperimentOutlined,
   InboxOutlined,
   SafetyCertificateOutlined,
   ToolOutlined,
@@ -9,6 +10,7 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { BatchesTab } from './BatchesTab';
+import { BottlesTab } from './BottlesTab';
 import { InventoryReportTab } from './InventoryReportTab';
 import { RefillTab } from './RefillTab';
 import { ShipmentsTab } from './ShipmentsTab';
@@ -61,8 +63,24 @@ export default function ShipmentsPage() {
                 ),
                 children: (
                   <BatchesTab
+                    canCreate={can('inventory.manage')}
                     canSubmit={isBrand && can('inventory.declare')}
                     canReview={can('inventory.verify')}
+                  />
+                ),
+              },
+              {
+                key: 'bottles',
+                label: (
+                  <span>
+                    <ExperimentOutlined /> {t('ui.bottlesTab')}
+                  </span>
+                ),
+                children: (
+                  <BottlesTab
+                    canManage={can('inventory.manage')}
+                    canAdjust={can('inventory.adjust')}
+                    isPlatform={!isBrand}
                   />
                 ),
               },

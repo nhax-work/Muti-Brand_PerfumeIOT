@@ -2,13 +2,16 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   FileUnknownOutlined,
+  PlusOutlined,
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
   Button,
+  DatePicker,
   Form,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -25,7 +28,10 @@ import { useI18n } from '@/shared/i18n';
 import {
   type AuthenticityStatus,
   type InventoryBatch,
+  useAllBrands,
   useApproveAuthenticity,
+  useBrandProducts,
+  useCreateInventoryBatch,
   useInventoryBatches,
   useRejectAuthenticity,
   useSubmitAuthenticity,
@@ -44,11 +50,27 @@ const DOCUMENT_TYPES: readonly { value: string; label: MessageKey }[] = [
   { value: 'DISTRIBUTION_AUTH', label: 'ui.documentTypeDistributionAuth' },
 ];
 
-/** FR-INV-33, 34: Brand Admin nộp giấy tờ, Super Admin duyệt hoặc từ chối lô đang PENDING. */
+/** Giá trị DatePicker của antd — tránh kéo thêm kiểu trực tiếp từ dayjs. */
+interface PickedDate {
+  toISOString(): string;
+}
+
+interface CreateBatchValues {
+  brandId: string;
+  fragranceProductId: string;
+  batchNumber: string;
+  quantityReceived: number;
+  receivedAt?: PickedDate;
+  expiresAt?: PickedDate;
+}
+
+/** FR-INV-01, 33, 34: Inventory Staff tạo lô thủ công; Brand Admin nộp giấy tờ; Super Admin duyệt/từ chối. */
 export function BatchesTab({
+  canCreate = false,
   canSubmit,
   canReview,
 }: {
+  readonly canCreate?: boolean;
   readonly canSubmit: boolean;
   readonly canReview: boolean;
 }) {
@@ -57,9 +79,16 @@ export function BatchesTab({
     canReview ? 'PENDING' : undefined,
   );
   const batches = useInventoryBatches(statusFilter);
+  const brands = useAllBrands(canCreate);
+  const products = useBrandProducts(canCreate);
+  const createBatch = useCreateInventoryBatch();
   const submit = useSubmitAuthenticity();
   const approve = useApproveAuthenticity();
   const reject = useRejectAuthenticity();
+
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm] = Form.useForm<CreateBatchValues>();
+  const [selectedBrandId, setSelectedBrandId] = useState<string | undefined>(undefined);
 
   const [submitting, setSubmitting] = useState<InventoryBatch | null>(null);
   const [submitForm] = Form.useForm<{ documentUrl: string; documentType: string }>();
@@ -74,6 +103,31 @@ export function BatchesTab({
     } catch (error) {
       void message.error(errorMessage(error, t));
       return false;
+    }
+  };
+
+  const handleCreate = async () => {
+    const values = await createForm.validateFields().catch(() => null);
+    if (!values) return;
+    const receivedAt = values.receivedAt
+      ? values.receivedAt.toISOString()
+      : new Date().toISOString();
+    const ok = await run(
+      () =>
+        createBatch.mutateAsync({
+          brandId: values.brandId,
+          fragranceProductId: values.fragranceProductId,
+          batchNumber: values.batchNumber.trim(),
+          quantityReceived: values.quantityReceived,
+          receivedAt,
+          ...(values.expiresAt ? { expiresAt: values.expiresAt.toISOString() } : {}),
+        }),
+      'inv.batchCreated',
+    );
+    if (ok) {
+      setCreateOpen(false);
+      setSelectedBrandId(undefined);
+      createForm.resetFields();
     }
   };
 
@@ -184,24 +238,125 @@ export function BatchesTab({
 
   return (
     <Space direction="vertical" style={{ width: '100%' }}>
-      <Select
-        allowClear
-        style={{ width: 240 }}
-        placeholder={t('ui.filterAllStatuses')}
-        value={statusFilter}
-        onChange={(value: AuthenticityStatus | undefined) => setStatusFilter(value)}
-        options={(Object.keys(STATUS_TAGS) as AuthenticityStatus[]).map((status) => ({
-          value: status,
-          label: t(`authenticityStatus.${status}` as MessageKey),
-        }))}
-      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <Select
+          allowClear
+          style={{ width: 240 }}
+          placeholder={t('ui.filterAllStatuses')}
+          value={statusFilter}
+          onChange={(value: AuthenticityStatus | undefined) => setStatusFilter(value)}
+          options={(Object.keys(STATUS_TAGS) as AuthenticityStatus[]).map((status) => ({
+            value: status,
+            label: t(`authenticityStatus.${status}` as MessageKey),
+          }))}
+        />
+        {canCreate && (
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+            {t('ui.createBatch')}
+          </Button>
+        )}
+      </div>
       <Table
         columns={columns}
         dataSource={batches.data ? [...batches.data.items] : []}
         rowKey="id"
         loading={batches.isLoading}
+        locale={{ emptyText: t('ui.noBatchesFound') }}
         pagination={{ pageSize: 10 }}
       />
+
+      <Modal
+        title={t('ui.createBatch')}
+        okText={t('ui.createBatchSubmit')}
+        open={createOpen}
+        onOk={handleCreate}
+        confirmLoading={createBatch.isPending}
+        onCancel={() => {
+          setCreateOpen(false);
+          setSelectedBrandId(undefined);
+          createForm.resetFields();
+        }}
+        destroyOnHidden
+      >
+        <Form form={createForm} layout="vertical">
+          <Form.Item
+            name="brandId"
+            label={t('ui.batchBrandLabel')}
+            rules={[{ required: true, message: t('validation.required') }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              loading={brands.isLoading}
+              placeholder={t('ui.selectBrandPlaceholder')}
+              onChange={(value: string) => {
+                setSelectedBrandId(value);
+                createForm.setFieldValue('fragranceProductId', undefined);
+              }}
+              options={(brands.data?.items ?? []).map((b) => ({
+                label: b.name,
+                value: b.id,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="fragranceProductId"
+            label={t('ui.invProduct')}
+            rules={[{ required: true, message: t('validation.required') }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              disabled={!selectedBrandId}
+              loading={products.isLoading}
+              placeholder={t('ui.selectProductPlaceholder')}
+              options={(products.data?.items ?? [])
+                .filter((p) => !selectedBrandId || p.brandId === selectedBrandId)
+                .map((p) => ({
+                  label: p.name,
+                  value: p.id,
+                }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="batchNumber"
+            label={t('ui.batchNumberLabel')}
+            rules={[{ required: true, whitespace: true, message: t('validation.required') }]}
+          >
+            <Input maxLength={100} />
+          </Form.Item>
+          <Form.Item
+            name="quantityReceived"
+            label={t('ui.receivedQuantity')}
+            rules={[{ required: true, message: t('validation.required') }]}
+          >
+            <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="receivedAt" label={t('ui.batchReceivedAtLabel')}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="expiresAt"
+            label={t('ui.batchExpiresAtLabel')}
+            rules={[
+              {
+                validator: async (_rule, value: PickedDate | undefined) => {
+                  if (!value) return;
+                  const received = createForm.getFieldValue('receivedAt') as PickedDate | undefined;
+                  const receivedMs = received
+                    ? new Date(received.toISOString()).getTime()
+                    : Date.now();
+                  if (new Date(value.toISOString()).getTime() <= receivedMs) {
+                    throw new Error(t('inv.expiresBeforeReceived'));
+                  }
+                },
+              },
+            ]}
+          >
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal
         title={t('ui.submitAuthenticity')}

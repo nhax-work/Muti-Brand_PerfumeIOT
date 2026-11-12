@@ -169,6 +169,20 @@ vi.mock('./api', async (importOriginal) => ({
   }),
   useOpenRefillSession: () => mutation(),
   useCloseRefillSession: () => mutation(),
+  useAllBrands: () => ({ data: { items: [] }, isLoading: false }),
+  useBottles: () => ({
+    data: { items: [], meta: { page: 1, pageSize: 20, total: 0 } },
+    isLoading: false,
+  }),
+  useBottleHistory: () => ({
+    data: { items: [], meta: { page: 1, pageSize: 20, total: 0 } },
+    isLoading: false,
+    error: null,
+  }),
+  useCreateInventoryBatch: () => mutation(),
+  useRegisterBottle: () => mutation(),
+  useRemoveBottleFromSlot: () => mutation(),
+  useCreateInventoryAdjustment: () => mutation(),
 }));
 
 function openTab(name: RegExp) {

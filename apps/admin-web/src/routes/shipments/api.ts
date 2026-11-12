@@ -1,17 +1,37 @@
 import type { components } from '@scentstation/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
+import { useReauth } from '@/shared/auth';
 
 export type ShipmentDeclaration = components['schemas']['ShipmentDeclaration'];
 export type ShipmentStatus = components['schemas']['ShipmentDeclarationStatus'];
 export type InventoryBatch = components['schemas']['InventoryBatch'];
+export type InventoryBatchCreate = components['schemas']['InventoryBatchCreate'];
 export type AuthenticityStatus = components['schemas']['BatchAuthenticityStatus'];
 export type Bottle = components['schemas']['Bottle'];
+export type BottleStatus = components['schemas']['BottleStatus'];
+export type BottleCreate = components['schemas']['BottleCreate'];
+export type InventoryAdjustment = components['schemas']['InventoryAdjustment'];
+export type InventoryAdjustmentCreate = components['schemas']['InventoryAdjustmentCreate'];
+export type AuditLogEntry = components['schemas']['AuditLogEntry'];
 export type RefillSession = components['schemas']['RefillSession'];
 export type RefillStatus = components['schemas']['RefillStatus'];
+export type Brand = components['schemas']['Brand'];
 export type Product = components['schemas']['Product'];
 export type Machine = components['schemas']['Machine'];
 export type MachineSlot = components['schemas']['MachineSlot'];
+
+/** Màu trạng thái chai theo bảng màu chuẩn (QUY_TAC_GIAO_DIEN §2.4). */
+export const BOTTLE_STATUS_COLOR: Record<BottleStatus, string> = {
+  IN_STOCK: 'blue',
+  INSTALLED: 'green',
+  LOW: 'gold',
+  EMPTY: 'orange',
+  DAMAGED: 'red',
+  EXPIRED: 'red',
+  LIQUIDATED: 'purple',
+  RETURNED_TO_BRAND: 'default',
+};
 
 /** Trang đầu đủ lớn cho bảng có phân trang phía client. */
 const LIST_PAGE_SIZE = 200;
@@ -205,6 +225,110 @@ export function useInventoryReport(params?: {
       unwrap(
         api.GET('/reports/inventory', {
           params: { query: params },
+        }),
+      ),
+  });
+}
+
+/** FR-INV-01: Inventory Staff tạo lô nước hoa thủ công. */
+export function useCreateInventoryBatch() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: InventoryBatchCreate) => unwrap(api.POST('/inventory-batches', { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['batches'] }),
+  });
+}
+
+/** Thương hiệu để nhân sự kho chọn khi tạo lô thủ công (`machine.view` / `brand.manage`). */
+export function useAllBrands(enabled: boolean) {
+  return useQuery({
+    queryKey: ['brands', 'batch-create'],
+    enabled,
+    queryFn: () =>
+      unwrap(api.GET('/brands', { params: { query: { page: 1, pageSize: LIST_PAGE_SIZE } } })),
+  });
+}
+
+export interface BottlesFilter {
+  readonly page: number;
+  readonly pageSize: number;
+  readonly status?: BottleStatus;
+  readonly batchId?: string;
+}
+
+/** FR-INV-04, 21: Danh sách chai nước hoa phân trang và lọc theo trạng thái / lô. */
+export function useBottles(filter: BottlesFilter, enabled = true) {
+  return useQuery({
+    queryKey: ['bottles', 'list', filter],
+    enabled,
+    queryFn: () => unwrap(api.GET('/bottles', { params: { query: filter } })),
+  });
+}
+
+/** FR-INV-02: Đăng ký chai nước hoa từ một lô đã có. */
+export function useRegisterBottle() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BottleCreate) => unwrap(api.POST('/bottles', { body })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
+    },
+  });
+}
+
+/** FR-INV-15: Tháo chai khỏi slot về kho (giữ nguyên ước tính ml, slot chuyển UNAVAILABLE). */
+export function useRemoveBottleFromSlot() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ slotId, notes }: { slotId: string; notes?: string }) =>
+      unwrap(
+        api.DELETE('/slots/{id}/bottle', {
+          params: { path: { id: slotId } },
+          ...(notes ? { body: { notes } } : {}),
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+      void queryClient.invalidateQueries({ queryKey: ['bottle-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
+      void queryClient.invalidateQueries({ queryKey: ['machine-slots'] });
+    },
+  });
+}
+
+/** FR-INV-16: Điều chỉnh tồn kho kèm lý do bắt buộc — cần xác thực lại (FR-AUTH-09). */
+export function useCreateInventoryAdjustment() {
+  const requestReauth = useReauth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: InventoryAdjustmentCreate) => {
+      const reauthToken = await requestReauth();
+      return unwrap(
+        api.POST('/inventory-adjustments', {
+          params: { header: { 'X-Reauth-Token': reauthToken } },
+          body,
+        }),
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+      void queryClient.invalidateQueries({ queryKey: ['bottle-history'] });
+      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
+      void queryClient.invalidateQueries({ queryKey: ['machine-slots'] });
+    },
+  });
+}
+
+/** FR-INV-17: Lịch sử vòng đời của một chai nước hoa. */
+export function useBottleHistory(bottleId: string | undefined, page: number, pageSize = 20) {
+  return useQuery({
+    queryKey: ['bottle-history', bottleId, { page, pageSize }],
+    enabled: Boolean(bottleId),
+    queryFn: () =>
+      unwrap(
+        api.GET('/bottles/{id}/history', {
+          params: { path: { id: bottleId! }, query: { page, pageSize } },
         }),
       ),
   });
