@@ -47,6 +47,15 @@ export const machineOperatingMode = {
   DISABLED: 'vô hiệu hóa',
 } as const;
 
+/** Vì sao máy dừng nhận đơn — banner đầu trang (ADR-0028). */
+export const salesStopReason = {
+  OFFLINE: 'mất kết nối',
+  DRAINING: 'đang dừng bán chờ bảo trì',
+  MAINTENANCE: 'đang bảo trì',
+  DISABLED: 'đã vô hiệu hóa',
+  REFILL_SESSION: 'đang nạp hàng',
+} as const;
+
 /** Nhãn hiển thị của `slot_rental_status`. */
 export const slotRentalStatus = {
   DRAFT: 'bản nháp',

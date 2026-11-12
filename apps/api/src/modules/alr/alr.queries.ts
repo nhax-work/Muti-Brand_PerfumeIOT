@@ -90,6 +90,8 @@ export interface NotificationFilter {
   readonly channel?: NotificationChannel | undefined;
   readonly type?: string | undefined;
   readonly brandId?: string | undefined;
+  /** ADR-0028: chỉ thông báo gửi cho người gọi, kể cả với người có `notification.manage`. */
+  readonly mine?: boolean | undefined;
 }
 
 export interface QueuedNotification {
@@ -339,6 +341,44 @@ export class AlrQueries {
       .forUpdate()
       .executeTakeFirst();
     return row ? toRecord(row) : null;
+  }
+
+  // -----------------------------------------------------------------------------------
+  // Chuông thông báo (ADR-0028) — luôn chỉ thông báo IN_APP của chính người gọi
+  // -----------------------------------------------------------------------------------
+
+  async countUnread(userId: string): Promise<number> {
+    const row = await this.db
+      .selectFrom('notifications')
+      .select((eb) => eb.fn.countAll<string>().as('n'))
+      .where('recipient_user_id', '=', userId)
+      .where('channel', '=', 'IN_APP')
+      .where('read_at', 'is', null)
+      .executeTakeFirstOrThrow();
+    return Number(row.n);
+  }
+
+  /** Đọc rồi thì giữ thời điểm đọc đầu tiên. `false` khi không phải thông báo IN_APP của người gọi. */
+  async markRead(id: string, userId: string, at: Date): Promise<boolean> {
+    const row = await this.db
+      .updateTable('notifications')
+      .set((eb) => ({ status: 'READ', read_at: eb.fn.coalesce('read_at', eb.val(at)) }))
+      .where('id', '=', id)
+      .where('recipient_user_id', '=', userId)
+      .where('channel', '=', 'IN_APP')
+      .returning('id')
+      .executeTakeFirst();
+    return row !== undefined;
+  }
+
+  async markAllRead(userId: string, at: Date): Promise<void> {
+    await this.db
+      .updateTable('notifications')
+      .set({ status: 'READ', read_at: at })
+      .where('recipient_user_id', '=', userId)
+      .where('channel', '=', 'IN_APP')
+      .where('read_at', 'is', null)
+      .execute();
   }
 
   /** Gửi lại do người bấm: về `PENDING` thì job nhặt ngay, kể cả khi đã hết lượt tự thử. */

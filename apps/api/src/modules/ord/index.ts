@@ -10,6 +10,8 @@ export {
   assertMachineAcceptsOrders,
   MODES_SERVING_PAID_QUEUE,
   openRefillSessionOn,
+  salesStopReason,
+  type SalesStopReason,
 } from './sales-stop.js';
 export { RefundClaimsService } from './refund-claims/refund-claims.service.js';
 

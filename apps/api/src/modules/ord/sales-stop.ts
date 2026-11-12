@@ -39,13 +39,30 @@ export function openRefillSessionOn(machineIdColumn: string): RawBuilder<SqlBool
  * độ khác NORMAL (gồm DRAINING) hoặc có phiếu nạp mở → MACHINE_IN_MAINTENANCE (kiosk hiện màn tạm
  * ngưng).
  */
-export function assertMachineAcceptsOrders(machine: {
+export function assertMachineAcceptsOrders(machine: SalesStopInput): void {
+  const reason = salesStopReason(machine);
+  if (reason === 'OFFLINE') throw new AppError('MACHINE_OFFLINE', 'ord.machineOffline');
+  if (reason !== null) throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
+}
+
+export interface SalesStopInput {
   readonly status: string;
   readonly operatingMode: MachineOperatingMode;
   readonly hasOpenRefillSession: boolean;
-}): void {
-  if (machine.status !== 'ONLINE') throw new AppError('MACHINE_OFFLINE', 'ord.machineOffline');
-  if (machine.operatingMode !== 'NORMAL' || machine.hasOpenRefillSession) {
-    throw new AppError('MACHINE_IN_MAINTENANCE', 'ord.machineInMaintenance');
-  }
+}
+
+/** Lý do máy dừng nhận đơn mới (openapi `SalesStopReason`). */
+export type SalesStopReason =
+  'OFFLINE' | Exclude<MachineOperatingMode, 'NORMAL'> | 'REFILL_SESSION';
+
+/**
+ * Máy có nhận đơn mới không, và nếu không thì vì sao — MỘT luật cho cả kiosk (tạo đơn) lẫn banner
+ * "máy dừng bán" của web quản trị (ADR-0028), để banner báo dừng bán khi và chỉ khi kiosk từ chối.
+ * Thứ tự: mất kết nối → chế độ khác NORMAL → phiếu nạp đang mở. `null` = đang nhận đơn.
+ */
+export function salesStopReason(machine: SalesStopInput): SalesStopReason | null {
+  if (machine.status !== 'ONLINE') return 'OFFLINE';
+  if (machine.operatingMode !== 'NORMAL') return machine.operatingMode;
+  if (machine.hasOpenRefillSession) return 'REFILL_SESSION';
+  return null;
 }

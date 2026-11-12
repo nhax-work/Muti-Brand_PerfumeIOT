@@ -155,6 +155,14 @@ export const en: SameKeysAs<typeof vi> = {
     DISABLED: 'disabled',
   },
 
+  salesStopReason: {
+    OFFLINE: 'offline',
+    DRAINING: 'draining before maintenance',
+    MAINTENANCE: 'under maintenance',
+    DISABLED: 'disabled',
+    REFILL_SESSION: 'being refilled',
+  },
+
   slotRentalStatus: {
     DRAFT: 'draft',
     ACTIVE: 'active',
@@ -1166,8 +1174,50 @@ export const en: SameKeysAs<typeof vi> = {
     selectMachine: 'Select machine',
     selectSlot: 'Select slot',
     selectBottle: 'Select a bottle in stock',
-    noBottleInStock: 'No bottle of this brand is in stock',
+    noBottleInStock: 'No installable bottle of this product is in stock',
+    notificationsMarkAllRead: 'Mark all as read',
+    notificationsViewAll: 'View all notifications',
+    notificationsEmpty: 'No notifications yet',
+    notificationsUnread: '{count} unread notifications',
+    salesStopTitle: '{count} machines not selling — kiosks reject new orders',
+    salesStopSince: 'since {time}',
+    salesStopRefillDetail: 'refill session on slot {slotNumber} open since {time} by {name}',
+    salesStopGoRefill: 'View refill sessions',
+    cancelRefillSession: 'Cancel',
+    cancelRefillTitle: 'Cancel refill session',
+    cancelRefillHint:
+      'No bottle is installed. The slot keeps its current bottle and the machine sells again once no refill session is open.',
+    cancelRefillReason: 'Reason',
+    refillSessionCancelled: 'Refill session cancelled',
+    refillWorklist: 'Refill tasks',
+    refillWorklistHint:
+      'Slots that need a bottle installed or replaced, listed automatically. Work in progress comes first; tasks that cannot be done yet are last with the reason.',
+    refillWorklistEmpty: 'No slot needs refilling',
+    refillWorkMachineSlot: 'Machine · Slot',
+    refillWorkBrandProduct: 'Brand · Product',
+    refillWorkTask: 'Task',
+    refillWorkBottle: 'Suggested bottle',
+    refillWorkRemaining: '{count} sprays left',
+    refillWorkNoBottle: 'No bottle',
+    refillWorkScheduled: 'Scheduled {time}',
+    refillWorkAvailable: '{count} bottles installable',
+    refillWorkInProgress: 'Refilling',
+    refillWorkAwaitingShipment: 'Waiting for the warehouse to receive the declared shipment',
+    refillWorkProductMissing: 'No product assigned',
+    refillSessionsHistory: 'Refill sessions',
+    refillSlotLabel: 'Slot {slotNumber}',
+    refillSlotOptionDetail: '{brand} · {product}',
+    refillSlotEmpty: 'Not rented',
+    refillSuggestedTag: 'Suggested',
+    refillTarget: 'Slot {slotNumber} · {brand} · {product}',
+    refillBottleOption: '{identifier} · {ml} ml · exp. {expires}',
+    refillBottleOptionNoExpiry: '{identifier} · {ml} ml',
     shipmentReceivedNoBatch: 'Recorded that no bottles arrived — no batch created',
+    shipmentReceivedWithBottles: 'Received — batch and {count} bottles added to stock',
+    receiveCreatesBottles:
+      'Confirming creates the batch and {count} bottles in stock, ready to refill machines',
+    receiveBottleCodeHint:
+      'Bottle codes look like «product SKU»-{batchNumber}-001, -002… Label each bottle with its code.',
     diagnosticDispense: 'Diagnostic spray',
     diagnosticTitle: 'Diagnostic spray on slot {slotNumber}',
     diagnosticHint:
@@ -1753,12 +1803,18 @@ export const en: SameKeysAs<typeof vi> = {
     discrepancyNotesRequired:
       'Received quantity differs from the declaration — a discrepancy note is required',
     batchNumberTaken: "This batch number already exists for the brand's product",
+    batchBottleIdentifierTaken:
+      'Bottle codes generated from this batch number clash with an existing bottle — use another batch number',
+    bottleIdentifierTooLong:
+      'The product SKU and batch number are too long to generate bottle codes — shorten the batch number',
+    receivedQuantityTooLarge: 'The received quantity exceeds the limit for a single receipt',
     batchNotFound: 'Batch not found',
     authenticityAlreadyApproved: 'The batch is already approved and cannot be resubmitted',
     authenticityNotPending: 'The batch is not awaiting authenticity review',
     documentSubmissionExpired:
       'The authenticity document deadline has passed ({days} days after the invoice was paid)',
     reasonRequired: 'A reason is required',
+    cancelReasonRequired: 'Enter a reason for cancelling the refill session',
     bottleIdentifierTaken: 'This bottle identifier already exists for the brand',
     bottleNotFound: 'Bottle not found',
     bottleNotOwned: 'The bottle does not belong to the brand renting the slot',
@@ -1873,6 +1929,19 @@ export const en: SameKeysAs<typeof vi> = {
     STARTED: 'In progress',
     COMPLETED: 'Completed',
     CANCELLED: 'Cancelled',
+  },
+
+  refillWorkKind: {
+    FIRST_INSTALL: 'First bottle install',
+    REFILL_REQUEST: 'Refill request',
+    LOW_STOCK: 'Running low',
+  },
+
+  refillWorkBlocker: {
+    PRODUCT_NOT_ASSIGNED: 'The brand has not assigned a product to the slot',
+    REQUEST_NOT_APPROVED: 'Refill request awaiting Super Admin approval',
+    NO_STOCK: 'No bottles of this product in stock',
+    DOCS_NOT_APPROVED: 'The batch authenticity documents are not approved yet',
   },
 
   mnt: {

@@ -104,6 +104,7 @@ const BottleQuery = z.object({
     ])
     .optional(),
   batchId: z.string().uuid().optional(),
+  fragranceProductId: z.string().uuid().optional(),
 });
 
 /** openapi `BottleDamageReport` — lý do rỗng sau khi cắt khoảng trắng bị service từ chối. */
@@ -326,5 +327,32 @@ export class RefillSessionsController {
       parseBody(IdParam, params).id,
       parseBody(RefillCloseBody, body),
     );
+  }
+
+  /** ADR-0028 */
+  @Post(':id/cancel')
+  @HttpCode(200)
+  @RequirePermissions(INVENTORY_MANAGE)
+  cancel(@CurrentUser() actor: AuthenticatedUser, @Param() params: unknown, @Body() body: unknown) {
+    return this.inv.cancelRefillSession(
+      actor,
+      parseBody(IdParam, params).id,
+      parseBody(RefillCancelBody, body).reason,
+    );
+  }
+}
+
+/** openapi `RefillSessionCancel` — lý do rỗng sau khi cắt khoảng trắng bị service từ chối. */
+const RefillCancelBody = z.object({ reason: z.string().max(2000) });
+
+@Controller('refill-worklist')
+export class RefillWorklistController {
+  constructor(@Inject(InvService) private readonly inv: InvService) {}
+
+  /** ADR-0026: việc cần nạp của Inventory Staff. */
+  @Get()
+  @RequirePermissions(INVENTORY_MANAGE)
+  async list(@CurrentBrandScope() scope: BrandScope) {
+    return { items: await this.inv.refillWorklist(scope) };
   }
 }

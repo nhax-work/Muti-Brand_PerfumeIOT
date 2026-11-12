@@ -5,6 +5,7 @@ import {
   BottlesController,
   InventoryBatchesController,
   RefillSessionsController,
+  RefillWorklistController,
   ShipmentDeclarationsController,
 } from './inv.http.js';
 import { InvQueries } from './inv.queries.js';
@@ -20,6 +21,7 @@ import { ShipmentPhotoService } from './shipment-photo.service.js';
     InventoryBatchesController,
     BottlesController,
     RefillSessionsController,
+    RefillWorklistController,
   ],
   providers: [InvQueries, InvService, ShipmentPhotoService],
   exports: [InvService],
