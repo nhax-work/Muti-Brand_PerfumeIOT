@@ -1,5 +1,5 @@
 import type { components } from '@scentstation/contracts';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/shared/api';
 import { useReauth } from '@/shared/auth';
 
@@ -38,6 +38,17 @@ export const BOTTLE_STATUS_COLOR: Record<BottleStatus, string> = {
 
 /** Trang đầu đủ lớn cho bảng có phân trang phía client. */
 const LIST_PAGE_SIZE = 200;
+
+/**
+ * Làm mới mọi màn đọc tồn kho chai: danh sách chai (kể cả ô chọn chai khi đóng phiếu nạp), việc cần
+ * nạp (lý do "kho chưa có chai" / "chưa duyệt giấy tờ") và báo cáo tồn kho. Các tab trong trang kho
+ * giữ nguyên khi chuyển tab nên không tự tải lại — mutation nào đổi kho chai phải gọi hàm này.
+ */
+function invalidateBottleStock(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+  void queryClient.invalidateQueries({ queryKey: ['refill-worklist'] });
+  void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
+}
 
 /** FR-INV-27: Brand Admin thấy khai báo của mình, nhân sự kho thấy tất cả. */
 export function useShipmentDeclarations() {
@@ -97,7 +108,10 @@ export function useDeleteShipmentPhoto() {
   });
 }
 
-/** FR-INV-24, 25, 26: tiếp nhận; nhận được chai thì máy chủ tạo lô ngay. */
+/**
+ * FR-INV-24, 25, 26: tiếp nhận; nhận được chai thì máy chủ tạo lô và đăng ký từng chai ngay
+ * (ADR-0025) — nên kho chai và việc cần nạp cũng phải tải lại.
+ */
 export function useReceiveShipment() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -106,6 +120,7 @@ export function useReceiveShipment() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['shipments'] });
       void queryClient.invalidateQueries({ queryKey: ['batches'] });
+      invalidateBottleStock(queryClient);
     },
   });
 }
@@ -151,7 +166,11 @@ export function useApproveAuthenticity() {
           params: { path: { id: batchId } },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['batches'] }),
+    // Duyệt giấy tờ làm chai của lô lắp được (FR-INV-35) — việc cần nạp đổi lý do.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['batches'] });
+      invalidateBottleStock(queryClient);
+    },
   });
 }
 
@@ -166,7 +185,10 @@ export function useRejectAuthenticity() {
           body: { reason },
         }),
       ),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['batches'] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['batches'] });
+      invalidateBottleStock(queryClient);
+    },
   });
 }
 
@@ -347,10 +369,7 @@ export function useRegisterBottle() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: BottleCreate) => unwrap(api.POST('/bottles', { body })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
-    },
+    onSuccess: () => invalidateBottleStock(queryClient),
   });
 }
 
@@ -366,9 +385,8 @@ export function useRemoveBottleFromSlot() {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+      invalidateBottleStock(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['bottle-history'] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
       void queryClient.invalidateQueries({ queryKey: ['machine-slots'] });
     },
   });
@@ -389,9 +407,8 @@ export function useCreateInventoryAdjustment() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['bottles'] });
+      invalidateBottleStock(queryClient);
       void queryClient.invalidateQueries({ queryKey: ['bottle-history'] });
-      void queryClient.invalidateQueries({ queryKey: ['inventory-report'] });
       void queryClient.invalidateQueries({ queryKey: ['machine-slots'] });
     },
   });
