@@ -1,5 +1,6 @@
 /** Nhận dữ liệu thiết bị vào các bảng IOT đã có; thời gian kết nối dùng đồng hồ server. */
 import { Inject, Injectable } from '@nestjs/common';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
@@ -196,7 +197,7 @@ export class IotService {
               type: 'MACHINE_OFFLINE',
               severity: 'HIGH',
               deduplicationKey: `machine-offline:${machine.id}`,
-              title: 'Machine offline',
+              title: translate(DEFAULT_LOCALE, 'alr.machineOfflineAlertTitle'),
               at: now,
             },
             tx,

@@ -14,6 +14,7 @@ import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { SPEC_CONSTRAINTS } from '../../shared/config/constraints.generated.js';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
+import { formatVnDateTime } from '../../shared/format/index.js';
 import { AppError } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
@@ -329,16 +330,4 @@ export class ExpService {
       at,
     });
   }
-}
-
-/** Mốc hạn hiển thị theo giờ Việt Nam — hạn tính tới từng giờ nên kèm giờ phút. */
-function formatVnDateTime(at: Date): string {
-  return at.toLocaleString('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
 }

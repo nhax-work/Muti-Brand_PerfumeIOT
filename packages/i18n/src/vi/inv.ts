@@ -80,6 +80,11 @@ export const inv = {
   slotEmptyAlertTitle: 'Slot {slot} đã hết nước hoa',
   slotEmptyAlertContent:
     'Slot {slot} còn {remainingMl} ml, không đủ một lượt {dosageMl} ml — slot đã ngừng bán.',
+  shipmentReceivedSubject: 'Kho đã nhận hàng: {product}',
+  shipmentReceivedContent: 'Kho đã nhận đủ {received} chai {product} theo khai báo gửi hàng.',
+  shipmentDiscrepancySubject: 'Hàng nhận về lệch số lượng: {product}',
+  shipmentDiscrepancyContent:
+    'Bạn khai gửi {declared} chai {product}, kho nhận {received} chai. Ghi chú của kho: {notes}',
 } as const;
 
 export const shipmentStatus = {

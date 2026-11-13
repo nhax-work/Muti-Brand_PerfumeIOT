@@ -1254,14 +1254,17 @@ export class SltQueries {
    * FR-EXP-23: Báo không gia hạn, lấy hàng về (ADR-0014). Chỉ ghi khi hóa đơn còn ACTIVE/EXPIRING và
    * chưa tới endsAt ngay tại lúc UPDATE — trả null nếu điều kiện đã đổi sau bước kiểm tra của service.
    */
-  async requestNonRenewal(params: {
-    rentalId: string;
-    brandId: string;
-    requestedBy: string;
-    returnMethod: BottleReturnMethod;
-    now: Date;
-  }): Promise<SlotRentalRecord | null> {
-    const result = await this.db
+  async requestNonRenewal(
+    params: {
+      rentalId: string;
+      brandId: string;
+      requestedBy: string;
+      returnMethod: BottleReturnMethod;
+      now: Date;
+    },
+    executor: Executor = this.db,
+  ): Promise<SlotRentalRecord | null> {
+    const result = await executor
       .updateTable('slot_rentals')
       .set({
         non_renewal_requested_at: params.now,
@@ -1277,7 +1280,11 @@ export class SltQueries {
     if (result.numUpdatedRows === 0n) return null;
 
     const row = await this.selectColumns(
-      this.base({ kind: 'BRAND', brandId: params.brandId }).where('sr.id', '=', params.rentalId),
+      this.base({ kind: 'BRAND', brandId: params.brandId }, executor).where(
+        'sr.id',
+        '=',
+        params.rentalId,
+      ),
     ).executeTakeFirstOrThrow();
     return toRecord(row);
   }

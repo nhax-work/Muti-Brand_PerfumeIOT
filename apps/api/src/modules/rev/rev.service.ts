@@ -21,6 +21,7 @@ import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import type { DB } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { formatAmount } from '../../shared/format/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService, type NotificationChannel } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
@@ -299,7 +300,7 @@ export class RevService {
     const params = {
       period: payout.periodMonth.slice(0, 7),
       orderCount: payout.orderCount,
-      amount: Number(payout.amount).toLocaleString('vi-VN'),
+      amount: formatAmount(payout.amount),
       currency: payout.currency,
     };
     await this.alr.notifyBrandAdmins(

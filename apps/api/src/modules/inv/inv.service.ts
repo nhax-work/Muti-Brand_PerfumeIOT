@@ -312,6 +312,27 @@ export class InvService {
         },
         tx,
       );
+      // Thương hiệu biết hàng đã tới kho, nhất là khi số nhận lệch số khai (FR-INV-28).
+      const product = (await this.queries.findShipment(shipment.id, tx))!.productName;
+      const params = {
+        product,
+        declared: shipment.declaredQuantity,
+        received: input.receivedQuantity,
+        notes: notes ?? '',
+      };
+      const key = discrepancy ? 'Discrepancy' : 'Received';
+      await this.alr.notifyBrandAdmins(
+        tx,
+        {
+          brandId: shipment.brandId,
+          type: discrepancy ? 'SHIPMENT_DISCREPANCY' : 'SHIPMENT_RECEIVED',
+          subject: translate(DEFAULT_LOCALE, `inv.shipment${key}Subject`, params),
+          content: translate(DEFAULT_LOCALE, `inv.shipment${key}Content`, params),
+          referenceId: shipment.id,
+          at: now,
+        },
+        ['IN_APP'],
+      );
       return createdBatchId;
     });
 

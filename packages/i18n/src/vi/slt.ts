@@ -82,6 +82,10 @@ export const slt = {
     'Khoản bồi thường {amount} đ cho chai {bottle} đã được chuyển khoản. Mã giao dịch: {reference}.',
   pricePerSprayFollowsProduct:
     'Giá mỗi lượt xịt đặt theo sản phẩm. Sửa giá ở trang Sản phẩm, mọi slot bán sản phẩm đó đổi theo.',
+  nonRenewalRequestedSubject: 'Thương hiệu báo không gia hạn hóa đơn {invoiceNumber}',
+  nonRenewalRequestedContent:
+    'Hóa đơn {invoiceNumber} sẽ không gia hạn và kết thúc ngày {endsAt}. Hình thức nhận hàng: ' +
+    '{method}. Chuẩn bị tháo chai và lập phiếu trả hàng khi hóa đơn kết thúc.',
 } as const;
 
 export const storageCompensationStatus = {

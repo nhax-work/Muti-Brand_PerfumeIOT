@@ -704,6 +704,45 @@ export class AlrQueries {
     return row ? { brandId: row.id, brandName: row.name, email: String(row.email) } : null;
   }
 
+  /**
+   * Thương hiệu bị ảnh hưởng bởi một cảnh báo (FR-ALR-09) — cùng quy tắc với danh sách cảnh báo của
+   * Brand Admin: cảnh báo gắn thương hiệu thì chỉ thương hiệu đó; cảnh báo mức máy thì mọi thương
+   * hiệu đang có hóa đơn hiệu lực trên máy. Kèm tên máy để soạn thông báo.
+   */
+  async brandsAffectedByAlert(
+    alert: {
+      readonly machineId: string;
+      readonly brandId: string | null;
+      readonly deduplicationKey: string;
+    },
+    executor: Executor,
+  ): Promise<{ alertId: string | null; machineName: string; brandIds: string[] }> {
+    const open = await executor
+      .selectFrom('alerts')
+      .select('id')
+      .where('deduplication_key', '=', alert.deduplicationKey)
+      .where('status', 'in', ['OPEN', 'ACKNOWLEDGED'])
+      .executeTakeFirst();
+    const alertId = open?.id ?? null;
+    const machine = await executor
+      .selectFrom('machines')
+      .select('display_name')
+      .where('id', '=', alert.machineId)
+      .executeTakeFirst();
+    const machineName = machine?.display_name ?? alert.machineId;
+    if (alert.brandId) return { alertId, machineName, brandIds: [alert.brandId] };
+
+    const rows = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .select('sr.brand_id')
+      .distinct()
+      .where('ms.machine_id', '=', alert.machineId)
+      .where('sr.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE'])
+      .execute();
+    return { alertId, machineName, brandIds: rows.map((r) => r.brand_id) };
+  }
+
   /** Thông báo trong ứng dụng cho từng người nhận — hiện ngay nên ghi SENT luôn. */
   async insertInAppForUsers(
     notification: UserNotification,

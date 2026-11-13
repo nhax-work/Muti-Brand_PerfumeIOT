@@ -106,6 +106,11 @@ export const en: SameKeysAs<typeof vi> = {
     resolutionRequired: 'A resolution summary is required before resolving.',
     cannotAssignClosed: 'Cannot assign a closed alert.',
     cannotResolveClosed: 'Cannot resolve a closed alert.',
+    machineOfflineAlertTitle: 'Machine offline',
+    alertForBrandSubject: 'Alert at machine {machine}: {title}',
+    alertForBrandContent:
+      'A {severity} alert was raised at machine {machine}: {title}. ' +
+      'The platform is handling it; see Alerts for details.',
   },
 
   alertSeverity: {
@@ -370,6 +375,10 @@ export const en: SameKeysAs<typeof vi> = {
       'The compensation of {amount} VND for bottle {bottle} has been transferred. Transaction reference: {reference}.',
     pricePerSprayFollowsProduct:
       'The price per spray is set per product. Change it on the Products page; every slot selling that product follows.',
+    nonRenewalRequestedSubject: 'A brand will not renew invoice {invoiceNumber}',
+    nonRenewalRequestedContent:
+      'Invoice {invoiceNumber} will not be renewed and ends on {endsAt}. Return method: {method}. ' +
+      'Prepare to remove the bottles and create a return ticket when the invoice ends.',
   },
 
   storageCompensationStatus: {
@@ -403,6 +412,18 @@ export const en: SameKeysAs<typeof vi> = {
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
     orderRateLimited: 'This machine is receiving too many requests. Please try again shortly.',
+    claimSubmittedSubject: 'New refund claim: {amount} {currency}',
+    claimSubmittedContent:
+      'A customer has filed a refund claim of {amount} {currency} for order {orderId}. ' +
+      'Deadline: {deadline}.',
+    claimAssignedSubject: 'A refund claim has been assigned to you',
+    claimAssignedContent:
+      'You have been assigned the refund claim of {amount} {currency} for order {orderId}. ' +
+      'Deadline: {deadline}.',
+    manualReviewSubject: 'Order needs manual review: {amount} {currency}',
+    manualReviewContent:
+      'Order {orderId} was paid but its spray was not delivered normally. ' +
+      'Check it under Orders needing review and refund if needed.',
   },
 
   dsp: {
@@ -1972,6 +1993,12 @@ export const en: SameKeysAs<typeof vi> = {
     slotEmptyAlertTitle: 'Slot {slot} is empty',
     slotEmptyAlertContent:
       'Slot {slot} has {remainingMl} ml left, not enough for one {dosageMl} ml spray — the slot has stopped selling.',
+    shipmentReceivedSubject: 'The warehouse received your goods: {product}',
+    shipmentReceivedContent:
+      'The warehouse received all {received} bottles of {product} from your shipment declaration.',
+    shipmentDiscrepancySubject: 'Received quantity differs: {product}',
+    shipmentDiscrepancyContent:
+      'You declared {declared} bottles of {product}; the warehouse received {received}. Warehouse note: {notes}',
   },
 
   shipmentStatus: {

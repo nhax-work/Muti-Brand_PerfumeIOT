@@ -373,5 +373,66 @@ describe('ALR Alerts Integration Tests', () => {
     const brandBRes = await brandB('GET', `/alerts?machineId=${fx.machineId}`);
     const brandBItems = brandBRes.json<{ items: Array<{ type: string }> }>().items;
     expect(brandBItems.some((a) => a.type === 'SLOT_LOW_STOCK')).toBe(false);
+
+    // Thông báo trong ứng dụng (FR-ALR-10): cảnh báo mức máy → Brand Admin cả hai thương hiệu có
+    // hóa đơn trên máy; cảnh báo của slot A → chỉ Brand Admin A.
+    const recipientsOf = async (title: string) => {
+      const res = await client.query<{ email: string; channel: string }>(
+        `SELECT u.email, n.channel FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+          WHERE n.type = 'ALERT_RAISED' AND n.subject LIKE '%' || $1 ORDER BY u.email`,
+        [title],
+      );
+      return res.rows;
+    };
+    expect(await recipientsOf('Máy ngắt kết nối kiểm thử bảo mật')).toEqual(
+      [fx.brandAdminAEmail, fx.brandAdminBEmail]
+        .sort()
+        .map((email) => ({ email, channel: 'IN_APP' })),
+    );
+    expect(await recipientsOf('Hết nước hoa slot A1')).toEqual([
+      { email: fx.brandAdminAEmail, channel: 'IN_APP' },
+    ]);
+  });
+
+  it('test_FR_ALR_10_repeat_occurrence_not_renotified — lần lặp gộp vào cảnh báo đang mở không báo thêm', async () => {
+    const raise = () =>
+      alr.raiseAlert({
+        brandId: fx.brandA,
+        machineId: fx.machineId,
+        slotId: fx.slots[1],
+        type: 'CONSECUTIVE_DISPENSE_FAILURES',
+        severity: 'HIGH',
+        deduplicationKey: `REPEAT_NOTICE:${fx.slots[1]}`,
+        title: 'Slot A2 xịt lỗi liên tiếp',
+      });
+    await raise();
+    await raise();
+
+    const res = await client.query<{ reference_id: string }>(
+      `SELECT n.reference_id FROM notifications n
+        WHERE n.type = 'ALERT_RAISED' AND n.subject LIKE '%Slot A2 xịt lỗi liên tiếp'`,
+    );
+    expect(res.rowCount).toBe(1);
+    const alert = await client.query<{ id: string }>(
+      `SELECT id FROM alerts WHERE deduplication_key = $1`,
+      [`REPEAT_NOTICE:${fx.slots[1]}`],
+    );
+    expect(res.rows[0]!.reference_id).toBe(alert.rows[0]!.id);
+  });
+
+  it('test_FR_ALR_10_internal_alerts_not_sent_to_brands — quá hạn phiếu khiếu nại không báo thương hiệu', async () => {
+    await alr.raiseAlert({
+      brandId: fx.brandA,
+      machineId: fx.machineId,
+      type: 'REFUND_CLAIM_SLA_BREACHED',
+      severity: 'HIGH',
+      deduplicationKey: `SLA_INTERNAL:${fx.runId}`,
+      title: 'Phiếu khiếu nại quá hạn kiểm thử',
+    });
+    const res = await client.query(
+      `SELECT 1 FROM notifications WHERE type = 'ALERT_RAISED'
+          AND subject LIKE '%Phiếu khiếu nại quá hạn kiểm thử'`,
+    );
+    expect(res.rowCount).toBe(0);
   });
 });

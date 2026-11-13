@@ -8,6 +8,12 @@ export const alr = {
   resolutionRequired: 'Cần nhập nội dung xử lý trước khi hoàn thành.',
   cannotAssignClosed: 'Không thể phân công cảnh báo đã đóng.',
   cannotResolveClosed: 'Không thể xử lý cảnh báo đã đóng.',
+  machineOfflineAlertTitle: 'Máy mất kết nối',
+  // FR-ALR-10: báo Brand Admin cảnh báo ảnh hưởng slot của mình
+  alertForBrandSubject: 'Cảnh báo tại máy {machine}: {title}',
+  alertForBrandContent:
+    'Hệ thống ghi nhận cảnh báo mức {severity} tại máy {machine}: {title}. ' +
+    'Nền tảng đang xử lý; xem chi tiết trong mục Cảnh báo.',
 } as const;
 
 export const alertSeverity = {

@@ -265,6 +265,15 @@ describe('Tiếp nhận và đối chiếu (FR-INV-24, 25, 26)', () => {
       declaration: { status: 'DISCREPANCY', discrepancyNotes: 'Vỡ 1 chai khi vận chuyển' },
       batch: { quantityReceived: 9 },
     });
+
+    // Brand Admin của thương hiệu khai báo được báo lệch số lượng kèm ghi chú của kho.
+    const notices = await client.query<{ email: string; content: string }>(
+      `SELECT u.email, n.content FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+        WHERE n.type = 'SHIPMENT_DISCREPANCY' AND n.reference_id = $1`,
+      [declaration.id],
+    );
+    expect(notices.rows.map((r) => r.email)).toEqual([fx.brandAdminAEmail]);
+    expect(notices.rows[0]!.content).toContain('Vỡ 1 chai khi vận chuyển');
   });
 
   it('test_FR_INV_25_receive_zero_creates_no_batch — nhận 0 chai: DISCREPANCY, batch null, không tạo lô', async () => {

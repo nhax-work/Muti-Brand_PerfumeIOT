@@ -45,6 +45,14 @@ export const NOTIFICATION_MANAGE = 'notification.manage';
 export const ALERT_HANDLE = 'alert.handle';
 /** Quyền quản lý thương hiệu — người xác minh pháp nhân (FR-BND-10). */
 const BRAND_MANAGE = 'brand.manage';
+/**
+ * Loại cảnh báo KHÔNG báo Brand Admin (FR-ALR-10): quá hạn xử lý phiếu khiếu nại là việc nội bộ
+ * của nền tảng; dừng bán bắt buộc đã có thông báo MACHINE_MAINTENANCE riêng (ADR-0015).
+ */
+const ALERT_TYPES_NOT_FOR_BRANDS: ReadonlySet<string> = new Set([
+  'REFUND_CLAIM_SLA_BREACHED',
+  'FORCED_MAINTENANCE',
+]);
 
 /** Số email mỗi nhịp job — đủ cho một đợt chốt kỳ chi trả mà không giữ nhịp quá lâu. */
 const DISPATCH_BATCH = 50;
@@ -427,15 +435,65 @@ export class AlrService implements BrandSignupListener {
     onDuplicate: AlertDuplicatePolicy = 'COUNT',
   ): Promise<boolean> {
     const at = data.at ?? this.clock.now();
-    return this.queries.insertOrUpdateAlert(
+    const executor = tx ?? this.queries.database;
+    const created = await this.queries.insertOrUpdateAlert(
       {
         ...data,
         firstOccurredAt: at,
         lastOccurredAt: at,
       },
-      tx ?? this.queries.database,
+      executor,
       onDuplicate,
     );
+    // Chỉ cảnh báo mới — lần xảy ra lặp lại đã gộp vào cảnh báo đang mở (FR-ALR-07) thì không báo.
+    if (created && !ALERT_TYPES_NOT_FOR_BRANDS.has(data.type)) {
+      await this.notifyAffectedBrands(executor, data, at);
+    }
+    return created;
+  }
+
+  /**
+   * FR-ALR-10: báo Brand Admin các thương hiệu bị ảnh hưởng. Chỉ đưa tên máy, mức độ và tiêu đề —
+   * cảnh báo mức máy không mang dữ liệu slot của thương hiệu khác.
+   */
+  private async notifyAffectedBrands(
+    executor: Executor,
+    alert: {
+      readonly brandId?: string | null;
+      readonly machineId: string;
+      readonly severity: AlertSeverity;
+      readonly title: string;
+      readonly deduplicationKey: string;
+    },
+    at: Date,
+  ): Promise<void> {
+    const { alertId, machineName, brandIds } = await this.queries.brandsAffectedByAlert(
+      {
+        machineId: alert.machineId,
+        brandId: alert.brandId ?? null,
+        deduplicationKey: alert.deduplicationKey,
+      },
+      executor,
+    );
+    const params = {
+      machine: machineName,
+      title: alert.title,
+      severity: translate(DEFAULT_LOCALE, `alertSeverity.${alert.severity}`),
+    };
+    for (const brandId of brandIds) {
+      await this.notifyBrandAdmins(
+        executor,
+        {
+          brandId,
+          type: 'ALERT_RAISED',
+          subject: translate(DEFAULT_LOCALE, 'alr.alertForBrandSubject', params),
+          content: translate(DEFAULT_LOCALE, 'alr.alertForBrandContent', params),
+          referenceId: alertId ?? alert.deduplicationKey,
+          at,
+        },
+        ['IN_APP'],
+      );
+    }
   }
 
   /**

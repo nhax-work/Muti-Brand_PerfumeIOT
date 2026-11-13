@@ -18,6 +18,7 @@ import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { formatVnDate } from '../../shared/format/index.js';
 import type { RequestOrigin } from '../../shared/http/request-origin.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import { AlrService } from '../alr/index.js';
@@ -53,6 +54,9 @@ type RentalInvoice = Schema<'RentalInvoice'>;
 type RentalPaymentIntent = Schema<'RentalPaymentIntent'>;
 type RentalCheckoutAnnex = Schema<'RentalCheckoutAnnex'>;
 type Bottle = Schema<'Bottle'>;
+
+/** Quyền quản lý kho — người tháo chai và lập phiếu trả hàng (FR-EXP-26). */
+const INVENTORY_MANAGE = 'inventory.manage';
 
 @Injectable()
 export class SltService {
@@ -994,30 +998,53 @@ export class SltService {
       return toDto(rental);
     }
 
-    const updated = await this.queries.requestNonRenewal({
-      rentalId,
-      brandId: scope.brandId,
-      requestedBy: actor.userId,
-      returnMethod,
-      now,
-    });
-    if (!updated) throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    const brandId = scope.brandId;
+    const updated = await this.db.transaction().execute(async (tx) => {
+      const changed = await this.queries.requestNonRenewal(
+        { rentalId, brandId, requestedBy: actor.userId, returnMethod, now },
+        tx,
+      );
+      if (!changed) throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
 
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      brandId: scope.brandId,
-      action: 'slt.rental.non_renewal_requested',
-      targetType: 'SlotRental',
-      targetId: rentalId,
-      before: {
-        nonRenewalRequestedAt: rental.nonRenewalRequestedAt?.toISOString() ?? null,
-        returnMethod: rental.returnMethod,
-      },
-      after: {
-        nonRenewalRequestedAt: updated.nonRenewalRequestedAt?.toISOString() ?? null,
-        returnMethod: updated.returnMethod,
-      },
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId,
+          action: 'slt.rental.non_renewal_requested',
+          targetType: 'SlotRental',
+          targetId: rentalId,
+          before: {
+            nonRenewalRequestedAt: rental.nonRenewalRequestedAt?.toISOString() ?? null,
+            returnMethod: rental.returnMethod,
+          },
+          after: {
+            nonRenewalRequestedAt: changed.nonRenewalRequestedAt?.toISOString() ?? null,
+            returnMethod: changed.returnMethod,
+          },
+        },
+        tx,
+      );
+
+      // Kho lên kế hoạch tháo chai và lập phiếu trả hàng khi hóa đơn kết thúc (FR-EXP-26).
+      const params = {
+        invoiceNumber: changed.invoiceNumber ?? changed.id,
+        endsAt: changed.endsAt ? formatVnDate(changed.endsAt) : '—',
+        method: translate(DEFAULT_LOCALE, `bottleReturnMethod.${returnMethod}`),
+      };
+      await this.alr.notifyPermissionHolders(
+        tx,
+        {
+          brandId,
+          type: 'RENTAL_NON_RENEWAL_REQUESTED',
+          subject: translate(DEFAULT_LOCALE, 'slt.nonRenewalRequestedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'slt.nonRenewalRequestedContent', params),
+          referenceId: rentalId,
+          at: now,
+        },
+        INVENTORY_MANAGE,
+      );
+      return changed;
     });
 
     return toDto(updated);
