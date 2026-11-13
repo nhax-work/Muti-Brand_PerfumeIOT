@@ -424,6 +424,10 @@ export const en: SameKeysAs<typeof vi> = {
     payoutDisputeAnsweredSubject: 'Your dispute for the {period} payout has been answered',
     payoutDisputeAnsweredContent:
       'The platform has answered your dispute about the {period} payout figures. See the details under Payouts.',
+    payoutConfirmedSubject: 'Payout figures for {period} are locked',
+    payoutConfirmedContent:
+      'Your spray revenue for {period} is locked: {orderCount} order(s), {amount} {currency} in total. ' +
+      'If anything looks wrong, you can dispute it once under Payouts.',
     payoutPaidSubject: 'Revenue for {period} has been transferred',
     payoutPaidContent:
       'The platform has transferred your spray revenue for {period}. The transaction reference is under Payouts.',
@@ -2089,10 +2093,24 @@ export const en: SameKeysAs<typeof vi> = {
     bottleNotOwnedByBrand: 'Perfume bottle is not owned by the renting brand',
     returnAlreadyClosed: 'Bottle return ticket is already handed over or forfeited',
     trackingNumberRequiredForShipping: 'Tracking number is required when shipping to brand',
+    bottleReturnReadySubject: '[ScentStation] Returned goods are ready ({invoiceNumber})',
+    bottleReturnReadyContent:
+      'Invoice {invoiceNumber} has ended and {count} bottle(s) have been removed from the slot. ' +
+      'Return method: {method}. Handover deadline: {deadline}. ' +
+      'Bottles not handed over by then become the property of the platform.',
+    bottleReturnReminderSubject: '[ScentStation] Returned goods deadline is near ({invoiceNumber})',
+    bottleReturnReminderContent:
+      'The handover deadline for the returned goods of invoice {invoiceNumber} is {deadline}. ' +
+      'Bottles not handed over by then will be liquidated and become the property of the platform.',
+    bottleReturnForfeitedSubject:
+      '[ScentStation] Overdue returned goods have been liquidated ({invoiceNumber})',
+    bottleReturnForfeitedContent:
+      'The returned goods of invoice {invoiceNumber} passed the handover deadline ({deadline}). ' +
+      'The bottles in the return ticket now belong to the platform.',
   },
 
   bottleReturnMethod: {
-    PICKUP_AT_STATION: 'Pickup at station / warehouse',
+    WAREHOUSE_PICKUP: 'Pickup at warehouse',
     SHIP_TO_BRAND: 'Ship to brand',
   },
 };

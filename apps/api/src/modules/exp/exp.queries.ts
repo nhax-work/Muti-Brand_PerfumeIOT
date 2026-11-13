@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { components } from '@scentstation/contracts';
-import type { Transaction } from 'kysely';
+import type { Kysely } from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { BottleReturnMethod, BottleStatus } from '../../shared/db/types.generated.js';
 
@@ -14,14 +14,27 @@ export interface BottleReturnFilters {
   readonly pageSize?: number;
 }
 
+/** Ghi trong transaction của service để thông báo và audit cùng số phận với nghiệp vụ. */
+type Executor = Kysely<DB>;
+
 export interface RentalForReturnInfo {
   readonly id: string;
+  readonly invoiceNumber: string | null;
   readonly brandId: string;
   readonly slotId: string;
   readonly status: string;
   readonly nonRenewalRequestedAt: Date | null;
   readonly returnMethod: BottleReturnMethod | null;
   readonly brandAddress: string | null;
+}
+
+/** Phiếu trả hàng còn mở cùng số hóa đơn — đủ để job nhắc hạn và thanh lý soạn thông báo. */
+export interface OpenBottleReturnRow {
+  readonly id: string;
+  readonly brandId: string;
+  readonly slotRentalId: string;
+  readonly invoiceNumber: string | null;
+  readonly pickupDeadline: Date;
 }
 
 /** Lượng còn lại của chai giữ theo ước tính `current_estimated_ml`, không cân (FR-INV-15, ADR-0019). */
@@ -184,6 +197,7 @@ export class ExpQueries {
       .innerJoin('brands', 'brands.id', 'slot_rentals.brand_id')
       .select([
         'slot_rentals.id',
+        'slot_rentals.invoice_number',
         'slot_rentals.brand_id',
         'slot_rentals.slot_id',
         'slot_rentals.status',
@@ -206,6 +220,7 @@ export class ExpQueries {
 
     return {
       id: row.id,
+      invoiceNumber: row.invoice_number,
       brandId: row.brand_id,
       slotId: row.slot_id,
       status: row.status,
@@ -226,85 +241,84 @@ export class ExpQueries {
       .execute();
   }
 
-  async createBottleReturn(data: CreateBottleReturnData): Promise<BottleReturnDto> {
-    return this.db.transaction().execute(async (trx: Transaction<DB>) => {
-      // 1. Tạo bản ghi bottle_returns
-      const [insertedReturn] = await trx
-        .insertInto('bottle_returns')
-        .values({
-          slot_rental_id: data.slotRentalId,
-          brand_id: data.brandId,
-          return_method: data.returnMethod,
-          shipping_address: data.shippingAddress,
-          ready_at: data.readyAt,
-          pickup_deadline: data.pickupDeadline,
-          created_by: data.createdBy,
-        })
-        .returningAll()
-        .execute();
+  /** Tạo phiếu, tháo chai, khóa slot và đóng hóa đơn — chạy trong `trx` của service. */
+  async createBottleReturn(data: CreateBottleReturnData, trx: Executor): Promise<BottleReturnDto> {
+    // 1. Tạo bản ghi bottle_returns
+    const [insertedReturn] = await trx
+      .insertInto('bottle_returns')
+      .values({
+        slot_rental_id: data.slotRentalId,
+        brand_id: data.brandId,
+        return_method: data.returnMethod,
+        shipping_address: data.shippingAddress,
+        ready_at: data.readyAt,
+        pickup_deadline: data.pickupDeadline,
+        created_by: data.createdBy,
+      })
+      .returningAll()
+      .execute();
 
-      if (!insertedReturn) {
-        throw new Error('Failed to insert bottle return record');
-      }
+    if (!insertedReturn) {
+      throw new Error('Failed to insert bottle return record');
+    }
 
-      const returnId = insertedReturn.id;
+    const returnId = insertedReturn.id;
 
-      // 2. Cập nhật các chai trong phiếu:
-      // status = 'RETURNED_TO_BRAND', bottle_return_id = returnId, removed_at
-      for (const item of data.bottles) {
-        await trx
-          .updateTable('bottles')
-          .set({
-            status: 'RETURNED_TO_BRAND' as BottleStatus,
-            bottle_return_id: returnId,
-            removed_at: data.readyAt,
-            updated_at: new Date(),
-          })
-          .where('id', '=', item.bottleId)
-          .where('brand_id', '=', data.brandId)
-          .execute();
-      }
-
-      // 3. Cập nhật slot máy: chuyển status UNAVAILABLE (FR-MCH-17), tháo chai active_bottle_id = null
-      // Lấy slotId từ rental
-      const rental = await trx
-        .selectFrom('slot_rentals')
-        .select(['slot_id'])
-        .where('id', '=', data.slotRentalId)
-        .executeTakeFirst();
-
-      if (rental?.slot_id) {
-        await trx
-          .updateTable('machine_slots')
-          .set({
-            status: 'UNAVAILABLE',
-            active_bottle_id: null,
-            updated_at: new Date(),
-          })
-          .where('id', '=', rental.slot_id)
-          .execute();
-      }
-
-      // 4. Cập nhật hóa đơn slot_rentals sang CLOSED
+    // 2. Cập nhật các chai trong phiếu:
+    // status = 'RETURNED_TO_BRAND', bottle_return_id = returnId, removed_at
+    for (const item of data.bottles) {
       await trx
-        .updateTable('slot_rentals')
+        .updateTable('bottles')
         .set({
-          status: 'CLOSED',
+          status: 'RETURNED_TO_BRAND' as BottleStatus,
+          bottle_return_id: returnId,
+          removed_at: data.readyAt,
           updated_at: new Date(),
         })
-        .where('id', '=', data.slotRentalId)
+        .where('id', '=', item.bottleId)
+        .where('brand_id', '=', data.brandId)
         .execute();
+    }
 
-      // 5. Lấy danh sách chai đã cập nhật để trả về
-      const updatedBottles = await trx
-        .selectFrom('bottles')
-        .selectAll('bottles')
-        .where('bottle_return_id', '=', returnId)
+    // 3. Cập nhật slot máy: chuyển status UNAVAILABLE (FR-MCH-17), tháo chai active_bottle_id = null
+    // Lấy slotId từ rental
+    const rental = await trx
+      .selectFrom('slot_rentals')
+      .select(['slot_id'])
+      .where('id', '=', data.slotRentalId)
+      .executeTakeFirst();
+
+    if (rental?.slot_id) {
+      await trx
+        .updateTable('machine_slots')
+        .set({
+          status: 'UNAVAILABLE',
+          active_bottle_id: null,
+          updated_at: new Date(),
+        })
+        .where('id', '=', rental.slot_id)
         .execute();
+    }
 
-      const bottlesDto = updatedBottles.map((b: Record<string, unknown>) => mapBottleRow(b));
-      return mapReturnRow(insertedReturn as Record<string, unknown>, bottlesDto);
-    });
+    // 4. Cập nhật hóa đơn slot_rentals sang CLOSED
+    await trx
+      .updateTable('slot_rentals')
+      .set({
+        status: 'CLOSED',
+        updated_at: new Date(),
+      })
+      .where('id', '=', data.slotRentalId)
+      .execute();
+
+    // 5. Lấy danh sách chai đã cập nhật để trả về
+    const updatedBottles = await trx
+      .selectFrom('bottles')
+      .selectAll('bottles')
+      .where('bottle_return_id', '=', returnId)
+      .execute();
+
+    const bottlesDto = updatedBottles.map((b: Record<string, unknown>) => mapBottleRow(b));
+    return mapReturnRow(insertedReturn as Record<string, unknown>, bottlesDto);
   }
 
   async handOverBottleReturn(
@@ -343,69 +357,110 @@ export class ExpQueries {
   /**
    * Quét các phiếu đến mốc pickup_deadline - 3 ngày chưa gửi email nhắc Brand Admin (FR-EXP-28).
    */
-  async findExpiringReturnsForReminder(now: Date) {
+  async findExpiringReturnsForReminder(now: Date): Promise<OpenBottleReturnRow[]> {
     const threshold = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
-
-    return this.db
-      .selectFrom('bottle_returns')
-      .selectAll('bottle_returns')
-      .where('handed_over_at', 'is', null)
-      .where('forfeited_at', 'is', null)
-      .where('reminder_sent_at', 'is', null)
-      .where('pickup_deadline', '<=', threshold)
-      .execute();
+    return (
+      this.openReturns()
+        .where('br.reminder_sent_at', 'is', null)
+        .where('br.pickup_deadline', '<=', threshold)
+        // Phiếu đã quá hạn thì job thanh lý báo thay — không nhắc một hạn đã qua.
+        .where('br.pickup_deadline', '>', now)
+        .execute()
+        .then((rows) => rows.map(toOpenReturnRow))
+    );
   }
 
-  async markReminderSent(id: string, sentAt: Date): Promise<void> {
-    await this.db
+  /**
+   * Đánh dấu đã nhắc. Chỉ phiếu chưa nhắc và còn mở mới đổi — hai nhịp job chồng nhau không nhắc
+   * hai lần.
+   *
+   * @returns true nếu nhịp này là nhịp đánh dấu
+   */
+  async markReminderSent(id: string, sentAt: Date, executor: Executor): Promise<boolean> {
+    const result = await executor
       .updateTable('bottle_returns')
       .set({
         reminder_sent_at: sentAt,
         updated_at: new Date(),
       })
       .where('id', '=', id)
-      .execute();
+      .where('reminder_sent_at', 'is', null)
+      .where('handed_over_at', 'is', null)
+      .where('forfeited_at', 'is', null)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 
   /**
    * Quét các phiếu đã quá pickup_deadline mà chưa nhận (FR-EXP-28).
    */
-  async findOverdueReturns(now: Date) {
+  async findOverdueReturns(now: Date): Promise<OpenBottleReturnRow[]> {
+    return this.openReturns()
+      .where('br.pickup_deadline', '<', now)
+      .execute()
+      .then((rows) => rows.map(toOpenReturnRow));
+  }
+
+  /** Phiếu chưa bàn giao, chưa thanh lý, kèm số hóa đơn. */
+  private openReturns() {
     return this.db
-      .selectFrom('bottle_returns')
-      .selectAll('bottle_returns')
-      .where('handed_over_at', 'is', null)
-      .where('forfeited_at', 'is', null)
-      .where('pickup_deadline', '<', now)
-      .execute();
+      .selectFrom('bottle_returns as br')
+      .innerJoin('slot_rentals as sr', 'sr.id', 'br.slot_rental_id')
+      .select([
+        'br.id',
+        'br.brand_id',
+        'br.slot_rental_id',
+        'br.pickup_deadline',
+        'sr.invoice_number',
+      ])
+      .where('br.handed_over_at', 'is', null)
+      .where('br.forfeited_at', 'is', null);
   }
 
   /**
    * Chuyển quyền sở hữu các chai của phiếu quá hạn sang PLATFORM và LIQUIDATED.
+   *
+   * @returns true nếu nhịp này thanh lý phiếu — phiếu vừa được bàn giao hay đã thanh lý thì không
    */
-  async forfeitBottleReturn(id: string, now: Date): Promise<void> {
-    await this.db.transaction().execute(async (trx: Transaction<DB>) => {
-      await trx
-        .updateTable('bottle_returns')
-        .set({
-          forfeited_at: now,
-          updated_at: new Date(),
-        })
-        .where('id', '=', id)
-        .where('handed_over_at', 'is', null)
-        .where('forfeited_at', 'is', null)
-        .execute();
+  async forfeitBottleReturn(id: string, now: Date, executor: Executor): Promise<boolean> {
+    const result = await executor
+      .updateTable('bottle_returns')
+      .set({
+        forfeited_at: now,
+        updated_at: new Date(),
+      })
+      .where('id', '=', id)
+      .where('handed_over_at', 'is', null)
+      .where('forfeited_at', 'is', null)
+      .executeTakeFirst();
+    if (Number(result.numUpdatedRows) === 0) return false;
 
-      await trx
-        .updateTable('bottles')
-        .set({
-          status: 'LIQUIDATED' as BottleStatus,
-          owner: 'PLATFORM',
-          liquidated_at: now,
-          updated_at: new Date(),
-        })
-        .where('bottle_return_id', '=', id)
-        .execute();
-    });
+    await executor
+      .updateTable('bottles')
+      .set({
+        status: 'LIQUIDATED' as BottleStatus,
+        owner: 'PLATFORM',
+        liquidated_at: now,
+        updated_at: new Date(),
+      })
+      .where('bottle_return_id', '=', id)
+      .execute();
+    return true;
   }
+}
+
+function toOpenReturnRow(row: {
+  id: string;
+  brand_id: string;
+  slot_rental_id: string;
+  pickup_deadline: Date | string;
+  invoice_number: string | null;
+}): OpenBottleReturnRow {
+  return {
+    id: row.id,
+    brandId: row.brand_id,
+    slotRentalId: row.slot_rental_id,
+    invoiceNumber: row.invoice_number,
+    pickupDeadline: new Date(row.pickup_deadline),
+  };
 }

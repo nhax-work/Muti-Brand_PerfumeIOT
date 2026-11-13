@@ -8,6 +8,7 @@
 import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { AlrService } from '../modules/alr/index.js';
 import { DspJobs } from '../modules/dsp/index.js';
+import { ExpJobs } from '../modules/exp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { RevService } from '../modules/rev/index.js';
 import { SltJobs } from '../modules/slt/index.js';
@@ -34,6 +35,11 @@ const PAYOUT_TICK_MS = 5 * 60_000;
  * EMAIL_RETRY_INTERVAL_MIN quyết định ở truy vấn; nhịp này chỉ cần đủ nhanh cho email mới.
  */
 const EMAIL_TICK_MS = 30_000;
+/**
+ * Phiếu trả hàng: nhắc trước hạn bàn giao 3 ngày, thanh lý khi quá hạn (FR-EXP-28). Hạn tính bằng
+ * ngày nên năm phút một lần là đủ; truy vấn theo mốc thời gian nên chạy bù vẫn đúng.
+ */
+const BOTTLE_RETURN_TICK_MS = 5 * 60_000;
 
 export interface SchedulerOptions {
   /** Chạy vòng điều phối lệnh xịt — chỉ bật khi đã kết nối MQTT. */
@@ -217,8 +223,22 @@ export function startScheduler(
   sweepExpiry();
   timers.push(setInterval(sweepExpiry, 5 * 60_000));
 
+  const exp = app.get(ExpJobs);
+  let sweepingReturns = false;
+  const sweepReturns = () => {
+    if (sweepingReturns) return;
+    sweepingReturns = true;
+    // ExpJobs tự bắt lỗi và ghi log, nên nhịp này không cần catch.
+    exp
+      .processReminders()
+      .then(() => exp.processForfeitures())
+      .finally(() => (sweepingReturns = false));
+  };
+  sweepReturns();
+  timers.push(setInterval(sweepReturns, BOTTLE_RETURN_TICK_MS));
+
   logger.log(
-    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email, quét cảnh báo, nhắc hết hạn hợp đồng${options.dispense ? ', điều phối lệnh xịt' : ''}`,
+    `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email, quét cảnh báo, nhắc hết hạn hợp đồng, phiếu trả hàng${options.dispense ? ', điều phối lệnh xịt' : ''}`,
   );
   return () => timers.forEach(clearInterval);
 }
