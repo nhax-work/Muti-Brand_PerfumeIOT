@@ -79,7 +79,7 @@ async function declare(quantity = 10, product = 0): Promise<Declaration> {
     payload: {
       fragranceProductId: fx.products[product],
       declaredQuantity: quantity,
-      declaredBottleVolumeMl: 50,
+      declaredBottleVolumeMl: 500,
       expectedShipDate: '2026-11-01',
     },
   });
@@ -107,6 +107,26 @@ async function receivedBatch(): Promise<Batch> {
 }
 
 describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
+  it('chặn tổng dung tích dưới 500 ml, chấp nhận đúng 500 ml từ nhiều chai nhỏ', async () => {
+    const payload = {
+      fragranceProductId: fx.products[0],
+      declaredQuantity: 5,
+      declaredBottleVolumeMl: 99.99,
+    };
+    const rejected = await brandA('POST', '/shipment-declarations', { payload });
+    expect(rejected.statusCode, rejected.body).toBe(400);
+    expect(rejected.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { messageKey: 'inv.shipmentVolumeMinimum' },
+    });
+
+    const accepted = await brandA('POST', '/shipment-declarations', {
+      payload: { ...payload, declaredBottleVolumeMl: 100 },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(201);
+    expect(accepted.json()).toMatchObject({ declaredQuantity: 5, declaredBottleVolumeMl: 100 });
+  });
+
   it('test_FR_INV_22_declare_shipment — Brand Admin khai báo, bản ghi DECLARED gắn đúng thương hiệu', async () => {
     const declaration = await declare(12);
     expect(declaration).toMatchObject({
@@ -127,7 +147,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[2],
         declaredQuantity: 5,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -139,7 +159,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 0,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(400);
@@ -170,7 +190,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 1,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -365,9 +385,9 @@ describe('Tự tạo chai khi tiếp nhận (FR-INV-26 AC4, AC5 — ADR-0025)', 
         brand_id: fx.brandA,
         fragrance_product_id: fx.products[1],
       });
-      // declare() khai báo 50 ml mỗi chai.
-      expect(Number(b.initial_volume_ml)).toBe(50);
-      expect(Number(b.current_estimated_ml)).toBe(50);
+      // declare() khai báo 500 ml mỗi chai.
+      expect(Number(b.initial_volume_ml)).toBe(500);
+      expect(Number(b.current_estimated_ml)).toBe(500);
       expect(b.expires_at?.toISOString()).toBe(expiresAt);
     }
 

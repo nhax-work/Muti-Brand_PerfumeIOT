@@ -2,6 +2,7 @@
  * Tồn kho, Khai báo gửi hàng, Giấy tờ chính hãng và Phiếu nạp (FR-INV-01..35).
  */
 export const inv = {
+  shipmentVolumeMinimum: 'Tổng dung tích lô hàng (ml/chai × số lượng) phải tối thiểu {min} ml',
   shipmentDeclared: 'Đã tạo khai báo gửi hàng đến kho',
   shipmentReceived: 'Đã xác nhận tiếp nhận hàng tại kho',
   shipmentDiscrepancy: 'Đã ghi nhận đối soát có chênh lệch số lượng',

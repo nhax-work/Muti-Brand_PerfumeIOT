@@ -60,7 +60,7 @@ const CreateBody = z.object({
   defaultPrice: pricePerSpraySchema,
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.optional(),
-  fullBottleVolumeMl: z.coerce.number().positive().optional(),
+  fullBottleVolumeMl: z.coerce.number().finite(),
 });
 
 const UpdateBody = z.object({
@@ -71,7 +71,7 @@ const UpdateBody = z.object({
   defaultPrice: pricePerSpraySchema.optional(),
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.nullable().optional(),
-  fullBottleVolumeMl: z.coerce.number().positive().nullable().optional(),
+  fullBottleVolumeMl: z.coerce.number().finite().nullable().optional(),
 });
 
 const IdParam = z.string().uuid();

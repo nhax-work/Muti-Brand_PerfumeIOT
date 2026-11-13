@@ -23,7 +23,7 @@ import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
-import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { APP_CONFIG, SPEC_CONSTRAINTS, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type {
   BatchAuthenticityStatus,
@@ -159,6 +159,11 @@ export class InvService {
       const productBrand = await this.queries.findProductBrand(input.fragranceProductId, tx);
       if (productBrand !== scope.brandId) {
         throw new AppError('PRODUCT_NOT_OWNED', 'inv.productNotOwned');
+      }
+      const totalVolumeMl = input.declaredBottleVolumeMl * input.declaredQuantity;
+      const min = SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML;
+      if (!Number.isFinite(totalVolumeMl) || totalVolumeMl < min) {
+        throw invalidField('declaredBottleVolumeMl', 'inv.shipmentVolumeMinimum', { min });
       }
       const now = this.clock.now();
       const shipmentId = await this.queries.insertShipment(

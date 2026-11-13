@@ -33,6 +33,7 @@ import type {
   InvQueries,
   PageFilter,
   RefillSessionRecord,
+  ShipmentRecord,
   SlotForRefill,
   StockableRental,
 } from '../../apps/api/src/modules/inv/inv.queries.js';
@@ -87,6 +88,7 @@ class FakeInvQueries {
     [PRODUCT_B, { brandId: BRAND_B, name: 'Rose Oud' }],
   ]);
   batches = new Map<string, BatchRecord>();
+  shipments = new Map<string, ShipmentRecord>();
   bottles = new Map<string, BottleRecord>();
   slots = new Map<string, SlotForRefill>();
   rentals = new Map<string, StockableRental>();
@@ -114,6 +116,33 @@ class FakeInvQueries {
 
   async findProductBrand(productId: string): Promise<string | null> {
     return this.products.get(productId)?.brandId ?? null;
+  }
+
+  async insertShipment(data: Parameters<InvQueries['insertShipment']>[0]): Promise<string> {
+    const id = `shipment-${this.shipments.size + 1}`;
+    this.shipments.set(id, {
+      ...data,
+      id,
+      productName: this.products.get(data.fragranceProductId)!.name,
+      declaredBottleVolumeMl: String(data.declaredBottleVolumeMl),
+      status: 'DECLARED',
+      receivedQuantity: null,
+      discrepancyNotes: null,
+      receivedBy: null,
+      receivedAt: null,
+      resultingBatchId: null,
+      createdAt: new Date('2026-10-19T10:00:00Z'),
+      photos: [],
+    });
+    return id;
+  }
+
+  async findShipment(id: string) {
+    return this.shipments.get(id) ?? null;
+  }
+
+  async findActiveInventoryStaff() {
+    return [];
   }
 
   async insertBatch(data: {
@@ -454,13 +483,60 @@ beforeEach(() => {
   service = new InvService(
     queries as unknown as InvQueries,
     sltStub,
-    {} as AlrService,
+    { notifyUsers: async () => {} } as unknown as AlrService,
     {} as CompensationService,
     rfqStub,
     audit as unknown as never,
     {} as AppConfig,
     { now: () => new Date('2026-10-19T10:00:00Z') },
   );
+});
+
+describe('INV — tổng dung tích khai báo tối thiểu 500 ml', () => {
+  it.each([
+    [5, 99.99],
+    [1, 499],
+    [4, 100],
+  ])(
+    'chặn %s chai × %s ml và không lưu dữ liệu',
+    async (declaredQuantity, declaredBottleVolumeMl) => {
+      await expect(
+        service.declareShipment(
+          brandAdminA,
+          { kind: 'BRAND', brandId: BRAND_A },
+          {
+            fragranceProductId: PRODUCT_A,
+            declaredQuantity,
+            declaredBottleVolumeMl,
+          },
+        ),
+      ).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        messageKey: 'inv.shipmentVolumeMinimum',
+      });
+      expect(queries.shipments.size).toBe(0);
+      expect(audit.entries).toHaveLength(0);
+    },
+  );
+
+  it.each([
+    [5, 100],
+    [1, 500],
+    [10, 75],
+  ])('cho phép %s chai × %s ml', async (declaredQuantity, declaredBottleVolumeMl) => {
+    const result = await service.declareShipment(
+      brandAdminA,
+      { kind: 'BRAND', brandId: BRAND_A },
+      {
+        fragranceProductId: PRODUCT_A,
+        declaredQuantity,
+        declaredBottleVolumeMl,
+      },
+    );
+    expect(result).toMatchObject({ declaredQuantity, declaredBottleVolumeMl, status: 'DECLARED' });
+    expect(queries.shipments.size).toBe(1);
+    expect(audit.entries[0]?.action).toBe('inv.shipment.declared');
+  });
 });
 
 describe('INV controllers — quyền, xác thực lại và validate HTTP', () => {

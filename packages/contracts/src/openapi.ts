@@ -3689,9 +3689,15 @@ export interface components {
             /** @description Mã số thuế (FR-BND-09). */
             taxCode?: string | null;
             businessLicenseNumber?: string | null;
-            /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả nguyên văn qua API. */
+            /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa. */
             hasPayoutAccount?: boolean;
-            /** @description Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho Super Admin đối soát và Brand Admin xem lại. */
+            /** @description Tài khoản đầy đủ, chỉ trả qua GET /brands/{id} cho PLATFORM_SUPER_ADMIN thuộc nền tảng để xác minh pháp nhân. Không trả trong danh sách, hồ sơ thương hiệu hoặc audit log. */
+            payoutAccount?: {
+                bankCode: string;
+                accountNumber: string;
+                accountHolder: string;
+            } | null;
+            /** @description Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho Brand Admin xem lại và các phản hồi không chứa tài khoản đầy đủ. */
             payoutAccountMasked?: {
                 bankCode?: string;
                 maskedAccountNumber?: string;
@@ -3707,7 +3713,7 @@ export interface components {
         BrandLegalProfileUpdate: {
             taxCode: string;
             businessLicenseNumber?: string;
-            /** @description Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn. */
+            /** @description Lưu mã hóa tầng ứng dụng; chỉ Super Admin xem đầy đủ qua chi tiết thương hiệu. */
             payoutAccount?: {
                 bankCode: string;
                 accountNumber: string;
@@ -3792,6 +3798,19 @@ export interface components {
             defaultPrice: components["schemas"]["Money"];
             currency?: components["schemas"]["Currency"];
             fullBottleRetailPrice?: components["schemas"]["Money"];
+            fullBottleVolumeMl: number;
+        };
+        ProductUpdate: {
+            name?: string;
+            description?: string | null;
+            fragranceNotes?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: uri */
+            imageUrl?: string | null;
+            defaultPrice?: components["schemas"]["Money"];
+            currency?: components["schemas"]["Currency"];
+            fullBottleRetailPrice?: components["schemas"]["Money"] | null;
             fullBottleVolumeMl?: number;
         };
         Location: {
@@ -4591,6 +4610,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @description Tổng declaredBottleVolumeMl × declaredQuantity phải tối thiểu 500 ml. */
         ShipmentDeclarationCreate: {
             /** Format: uuid */
             fragranceProductId: string;
@@ -6383,7 +6403,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductCreate"];
+                "application/json": components["schemas"]["ProductUpdate"];
             };
         };
         responses: {
