@@ -19,3 +19,4 @@ export {
   LoggingEmailVerificationSender,
   type EmailVerificationSender,
 } from './email-verification-sender.js';
+export { BRAND_SIGNUP_LISTENER, type BrandSignupListener } from './brand-signup-listener.js';

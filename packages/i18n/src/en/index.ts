@@ -261,6 +261,18 @@ export const en: SameKeysAs<typeof vi> = {
     logoFileRequired: 'Choose an image file for the logo',
     logoTooLarge: 'The logo is larger than {maxMb} MB',
     logoUnsupported: 'Only valid JPEG, PNG or WebP images are accepted for the logo',
+    newBrandRegisteredSubject: 'New brand registered: {brand}',
+    newBrandRegisteredContent:
+      'The brand {brand} ({email}) has signed up and verified its email. It can rent slots right ' +
+      'away; its legal entity must be verified before the first revenue payout.',
+    legalProfileSubmittedSubject: '{brand} is waiting for legal verification',
+    legalProfileSubmittedContent:
+      'The brand {brand} has submitted its legal profile (tax code {taxCode}). ' +
+      'Review it and record the verification so the brand can receive revenue payouts.',
+    legalVerifiedSubject: 'Legal entity of {brand} verified',
+    legalVerifiedContent:
+      'The platform has verified the legal profile of {brand}. Locked revenue payouts will be ' +
+      'transferred to the payout account the brand declared.',
   },
 
   prd: {
@@ -1944,6 +1956,10 @@ export const en: SameKeysAs<typeof vi> = {
     newShipmentSubject: 'New shipment declaration: {product}',
     newShipmentContent:
       'A brand has declared {quantity} bottles of {product} on the way to the warehouse.',
+    authenticitySubmittedSubject: 'Batch {batch} is waiting for authenticity review',
+    authenticitySubmittedContent:
+      'A brand has submitted authenticity documents for batch {batch} ({product}). ' +
+      'Bottles of this batch cannot be installed until the documents are approved.',
     authenticityApprovedSubject: 'Batch {batch} authenticity approved',
     authenticityApprovedContent:
       'The authenticity documents of batch {batch} ({product}) were approved. Its bottles can now be installed.',

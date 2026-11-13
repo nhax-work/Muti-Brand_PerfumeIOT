@@ -661,6 +661,49 @@ export class AlrQueries {
     return rows[0]?.inserted === true;
   }
 
+  /**
+   * Tài khoản nền tảng ACTIVE đang giữ quyền `permission` qua bất kỳ vai trò nào. Quyền cấp theo dữ
+   * liệu (`role_permissions`), nên người nhận đi theo việc ai được phép xử lý — không gắn cứng mã
+   * vai trò.
+   */
+  async activePlatformUserIdsWithPermission(
+    permission: string,
+    executor: Executor,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .select('u.id')
+      .where('u.status', '=', 'ACTIVE')
+      .where('u.brand_id', 'is', null)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('user_roles as ur')
+            .innerJoin('role_permissions as rp', 'rp.role_id', 'ur.role_id')
+            .innerJoin('permissions as p', 'p.id', 'rp.permission_id')
+            .select('ur.id')
+            .whereRef('ur.user_id', '=', 'u.id')
+            .where('p.code', '=', permission),
+        ),
+      )
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /** Thương hiệu của tài khoản vừa xác minh email — null nếu không phải tài khoản thương hiệu. */
+  async findBrandOfUser(
+    userId: string,
+    executor: Executor,
+  ): Promise<{ brandId: string; brandName: string; email: string } | null> {
+    const row = await executor
+      .selectFrom('users as u')
+      .innerJoin('brands as b', 'b.id', 'u.brand_id')
+      .select(['b.id', 'b.name', 'u.email'])
+      .where('u.id', '=', userId)
+      .executeTakeFirst();
+    return row ? { brandId: row.id, brandName: row.name, email: String(row.email) } : null;
+  }
+
   /** Thông báo trong ứng dụng cho từng người nhận — hiện ngay nên ghi SENT luôn. */
   async insertInAppForUsers(
     notification: UserNotification,

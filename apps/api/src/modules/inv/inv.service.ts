@@ -58,6 +58,8 @@ export type BottleHistoryEntry = Schema<'AuditLogEntry'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
+/** Quyền duyệt giấy tờ chính hãng của lô (FR-INV-34) — người nhận thông báo lô chờ duyệt. */
+const INVENTORY_VERIFY = 'inventory.verify';
 /** `bottles.identifier varchar(150)`. */
 const BOTTLE_IDENTIFIER_MAX_LENGTH = 150;
 /** Số thứ tự chai trong mã tự sinh đệm 0 ít nhất tới 3 chữ số: `…-001` (ADR-0025). */
@@ -385,6 +387,21 @@ export class InvService {
           after: { authenticityStatus: 'PENDING', documentType },
         },
         tx,
+      );
+      // Lô chưa duyệt thì chai không lắp được (FR-INV-34) — báo người duyệt ngay.
+      const detail = (await this.queries.findBatch(batch.id, scope, tx))!;
+      const params = { batch: detail.batchNumber, product: detail.productName };
+      await this.alr.notifyPermissionHolders(
+        tx,
+        {
+          brandId: batch.brandId,
+          type: 'BATCH_AUTHENTICITY_SUBMITTED',
+          subject: translate(DEFAULT_LOCALE, 'inv.authenticitySubmittedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'inv.authenticitySubmittedContent', params),
+          referenceId: batch.id,
+          at: now,
+        },
+        INVENTORY_VERIFY,
       );
     });
     return toBatchDto((await this.queries.findBatch(batchId, scope))!);

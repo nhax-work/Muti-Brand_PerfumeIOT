@@ -714,6 +714,65 @@ describe('ADR-0004 — tài khoản INVITED và đổi mật khẩu', () => {
       await expect(auth.verifyEmail(rawToken)).resolves.toBeUndefined();
     });
 
+    it('test_FR_USR_07_verify_email_notifies_signup_listener_once — báo thương hiệu mới một lần', async () => {
+      const rawToken = 'listener-verification-token';
+      queries.addVerification(
+        'usr-listener',
+        'listener@test.local',
+        hashVerificationToken(rawToken),
+        new Date(clock.now().getTime() + 24 * 3600_000),
+      );
+      const calls: string[] = [];
+      const listener = {
+        onBrandEmailVerified: async (userId: string) => {
+          calls.push(userId);
+        },
+      };
+      const withListener = new AuthService(
+        queries,
+        audit,
+        loader,
+        tokens,
+        config,
+        clock,
+        undefined,
+        listener,
+      );
+
+      await withListener.verifyEmail(rawToken);
+      await withListener.verifyEmail(rawToken);
+
+      expect(calls).toEqual(['usr-listener']);
+    });
+
+    it('test_FR_USR_07_verify_email_survives_listener_failure — lỗi báo tin không hỏng xác minh', async () => {
+      const rawToken = 'failing-listener-token';
+      queries.addVerification(
+        'usr-failing-listener',
+        'failing@test.local',
+        hashVerificationToken(rawToken),
+        new Date(clock.now().getTime() + 24 * 3600_000),
+      );
+      const failing = {
+        onBrandEmailVerified: async () => {
+          throw new Error('db down');
+        },
+      };
+      const withListener = new AuthService(
+        queries,
+        audit,
+        loader,
+        tokens,
+        config,
+        clock,
+        undefined,
+        failing,
+      );
+
+      await expect(withListener.verifyEmail(rawToken)).resolves.toBeUndefined();
+      expect(queries.verifications.get('usr-failing-listener')!.verifiedAt).not.toBeNull();
+    });
+
     it('test_FR_USR_07_current_user_reports_pending_verification_until_verified', async () => {
       // ADR-0021: CurrentUser báo chưa xác minh để giao diện nhắc trên mọi trang.
       const user = addUser({ email: 'pending@test.local', roles: ['BRAND_ADMIN'] });

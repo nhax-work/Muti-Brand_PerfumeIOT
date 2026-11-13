@@ -6,7 +6,7 @@
  * Nhờ vậy unit test khởi tạo service trực tiếp với các phụ thuộc giả, không cần dựng server.
  */
 
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type {
   BrandRegistered,
   BrandRegistration,
@@ -43,6 +43,7 @@ import {
   EMAIL_VERIFICATION_SENDER,
   type EmailVerificationSender,
 } from './email-verification-sender.js';
+import { BRAND_SIGNUP_LISTENER, type BrandSignupListener } from './brand-signup-listener.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
 import {
   hashRefreshToken,
@@ -83,6 +84,7 @@ type Audit = Pick<AuditService, 'log'>;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger('Auth');
   /** FR-USR-06: theo IP. */
   private readonly registerLimiter: PerMinuteRateLimiter;
   /** FR-USR-07: gửi lại mã, theo tài khoản — dùng chung ngưỡng với đăng ký. */
@@ -98,6 +100,9 @@ export class AuthService {
     @Optional()
     @Inject(EMAIL_VERIFICATION_SENDER)
     private emailSender?: EmailVerificationSender,
+    @Optional()
+    @Inject(BRAND_SIGNUP_LISTENER)
+    private readonly signupListener?: BrandSignupListener,
   ) {
     const limit = () => config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN');
     this.registerLimiter = new PerMinuteRateLimiter(clock, limit);
@@ -431,6 +436,13 @@ export class AuthService {
       targetId: record.userId,
       metadata: { email: record.email },
     });
+
+    // Báo Super Admin có thương hiệu mới. Xác minh đã ghi xong — lỗi báo tin chỉ ghi log.
+    try {
+      await this.signupListener?.onBrandEmailVerified(record.userId, now);
+    } catch (err: unknown) {
+      this.logger.warn(`Không báo được thương hiệu mới đăng ký: ${String(err)}`);
+    }
   }
 
   /**

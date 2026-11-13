@@ -118,13 +118,39 @@ class FakeBndQueries {
 
   async verifyLegal(id: string, adminId: string, verifiedAt: Date) {
     const b = this.brands.get(id);
-    if (!b) return;
+    if (!b || b.legalVerifiedAt !== null) return false;
     this.brands.set(id, {
       ...b,
       legalVerifiedAt: verifiedAt,
       legalVerifiedBy: adminId,
       updatedAt: verifiedAt,
     });
+    return true;
+  }
+
+  /** Bộ nhớ không có transaction thật — chạy thẳng, executor không dùng tới. */
+  async transaction<T>(work: (tx: never) => Promise<T>): Promise<T> {
+    return work(undefined as never);
+  }
+}
+
+/** Ghi lại thông báo service gửi đi — thay AlrService. */
+class FakeNotifier {
+  toPermission: { permission: string; type: string; brandId: string; content: string }[] = [];
+  toBrandAdmins: { type: string; brandId: string; content: string }[] = [];
+
+  async notifyPermissionHolders(
+    _tx: unknown,
+    n: { type: string; brandId: string; content: string },
+    permission: string,
+  ) {
+    this.toPermission.push({ permission, type: n.type, brandId: n.brandId, content: n.content });
+    return 1;
+  }
+
+  async notifyBrandAdmins(_tx: unknown, n: { type: string; brandId: string; content: string }) {
+    this.toBrandAdmins.push({ type: n.type, brandId: n.brandId, content: n.content });
+    return 1;
   }
 }
 
@@ -165,6 +191,7 @@ const brandAdmin: AuthenticatedUser = {
 
 let queries: FakeBndQueries;
 let audit: FakeAudit;
+let notifier: FakeNotifier;
 let service: BndService;
 const fakeKey = Buffer.alloc(32, 7);
 const fakeClock = { now: () => new Date('2026-10-19T10:00:00Z') };
@@ -198,7 +225,14 @@ function bearer(userId: string): Record<string, string> {
 beforeEach(() => {
   queries = new FakeBndQueries();
   audit = new FakeAudit();
-  service = new BndService(queries, audit, { refundAccountEncKey: fakeKey }, fakeClock);
+  notifier = new FakeNotifier();
+  service = new BndService(
+    queries,
+    audit,
+    { refundAccountEncKey: fakeKey },
+    fakeClock,
+    notifier as never,
+  );
 });
 
 describe('BndService — FR-BND-01: Tạo thương hiệu', () => {
@@ -395,6 +429,24 @@ describe('BndService — FR-BND-09: Brand Admin khai hồ sơ pháp nhân & tài
     expect(resetRecord?.legalVerifiedBy).toBeNull();
   });
 
+  it('test_FR_BND_09_legal_profile_notifies_brand_managers — báo người có brand.manage', async () => {
+    const created = await service.create(admin, { code: 'LEGAL4', name: 'Huong Thom' });
+    await service.updateMyBrandLegalProfile(
+      { ...brandAdmin, brandId: created.id },
+      { taxCode: '0312345678' },
+    );
+
+    expect(notifier.toPermission).toEqual([
+      {
+        permission: 'brand.manage',
+        type: 'BRAND_LEGAL_PROFILE_SUBMITTED',
+        brandId: created.id,
+        content: expect.stringContaining('0312345678'),
+      },
+    ]);
+    expect(notifier.toBrandAdmins).toEqual([]);
+  });
+
   it('test_FR_BND_09_forbidden_for_non_brand_admin', async () => {
     await expect(
       service.updateMyBrandLegalProfile(admin, {
@@ -454,6 +506,26 @@ describe('BndService — FR-BND-10: Super Admin xác minh pháp nhân thương h
     expect(auditEntry).toBeDefined();
     expect(auditEntry?.targetId).toBe(created.id);
     expect(auditEntry?.actorId).toBe(admin.userId);
+  });
+
+  it('test_FR_BND_10_verify_notifies_brand_admins_once — xác minh lại không báo lần hai', async () => {
+    const created = await service.create(admin, { code: 'VERIFY4', name: 'Verify Notice' });
+    await service.updateMyBrandLegalProfile(
+      { ...brandAdmin, brandId: created.id },
+      { taxCode: '0123456789' },
+    );
+
+    await service.verifyBrandLegal(admin, created.id);
+    await service.verifyBrandLegal(admin, created.id);
+
+    expect(notifier.toBrandAdmins).toEqual([
+      {
+        type: 'BRAND_LEGAL_VERIFIED',
+        brandId: created.id,
+        content: expect.stringContaining('Verify Notice'),
+      },
+    ]);
+    expect(audit.entries.filter((e) => e.action === 'bnd.legal.verified')).toHaveLength(1);
   });
 
   it('test_FR_BND_10_verify_fails_without_tax_code', async () => {

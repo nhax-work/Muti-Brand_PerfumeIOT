@@ -64,6 +64,10 @@ export const inv = {
 
   newShipmentSubject: 'Khai báo gửi hàng mới: {product}',
   newShipmentContent: 'Thương hiệu vừa khai báo gửi {quantity} chai {product} đến kho.',
+  authenticitySubmittedSubject: 'Lô {batch} chờ duyệt giấy tờ chính hãng',
+  authenticitySubmittedContent:
+    'Thương hiệu vừa nộp giấy tờ chính hãng cho lô {batch} ({product}). ' +
+    'Chai của lô chưa lắp được vào slot cho tới khi giấy tờ được duyệt.',
   authenticityApprovedSubject: 'Lô {batch} đã được duyệt giấy tờ chính hãng',
   authenticityApprovedContent:
     'Giấy tờ chính hãng của lô {batch} ({product}) đã được duyệt. Chai của lô này lắp được vào slot.',
