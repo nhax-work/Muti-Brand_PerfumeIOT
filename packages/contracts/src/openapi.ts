@@ -4067,6 +4067,8 @@ export interface components {
             machineId: string;
             machineDisplayName?: string;
             slotNumber: number;
+            /** @description Tổng số slot đang lắp trên máy (không tính slot đã xóa), để màn thuê vẽ đủ dãy ô như máy thật; ô không có trong danh sách trống hiện "Không khả dụng". Chỉ là con số của máy, không nói slot nào của ai (BR-012). */
+            machineSlotCount: number;
             /** Format: uuid */
             locationId?: string;
             locationName: string;

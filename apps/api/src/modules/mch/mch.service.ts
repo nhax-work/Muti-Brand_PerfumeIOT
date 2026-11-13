@@ -91,6 +91,7 @@ function toAvailableSlotDto(r: AvailableSlotRecord): AvailableSlotDto {
     machineId: r.machineId,
     machineDisplayName: r.machineDisplayName,
     slotNumber: r.slotNumber,
+    machineSlotCount: r.machineSlotCount,
     locationId: r.locationId,
     locationName: r.locationName,
     monthlyRentPrice: r.monthlyRentPrice,

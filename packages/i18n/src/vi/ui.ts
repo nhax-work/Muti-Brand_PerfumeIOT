@@ -230,7 +230,7 @@ export const ui = {
   // Mua gói thuê slot & quản lý hóa đơn thương hiệu (TV3 tuần 5)
   rentals: 'Gói thuê & Hóa đơn',
   availableRentals: 'Thuê slot mới',
-  availableSlotsTitle: 'Thuê Slot Trống',
+  availableSlotsTitle: 'Thuê slot trống',
   availableSlotsSubtitle:
     'Chọn slot trống tại các máy Kiosk, chọn gói thuê và gói bảo quản phù hợp.',
   selectPackage: 'Chọn gói thuê',
@@ -1316,4 +1316,20 @@ export const ui = {
   shipmentPhotosLocked: 'Kho đã nhận hàng, ảnh được giữ làm bằng chứng và không sửa được nữa.',
   declareShipmentSubmit: 'Khai báo',
   receiveShipmentSubmit: 'Xác nhận tiếp nhận',
+  agreementPublishedOn: 'Công bố lúc {time}',
+  agreementContentHint:
+    'Mỗi điều mở đầu bằng một dòng "ĐIỀU 1: Tên điều"; mục đánh số viết "1. …"; các dòng "Nhãn: giá trị" ở đầu văn bản hiện thành thông tin chung.',
+  agreementPreview: 'Xem trước bản hiển thị',
+  agreementPreviewEmpty: 'Nhập nội dung điều khoản để xem trước.',
+  rentFreeOfTotal: '{free}/{total} ô trống',
+  rentPriceFrom: 'Từ {price}/tháng',
+  rentSelectedOnMachine: 'Đã chọn {count}',
+  rentSlotFree: 'Còn trống',
+  rentSlotSelected: 'Đã chọn',
+  rentSlotUnavailable: 'Không khả dụng',
+  rentPickHint: 'Bấm vào ô còn trống để chọn; chọn được nhiều ô trên nhiều máy.',
+  rentMachinesCount: '{count} máy đang có {slots} slot trống — bấm vào máy để xem dãy ô.',
+  rentConfigTitle: 'Gói thuê cho slot đã chọn',
+  rentCartEmpty: 'Chưa chọn slot nào. Mở một máy và bấm vào ô còn trống.',
+  rentRemoveSlot: 'Bỏ chọn slot',
 } as const;

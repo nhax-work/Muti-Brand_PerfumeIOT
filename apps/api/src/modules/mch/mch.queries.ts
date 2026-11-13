@@ -88,6 +88,8 @@ export interface AvailableSlotRecord {
   readonly slotNumber: number;
   readonly machineId: string;
   readonly machineDisplayName: string;
+  /** Số slot chưa xóa của máy — màn thuê vẽ đủ dãy ô (FR-SLT-19). */
+  readonly machineSlotCount: number;
   readonly locationId: string;
   readonly locationName: string;
   readonly monthlyRentPrice: string;
@@ -638,6 +640,13 @@ export class MchQueries {
         's.slot_number',
         'm.id as machine_id',
         'm.display_name as machine_display_name',
+        (eb) =>
+          eb
+            .selectFrom('machine_slots as ms')
+            .select((sub) => sub.fn.countAll<string>().as('n'))
+            .whereRef('ms.machine_id', '=', 'm.id')
+            .where('ms.status', '<>', 'DISABLED')
+            .as('machine_slot_count'),
         'l.id as location_id',
         'l.name as location_name',
         's.monthly_rent_price',
@@ -655,6 +664,7 @@ export class MchQueries {
         slotNumber: r.slot_number,
         machineId: r.machine_id,
         machineDisplayName: r.machine_display_name,
+        machineSlotCount: Number(r.machine_slot_count),
         locationId: r.location_id,
         locationName: r.location_name,
         // Câu WHERE đã loại slot chưa có giá.
