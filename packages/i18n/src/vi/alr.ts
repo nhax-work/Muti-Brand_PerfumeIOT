@@ -9,6 +9,9 @@ export const alr = {
   cannotAssignClosed: 'Không thể phân công cảnh báo đã đóng.',
   cannotResolveClosed: 'Không thể xử lý cảnh báo đã đóng.',
   machineOfflineAlertTitle: 'Máy mất kết nối',
+  // ADR-0029: phân công cảnh báo
+  alertAssignedSubject: 'Bạn được giao xử lý cảnh báo: {title}',
+  alertAssignedContent: 'Bạn được giao cảnh báo mức {severity} tại máy {machine}: {title}.',
   // FR-ALR-10: báo Brand Admin cảnh báo ảnh hưởng slot của mình
   alertForBrandSubject: 'Cảnh báo tại máy {machine}: {title}',
   alertForBrandContent:

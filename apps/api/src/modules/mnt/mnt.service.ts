@@ -4,10 +4,13 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError } from '../../shared/errors/index.js';
+import { formatVnDateTime } from '../../shared/format/index.js';
+import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   MntQueries,
@@ -69,6 +72,7 @@ export class MntService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(DATABASE) private readonly db: Database,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AlrService) private readonly alr: Pick<AlrService, 'notifyUsers'>,
   ) {}
 
   async listTickets(filter: TicketFilter): Promise<{
@@ -175,6 +179,34 @@ export class MntService {
       before: { assignedTo: ticket.assignedTo, status: ticket.status },
       after: { assignedTo: updated.assignedTo, status: updated.status },
     });
+
+    // ADR-0029: báo người được giao — phiếu bảo trì thuộc máy, không gắn thương hiệu. Module MNT ghi
+    // ngoài transaction (như audit ở trên), nên thông báo ghi ngay sau khi phân công thành công.
+    if (input.assignedTo !== actor.userId && input.assignedTo !== ticket.assignedTo) {
+      const machine = await this.db
+        .selectFrom('machines')
+        .select('display_name')
+        .where('id', '=', updated.machineId)
+        .executeTakeFirst();
+      const params = {
+        ticket: updated.ticketNumber,
+        machine: machine?.display_name ?? updated.machineId,
+        priority: translate(DEFAULT_LOCALE, `ticketPriority.${updated.priority}`),
+        deadline: updated.dueAt ? formatVnDateTime(updated.dueAt) : '—',
+      };
+      await this.alr.notifyUsers(
+        this.db,
+        {
+          brandId: updated.brandId,
+          type: 'MAINTENANCE_TICKET_ASSIGNED',
+          subject: translate(DEFAULT_LOCALE, 'mnt.ticketAssignedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'mnt.ticketAssignedContent', params),
+          referenceId: updated.id,
+          at: this.clock.now(),
+        },
+        [input.assignedTo],
+      );
+    }
 
     return toTicketDto(updated);
   }

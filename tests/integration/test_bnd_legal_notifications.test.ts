@@ -82,9 +82,9 @@ describe('Thông báo hồ sơ pháp nhân (FR-BND-09, FR-BND-10)', () => {
     });
 
     const first = await call('POST', url, { headers: await headers() });
-    expect(first.statusCode, first.body).toBe(201);
+    expect(first.statusCode, first.body).toBe(200);
     const again = await call('POST', url, { headers: await headers() });
-    expect(again.statusCode).toBe(201);
+    expect(again.statusCode).toBe(200);
 
     const rows = await notices('BRAND_LEGAL_VERIFIED', fx.brandA);
     expect(rows.map((r) => [r.email, r.channel])).toEqual([

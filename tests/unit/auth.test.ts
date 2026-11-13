@@ -18,7 +18,9 @@ import { AuthService } from '../../apps/api/src/modules/auth/auth.service.js';
 import {
   LOGIN_FAILED,
   LOGIN_SUCCEEDED,
+  PASSWORD_RESET,
   type LoginUserRow,
+  type PasswordResetRow,
   type PrincipalRow,
   type SessionRow,
   type UserStatus,
@@ -87,7 +89,10 @@ class FakeQueries {
   }
   async recentLoginOutcomes(userId: string, limit: number) {
     return this.loginLog
-      .filter((e) => e.userId === userId && [LOGIN_SUCCEEDED, LOGIN_FAILED].includes(e.action))
+      .filter(
+        (e) =>
+          e.userId === userId && [LOGIN_SUCCEEDED, LOGIN_FAILED, PASSWORD_RESET].includes(e.action),
+      )
       .sort((a, b) => b.at.getTime() - a.at.getTime())
       .slice(0, limit)
       .map((e) => ({ action: e.action, at: e.at }));
@@ -229,6 +234,30 @@ class FakeQueries {
       u.passwordHash = passwordHash;
       u.status = status;
     }
+  }
+
+  // Quên mật khẩu (ADR-0030): mỗi tài khoản một dòng, như uq_password_reset_user.
+  resets = new Map<
+    string,
+    { id: string; tokenHash: string; expiresAt: Date; usedAt: Date | null }
+  >();
+
+  async upsertPasswordResetToken(userId: string, tokenHash: string, expiresAt: Date) {
+    this.resets.set(userId, { id: `pr-${userId}`, tokenHash, expiresAt, usedAt: null });
+  }
+  async findPasswordResetByTokenHash(tokenHash: string): Promise<PasswordResetRow | null> {
+    for (const [userId, r] of this.resets) {
+      if (r.tokenHash !== tokenHash) continue;
+      const u = this.users.get(userId)!;
+      return { ...r, userId, brandId: u.brandId, userStatus: u.status };
+    }
+    return null;
+  }
+  async consumePasswordResetToken(id: string, now: Date) {
+    const r = [...this.resets.values()].find((x) => x.id === id);
+    if (!r || r.usedAt !== null || r.expiresAt <= now) return false;
+    r.usedAt = now;
+    return true;
   }
 }
 
@@ -573,6 +602,164 @@ describe('FR-AUTH-10 — thu hồi phiên khi vô hiệu hóa tài khoản', () 
     clock.advanceMinutes(revokeMaxMinutes + 0.1);
 
     await expectAppError(loader.load(claims), 'UNAUTHENTICATED');
+  });
+});
+
+describe('FR-AUTH-13 — quên mật khẩu qua email (ADR-0030)', () => {
+  const NEW_PASSWORD = 'brand-new-password-9';
+  let sent: { email: string; token: string }[];
+  let resetAuth: AuthService;
+
+  beforeEach(() => {
+    sent = [];
+    const sender = {
+      sendPasswordResetEmail: async (email: string, token: string) => {
+        sent.push({ email, token });
+      },
+    };
+    resetAuth = new AuthService(
+      queries,
+      audit,
+      loader,
+      tokens,
+      config,
+      clock,
+      undefined,
+      undefined,
+      sender,
+    );
+  });
+
+  /** Gửi email là việc nền (không chờ) — đợi một nhịp cho test double nhận được. */
+  async function requestReset(email: string, ip = origin.ip): Promise<void> {
+    await resetAuth.requestPasswordReset(email, { ...origin, ip });
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+
+  it('test_FR_AUTH_13_reset_password_with_emailed_token', async () => {
+    const user = addUser({ email: 'ops@scentstation.local' });
+    const pair = await resetAuth.login('ops@scentstation.local', PASSWORD, origin);
+
+    await requestReset('OPS@scentstation.local');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.email).toBe('ops@scentstation.local');
+
+    await resetAuth.resetPassword(sent[0]!.token, NEW_PASSWORD, origin);
+
+    // Mật khẩu cũ hết dùng được, mật khẩu mới đăng nhập được, mọi phiên cũ bị thu hồi.
+    await expectAppError(
+      resetAuth.login('ops@scentstation.local', PASSWORD, origin),
+      'INVALID_CREDENTIALS',
+    );
+    await expect(
+      resetAuth.login('ops@scentstation.local', NEW_PASSWORD, origin),
+    ).resolves.toBeTruthy();
+    await expectAppError(resetAuth.refresh(pair.refreshToken), 'UNAUTHENTICATED');
+    expect(audit.entries.some((e) => e.action === PASSWORD_RESET && e.targetId === user.id)).toBe(
+      true,
+    );
+  });
+
+  it('test_FR_AUTH_13_unknown_or_disabled_email_same_response', async () => {
+    addUser({ email: 'gone@scentstation.local', status: 'DISABLED' });
+    addUser({ email: 'locked@scentstation.local', status: 'LOCKED' });
+
+    // AC: không lộ email nào có tài khoản — cùng kết quả, không gửi thư.
+    await expect(requestReset('nobody@scentstation.local')).resolves.toBeUndefined();
+    await expect(requestReset('gone@scentstation.local')).resolves.toBeUndefined();
+    await expect(requestReset('locked@scentstation.local')).resolves.toBeUndefined();
+    expect(sent).toEqual([]);
+  });
+
+  it('test_FR_AUTH_13_token_single_use_and_expires', async () => {
+    addUser({ email: 'ops@scentstation.local' });
+    await requestReset('ops@scentstation.local');
+    const token = sent[0]!.token;
+
+    await resetAuth.resetPassword(token, NEW_PASSWORD, origin);
+    await expectAppError(
+      resetAuth.resetPassword(token, 'another-pass-1', origin),
+      'VALIDATION_ERROR',
+    );
+
+    await requestReset('ops@scentstation.local');
+    clock.advanceMinutes(config.constraint('PASSWORD_RESET_TOKEN_TTL_MIN') + 1);
+    await expectAppError(
+      resetAuth.resetPassword(sent[1]!.token, 'another-pass-1', origin),
+      'VALIDATION_ERROR',
+    );
+    await expectAppError(
+      resetAuth.resetPassword('not-a-real-token-at-all', 'another-pass-1', origin),
+      'VALIDATION_ERROR',
+    );
+  });
+
+  it('test_FR_AUTH_13_new_request_replaces_old_token', async () => {
+    addUser({ email: 'ops@scentstation.local' });
+    await requestReset('ops@scentstation.local');
+    await requestReset('ops@scentstation.local');
+
+    await expectAppError(
+      resetAuth.resetPassword(sent[0]!.token, NEW_PASSWORD, origin),
+      'VALIDATION_ERROR',
+    );
+    await expect(resetAuth.resetPassword(sent[1]!.token, NEW_PASSWORD, origin)).resolves.toBe(
+      undefined,
+    );
+  });
+
+  it('test_FR_AUTH_13_invited_becomes_active_and_disabled_cannot_reset', async () => {
+    const invited = addUser({ email: 'new@scentstation.local', status: 'INVITED' });
+    await requestReset('new@scentstation.local');
+    await resetAuth.resetPassword(sent[0]!.token, NEW_PASSWORD, origin);
+    expect(queries.users.get(invited.id)!.status).toBe('ACTIVE');
+
+    // Mã còn hạn nhưng tài khoản bị vô hiệu hóa sau khi gửi → không dùng được.
+    const ops = addUser({ email: 'ops@scentstation.local' });
+    await requestReset('ops@scentstation.local');
+    queries.users.get(ops.id)!.status = 'DISABLED';
+    await expectAppError(
+      resetAuth.resetPassword(sent[1]!.token, NEW_PASSWORD, origin),
+      'VALIDATION_ERROR',
+    );
+  });
+
+  it('test_FR_AUTH_13_reset_breaks_login_lockout', async () => {
+    addUser({ email: 'ops@scentstation.local' });
+    for (let i = 0; i < config.constraint('LOGIN_LOCKOUT_ATTEMPTS'); i++) {
+      await resetAuth.login('ops@scentstation.local', 'wrong-password', origin).catch(() => {});
+    }
+    await expectAppError(
+      resetAuth.login('ops@scentstation.local', PASSWORD, origin),
+      'ACCOUNT_LOCKED',
+    );
+
+    // Đặt lại mật khẩu xảy ra sau các lần sai — vẫn còn trong cửa sổ khóa LOGIN_LOCKOUT_MIN.
+    clock.advanceMinutes(1);
+    await requestReset('ops@scentstation.local');
+    await resetAuth.resetPassword(sent[0]!.token, NEW_PASSWORD, origin);
+    await expect(
+      resetAuth.login('ops@scentstation.local', NEW_PASSWORD, origin),
+    ).resolves.toBeTruthy();
+  });
+
+  it('test_FR_AUTH_13_rate_limited_per_ip_and_per_email', async () => {
+    addUser({ email: 'ops@scentstation.local' });
+    const limit = config.constraint('PASSWORD_RESET_RATE_LIMIT_PER_MIN');
+
+    // Theo email: đổi IP mỗi lần vẫn bị chặn.
+    for (let i = 0; i < limit; i++) await requestReset('ops@scentstation.local', `10.0.0.${i}`);
+    await expectAppError(
+      resetAuth.requestPasswordReset('ops@scentstation.local', { ...origin, ip: '10.0.1.1' }),
+      'RATE_LIMITED',
+    );
+
+    // Theo IP: đổi email mỗi lần vẫn bị chặn.
+    for (let i = 0; i < limit; i++) await requestReset(`probe${i}@x.local`, '10.9.9.9');
+    await expectAppError(
+      resetAuth.requestPasswordReset('another@x.local', { ...origin, ip: '10.9.9.9' }),
+      'RATE_LIMITED',
+    );
   });
 });
 

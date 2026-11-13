@@ -1,6 +1,6 @@
 # FR-AUTH — Xác thực và phân quyền
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A1 · 12 FR
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A1 · 13 FR (FR-AUTH-13 thêm ngày 2026-11-13 theo ADR-0030)
 > Trạng thái AC: **hoàn thành**
 > Phụ trách: TV1
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
@@ -308,3 +308,27 @@ trên slot đó trước khi mình thuê hay sau khi hóa đơn kết thúc.
 
 > **Ưu tiên S** — hiện thực sau tuần 9 nếu còn thời gian (`docs/FR_NFR_SCENTSTATION.md` Phần D).
 > Cột `user_roles.scope_type` và `scope_id` đã có sẵn trong lược đồ nên không cần migration khi làm.
+
+---
+
+## FR-AUTH-13 — Tự đặt lại mật khẩu qua email
+* **Statement:** Hệ thống phải cho phép người dùng tự đặt lại mật khẩu qua liên kết dùng một lần gửi tới email của tài khoản, không tiết lộ email nào có tài khoản.
+* **Traces:** BR-003 · **Priority:** M · ADR-0030
+* **API:** `POST /auth/forgot-password`, `POST /auth/reset-password`
+* **Acceptance criteria:**
+  * **AC1 (Gửi liên kết):** Given tài khoản `U` đang `ACTIVE` hoặc `INVITED`,
+    When gửi `POST /auth/forgot-password` với email của `U`,
+    Then hệ thống trả `204` và gửi email chứa liên kết `/reset-password?token=…`; chỉ lưu SHA-256 của mã, mã hết hạn sau `PASSWORD_RESET_TOKEN_TTL_MIN` phút.
+  * **AC2 (Không lộ tài khoản):** Given email không có tài khoản, hoặc tài khoản `DISABLED`/`LOCKED`,
+    When gửi yêu cầu,
+    Then hệ thống trả cùng `204` như AC1 và không gửi email nào.
+  * **AC3 (Đặt lại):** Given mã đúng, còn hạn, chưa dùng,
+    When gửi `POST /auth/reset-password` với mật khẩu mới tối thiểu 8 ký tự,
+    Then mật khẩu đổi, `U` chuyển `ACTIVE`, **mọi** phiên của `U` bị thu hồi, ghi AuditLog `auth.password.reset`, và chuỗi đăng nhập sai liên tiếp của FR-AUTH-03 bị ngắt.
+  * **AC4 (Dùng một lần):** Given mã đã dùng, quá hạn, bị thay bởi yêu cầu mới hơn, hoặc tài khoản bị vô hiệu hóa sau khi gửi,
+    When đặt lại,
+    Then hệ thống trả `400 VALIDATION_ERROR` và không đổi gì.
+  * **AC5 (Giới hạn tần suất):** Given một IP hoặc một email đã gửi `PASSWORD_RESET_RATE_LIMIT_PER_MIN` yêu cầu trong một phút,
+    When gửi thêm,
+    Then hệ thống trả `429 RATE_LIMITED`.
+* **Test:** `tests/unit/auth.test.ts`, `tests/integration/test_auth_password_reset.test.ts` — các test `test_FR_AUTH_13_*`

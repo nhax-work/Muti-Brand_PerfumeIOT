@@ -355,6 +355,18 @@ body {
   margin-bottom: 16px;
 }
 
+/* Liên kết "Quên mật khẩu?" ngay dưới ô mật khẩu, kéo sát lên ô nhập. */
+.login-forgot {
+  margin: -16px 0 16px;
+  text-align: right;
+}
+
+/* Liên kết phụ dưới nút chính của các thẻ xác thực (quay lại đăng nhập…). */
+.login-links {
+  margin-top: 16px;
+  text-align: center;
+}
+
 /* =========================================================================
    PREMIUM UI COMPONENTS & MICRO-INTERACTIONS
    ========================================================================= */

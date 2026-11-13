@@ -352,6 +352,26 @@ export class AlrService implements BrandSignupListener {
         },
         tx,
       );
+      // ADR-0029: báo người được giao. Cảnh báo mức máy không có thương hiệu → thông báo nội bộ.
+      if (assignedTo !== actor.userId && assignedTo !== record.assignedTo) {
+        const params = {
+          title: record.title,
+          machine: await this.queries.machineName(record.machineId, tx),
+          severity: translate(DEFAULT_LOCALE, `alertSeverity.${record.severity}`),
+        };
+        await this.notifyUsers(
+          tx,
+          {
+            brandId: record.brandId,
+            type: 'ALERT_ASSIGNED',
+            subject: translate(DEFAULT_LOCALE, 'alr.alertAssignedSubject', params),
+            content: translate(DEFAULT_LOCALE, 'alr.alertAssignedContent', params),
+            referenceId: record.id,
+            at: now,
+          },
+          [assignedTo],
+        );
+      }
     });
     return this.getAlert(actor, id);
   }

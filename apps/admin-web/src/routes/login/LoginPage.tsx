@@ -48,6 +48,9 @@ export default function LoginPage() {
         >
           <Input.Password autoComplete="current-password" />
         </Form.Item>
+        <div className="login-forgot">
+          <Link to="/forgot-password">{t('ui.forgotPasswordLink')}</Link>
+        </div>
         <Button type="primary" htmlType="submit" block loading={login.isPending}>
           {t('ui.login')}
         </Button>

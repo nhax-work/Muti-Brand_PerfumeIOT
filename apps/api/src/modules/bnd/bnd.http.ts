@@ -186,6 +186,8 @@ export class BndController {
 
   /** FR-BND-10: Platform Super Admin ghi nhận đã xác minh pháp nhân. */
   @Post(':id/legal-verification')
+  // openapi.yaml trả 200 — NestJS mặc định 201 cho POST.
+  @HttpCode(200)
   @RequirePermissions(BRAND_MANAGE)
   @RequireReauth()
   verifyBrandLegal(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {

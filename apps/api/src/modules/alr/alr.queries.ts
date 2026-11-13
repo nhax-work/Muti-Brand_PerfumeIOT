@@ -58,7 +58,8 @@ export interface AlertFilter {
 
 export interface NotificationRecord {
   readonly id: string;
-  readonly brandId: string;
+  /** null = thông báo nội bộ nền tảng (ADR-0029). */
+  readonly brandId: string | null;
   readonly recipientUserId: string;
   readonly type: string;
   readonly channel: NotificationChannel;
@@ -105,7 +106,8 @@ export interface QueuedNotification {
 
 /** Thông báo trong ứng dụng gửi tới người nhận do module gọi tự chọn (không chỉ Brand Admin). */
 export interface UserNotification {
-  readonly brandId: string;
+  /** null = thông báo nội bộ nền tảng, không gắn thương hiệu (ADR-0029). */
+  readonly brandId: string | null;
   readonly type: string;
   readonly subject: string;
   readonly content: string;
@@ -724,12 +726,7 @@ export class AlrQueries {
       .where('status', 'in', ['OPEN', 'ACKNOWLEDGED'])
       .executeTakeFirst();
     const alertId = open?.id ?? null;
-    const machine = await executor
-      .selectFrom('machines')
-      .select('display_name')
-      .where('id', '=', alert.machineId)
-      .executeTakeFirst();
-    const machineName = machine?.display_name ?? alert.machineId;
+    const machineName = await this.machineName(alert.machineId, executor);
     if (alert.brandId) return { alertId, machineName, brandIds: [alert.brandId] };
 
     const rows = await executor
@@ -741,6 +738,16 @@ export class AlrQueries {
       .where('sr.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE'])
       .execute();
     return { alertId, machineName, brandIds: rows.map((r) => r.brand_id) };
+  }
+
+  /** Tên hiển thị của máy cho nội dung thông báo; không thấy máy thì dùng mã máy. */
+  async machineName(machineId: string, executor: Executor): Promise<string> {
+    const machine = await executor
+      .selectFrom('machines')
+      .select('display_name')
+      .where('id', '=', machineId)
+      .executeTakeFirst();
+    return machine?.display_name ?? machineId;
   }
 
   /** Thông báo trong ứng dụng cho từng người nhận — hiện ngay nên ghi SENT luôn. */
@@ -975,7 +982,7 @@ export class AlrQueries {
 
 function toRecord(r: {
   id: string;
-  brand_id: string;
+  brand_id: string | null;
   recipient_user_id: string;
   type: string;
   channel: string;

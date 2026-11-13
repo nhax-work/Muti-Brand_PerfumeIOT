@@ -68,6 +68,12 @@ export const en: SameKeysAs<typeof vi> = {
     verificationEmailSubject: 'Verify your ScentStation brand account',
     verificationEmailBody:
       'Welcome to ScentStation. Please click the following link to verify your email address: {link}. This link will expire in {hours} hours.',
+    passwordResetEmailSubject: 'Reset your ScentStation password',
+    passwordResetEmailBody:
+      'We received a request to reset the password of your ScentStation account. Click the following link to set a new password: {link}. The link works once and expires in {minutes} minutes. If you did not ask for this, ignore this email — your current password stays the same.',
+    invalidResetToken:
+      'This password reset link is invalid, expired or already used. Please request a new link.',
+    passwordResetRateLimited: 'Too many requests. Please try again in a minute.',
   },
 
   mch: {
@@ -107,6 +113,9 @@ export const en: SameKeysAs<typeof vi> = {
     cannotAssignClosed: 'Cannot assign a closed alert.',
     cannotResolveClosed: 'Cannot resolve a closed alert.',
     machineOfflineAlertTitle: 'Machine offline',
+    alertAssignedSubject: 'An alert has been assigned to you: {title}',
+    alertAssignedContent:
+      'You have been assigned a {severity} alert at machine {machine}: {title}.',
     alertForBrandSubject: 'Alert at machine {machine}: {title}',
     alertForBrandContent:
       'A {severity} alert was raised at machine {machine}: {title}. ' +
@@ -1040,6 +1049,22 @@ export const en: SameKeysAs<typeof vi> = {
     invalidToken: 'Verification link is missing a valid token.',
     resendVerification: 'Resend verification email',
     resendVerificationSuccess: 'Verification email resent. Please check your inbox.',
+    forgotPasswordLink: 'Forgot password?',
+    forgotPasswordTitle: 'Forgot password',
+    forgotPasswordDesc:
+      'Enter your sign-in email. If it belongs to an account, we will send a password reset link.',
+    sendResetLink: 'Send reset link',
+    forgotPasswordSentTitle: 'Check your inbox',
+    forgotPasswordSentDesc:
+      'If {email} has a ScentStation account, a password reset link has been sent to it. The link expires in {minutes} minutes.',
+    resetPasswordTitle: 'Set a new password',
+    resetPasswordSubmit: 'Set new password',
+    resetPasswordSuccessTitle: 'New password set',
+    resetPasswordSuccessDesc:
+      'Sign in with your new password. All previous sessions on other devices have been signed out.',
+    resetPasswordMissingToken:
+      'This password reset link is missing a valid token. Please request a new link.',
+    requestNewResetLink: 'Request a new link',
     // Framework agreement (ADR-0013)
     frameworkAgreementTitle: 'Master Framework Agreement',
     frameworkAgreementDesc:
@@ -2106,6 +2131,9 @@ export const en: SameKeysAs<typeof vi> = {
     postTestIncomplete:
       'Machine has an active ticket with incomplete post-maintenance checklist (PASS required to restore NORMAL)',
     ticketClosed: 'Maintenance ticket is closed',
+    ticketAssignedSubject: 'Maintenance ticket {ticket} has been assigned to you',
+    ticketAssignedContent:
+      'You have been assigned maintenance ticket {ticket} at machine {machine}, priority {priority}. Deadline: {deadline}.',
   },
 
   ticketStatus: {

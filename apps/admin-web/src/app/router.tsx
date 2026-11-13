@@ -26,6 +26,21 @@ export const router = createBrowserRouter([
           import('@/routes/verify-email/VerifyEmailPage').then((m) => ({ Component: m.default })),
       },
       {
+        // Quên mật khẩu (FR-AUTH-13, ADR-0030) — công khai, mở từ trang đăng nhập và từ email.
+        path: '/forgot-password',
+        lazy: () =>
+          import('@/routes/forgot-password/ForgotPasswordPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
+        path: '/reset-password',
+        lazy: () =>
+          import('@/routes/reset-password/ResetPasswordPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
+      {
         // Công khai: khách mở từ QR sự cố trên kiosk, không đăng nhập (ADR-0012).
         path: '/claim',
         lazy: () => import('@/routes/claim/ClaimPage').then((m) => ({ Component: m.default })),

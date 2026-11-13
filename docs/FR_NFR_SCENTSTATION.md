@@ -123,6 +123,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-AUTH-10 | Hệ thống phải thu hồi toàn bộ phiên đăng nhập đang hoạt động trong vòng 60 giây khi tài khoản bị vô hiệu hóa | BR-003 | M |
 | FR-AUTH-11 | Hệ thống phải cho phép Platform Super Admin thu hồi quyền truy cập của bất kỳ người dùng hoặc thiết bị nào | BR-003 | M |
 | FR-AUTH-12 | Hệ thống phải cho phép giới hạn phạm vi của Operations Staff theo danh sách địa điểm hoặc máy của nền tảng được phân công | BR-004 | S |
+| FR-AUTH-13 | Hệ thống phải cho phép người dùng tự đặt lại mật khẩu qua liên kết dùng một lần gửi tới email của tài khoản, không tiết lộ email nào có tài khoản | BR-003 | M |
 
 ## A2. FR-BND — Thương hiệu và cô lập dữ liệu
 
@@ -751,3 +752,10 @@ FR-EXP-19, FR-EXP-26, FR-IOT-04; bãi bỏ FR-INV-18, FR-INV-19 (mức S → X) 
 `LEAK_DETECT_THRESHOLD_PCT`. NFR-REL-06 giữ nguyên — cân 0,01g ở đó là dụng cụ kiểm thử trong phòng lab.
 Thống kê: S 24 → 22, tổng FR 320 → 318, mức X 7 → 9; INV 35 → 33. Contract (`schema.sql`, `openapi.yaml`,
 `mqtt.md`, `data-dictionary.md`) đã áp cùng migration `1791400000000_adr-0019-bo-load-cell.sql`.
+
+**Ghi chú bổ sung (2026-11-13).** Thêm FR-AUTH-13 (tự lấy lại mật khẩu qua email) theo
+`spec/decisions/0030-quen-mat-khau-qua-email.md` (**đề xuất**, chờ TV1 duyệt). ADR-0004 chọn mật khẩu
+tạm vì chưa có hạ tầng email; nay đã có (ADR-0013, ADR-0017). FR-USR-04 giữ nguyên. Thống kê: M +1,
+AUTH 12 → 13. Hằng `PASSWORD_RESET_TOKEN_TTL_MIN`, `PASSWORD_RESET_RATE_LIMIT_PER_MIN` đã thêm vào
+`spec/constraints.md`; không có mã lỗi mới. Contract áp cùng migration
+`1791700060000_adr-0030-quen-mat-khau.sql`.
