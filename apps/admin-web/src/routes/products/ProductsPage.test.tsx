@@ -44,7 +44,7 @@ vi.mock('./api', async () => ({
           defaultPrice: '35000.0000',
           currency: 'VND',
           fullBottleRetailPrice: '2400000.0000',
-          fullBottleVolumeMl: 50,
+          fullBottleVolumeMl: 500,
           imageUrl: 'https://pub-test.r2.dev/products/p-1-abc.webp',
           status: 'ACTIVE',
         },
@@ -84,6 +84,20 @@ afterEach(() => {
 });
 
 describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
+  it('chặn lưu sản phẩm có dung tích dưới 500 ml', async () => {
+    renderScreen(<ProductsPage />);
+    fireEvent.click(screen.getByText('Sửa'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Dung tích chai'), { target: { value: '499' } });
+    fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
+    await waitFor(() =>
+      expect(within(dialog).getAllByText('Dung tích sản phẩm phải tối thiểu 500 ml')).toHaveLength(
+        2,
+      ),
+    );
+    expect(mockSave).not.toHaveBeenCalled();
+  });
+
   it('Brand Admin tạo sản phẩm — giá gửi dạng chuỗi tiền (NFR-DAT-02)', async () => {
     renderScreen(<ProductsPage />);
     fireEvent.click(screen.getByText('Thêm sản phẩm'));
@@ -92,6 +106,7 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     fireEvent.change(sku!, { target: { value: 'MA-003' } });
     fireEvent.change(name!, { target: { value: 'Aurore Soir' } });
     fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '40000' } });
+    fireEvent.change(within(dialog).getByLabelText('Dung tích chai'), { target: { value: '500' } });
     fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
     await waitFor(() =>
       expect(mockSave).toHaveBeenCalledWith({
@@ -114,6 +129,7 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     fireEvent.change(sku!, { target: { value: 'MA-004' } });
     fireEvent.change(name!, { target: { value: 'Aurore Nuit' } });
     fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '45000' } });
+    fireEvent.change(within(dialog).getByLabelText('Dung tích chai'), { target: { value: '500' } });
     const file = new File(['x'], 'bottle.jpg', { type: 'image/jpeg' });
     fireEvent.change(within(dialog).getByTestId('product-image-input'), {
       target: { files: [file] },
@@ -182,6 +198,7 @@ describe('ProductsPage (FR-PRD-01 ÷ 03)', () => {
     fireEvent.change(sku!, { target: { value: 'MA-009' } });
     fireEvent.change(name!, { target: { value: 'Aurore Nuit' } });
     fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '30000' } });
+    fireEvent.change(within(dialog).getByLabelText('Dung tích chai'), { target: { value: '500' } });
     fireEvent.click(within(dialog).getByText('Lưu thay đổi'));
     await waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith('/my-slots?configure=r-1&product=p-new'),

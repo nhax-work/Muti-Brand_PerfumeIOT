@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useAuth } from '@/shared/auth';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
@@ -43,7 +44,7 @@ interface ProductForm {
   description?: string;
   defaultPrice: number;
   fullBottleRetailPrice?: number | null;
-  fullBottleVolumeMl?: number | null;
+  fullBottleVolumeMl: number;
 }
 
 /**
@@ -89,7 +90,7 @@ export default function ProductsPage() {
         fullBottleRetailPrice: product.fullBottleRetailPrice
           ? Number(product.fullBottleRetailPrice)
           : null,
-        fullBottleVolumeMl: product.fullBottleVolumeMl,
+        fullBottleVolumeMl: product.fullBottleVolumeMl ?? undefined,
       });
     }
   };
@@ -111,7 +112,7 @@ export default function ProductsPage() {
           currency: 'VND',
           fullBottleRetailPrice:
             v.fullBottleRetailPrice != null ? String(v.fullBottleRetailPrice) : undefined,
-          fullBottleVolumeMl: v.fullBottleVolumeMl ?? undefined,
+          fullBottleVolumeMl: v.fullBottleVolumeMl,
         },
       });
     } catch (error) {
@@ -333,8 +334,25 @@ export default function ProductsPage() {
                 </Form.Item>
               </Col>
               <Col xs={24} sm={10}>
-                <Form.Item name="fullBottleVolumeMl" label={t('ui.productVolumeMl')}>
-                  <InputNumber min={0} suffix="ml" style={{ width: '100%' }} />
+                <Form.Item
+                  name="fullBottleVolumeMl"
+                  label={t('ui.productVolumeMl')}
+                  extra={t('prd.bottleVolumeMinimum', {
+                    min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                  })}
+                  rules={[
+                    { required: true, message: t('validation.required') },
+                    {
+                      type: 'number',
+                      min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                      message: t('prd.bottleVolumeMinimum', {
+                        min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                      }),
+                    },
+                  ]}
+                >
+                  {/* Để Form kiểm ngưỡng: min trên InputNumber có thể giữ giá trị cũ khi nhập dưới ngưỡng. */}
+                  <InputNumber suffix="ml" style={{ width: '100%' }} />
                 </Form.Item>
               </Col>
             </Row>

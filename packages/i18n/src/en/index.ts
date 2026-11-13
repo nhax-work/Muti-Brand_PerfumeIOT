@@ -264,6 +264,7 @@ export const en: SameKeysAs<typeof vi> = {
   },
 
   prd: {
+    bottleVolumeMinimum: 'Product bottle volume must be at least {min} ml',
     brandAccountOnly: 'Only brand-scoped accounts can create products',
     skuTaken: 'This SKU already exists within the brand',
     imageFileRequired: 'Choose an image file to upload',
@@ -1872,6 +1873,7 @@ export const en: SameKeysAs<typeof vi> = {
   },
 
   inv: {
+    shipmentVolumeMinimum: 'Total shipment volume (ml/bottle × quantity) must be at least {min} ml',
     shipmentDeclared: 'Shipment declaration created',
     shipmentReceived: 'Shipment receipt confirmed',
     shipmentDiscrepancy: 'Quantity discrepancy recorded',

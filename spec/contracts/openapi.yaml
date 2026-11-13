@@ -554,13 +554,22 @@ components:
         hasPayoutAccount:
           type: boolean
           description: >-
-            Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả
-            nguyên văn qua API.
+            Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa.
+        payoutAccount:
+          type: [object, 'null']
+          description: >-
+            Tài khoản đầy đủ, chỉ trả qua GET /brands/{id} cho PLATFORM_SUPER_ADMIN thuộc nền tảng
+            để xác minh pháp nhân. Không trả trong danh sách, hồ sơ thương hiệu hoặc audit log.
+          required: [bankCode, accountNumber, accountHolder]
+          properties:
+            bankCode: { type: string, maxLength: 20 }
+            accountNumber: { type: string, maxLength: 30 }
+            accountHolder: { type: string, maxLength: 200 }
         payoutAccountMasked:
           type: [object, 'null']
           description: >-
             Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho
-            Super Admin đối soát và Brand Admin xem lại.
+            Brand Admin xem lại và các phản hồi không chứa tài khoản đầy đủ.
           properties:
             bankCode: { type: string, maxLength: 20 }
             maskedAccountNumber: { type: string, maxLength: 30 }
@@ -583,7 +592,7 @@ components:
         payoutAccount:
           type: object
           required: [bankCode, accountNumber, accountHolder]
-          description: Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn.
+          description: Lưu mã hóa tầng ứng dụng; chỉ Super Admin xem đầy đủ qua chi tiết thương hiệu.
           properties:
             bankCode: { type: string, maxLength: 20 }
             accountNumber: { type: string, maxLength: 30 }
@@ -658,7 +667,7 @@ components:
         status: { type: string, enum: [ACTIVE, DISCONTINUED] }
     ProductCreate:
       type: object
-      required: [sku, name, defaultPrice]
+      required: [sku, name, defaultPrice, fullBottleVolumeMl]
       properties:
         sku: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 200 }
@@ -674,7 +683,19 @@ components:
           description: Giá mỗi lượt xịt, lớn hơn 0 (ADR-0023).
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice: { $ref: '#/components/schemas/Money' }
-        fullBottleVolumeMl: { type: number, minimum: 0 }
+        fullBottleVolumeMl: { type: number, minimum: 500 }
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, 'null'] }
+        fragranceNotes: { type: [object, 'null'], additionalProperties: true }
+        imageUrl: { type: [string, 'null'], format: uri }
+        defaultPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        fullBottleRetailPrice:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+        fullBottleVolumeMl: { type: number, minimum: 500 }
 
     # ---------------------------------------------------------------------------------
     # MCH
@@ -1617,6 +1638,7 @@ components:
         createdAt: { type: string, format: date-time }
     ShipmentDeclarationCreate:
       type: object
+      description: Tổng declaredBottleVolumeMl × declaredQuantity phải tối thiểu 500 ml.
       required: [fragranceProductId, declaredQuantity, declaredBottleVolumeMl]
       properties:
         fragranceProductId: { type: string, format: uuid }
@@ -3359,7 +3381,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProductCreate' }
+            schema: { $ref: '#/components/schemas/ProductUpdate' }
       responses:
         '200':
           description: Đã cập nhật
