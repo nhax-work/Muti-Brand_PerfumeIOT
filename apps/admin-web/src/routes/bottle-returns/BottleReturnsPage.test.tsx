@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
 import BottleReturnsPage from './BottleReturnsPage';
 import type { BottleReturn } from './api';
@@ -88,8 +88,15 @@ describe('BottleReturnsPage', () => {
     installDomStubs();
   });
 
+  beforeEach(() => {
+    // Cố định ngày để trạng thái quá hạn không phụ thuộc ngày chạy CI.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-28T08:00:00Z'));
+  });
+
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   it('renders page header and list of returns correctly', () => {
@@ -102,6 +109,15 @@ describe('BottleReturnsPage', () => {
     expect(screen.getByText('Nhận tại kho')).toBeDefined();
     expect(screen.getByText('Đã bàn giao')).toBeDefined();
     expect(screen.getByText('Chờ nhận hàng')).toBeDefined();
+  });
+
+  it('marks a pending return as overdue after its pickup deadline', () => {
+    vi.setSystemTime(new Date('2026-11-10T08:00:00Z'));
+    renderScreen(<BottleReturnsPage />);
+
+    expect(screen.getByText('Chờ nhận hàng (Quá hạn)')).toBeDefined();
+    expect(screen.queryByText('Chờ nhận hàng')).toBeNull();
+    expect(screen.getByText('Đã bàn giao')).toBeDefined();
   });
 
   it('opens detail drawer when clicking details button', () => {
