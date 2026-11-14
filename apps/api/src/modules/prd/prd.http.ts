@@ -20,7 +20,7 @@ import {
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
-import { AppError, invalidField } from '../../shared/errors/index.js';
+import { readImageFile } from '../../shared/http/multipart.js';
 import { parseBody } from '../../shared/http/validation.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import {
@@ -47,6 +47,9 @@ const ListQuery = z.object({
 /** Money regex: chuỗi số thập phân dương tối đa 4 chữ số sau dấu chấm. */
 const moneySchema = z.string().regex(/^\d+(\.\d{1,4})?$/, 'Giá phải là chuỗi số thập phân');
 
+/** ADR-0023: giá mỗi lượt xịt của sản phẩm là giá bán thật trên slot, nên phải lớn hơn 0. */
+const pricePerSpraySchema = moneySchema.refine((v) => Number(v) > 0, 'Giá phải lớn hơn 0');
+
 /** openapi.yaml: ProductCreate. */
 const CreateBody = z.object({
   sku: z.string().min(1).max(100),
@@ -54,10 +57,10 @@ const CreateBody = z.object({
   description: z.string().optional(),
   fragranceNotes: z.record(z.string(), z.unknown()).optional(),
   imageUrl: z.string().url().optional(),
-  defaultPrice: moneySchema,
+  defaultPrice: pricePerSpraySchema,
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.optional(),
-  fullBottleVolumeMl: z.coerce.number().positive().optional(),
+  fullBottleVolumeMl: z.coerce.number().finite(),
 });
 
 const UpdateBody = z.object({
@@ -65,10 +68,10 @@ const UpdateBody = z.object({
   description: z.string().nullable().optional(),
   fragranceNotes: z.record(z.string(), z.unknown()).nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
-  defaultPrice: moneySchema.optional(),
+  defaultPrice: pricePerSpraySchema.optional(),
   currency: z.string().length(3).optional(),
   fullBottleRetailPrice: moneySchema.nullable().optional(),
-  fullBottleVolumeMl: z.coerce.number().positive().nullable().optional(),
+  fullBottleVolumeMl: z.coerce.number().finite().nullable().optional(),
 });
 
 const IdParam = z.string().uuid();
@@ -136,7 +139,10 @@ export class PrdController {
     @Req() request: FastifyRequest,
   ) {
     const productId = parseBody(IdParam, id);
-    const data = await readImageFile(request, this.config.constraint('PRODUCT_IMAGE_MAX_BYTES'));
+    const data = await readImageFile(request, this.config.constraint('PRODUCT_IMAGE_MAX_BYTES'), {
+      required: 'prd.imageFileRequired',
+      tooLarge: 'prd.imageTooLarge',
+    });
     return this.images.upload(actor, scope, productId, data);
   }
 
@@ -158,31 +164,5 @@ export class PrdController {
     @Param('id') id: string,
   ) {
     return this.products.discontinue(actor, scope, parseBody(IdParam, id));
-  }
-}
-
-/**
- * Đọc đúng một tệp `file` từ multipart/form-data vào bộ nhớ, dừng ngay khi vượt `maxBytes` — không
- * bao giờ giữ một tệp quá cỡ trong RAM.
- */
-async function readImageFile(request: FastifyRequest, maxBytes: number): Promise<Buffer> {
-  if (!request.isMultipart()) throw invalidField('file', 'prd.imageFileRequired');
-  let part;
-  try {
-    part = await request.file({ limits: { fileSize: maxBytes, files: 1 } });
-  } catch {
-    throw invalidField('file', 'prd.imageFileRequired');
-  }
-  if (!part || part.fieldname !== 'file') throw invalidField('file', 'prd.imageFileRequired');
-  try {
-    // toBuffer() ném lỗi FST_REQ_FILE_TOO_LARGE khi vượt giới hạn fileSize.
-    return await part.toBuffer();
-  } catch (err) {
-    if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE') {
-      throw new AppError('FILE_TOO_LARGE', 'prd.imageTooLarge', {
-        maxMb: Math.floor(maxBytes / (1024 * 1024)),
-      });
-    }
-    throw err;
   }
 }

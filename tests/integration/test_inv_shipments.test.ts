@@ -79,7 +79,7 @@ async function declare(quantity = 10, product = 0): Promise<Declaration> {
     payload: {
       fragranceProductId: fx.products[product],
       declaredQuantity: quantity,
-      declaredBottleVolumeMl: 50,
+      declaredBottleVolumeMl: 500,
       expectedShipDate: '2026-11-01',
     },
   });
@@ -107,6 +107,26 @@ async function receivedBatch(): Promise<Batch> {
 }
 
 describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
+  it('chặn tổng dung tích dưới 500 ml, chấp nhận đúng 500 ml từ nhiều chai nhỏ', async () => {
+    const payload = {
+      fragranceProductId: fx.products[0],
+      declaredQuantity: 5,
+      declaredBottleVolumeMl: 99.99,
+    };
+    const rejected = await brandA('POST', '/shipment-declarations', { payload });
+    expect(rejected.statusCode, rejected.body).toBe(400);
+    expect(rejected.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { messageKey: 'inv.shipmentVolumeMinimum' },
+    });
+
+    const accepted = await brandA('POST', '/shipment-declarations', {
+      payload: { ...payload, declaredBottleVolumeMl: 100 },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(201);
+    expect(accepted.json()).toMatchObject({ declaredQuantity: 5, declaredBottleVolumeMl: 100 });
+  });
+
   it('test_FR_INV_22_declare_shipment — Brand Admin khai báo, bản ghi DECLARED gắn đúng thương hiệu', async () => {
     const declaration = await declare(12);
     expect(declaration).toMatchObject({
@@ -127,7 +147,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[2],
         declaredQuantity: 5,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -139,7 +159,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 0,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(400);
@@ -170,7 +190,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 1,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -312,6 +332,149 @@ describe('Tiếp nhận và đối chiếu (FR-INV-24, 25, 26)', () => {
       second.id,
     ]);
     expect(row.rows[0]).toEqual({ status: 'DECLARED' });
+  });
+});
+
+describe('Tự tạo chai khi tiếp nhận (FR-INV-26 AC4, AC5 — ADR-0025)', () => {
+  async function skuOf(product: number): Promise<string> {
+    const { rows } = await client.query<{ sku: string }>(
+      `SELECT sku FROM fragrance_products WHERE id = $1`,
+      [fx.products[product]],
+    );
+    return rows[0]!.sku;
+  }
+
+  async function bottlesOfBatch(batchId: string) {
+    const { rows } = await client.query<{
+      identifier: string;
+      status: string;
+      owner: string;
+      brand_id: string;
+      fragrance_product_id: string;
+      initial_volume_ml: string;
+      current_estimated_ml: string;
+      expires_at: Date | null;
+    }>(
+      `SELECT identifier, status, owner, brand_id, fragrance_product_id, initial_volume_ml,
+              current_estimated_ml, expires_at
+         FROM bottles WHERE batch_id = $1 ORDER BY identifier`,
+      [batchId],
+    );
+    return rows;
+  }
+
+  it('test_FR_INV_26_auto_create_bottles_on_receive — đủ N chai IN_STOCK, mã theo SKU và số lô, dung tích theo khai báo', async () => {
+    const declaration = await declare(4, 1);
+    const batchNumber = `LOT-${fx.runId}-AUTO`;
+    const expiresAt = '2028-06-30T00:00:00.000Z';
+    const res = await staff('POST', `/shipment-declarations/${declaration.id}/receive`, {
+      payload: { receivedQuantity: 4, batchNumber, expiresAt },
+    });
+    expect(res.statusCode, res.body).toBe(200);
+    const { batch } = res.json<{ batch: Batch }>();
+
+    const sku = await skuOf(1);
+    const bottles = await bottlesOfBatch(batch.id);
+    expect(bottles.map((b) => b.identifier)).toEqual(
+      ['001', '002', '003', '004'].map((n) => `${sku}-${batchNumber}-${n}`),
+    );
+    for (const b of bottles) {
+      expect(b).toMatchObject({
+        status: 'IN_STOCK',
+        owner: 'BRAND',
+        brand_id: fx.brandA,
+        fragrance_product_id: fx.products[1],
+      });
+      // declare() khai báo 500 ml mỗi chai.
+      expect(Number(b.initial_volume_ml)).toBe(500);
+      expect(Number(b.current_estimated_ml)).toBe(500);
+      expect(b.expires_at?.toISOString()).toBe(expiresAt);
+    }
+
+    // Chai tạo ra xuất hiện ngay trong kho của thương hiệu — đúng thứ phiếu nạp sẽ chọn.
+    const list = await brandA('GET', `/bottles?batchId=${batch.id}&status=IN_STOCK`);
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json<{ meta: { total: number } }>().meta.total).toBe(4);
+  });
+
+  it('test_FR_INV_26_discrepancy_creates_received_count — lệch số thì tạo theo số thực nhận, không theo số khai báo', async () => {
+    const declaration = await declare(5);
+    const res = await receive(declaration.id, 3, 'Vỡ 2 chai khi vận chuyển');
+    expect(res.statusCode, res.body).toBe(200);
+    const { batch } = res.json<{ batch: Batch }>();
+    expect(await bottlesOfBatch(batch.id)).toHaveLength(3);
+  });
+
+  it('test_FR_INV_26_receive_zero_creates_no_bottle — nhận 0 chai thì không có lô nên không có chai', async () => {
+    const declaration = await declare(2);
+    const before = await client.query(
+      `SELECT count(*)::int AS n FROM bottles WHERE brand_id = $1`,
+      [fx.brandA],
+    );
+    const res = await receive(declaration.id, 0, 'Không nhận được kiện');
+    expect(res.statusCode, res.body).toBe(200);
+    const after = await client.query(`SELECT count(*)::int AS n FROM bottles WHERE brand_id = $1`, [
+      fx.brandA,
+    ]);
+    expect(after.rows[0]).toEqual(before.rows[0]);
+  });
+
+  it('test_FR_INV_26_bottle_identifier_clash_rolls_back — mã sinh ra trùng chai đăng ký tay thì hủy cả lần tiếp nhận', async () => {
+    const sku = await skuOf(0);
+    const batchNumber = `LOT-${fx.runId}-CLASH`;
+    // Chai đăng ký tay (FR-INV-02) vào một lô có sẵn, mang đúng mã mà lần tiếp nhận sau sẽ sinh.
+    const existing = await receivedBatch();
+    const manual = await staff('POST', '/bottles', {
+      payload: {
+        batchId: existing.id,
+        identifier: `${sku}-${batchNumber}-002`,
+        initialVolumeMl: 50,
+      },
+    });
+    expect(manual.statusCode, manual.body).toBe(201);
+
+    const declaration = await declare(3);
+    const res = await staff('POST', `/shipment-declarations/${declaration.id}/receive`, {
+      payload: { receivedQuantity: 3, batchNumber },
+    });
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { fields: [{ path: 'batchNumber', messageKey: 'inv.batchBottleIdentifierTaken' }] },
+    });
+
+    const decl = await client.query(
+      `SELECT status FROM brand_shipment_declarations WHERE id = $1`,
+      [declaration.id],
+    );
+    expect(decl.rows[0]).toEqual({ status: 'DECLARED' });
+    const batches = await client.query(
+      `SELECT count(*)::int AS n FROM inventory_batches WHERE source_declaration_id = $1`,
+      [declaration.id],
+    );
+    expect(batches.rows[0]).toEqual({ n: 0 });
+    const bottles = await client.query(
+      `SELECT count(*)::int AS n FROM bottles WHERE identifier LIKE $1`,
+      [`${sku}-${batchNumber}-%`],
+    );
+    expect(bottles.rows[0]).toEqual({ n: 1 });
+  });
+
+  it('test_FR_INV_26_receive_quantity_limit — vượt SHIPMENT_RECEIVE_MAX_BOTTLES bị từ chối, khai báo giữ nguyên', async () => {
+    const declaration = await declare(3);
+    const res = await receive(declaration.id, 2001, 'Nhập thử số quá lớn');
+    expect(res.statusCode, res.body).toBe(400);
+    expect(res.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: {
+        fields: [{ path: 'receivedQuantity', messageKey: 'inv.receivedQuantityTooLarge' }],
+      },
+    });
+    const decl = await client.query(
+      `SELECT status FROM brand_shipment_declarations WHERE id = $1`,
+      [declaration.id],
+    );
+    expect(decl.rows[0]).toEqual({ status: 'DECLARED' });
   });
 });
 

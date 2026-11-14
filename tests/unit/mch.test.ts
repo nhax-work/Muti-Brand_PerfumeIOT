@@ -214,6 +214,9 @@ class FakeMchQueries {
         slotNumber: slot.slotNumber,
         machineId: machine.id,
         machineDisplayName: machine.displayName,
+        machineSlotCount: [...this.slots.values()].filter(
+          (s) => s.machineId === machine.id && s.status !== 'DISABLED',
+        ).length,
         locationId: machine.locationId,
         locationName: this.locations.get(machine.locationId)!.name,
         monthlyRentPrice: slot.monthlyRentPrice as string,
@@ -561,6 +564,7 @@ describe('MchService (Machine, Slot, Location)', () => {
           'locationName',
           'machineDisplayName',
           'machineId',
+          'machineSlotCount',
           'monthlyRentPrice',
           'slotId',
           'slotNumber',

@@ -318,6 +318,34 @@ describe('BndService — FR-BND-06: Brand Admin xem và sửa thương hiệu c�
 });
 
 describe('BndService — FR-BND-07: Platform Super Admin xem danh sách & chi tiết', () => {
+  it('chỉ Super Admin nền tảng được đọc đầy đủ tài khoản qua chi tiết; danh sách và audit vẫn che', async () => {
+    const brand = await service.create(admin, { code: 'BANK', name: 'Bank Brand' });
+    const owner = { ...brandAdmin, brandId: brand.id };
+    const account = {
+      bankCode: 'VCB',
+      accountNumber: '001234567890',
+      accountHolder: 'CONG TY TEST',
+    };
+    await service.updateMyBrandLegalProfile(owner, {
+      taxCode: '0123456789',
+      payoutAccount: account,
+    });
+
+    expect((await service.get(admin, brand.id)).payoutAccount).toEqual(account);
+    expect((await service.getMyBrand(owner)).payoutAccount).toBeUndefined();
+    for (const actor of [
+      owner,
+      { ...admin, roles: ['OPERATIONS_STAFF'] as const },
+      { ...admin, brandId: brand.id },
+    ]) {
+      expect((await service.get(actor, brand.id)).payoutAccount).toBeUndefined();
+    }
+    expect(JSON.stringify(await service.list({ page: 1, pageSize: 20 }))).not.toContain(
+      account.accountNumber,
+    );
+    expect(JSON.stringify(audit.entries)).not.toContain(account.accountNumber);
+  });
+
   it('test_FR_BND_07_list_and_get', async () => {
     await service.create(admin, { code: 'B1', name: 'Brand 1' });
     const b2 = await service.create(admin, { code: 'B2', name: 'Brand 2' });
@@ -533,7 +561,8 @@ describe('BndController & AccessGuard — Bảo vệ pháp nhân và phân quy�
   });
 
   it('test_FR_BND_09_controller_validation_rejects_invalid_tax_code_and_missing_payout_field', () => {
-    const controller = new BndController(service);
+    // Test chỉ đi qua bước kiểm dữ liệu hồ sơ pháp lý — không chạm tới upload logo (ADR-0022).
+    const controller = new BndController(service, undefined as never, undefined as never);
 
     // Mã số thuế dưới 10 ký tự -> VALIDATION_ERROR
     expect(() =>

@@ -6,7 +6,12 @@
 
 import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
-import type { AgreementAcceptance, AgreementCurrent, Schema } from '@scentstation/contracts';
+import type {
+  AgreementAcceptance,
+  AgreementCurrent,
+  AgreementVersion,
+  Schema,
+} from '@scentstation/contracts';
 import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
@@ -26,6 +31,7 @@ import {
   SltQueries,
   stageOf,
   type AgreementAcceptanceRecord,
+  type AgreementVersionRecord,
   type AnnexItemRecord,
   type BottleRecord,
   type BottleReturnMethod,
@@ -35,6 +41,10 @@ import {
   type SlotRentalFilter,
   type SlotRentalRecord,
 } from './slt.queries.js';
+
+export type AgreementVersionItem = AgreementVersion & {
+  readonly acceptedBrandCount?: number;
+};
 
 type SlotRental = Schema<'SlotRental'>;
 type RentalCheckout = Schema<'RentalCheckout'>;
@@ -458,7 +468,13 @@ export class SltService {
       throw invalidField('fragranceProductId', 'slt.productDiscontinued');
     }
 
-    const updated = await this.queries.updateProduct(scope, id, fragranceProductId);
+    // ADR-0023: slot bán đúng giá của sản phẩm.
+    const updated = await this.queries.updateProduct(
+      scope,
+      id,
+      fragranceProductId,
+      product.defaultPrice,
+    );
     const dto = toDto(updated!);
 
     await this.audit.log({
@@ -467,14 +483,22 @@ export class SltService {
       action: 'slt.slot_rental.product_assigned',
       targetType: 'SlotRental',
       targetId: id,
-      before: { fragranceProductId: rental.fragranceProductId },
-      after: { fragranceProductId },
+      before: {
+        fragranceProductId: rental.fragranceProductId,
+        pricePerSpray: rental.pricePerSpray,
+      },
+      after: { fragranceProductId, pricePerSpray: dto.pricePerSpray },
     });
 
     return dto;
   }
 
-  /** FR-SLT-08: Đặt giá mỗi lượt xịt. */
+  /**
+   * Giá riêng của một slot. Từ ADR-0023 giá thương hiệu bán đặt ở sản phẩm và slot lấy theo khi gán
+   * sản phẩm, nên endpoint này chỉ còn cho Platform Super Admin đặt giá slot đang bán hàng thanh lý
+   * (FR-EXP-18) — hàng đó đã thuộc nền tảng. Mọi trường hợp khác bị từ chối để không có giá slot lệch
+   * với sản phẩm.
+   */
   async setPricePerSpray(
     actor: AuthenticatedUser,
     scope: BrandScope,
@@ -484,8 +508,12 @@ export class SltService {
     const rental = await this.queries.findById(scope, id);
     if (!rental) throw notFoundFor(actor);
 
-    if (!rental.paidAt || ['CLOSED', 'TERMINATED', 'CANCELLED'].includes(rental.status)) {
-      throw new AppError('RENTAL_NOT_ACTIVE', 'slt.rentalNotActive');
+    if (rental.status !== 'LIQUIDATED') {
+      throw invalidField('pricePerSpray', 'slt.pricePerSprayFollowsProduct');
+    }
+    // FR-EXP-18 AC2: thương hiệu cũ không đổi được giá hàng đã thanh lý.
+    if (scope.kind === 'BRAND') {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
     }
 
     const numericPrice = Number(pricePerSpray);
@@ -508,6 +536,171 @@ export class SltService {
     });
 
     return dto;
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): Super Admin liệt kê toàn bộ các phiên bản hợp đồng khung (nháp + đã công bố)
+   * kèm số thương hiệu đã đồng ý (acceptedBrandCount).
+   */
+  async listAgreementVersions(actor: AuthenticatedUser): Promise<AgreementVersionItem[]> {
+    if (!actor.roles.includes('PLATFORM_SUPER_ADMIN')) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const records = await this.queries.listAgreementVersions();
+    return records.map((r) => toAgreementVersionDto(r, r.acceptedBrandCount));
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): Super Admin soạn phiên bản hợp đồng khung mới ở trạng thái nháp
+   * (`is_current = false`, `published_at = null`), tự băm `content_hash = SHA-256 hex(content)`
+   * và ghi nhật ký kiểm toán (FR-AUD-03).
+   */
+  async createAgreementVersion(
+    actor: AuthenticatedUser,
+    input: { version: string; title: string; content: string },
+    origin?: RequestOrigin,
+  ): Promise<AgreementVersionItem> {
+    if (!actor.roles.includes('PLATFORM_SUPER_ADMIN')) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const version = input.version.trim();
+    if (!version || version.length > 20) {
+      throw invalidField('version', 'validation.invalidFormat');
+    }
+
+    const title = input.title.trim();
+    if (!title || title.length > 200) {
+      throw invalidField('title', 'validation.invalidFormat');
+    }
+
+    const content = input.content;
+    if (!content || content.trim().length === 0) {
+      throw invalidField('content', 'validation.required');
+    }
+
+    const existing = await this.queries.findAgreementVersionByVersion(version);
+    if (existing) {
+      throw invalidField('version', 'slt.agreementVersionTaken');
+    }
+
+    const contentHash = createHash('sha256').update(content, 'utf8').digest('hex');
+
+    let created: AgreementVersionRecord;
+    try {
+      created = await this.db.transaction().execute(async (tx) => {
+        const inserted = await this.queries.insertAgreementVersion(
+          {
+            version,
+            title,
+            content,
+            contentHash,
+            createdBy: actor.userId,
+          },
+          tx,
+        );
+
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            action: 'slt.agreement_version.created',
+            targetType: 'agreement_version',
+            targetId: inserted.id,
+            sourceIp: origin?.ip,
+            userAgent: origin?.userAgent,
+            after: {
+              version: inserted.version,
+              title: inserted.title,
+              contentHash: inserted.contentHash,
+              isCurrent: inserted.isCurrent,
+              publishedAt: null,
+            },
+          },
+          tx,
+        );
+
+        return inserted;
+      });
+    } catch (error) {
+      const pgErr = error as { code?: string; constraint?: string };
+      if (pgErr.code === '23505' && pgErr.constraint === 'uq_agreement_version') {
+        throw invalidField('version', 'slt.agreementVersionTaken');
+      }
+      throw error;
+    }
+
+    return toAgreementVersionDto(created, 0);
+  }
+
+  /**
+   * FR-SLT-48 (ADR-0013): Super Admin công bố một phiên bản hợp đồng khung làm bản hiện hành duy nhất.
+   * Phiên bản đã công bố (`published_at IS NOT NULL`) không được công bố lại hay sửa nội dung.
+   * Trong cùng một transaction: hạ bản hiện hành cũ (`is_current = false`), đặt bản mới (`is_current = true`,
+   * `published_at = now()`) và ghi nhật ký kiểm toán (FR-AUD-03).
+   */
+  async publishAgreementVersion(
+    actor: AuthenticatedUser,
+    rawVersion: string,
+    origin?: RequestOrigin,
+  ): Promise<AgreementVersionItem> {
+    if (!actor.roles.includes('PLATFORM_SUPER_ADMIN')) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const version = rawVersion.trim();
+    if (!version || version.length > 20) {
+      throw invalidField('version', 'validation.invalidFormat');
+    }
+
+    const now = this.clock.now();
+
+    const { published, acceptedBrandCount } = await this.db.transaction().execute(async (tx) => {
+      const target = await this.queries.lockAgreementVersionByVersion(version, tx);
+      if (!target) {
+        throw new AppError('NOT_FOUND', 'slt.agreementNotFound');
+      }
+
+      if (target.publishedAt !== null) {
+        throw new AppError('VALIDATION_ERROR', 'slt.agreementAlreadyPublished');
+      }
+
+      const previousCurrent = await this.queries.clearCurrentAgreementVersion(now, tx);
+      const updated = await this.queries.publishAgreementVersionById(target.id, now, tx);
+      const count = await this.queries.countFrameworkAcceptances(updated.id, tx);
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          action: 'slt.agreement_version.published',
+          targetType: 'agreement_version',
+          targetId: updated.id,
+          sourceIp: origin?.ip,
+          userAgent: origin?.userAgent,
+          before: {
+            version: target.version,
+            isCurrent: target.isCurrent,
+            publishedAt: iso(target.publishedAt),
+          },
+          after: {
+            version: updated.version,
+            isCurrent: updated.isCurrent,
+            publishedAt: iso(updated.publishedAt),
+          },
+          metadata: {
+            previousCurrentVersionId: previousCurrent?.id ?? null,
+            previousCurrentVersion: previousCurrent?.version ?? null,
+          },
+        },
+        tx,
+      );
+
+      return { published: updated, acceptedBrandCount: count };
+    });
+
+    return toAgreementVersionDto(published, acceptedBrandCount);
   }
 
   /**
@@ -1334,6 +1527,23 @@ export class SltService {
 
     return toDto(closed);
   }
+}
+
+function toAgreementVersionDto(
+  record: AgreementVersionRecord,
+  acceptedBrandCount?: number,
+): AgreementVersionItem {
+  return {
+    id: record.id,
+    version: record.version,
+    title: record.title,
+    content: record.content,
+    contentHash: record.contentHash,
+    isCurrent: record.isCurrent,
+    publishedAt: iso(record.publishedAt),
+    createdAt: record.createdAt.toISOString(),
+    ...(acceptedBrandCount !== undefined ? { acceptedBrandCount } : {}),
+  };
 }
 
 function toAcceptanceDto(record: AgreementAcceptanceRecord): AgreementAcceptance {

@@ -6,6 +6,16 @@
   --color-online: #10b981;
   --color-unstable: #f59e0b;
   --color-offline: #94a3b8;
+  --surface-muted: #f1f5f9;
+  --line: #e2e8f0;
+  --surface: #ffffff;
+  --surface-fade: rgba(255, 255, 255, 0);
+  --text-main: #1e293b;
+  --text-strong: #0f172a;
+  --text-muted: #64748b;
+  --color-primary-soft: #f0f9ff;
+  --glow-online: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  --glow-primary: 0 0 0 3px rgba(2, 132, 199, 0.2);
   --radius-lg: 12px;
   --radius-xl: 16px;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -74,19 +84,225 @@ body {
   color: #334155;
 }
 
-/* Nội dung hợp đồng khung trong hộp thoại đồng ý */
-.framework-agreement-content {
-  max-height: 350px;
-  min-height: 120px;
+/* Văn bản hợp đồng khung / phụ lục (shared/agreement/AgreementDocument) */
+.agreement-paper {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.agreement-paper-scroll {
+  max-height: min(56vh, 480px);
   overflow-y: auto;
-  padding: 16px;
-  margin-bottom: 16px;
-  background: #f9f9f9;
-  border: 1px solid #e8e8e8;
-  border-radius: 6px;
-  white-space: pre-wrap;
-  font-family: monospace;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.agreement-paper-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.agreement-paper-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, var(--surface-fade), var(--surface));
+}
+
+.agreement-paper--compact .agreement-paper-scroll {
+  max-height: 320px;
+}
+
+.agreement-paper--loading {
+  padding: 32px 40px;
+}
+
+.agreement-doc {
+  padding: 32px 44px 36px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-main);
+}
+
+.agreement-paper--compact .agreement-doc {
+  padding: 20px 24px 24px;
+}
+
+.agreement-doc > :first-child {
+  margin-top: 0;
+}
+
+.agreement-doc-head {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.agreement-doc-title {
+  margin: 0 auto;
+  max-width: 560px;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-strong);
+}
+
+.agreement-doc-rule {
+  display: block;
+  width: 48px;
+  height: 2px;
+  margin: 14px auto 0;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
+.agreement-doc-meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 20px;
+  margin: 0 0 8px;
+  padding: 14px 18px;
   font-size: 13px;
+  background: var(--surface-muted);
+  border-radius: 8px;
+}
+
+.agreement-doc-meta dt {
+  color: var(--text-muted);
+}
+
+.agreement-doc-meta dd {
+  margin: 0;
+  font-weight: 500;
+  color: var(--text-strong);
+}
+
+.agreement-doc-article {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 28px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--text-strong);
+}
+
+.agreement-doc-article-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+}
+
+.agreement-doc-subheading {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.agreement-doc-paragraph {
+  margin: 0 0 10px;
+  text-align: justify;
+  hyphens: auto;
+}
+
+.agreement-doc-list {
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.agreement-doc-list li {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  margin-bottom: 6px;
+  text-align: justify;
+}
+
+.agreement-doc-list-marker {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.agreement-annex-body {
+  margin-bottom: 16px;
+}
+
+/* Hộp thoại đồng ý hợp đồng khung */
+.agreement-modal-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-right: 24px;
+}
+
+.agreement-modal-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  font-size: 22px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.agreement-modal-heading {
+  min-width: 0;
+}
+
+.agreement-modal-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.agreement-modal .ant-modal-header {
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.agreement-modal .ant-modal-footer {
+  margin-top: 20px;
+}
+
+.agreement-modal-desc.ant-typography {
+  margin-bottom: 14px;
+}
+
+.agreement-consent {
+  margin-top: 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
+}
+
+.agreement-consent.is-checked {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 .admin-header {
@@ -415,4 +631,503 @@ body {
 
 .ant-picker-time-panel-column:nth-child(3)::before {
   content: 'Giây';
+}
+
+/* Modal cấu hình slot của Brand Admin (SlotSetupModal). */
+.slot-setup-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.slot-setup-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slot-setup-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.slot-setup-option-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.slot-setup-thumb {
+  width: 40px;
+  aspect-ratio: 4 / 5;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slot-setup-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.slot-setup-thumb-placeholder {
+  color: var(--color-offline);
+}
+
+/* Ô chọn ảnh có xem trước (ImageField): ảnh sản phẩm 4:5, logo thương hiệu 1:1. */
+.image-field {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.image-field-preview {
+  width: 120px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-field-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-field-placeholder {
+  font-size: 32px;
+  color: var(--color-offline);
+}
+
+/* Ảnh khai báo gửi hàng (ShipmentPhotos, ADR-0024). */
+.shipment-photo-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.shipment-photo-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.shipment-photo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.shipment-photo-image {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  object-fit: cover;
+}
+
+/* Màn thuê slot (routes/rentals/RentMachineCard) — mỗi máy một thẻ, mở ra dãy ô như máy thật */
+.rent-machine {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+
+.rent-machine.is-expanded {
+  border-color: var(--color-primary);
+}
+
+.rent-machine-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 20px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rent-machine-head:hover {
+  background: var(--bg-main);
+}
+
+.rent-machine-head:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.rent-machine-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  font-size: 22px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.rent-machine-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rent-machine-name.ant-typography {
+  font-size: 16px;
+}
+
+.rent-machine-location.ant-typography {
+  font-size: 13px;
+}
+
+.rent-machine-strip {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.rent-machine-strip-cell {
+  width: 14px;
+  height: 18px;
+  border-radius: 3px;
+  background: var(--color-offline);
+  opacity: 0.45;
+}
+
+.rent-machine-strip-cell.is-free {
+  background: var(--color-online);
+  opacity: 1;
+}
+
+.rent-machine-strip-cell.is-selected {
+  background: var(--color-primary);
+  opacity: 1;
+}
+
+.rent-machine-summary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.rent-machine-summary .ant-tag {
+  margin: 0;
+}
+
+.rent-machine-price.ant-typography {
+  font-size: 13px;
+}
+
+.rent-machine-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.rent-machine.is-expanded .rent-machine-chevron {
+  transform: rotate(180deg);
+}
+
+.rent-machine-body {
+  padding: 4px 20px 20px;
+}
+
+.rent-machine-front {
+  padding: 12px 16px 18px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+}
+
+.rent-machine-brandbar {
+  margin-bottom: 12px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.rent-machine-bays {
+  display: grid;
+  grid-template-columns: repeat(var(--bays, 4), minmax(92px, 150px));
+  justify-content: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 6px;
+  scrollbar-width: thin;
+}
+
+.rent-bay {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 12px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  font: inherit;
+  color: var(--text-main);
+  text-align: center;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    transform 0.2s;
+}
+
+button.rent-bay {
+  cursor: pointer;
+}
+
+button.rent-bay:hover {
+  border-color: var(--color-online);
+  transform: translateY(-2px);
+}
+
+button.rent-bay:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.rent-bay.is-selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: var(--glow-primary);
+}
+
+button.rent-bay.is-selected:hover {
+  border-color: var(--color-primary);
+}
+
+.rent-bay.is-unavailable {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background: repeating-linear-gradient(
+    135deg,
+    var(--surface),
+    var(--surface) 6px,
+    var(--surface-muted) 6px,
+    var(--surface-muted) 12px
+  );
+}
+
+.rent-bay-number {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rent-bay-window {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 56px;
+  border-radius: 8px;
+  font-size: 22px;
+  color: var(--color-online);
+  background: var(--surface-muted);
+}
+
+.rent-bay.is-selected .rent-bay-window {
+  color: var(--surface);
+  background: var(--color-primary);
+}
+
+.rent-bay.is-unavailable .rent-bay-window {
+  font-size: 18px;
+  color: var(--color-offline);
+  background: transparent;
+}
+
+.rent-bay-status {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-online);
+}
+
+.rent-bay.is-selected .rent-bay-status {
+  color: var(--color-primary);
+}
+
+.rent-bay.is-unavailable .rent-bay-status {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.rent-bay-price {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.rent-bay-status,
+.rent-bay-number {
+  line-height: 1.4;
+}
+
+/* Đèn nút bấm dưới mỗi ô — giống đèn trên máy thật */
+.rent-bay-light {
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 50%;
+  background: var(--color-online);
+  box-shadow: var(--glow-online);
+}
+
+.rent-bay.is-selected .rent-bay-light {
+  background: var(--color-primary);
+  box-shadow: var(--glow-primary);
+}
+
+.rent-bay.is-unavailable .rent-bay-light {
+  background: var(--color-offline);
+  box-shadow: none;
+}
+
+.rent-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.rent-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rent-legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.rent-legend-dot.is-free {
+  background: var(--color-online);
+}
+
+.rent-legend-dot.is-selected {
+  background: var(--color-primary);
+}
+
+.rent-legend-dot.is-unavailable {
+  background: var(--color-offline);
+}
+
+.rent-legend-hint.ant-typography {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+.rent-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--line);
+}
+
+.rent-config {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.rent-config-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.rent-config-total.ant-typography {
+  color: var(--color-primary);
+}
+
+.rent-config-field.ant-form-item {
+  margin-bottom: 0;
+}
+
+.rent-cart {
+  position: sticky;
+  top: 88px;
+}
+
+.rent-cart-list {
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.rent-cart-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.rent-cart-item-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rent-cart-item-amount.ant-typography {
+  font-variant-numeric: tabular-nums;
+}
+
+.rent-cart-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 16px 0;
+}
+
+.rent-cart-total-amount.ant-typography {
+  font-size: 20px;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
 }

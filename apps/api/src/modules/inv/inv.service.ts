@@ -23,7 +23,7 @@ import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
-import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { APP_CONFIG, SPEC_CONSTRAINTS, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type {
   BatchAuthenticityStatus,
@@ -41,18 +41,27 @@ import {
   InvQueries,
   type BatchRecord,
   type BottleRecord,
+  type InventoryAdjustmentRecord,
   type RefillSessionRecord,
+  type RefillSessionView,
   type ShipmentRecord,
 } from './inv.queries.js';
+import { buildRefillWorklist, type RefillWorkItem } from './refill-worklist.js';
 
 export type ShipmentDeclaration = Schema<'ShipmentDeclaration'>;
 export type InventoryBatch = Schema<'InventoryBatch'>;
 export type Bottle = Schema<'Bottle'>;
 export type RefillSession = Schema<'RefillSession'>;
 export type BottleDamageResult = Schema<'BottleDamageResult'>;
+export type InventoryAdjustment = Schema<'InventoryAdjustment'>;
+export type BottleHistoryEntry = Schema<'AuditLogEntry'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
+/** `bottles.identifier varchar(150)`. */
+const BOTTLE_IDENTIFIER_MAX_LENGTH = 150;
+/** Số thứ tự chai trong mã tự sinh đệm 0 ít nhất tới 3 chữ số: `…-001` (ADR-0025). */
+const BOTTLE_SEQ_MIN_WIDTH = 3;
 
 export interface DeclareShipmentInput {
   readonly fragranceProductId: string;
@@ -84,6 +93,23 @@ export interface OpenRefillInput {
 export interface CloseRefillInput {
   readonly newBottleId: string;
   readonly notes?: string | undefined;
+}
+
+export interface CreateBatchInput {
+  readonly brandId: string;
+  readonly fragranceProductId: string;
+  readonly batchNumber: string;
+  readonly receivedAt: Date;
+  readonly expiresAt?: Date | undefined;
+  readonly quantityReceived: number;
+  readonly supplierInfo?: Record<string, unknown> | undefined;
+}
+
+export interface CreateAdjustmentInput {
+  readonly bottleId: string;
+  readonly slotId?: string | undefined;
+  readonly afterQuantityMl: number;
+  readonly reason?: string | null | undefined;
 }
 
 type Executor = Kysely<DB>;
@@ -134,6 +160,11 @@ export class InvService {
       if (productBrand !== scope.brandId) {
         throw new AppError('PRODUCT_NOT_OWNED', 'inv.productNotOwned');
       }
+      const totalVolumeMl = input.declaredBottleVolumeMl * input.declaredQuantity;
+      const min = SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML;
+      if (!Number.isFinite(totalVolumeMl) || totalVolumeMl < min) {
+        throw invalidField('declaredBottleVolumeMl', 'inv.shipmentVolumeMinimum', { min });
+      }
       const now = this.clock.now();
       const shipmentId = await this.queries.insertShipment(
         {
@@ -181,8 +212,8 @@ export class InvService {
   }
 
   /**
-   * FR-INV-24, 25, 26: tiếp nhận và đối chiếu. Cập nhật khai báo và tạo lô trong CÙNG transaction
-   * (FR-INV-26 AC1); nhận 0 chai thì không tạo lô (FR-INV-25 AC3).
+   * FR-INV-24, 25, 26: tiếp nhận và đối chiếu. Cập nhật khai báo, tạo lô và tạo từng chai của lô
+   * trong CÙNG transaction (FR-INV-26 AC1, AC4 — ADR-0025); nhận 0 chai thì không tạo lô (FR-INV-25 AC3).
    */
   async receiveShipment(
     actor: AuthenticatedUser,
@@ -201,6 +232,16 @@ export class InvService {
       if (discrepancy && !notes) {
         throw invalidField('discrepancyNotes', 'inv.discrepancyNotesRequired');
       }
+      // ADR-0025: mỗi chai nhận về thành một dòng `bottles` — chặn số liệu nhập nhầm sinh hàng loạt.
+      if (input.receivedQuantity > this.config.constraint('SHIPMENT_RECEIVE_MAX_BOTTLES')) {
+        throw invalidField('receivedQuantity', 'inv.receivedQuantityTooLarge');
+      }
+      const batchNumber = input.batchNumber.trim();
+      const width = Math.max(BOTTLE_SEQ_MIN_WIDTH, String(input.receivedQuantity).length);
+      const identifierPrefix = `${shipment.productSku}-${batchNumber}-`;
+      if (identifierPrefix.length + width > BOTTLE_IDENTIFIER_MAX_LENGTH) {
+        throw invalidField('batchNumber', 'inv.bottleIdentifierTooLong');
+      }
 
       const now = this.clock.now();
       await this.queries.markShipmentReceived(
@@ -216,6 +257,7 @@ export class InvService {
       );
 
       let createdBatchId: string | null = null;
+      let bottlesCreated = 0;
       if (input.receivedQuantity > 0) {
         try {
           createdBatchId = await this.queries.insertBatch(
@@ -223,7 +265,7 @@ export class InvService {
               brandId: shipment.brandId,
               fragranceProductId: shipment.fragranceProductId,
               sourceDeclarationId: shipment.id,
-              batchNumber: input.batchNumber.trim(),
+              batchNumber,
               receivedAt: now,
               expiresAt: input.expiresAt ?? null,
               quantityReceived: input.receivedQuantity,
@@ -231,9 +273,24 @@ export class InvService {
             },
             tx,
           );
+          // ADR-0025: chai sinh cùng transaction với lô — không có lô nào nhận hàng mà thiếu chai.
+          bottlesCreated = await this.queries.insertBottlesForBatch(
+            {
+              batchId: createdBatchId,
+              identifierPrefix,
+              width,
+              initialVolumeMl: shipment.declaredBottleVolumeMl,
+            },
+            tx,
+          );
         } catch (error) {
-          if (uniqueViolation(error) === 'uq_batch_brand_product_number') {
+          const constraint = uniqueViolation(error);
+          if (constraint === 'uq_batch_brand_product_number') {
             throw invalidField('batchNumber', 'inv.batchNumberTaken');
+          }
+          // Trùng mã với chai đăng ký tay trước đó (POST /bottles) — đổi số lô là hết trùng.
+          if (constraint === 'uq_bottle_brand_identifier') {
+            throw invalidField('batchNumber', 'inv.batchBottleIdentifierTaken');
           }
           throw error;
         }
@@ -253,6 +310,7 @@ export class InvService {
             status: discrepancy ? 'DISCREPANCY' : 'RECEIVED',
             receivedQuantity: input.receivedQuantity,
             batchId: createdBatchId,
+            bottlesCreated,
           },
         },
         tx,
@@ -435,6 +493,7 @@ export class InvService {
       readonly pageSize: number;
       readonly status?: BottleStatus | undefined;
       readonly batchId?: string | undefined;
+      readonly fragranceProductId?: string | undefined;
     },
   ): Promise<{ items: Bottle[]; total: number }> {
     const { items, total } = await this.queries.listBottles(scope, filter);
@@ -562,6 +621,11 @@ export class InvService {
   // Phiếu nạp (FR-INV-29 ÷ 32)
   // -----------------------------------------------------------------------------------
 
+  /** ADR-0026: việc cần nạp, tính từ hóa đơn, yêu cầu bổ sung và tồn kho — không có bảng riêng. */
+  async refillWorklist(scope: BrandScope): Promise<RefillWorkItem[]> {
+    return buildRefillWorklist(await this.queries.refillWorklist(scope, this.clock.now()));
+  }
+
   async listRefillSessions(
     scope: BrandScope,
     filter: {
@@ -670,6 +734,10 @@ export class InvService {
       const bottle = await this.assertInstallable(tx, input.newBottleId, rental, now);
 
       const oldBottleId = slot.activeBottleId;
+      const oldBottle =
+        oldBottleId && oldBottleId !== bottle.id
+          ? await this.queries.findBottle(oldBottleId, tx)
+          : null;
       if (oldBottleId && oldBottleId !== bottle.id) {
         await this.queries.removeBottle(oldBottleId, now, tx);
       }
@@ -689,6 +757,60 @@ export class InvService {
       await this.refillRequests.completeForSession(tx, session.id, actor.userId);
       // FR-SLT-24: kích hoạt hóa đơn khi lắp chai đầu tiên trong cùng tx với việc đóng phiếu nạp.
       await this.slt.activateOnFirstBottleInstall(rental.id, now, actor, tx);
+      if (oldBottle) {
+        const afterOldStatus =
+          oldBottle.status === 'LIQUIDATED' || oldBottle.status === 'EXPIRED'
+            ? oldBottle.status
+            : Number(oldBottle.currentEstimatedMl) > 0
+              ? 'IN_STOCK'
+              : 'EMPTY';
+        await this.audit.log(
+          {
+            actorType: 'USER',
+            actorId: actor.userId,
+            brandId: session.brandId,
+            action: 'inv.bottle.removed',
+            targetType: 'Bottle',
+            targetId: oldBottle.id,
+            before: {
+              slotId: slot.id,
+              status: oldBottle.status,
+              currentEstimatedMl: Number(oldBottle.currentEstimatedMl),
+            },
+            after: {
+              slotId: null,
+              status: afterOldStatus,
+              currentEstimatedMl: Number(oldBottle.currentEstimatedMl),
+              refillSessionId: session.id,
+            },
+            metadata: { machineId: slot.machineId, slotId: slot.id, reason: 'REFILL_REPLACEMENT' },
+          },
+          tx,
+        );
+      }
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: session.brandId,
+          action: 'inv.bottle.installed',
+          targetType: 'Bottle',
+          targetId: bottle.id,
+          before: {
+            slotId: null,
+            status: bottle.status,
+            currentEstimatedMl: Number(bottle.currentEstimatedMl),
+          },
+          after: {
+            slotId: slot.id,
+            status: 'INSTALLED',
+            currentEstimatedMl: Number(bottle.currentEstimatedMl),
+            refillSessionId: session.id,
+          },
+          metadata: { machineId: slot.machineId, slotId: slot.id },
+        },
+        tx,
+      );
       await this.audit.log(
         {
           actorType: 'USER',
@@ -699,6 +821,44 @@ export class InvService {
           targetId: session.id,
           before: { status: 'STARTED', activeBottleId: oldBottleId },
           after: { status: 'COMPLETED', activeBottleId: bottle.id, rentalId: rental.id },
+        },
+        tx,
+      );
+    });
+    return toRefillDto((await this.queries.findRefillSession(sessionId))!);
+  }
+
+  /**
+   * ADR-0028: hủy phiếu đang mở mà không lắp chai — mở nhầm slot, hay mở rồi mới biết không có chai
+   * đúng. Slot giữ nguyên chai cũ; máy nhận đơn lại khi không còn phiếu mở (chốt chặn ở ORD đọc
+   * `refill_sessions.status`). Yêu cầu bổ sung đã gắn được gỡ ra trong cùng transaction.
+   */
+  async cancelRefillSession(
+    actor: AuthenticatedUser,
+    sessionId: string,
+    reason: string,
+  ): Promise<RefillSession> {
+    const trimmed = reason.trim();
+    if (!trimmed) throw invalidField('reason', 'inv.cancelReasonRequired');
+    await this.queries.transaction(async (tx) => {
+      const session = await this.queries.lockRefillSession(sessionId, tx);
+      if (!session) throw new AppError('NOT_FOUND', 'inv.refillSessionNotFound');
+      if (session.status !== 'STARTED') {
+        throw new AppError('REFILL_SESSION_NOT_OPEN', 'inv.refillSessionNotOpen');
+      }
+      const now = this.clock.now();
+      await this.queries.cancelRefillSession(session.id, { notes: trimmed, at: now }, tx);
+      await this.refillRequests.unlinkFromSession(tx, session.id, actor.userId);
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: session.brandId,
+          action: 'inv.refill.cancelled',
+          targetType: 'RefillSession',
+          targetId: session.id,
+          before: { status: 'STARTED' },
+          after: { status: 'CANCELLED', reason: trimmed },
         },
         tx,
       );
@@ -733,6 +893,300 @@ export class InvService {
     }
     return bottle;
   }
+
+  /** FR-INV-01: Inventory Staff tạo lô nước hoa thủ công cho một thương hiệu. */
+  async createBatch(actor: AuthenticatedUser, input: CreateBatchInput): Promise<InventoryBatch> {
+    if (actor.brandId !== null && actor.brandId !== input.brandId) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+    if (input.expiresAt && input.expiresAt.getTime() <= input.receivedAt.getTime()) {
+      throw invalidField('expiresAt', 'inv.expiresBeforeReceived');
+    }
+
+    const batchId = await this.queries.transaction(async (tx) => {
+      if (!(await this.queries.brandExists(input.brandId, tx))) {
+        throw invalidField('brandId', 'inv.brandNotFound');
+      }
+      const productBrand = await this.queries.findProductBrand(input.fragranceProductId, tx);
+      if (!productBrand) {
+        throw invalidField('fragranceProductId', 'inv.productNotFound');
+      }
+      if (productBrand !== input.brandId) {
+        throw new AppError('PRODUCT_NOT_OWNED', 'inv.productNotOwned');
+      }
+
+      const trimmedBatchNumber = input.batchNumber.trim();
+      let insertedId: string;
+      try {
+        insertedId = await this.queries.insertBatch(
+          {
+            brandId: input.brandId,
+            fragranceProductId: input.fragranceProductId,
+            sourceDeclarationId: null,
+            batchNumber: trimmedBatchNumber,
+            receivedAt: input.receivedAt,
+            expiresAt: input.expiresAt ?? null,
+            quantityReceived: input.quantityReceived,
+            supplierInfo: input.supplierInfo ?? null,
+            createdBy: actor.userId,
+          },
+          tx,
+        );
+      } catch (error) {
+        if (uniqueViolation(error) === 'uq_batch_brand_product_number') {
+          throw invalidField('batchNumber', 'inv.batchNumberTaken');
+        }
+        throw error;
+      }
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: input.brandId,
+          action: 'inv.batch.created',
+          targetType: 'InventoryBatch',
+          targetId: insertedId,
+          after: {
+            fragranceProductId: input.fragranceProductId,
+            batchNumber: trimmedBatchNumber,
+            quantityReceived: input.quantityReceived,
+            receivedAt: input.receivedAt.toISOString(),
+            expiresAt: input.expiresAt ? input.expiresAt.toISOString() : null,
+          },
+        },
+        tx,
+      );
+
+      return insertedId;
+    });
+
+    return toBatchDto((await this.queries.findBatch(batchId, { kind: 'UNRESTRICTED' }))!);
+  }
+
+  /**
+   * FR-INV-15: Tháo chai khỏi slot về kho; giữ nguyên ước tính `currentEstimatedMl` (ADR-0019),
+   * slot chuyển UNAVAILABLE (FR-MCH-17). Hóa đơn đã báo không gia hạn đi qua POST /bottle-returns.
+   */
+  async removeBottleFromSlot(
+    actor: AuthenticatedUser,
+    slotId: string,
+    notes?: string,
+  ): Promise<Bottle> {
+    if (actor.brandId !== null) {
+      throw new AppError('FORBIDDEN_SCOPE', 'common.outOfScope');
+    }
+
+    const updated = await this.queries.transaction(async (tx) => {
+      const slot = await this.queries.lockSlotAndMachine(slotId, tx);
+      if (!slot) throw notFoundFor(actor);
+      if (!slot.activeBottleId) {
+        throw new AppError('SLOT_UNAVAILABLE', 'inv.slotEmpty');
+      }
+      if (await this.queries.machineIsBusy(slot.machineId, tx)) {
+        throw new AppError('MACHINE_BUSY', 'inv.machineBusy');
+      }
+      if (await this.queries.slotHasOpenRefillSession(slot.id, tx)) {
+        throw new AppError('REFILL_SESSION_OPEN', 'inv.refillSessionOpen');
+      }
+      if (await this.queries.slotHasNonRenewalRental(slot.id, tx)) {
+        throw new AppError('RENTAL_NOT_ACTIVE', 'inv.rentalNonRenewalUseReturn');
+      }
+
+      const bottle = await this.queries.lockBottleForAdjustment(slot.activeBottleId, tx);
+      if (!bottle) throw notFoundFor(actor);
+
+      const now = this.clock.now();
+      await this.queries.clearSlotBottle(slot.id, tx, { markUnavailableIfAvailable: true });
+      await this.queries.removeBottle(bottle.id, now, tx);
+      const afterBottle = (await this.queries.findBottle(bottle.id, tx))!;
+      const trimmedNotes = notes?.trim() || undefined;
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: bottle.brandId,
+          action: 'inv.bottle.removed',
+          targetType: 'Bottle',
+          targetId: bottle.id,
+          before: {
+            slotId: slot.id,
+            slotStatus: slot.slotStatus,
+            status: bottle.status,
+            currentEstimatedMl: Number(bottle.currentEstimatedMl),
+          },
+          after: {
+            slotId: null,
+            slotStatus: slot.slotStatus === 'AVAILABLE' ? 'UNAVAILABLE' : slot.slotStatus,
+            status: afterBottle.status,
+            currentEstimatedMl: Number(afterBottle.currentEstimatedMl),
+            ...(trimmedNotes ? { notes: trimmedNotes } : {}),
+          },
+          metadata: { machineId: slot.machineId, slotId: slot.id },
+        },
+        tx,
+      );
+
+      return afterBottle;
+    });
+
+    return toBottleDto(updated);
+  }
+
+  /**
+   * FR-INV-16: Ghi nhận điều chỉnh tồn kho kèm lý do bắt buộc (ADR-0019, FR-AUTH-09).
+   * Đồng bộ `bottles.current_estimated_ml` và `machine_slots` nếu chai đang lắp trên slot.
+   */
+  async createAdjustment(
+    actor: AuthenticatedUser,
+    input: CreateAdjustmentInput,
+  ): Promise<InventoryAdjustment> {
+    const trimmedReason = input.reason?.trim() ?? '';
+    if (!trimmedReason) {
+      throw new AppError('ADJUSTMENT_REASON_REQUIRED', 'inv.adjustmentReasonRequired');
+    }
+
+    const record = await this.queries.transaction(async (tx) => {
+      // Khóa máy → slot trước, chai sau để cùng thứ tự với tiêu thụ liều và tháo/báo hỏng.
+      const installedSlotId = await this.queries.slotHoldingBottle(input.bottleId, tx);
+      if (
+        installedSlotId !== null &&
+        input.slotId !== undefined &&
+        input.slotId !== installedSlotId
+      ) {
+        throw invalidField('slotId', 'inv.adjustmentSlotMismatch');
+      }
+
+      const slotToLock = installedSlotId ?? input.slotId ?? null;
+      const slot = slotToLock ? await this.queries.lockSlotAndMachine(slotToLock, tx) : null;
+      if (slotToLock !== null && !slot) {
+        throw actor.brandId !== null
+          ? notFoundFor(actor)
+          : invalidField('slotId', 'inv.slotNotFound');
+      }
+
+      const bottle = await this.queries.lockBottleForAdjustment(input.bottleId, tx);
+      if (!bottle) {
+        throw actor.brandId !== null
+          ? notFoundFor(actor)
+          : invalidField('bottleId', 'inv.bottleNotFound');
+      }
+      if (actor.brandId !== null && bottle.brandId !== actor.brandId) {
+        throw notFoundFor(actor);
+      }
+
+      const stillInstalled = slot !== null && slot.activeBottleId === bottle.id;
+      const effectiveSlotId = stillInstalled ? slot.id : (input.slotId ?? null);
+
+      const beforeUnits = toFixedUnits(Number(bottle.currentEstimatedMl));
+      const afterUnits = toFixedUnits(input.afterQuantityMl);
+      const diffUnits = afterUnits - beforeUnits;
+      const beforeStr = fromFixedUnits(beforeUnits);
+      const afterStr = fromFixedUnits(afterUnits);
+      const diffStr = fromFixedUnits(diffUnits);
+
+      let nextStatus: BottleStatus = bottle.status;
+      if (stillInstalled) {
+        const dosageUnits =
+          slot.calibratedDosageMl !== null ? toFixedUnits(Number(slot.calibratedDosageMl)) : 0;
+        const thresholdUnits =
+          slot.lowStockThresholdMl !== null ? toFixedUnits(Number(slot.lowStockThresholdMl)) : null;
+        const isEmpty = dosageUnits > 0 ? afterUnits < dosageUnits : afterUnits === 0;
+        const isLow = thresholdUnits !== null && afterUnits < thresholdUnits;
+        const mutableSlotBottle =
+          bottle.status === 'INSTALLED' || bottle.status === 'LOW' || bottle.status === 'EMPTY';
+        nextStatus = !mutableSlotBottle
+          ? bottle.status
+          : isEmpty
+            ? 'EMPTY'
+            : isLow
+              ? 'LOW'
+              : 'INSTALLED';
+
+        await this.queries.setBottleStock(
+          bottle.id,
+          { remainingMl: afterStr, status: nextStatus },
+          tx,
+        );
+        await this.queries.setSlotStock(
+          slot.id,
+          {
+            remainingMl: afterStr,
+            sprays: dosageUnits > 0 ? Math.floor(afterUnits / dosageUnits) : 0,
+            status: isEmpty && slot.slotStatus === 'AVAILABLE' ? 'UNAVAILABLE' : slot.slotStatus,
+          },
+          tx,
+        );
+      } else {
+        const mutableStockBottle = bottle.status === 'IN_STOCK' || bottle.status === 'EMPTY';
+        nextStatus = !mutableStockBottle ? bottle.status : afterUnits > 0 ? 'IN_STOCK' : 'EMPTY';
+        await this.queries.setBottleStock(
+          bottle.id,
+          { remainingMl: afterStr, status: nextStatus },
+          tx,
+        );
+      }
+
+      const inserted = await this.queries.insertAdjustment(
+        {
+          brandId: bottle.brandId,
+          bottleId: bottle.id,
+          slotId: effectiveSlotId,
+          beforeQuantityMl: beforeStr,
+          afterQuantityMl: afterStr,
+          differenceMl: diffStr,
+          reason: trimmedReason,
+          adjustedBy: actor.userId,
+        },
+        tx,
+      );
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId: bottle.brandId,
+          action: 'inv.inventory.adjusted',
+          targetType: 'Bottle',
+          targetId: bottle.id,
+          severity: 'WARNING',
+          before: {
+            currentEstimatedMl: Number(beforeStr),
+            status: bottle.status,
+            slotId: effectiveSlotId,
+          },
+          after: {
+            currentEstimatedMl: Number(afterStr),
+            differenceMl: Number(diffStr),
+            status: nextStatus,
+            adjustmentId: inserted.id,
+          },
+          metadata: {
+            reason: trimmedReason,
+            slotId: effectiveSlotId,
+          },
+        },
+        tx,
+      );
+
+      return inserted;
+    });
+
+    return toAdjustmentDto(record);
+  }
+
+  /** FR-INV-17: Lịch sử vòng đời chai theo phạm vi thương hiệu. */
+  async getBottleHistory(
+    actor: AuthenticatedUser,
+    scope: BrandScope,
+    bottleId: string,
+    filter: { readonly page: number; readonly pageSize: number },
+  ): Promise<{ items: BottleHistoryEntry[]; total: number }> {
+    const bottle = await this.queries.findBottleScoped(bottleId, scope);
+    if (!bottle) throw notFoundFor(actor);
+    return this.queries.listBottleHistory(bottle.id, filter);
+  }
 }
 
 // -------------------------------------------------------------------------------------
@@ -759,6 +1213,12 @@ export function toShipmentDto(r: ShipmentRecord): ShipmentDeclaration {
     receivedAt: iso(r.receivedAt),
     resultingBatchId: r.resultingBatchId,
     createdAt: r.createdAt.toISOString(),
+    photos: r.photos.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      url: p.url,
+      createdAt: p.createdAt.toISOString(),
+    })),
   };
 }
 
@@ -803,8 +1263,16 @@ export function toBottleDto(r: BottleRecord): Bottle {
   };
 }
 
-export function toRefillDto(r: RefillSessionRecord): RefillSession {
+export function toRefillDto(r: RefillSessionRecord | RefillSessionView): RefillSession {
   return {
+    ...('slotNumber' in r
+      ? {
+          slotNumber: r.slotNumber,
+          brandName: r.brandName,
+          fragranceProductId: r.fragranceProductId,
+          productName: r.productName,
+        }
+      : {}),
     id: r.id,
     brandId: r.brandId,
     machineId: r.machineId,
@@ -823,4 +1291,27 @@ export function toRefillDto(r: RefillSessionRecord): RefillSession {
 function uniqueViolation(error: unknown): string | null {
   const e = error as { code?: string; constraint?: string };
   return e.code === '23505' ? (e.constraint ?? null) : null;
+}
+
+function toFixedUnits(ml: number): number {
+  return Math.round(ml * 10_000);
+}
+
+function fromFixedUnits(units: number): string {
+  return (units / 10_000).toFixed(4);
+}
+
+export function toAdjustmentDto(r: InventoryAdjustmentRecord): InventoryAdjustment {
+  return {
+    id: r.id,
+    brandId: r.brandId,
+    bottleId: r.bottleId,
+    slotId: r.slotId,
+    beforeQuantityMl: Number(r.beforeQuantityMl),
+    afterQuantityMl: Number(r.afterQuantityMl),
+    differenceMl: Number(r.differenceMl),
+    reason: r.reason,
+    adjustedBy: r.adjustedBy,
+    createdAt: r.createdAt.toISOString(),
+  };
 }

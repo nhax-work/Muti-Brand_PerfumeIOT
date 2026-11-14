@@ -27,13 +27,14 @@ Dùng cho mọi module. Thêm ngày 2026-09-18 khi dựng module xác thực —
 | `FORBIDDEN_SCOPE` | 403 | Ngoài phạm vi slot của thương hiệu |
 | `REAUTH_REQUIRED` | 403 | Thao tác nhạy cảm cần xác thực lại |
 
-## Sản phẩm
+## Tệp ảnh
 
-Thêm ngày 2026-11-02 theo ADR-0020 (upload ảnh sản phẩm, FR-PRD-01).
+Thêm ngày 2026-11-02 theo ADR-0020 (upload ảnh sản phẩm, FR-PRD-01); từ ADR-0022 dùng chung cho logo
+thương hiệu (FR-BND-06).
 
 | Mã | HTTP | Khi nào |
 |---|---|---|
-| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt `PRODUCT_IMAGE_MAX_BYTES` |
+| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt ngưỡng dung lượng của loại ảnh tương ứng: `PRODUCT_IMAGE_MAX_BYTES` (ảnh sản phẩm), `BRAND_LOGO_MAX_BYTES` (logo thương hiệu), `SHIPMENT_PHOTO_MAX_BYTES` (ảnh khai báo gửi hàng) |
 | `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải ảnh JPEG, PNG hay WebP hợp lệ — kiểm theo nội dung tệp, không theo đuôi tên hay `Content-Type` |
 
 ## Hóa đơn thuê slot
@@ -102,7 +103,7 @@ Thêm ngày 2026-10-14 theo ADR-0013.
 | `BATCH_NOT_APPROVED` | 409 | Lắp chai thuộc lô chưa được duyệt giấy tờ chính hãng (FR-INV-35, ADR-0017) |
 | `DOCUMENT_SUBMISSION_EXPIRED` | 409 | Nộp giấy tờ chính hãng khi thương hiệu không còn hóa đơn hiệu lực và mọi hóa đơn chờ nạp hàng đã quá `RENTAL_MAX_STOCKING_DAYS` (FR-INV-33, ADR-0017) |
 | `AUTHENTICITY_NOT_PENDING` | 409 | Duyệt/từ chối giấy tờ của lô không ở `PENDING`, hoặc nộp lại cho lô đã `APPROVED` (FR-INV-34, ADR-0017) |
-| `SHIPMENT_ALREADY_PROCESSED` | 409 | Tiếp nhận khai báo gửi hàng không còn ở `DECLARED` (FR-INV-24, ADR-0017) |
+| `SHIPMENT_ALREADY_PROCESSED` | 409 | Tiếp nhận, hoặc thêm/xóa ảnh của, khai báo gửi hàng không còn ở `DECLARED` (FR-INV-24, ADR-0017, ADR-0024) |
 | `REFILL_SESSION_OPEN` | 409 | Slot đã có phiếu nạp đang mở (FR-INV-29, ADR-0017) |
 | `REFILL_SESSION_NOT_OPEN` | 409 | Đóng phiếu nạp không ở `STARTED` (FR-INV-31, ADR-0017) |
 | `BOTTLE_NOT_IN_STOCK` | 409 | Chai chọn để lắp không ở `IN_STOCK` (FR-INV-31, ADR-0017) |

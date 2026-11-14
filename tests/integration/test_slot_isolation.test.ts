@@ -237,13 +237,16 @@ describe('slot trống chào thuê', () => {
       const slot = after.items[0] as Record<string, unknown>;
       expect(slot['slotId']).toBe(fx.slots[2]);
       expect(slot['monthlyRentPrice']).toBe('1200000.0000');
-      // Đúng bảy trường: vị trí + giá niêm yết, không hơn — thêm trường nào cũng là một đường rò mới.
+      expect(slot['machineSlotCount']).toBe(fx.slots.length);
+      // Đúng tám trường: vị trí, số slot của máy, giá niêm yết — không hơn. Thêm trường nào cũng là
+      // một đường rò mới; machineSlotCount chỉ là con số của máy, không nói slot nào của ai.
       expect(Object.keys(slot).sort()).toEqual(
         [
           'locationId',
           'locationName',
           'machineDisplayName',
           'machineId',
+          'machineSlotCount',
           'monthlyRentPrice',
           'slotId',
           'slotNumber',

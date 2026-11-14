@@ -79,7 +79,10 @@ export class BndService {
   async get(actor: AuthenticatedUser, id: string): Promise<Brand> {
     const record = await this.queries.findById(id);
     if (!record) throw notFoundFor(actor);
-    return this.toDto(record);
+    return this.toDto(
+      record,
+      actor.brandId === null && actor.roles.includes('PLATFORM_SUPER_ADMIN'),
+    );
   }
 
   /**
@@ -301,8 +304,9 @@ export class BndService {
     return dto;
   }
 
-  private toDto(record: BrandRecord): Brand {
+  private toDto(record: BrandRecord, includePayoutAccount = false): Brand {
     let payoutAccountMasked = null;
+    let payoutAccount: Brand['payoutAccount'] = null;
     const key = this.config.refundAccountEncKey;
     if (record.payoutAccountCiphertext && key) {
       try {
@@ -319,6 +323,7 @@ export class BndService {
           maskedAccountNumber,
           accountHolder: raw.accountHolder,
         };
+        if (includePayoutAccount) payoutAccount = raw;
       } catch {
         payoutAccountMasked = null;
       }
@@ -335,6 +340,7 @@ export class BndService {
       businessLicenseNumber: record.businessLicenseNumber,
       hasPayoutAccount: record.payoutAccountCiphertext !== null,
       payoutAccountMasked,
+      ...(includePayoutAccount ? { payoutAccount } : {}),
       legalVerifiedAt: record.legalVerifiedAt?.toISOString() ?? null,
       status: record.status,
       createdAt: record.createdAt.toISOString(),

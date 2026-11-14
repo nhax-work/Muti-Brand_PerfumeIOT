@@ -1,5 +1,6 @@
-import { PictureOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, PictureOutlined, PlusOutlined } from '@ant-design/icons';
 import {
+  Alert,
   Button,
   Col,
   Form,
@@ -16,12 +17,15 @@ import {
   message,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useAuth } from '@/shared/auth';
 import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { PRODUCT_PARAM, RETURN_TO_PARAM, safeReturnTo, withParams } from '@/shared/return-to';
 import {
   type Product,
   type ProductStatus,
@@ -40,7 +44,7 @@ interface ProductForm {
   description?: string;
   defaultPrice: number;
   fullBottleRetailPrice?: number | null;
-  fullBottleVolumeMl?: number | null;
+  fullBottleVolumeMl: number;
 }
 
 /**
@@ -57,7 +61,17 @@ export default function ProductsPage() {
   const { data, isLoading } = useProducts({ page, pageSize: 20, status });
   const save = useSaveProduct();
   const discontinue = useDiscontinueProduct();
-  const [editing, setEditing] = useState<Product | 'new' | null>(null);
+  const navigate = useNavigate();
+  // `?new=1&returnTo=…`: tới từ nút "Tạo sản phẩm" ở modal cấu hình slot — mở sẵn pop-up tạo sản
+  // phẩm, tạo xong đưa về đúng slot đó với sản phẩm mới được chọn sẵn.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantsNew = canEdit && searchParams.get('new') === '1';
+  const [returnTo] = useState(() => safeReturnTo(searchParams.get(RETURN_TO_PARAM)));
+  const [editing, setEditing] = useState<Product | 'new' | null>(() => (wantsNew ? 'new' : null));
+  // Bỏ tham số sau lần mở đầu để tải lại trang không bật pop-up lần nữa.
+  useEffect(() => {
+    if (wantsNew) setSearchParams({}, { replace: true });
+  }, [wantsNew, setSearchParams]);
   const [form] = Form.useForm<ProductForm>();
   const uploadImage = useUploadProductImage();
   const deleteImage = useDeleteProductImage();
@@ -76,7 +90,7 @@ export default function ProductsPage() {
         fullBottleRetailPrice: product.fullBottleRetailPrice
           ? Number(product.fullBottleRetailPrice)
           : null,
-        fullBottleVolumeMl: product.fullBottleVolumeMl,
+        fullBottleVolumeMl: product.fullBottleVolumeMl ?? undefined,
       });
     }
   };
@@ -98,7 +112,7 @@ export default function ProductsPage() {
           currency: 'VND',
           fullBottleRetailPrice:
             v.fullBottleRetailPrice != null ? String(v.fullBottleRetailPrice) : undefined,
-          fullBottleVolumeMl: v.fullBottleVolumeMl ?? undefined,
+          fullBottleVolumeMl: v.fullBottleVolumeMl,
         },
       });
     } catch (error) {
@@ -120,6 +134,9 @@ export default function ProductsPage() {
     }
     message.success(t('ui.productSaved'));
     setEditing(null);
+    if (editing === 'new' && returnTo) {
+      void navigate(withParams(returnTo, { [PRODUCT_PARAM]: saved.id }));
+    }
   };
 
   const columns: ColumnsType<Product> = [
@@ -217,6 +234,23 @@ export default function ProductsPage() {
     <RequireRole allow={['BRAND_ADMIN', 'PLATFORM_SUPER_ADMIN']}>
       <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
         <Typography.Title level={3}>{t('ui.products')}</Typography.Title>
+        {returnTo && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            title={t('ui.productReturnToSlotHint')}
+            action={
+              <Button
+                size="small"
+                icon={<ArrowLeftOutlined />}
+                onClick={() => void navigate(returnTo)}
+              >
+                {t('ui.backToSlotSetup')}
+              </Button>
+            }
+          />
+        )}
         <Space style={{ marginBottom: 16 }}>
           {canEdit && (
             <Button type="primary" icon={<PlusOutlined />} onClick={() => open('new')}>
@@ -300,8 +334,25 @@ export default function ProductsPage() {
                 </Form.Item>
               </Col>
               <Col xs={24} sm={10}>
-                <Form.Item name="fullBottleVolumeMl" label={t('ui.productVolumeMl')}>
-                  <InputNumber min={0} suffix="ml" style={{ width: '100%' }} />
+                <Form.Item
+                  name="fullBottleVolumeMl"
+                  label={t('ui.productVolumeMl')}
+                  extra={t('prd.bottleVolumeMinimum', {
+                    min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                  })}
+                  rules={[
+                    { required: true, message: t('validation.required') },
+                    {
+                      type: 'number',
+                      min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                      message: t('prd.bottleVolumeMinimum', {
+                        min: SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML,
+                      }),
+                    },
+                  ]}
+                >
+                  {/* Để Form kiểm ngưỡng: min trên InputNumber có thể giữ giá trị cũ khi nhập dưới ngưỡng. */}
+                  <InputNumber suffix="ml" style={{ width: '100%' }} />
                 </Form.Item>
               </Col>
             </Row>

@@ -1,6 +1,6 @@
 # FR-INV — Tồn kho và nạp nước hoa
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 35 mục = 33 FR hiệu lực + 2 FR bãi bỏ (mức X)  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 37 mục = 35 FR hiệu lực + 2 FR bãi bỏ (mức X); FR-INV-36, 37 thêm ngày 2026-11-12 theo ADR-0026, ADR-0028  
 > Trạng thái AC: **hoàn thành** (FR-INV-04, 30, 31 soát lại và FR-INV-32÷35 thêm ngày 2026-10-17 theo ADR-0013, ADR-0014, ADR-0015; FR-INV-05, 13, 15 sửa và FR-INV-18, 19 bãi bỏ ngày 2026-10-28 theo ADR-0019 — máy không có load cell)  
 > Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
@@ -343,8 +343,10 @@
 - AC1: Cho khai báo `D` được xác nhận tiếp nhận, Khi hệ thống xử lý, Thì trong cùng một transaction hệ thống tạo `InventoryBatch` với `source_declaration_id = D.id`, `brand_id` và `fragrance_product_id` lấy từ khai báo, `quantity_received` bằng số thực nhận.
 - AC2: Cho lô được tạo tự động, Khi kiểm tra bản ghi, Thì `source_declaration_id` khác NULL — phân biệt được với lô nhập thủ công.
 - AC3 (Ràng buộc cùng thương hiệu): Cho nỗ lực tạo lô với `fragrance_product_id` thuộc thương hiệu khác `brand_id`, Khi ghi vào CSDL, Thì composite foreign key `fk_batch_product_same_brand` từ chối thao tác.
+- AC4 (Tự tạo chai, ADR-0025): Cho khai báo `D` được tiếp nhận với số thực nhận `N > 0` và số lô `L`, Khi hệ thống tạo lô, Thì trong cùng transaction hệ thống tạo đúng `N` chai `IN_STOCK` thuộc lô đó, mã `{sku}-{L}-{số thứ tự}` đệm 0 ít nhất 3 chữ số, `initial_volume_ml` bằng `D.declared_bottle_volume_ml`, hạn dùng theo lô.
+- AC5 (Mã chai trùng, ADR-0025): Cho một chai của thương hiệu đã có mã trùng với mã sẽ sinh, Khi xác nhận tiếp nhận, Thì hệ thống từ chối với `VALIDATION_ERROR` trên `batchNumber` và không đổi khai báo, không tạo lô, không tạo chai nào.
 
-**Kiểm tra:** `test_FR_INV_26_auto_create_batch_on_receive`
+**Kiểm tra:** `test_FR_INV_26_auto_create_batch_on_receive`, `test_FR_INV_26_auto_create_bottles_on_receive`
 
 ## FR-INV-27 — Brand Admin xem lịch sử gửi hàng
 
@@ -478,3 +480,36 @@
 - AC2 (Cho phép khi đã duyệt): Cho chai `C` thuộc lô hàng đã có `authenticity_status = 'APPROVED'`, Khi chọn chai `C` để nạp vào slot, Thì hệ thống chấp nhận lắp chai và đóng phiên nạp thành công.
 
 **Kiểm tra:** `test_FR_INV_35_reject_install_unapproved_batch_bottle`
+
+## FR-INV-36 — Việc cần nạp
+
+**Tuyên bố:** Hệ thống phải liệt kê cho Inventory Staff các slot cần lắp hoặc thay chai, kèm lý do chưa làm được và chai gợi ý lắp (ADR-0026).
+
+**Dấu vết:** BR-005, BR-008 · **Ưu tiên:** M · ADR-0026 · **API:** `GET /refill-worklist`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Lắp chai đầu tiên): Cho slot có hóa đơn `DRAFT` đã thanh toán, Khi Inventory Staff xem việc cần nạp, Thì slot có mặt với loại `FIRST_INSTALL`.
+- AC2 (Yêu cầu bổ sung): Cho slot có yêu cầu bổ sung đang mở, Khi xem việc cần nạp, Thì slot có loại `REFILL_REQUEST`; yêu cầu còn `SUBMITTED` thì lý do chặn là `REQUEST_NOT_APPROVED`.
+- AC3 (Sắp hết): Cho slot đang bán dưới ngưỡng sắp hết và không có yêu cầu bổ sung, Khi xem việc cần nạp, Thì slot có loại `LOW_STOCK`. Slot đang bán còn đủ không có trong danh sách.
+- AC4 (Lý do chặn): Cho việc chưa làm được, Khi xem việc cần nạp, Thì lý do là `PRODUCT_NOT_ASSIGNED` nếu chưa gán sản phẩm, `NO_STOCK` nếu kho không có chai còn hạn của sản phẩm, `DOCS_NOT_APPROVED` nếu có chai nhưng không lô nào đã duyệt giấy tờ.
+- AC5 (Chai gợi ý lắp được): Cho kho có nhiều chai lắp được của sản phẩm, Khi xem việc cần nạp, Thì chai gợi ý là chai hết hạn sớm nhất, và đóng phiếu nạp với chai đó thì máy chủ chấp nhận.
+- AC6 (Quyền): Cho tài khoản không có `inventory.manage`, Khi gọi `GET /refill-worklist`, Thì hệ thống trả 403.
+
+**Kiểm tra:** `test_FR_INV_36_*` (`tests/integration/test_inv_refill_worklist.test.ts`)
+
+## FR-INV-37 — Hủy phiếu nạp
+
+**Tuyên bố:** Hệ thống phải cho phép Inventory Staff hủy phiếu nạp đang mở mà không lắp chai, kèm lý do bắt buộc (ADR-0028).
+
+**Dấu vết:** BR-005, BR-010 · **Ưu tiên:** M · ADR-0028 · **API:** `POST /refill-sessions/{id}/cancel`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Máy bán lại ngay): Cho phiếu `STARTED` là phiếu mở duy nhất trên máy, Khi Inventory Staff hủy kèm lý do, Thì phiếu chuyển `CANCELLED`, lý do ghi vào ghi chú và nhật ký, slot giữ nguyên chai cũ, và máy nhận đơn mới ngay.
+- AC2 (Bắt buộc lý do): Cho yêu cầu hủy có lý do rỗng, Khi gửi, Thì hệ thống từ chối với `VALIDATION_ERROR` và phiếu vẫn `STARTED`.
+- AC3 (Chỉ phiếu đang mở): Cho phiếu không còn `STARTED`, Khi hủy, Thì hệ thống từ chối với `REFILL_SESSION_NOT_OPEN`.
+- AC4 (Gỡ yêu cầu bổ sung): Cho phiếu đã gắn yêu cầu bổ sung (FR-RFQ-08), Khi hủy phiếu, Thì yêu cầu giữ trạng thái và không còn gắn phiếu nào, và gắn được với phiếu mở sau.
+- AC5 (Quyền): Cho Brand Admin, Khi gọi hủy phiếu, Thì hệ thống trả 403.
+
+**Kiểm tra:** `test_FR_INV_37_*` (`tests/integration/test_adr_0028_sales_stop_cancel_bell.test.ts`)

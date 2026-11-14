@@ -1,35 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
 import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Col,
   Empty,
   Form,
   Row,
   Select,
+  Skeleton,
+  Space,
   Spin,
-  Statistic,
   Tag,
   Typography,
   message,
 } from 'antd';
-import {
-  AppstoreAddOutlined,
-  CheckCircleOutlined,
-  DollarCircleOutlined,
-  ShoppingCartOutlined,
-} from '@ant-design/icons';
+import { CloseOutlined, DollarCircleOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { FrameworkAgreementModal } from '@/shared/agreement';
 import { ApiRequestError, errorMessage } from '@/shared/api';
 import { useResendVerification } from '@/shared/auth';
+import { formatVnd } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import { useAvailableSlots, useCreateCheckout, useRentalQuote, type AvailableSlot } from './api';
+import { RentMachineCard } from './RentMachineCard';
+import { groupByMachine } from './rentMachines';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 interface SelectedSlotConfig {
   slotId: string;
@@ -110,56 +108,58 @@ function SlotQuoteSelector({
   };
 
   return (
-    <Card
-      size="small"
-      style={{ marginTop: 8, background: '#fafafa', borderColor: '#d9d9d9' }}
-      title={
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>
-            Slot {slot.slotNumber} • {Number(slot.monthlyRentPrice || 0).toLocaleString('vi-VN')}{' '}
-            đ/tháng
-          </span>
-          {slotTotal > 0 && (
-            <Tag color="blue">
-              {slotTotal.toLocaleString('vi-VN')} {quote.currency}
-            </Tag>
-          )}
-        </div>
-      }
-    >
-      <Row gutter={12}>
-        <Col xs={24} sm={12}>
-          <Form.Item label={t('ui.selectPackage')} required style={{ marginBottom: 8 }}>
-            <Select
-              placeholder={t('ui.selectPackage')}
-              value={config.rentalPackageId}
-              onChange={handlePackageChange}
-              options={quote.packages.map((pkg) => ({
-                label: `${pkg.name} (${pkg.durationMonths} tháng${
-                  pkg.discountPercent > 0 ? ` • -${pkg.discountPercent}%` : ''
-                }) — ${Number(pkg.rentAmount).toLocaleString('vi-VN')} đ`,
-                value: pkg.rentalPackageId,
-              }))}
-            />
-          </Form.Item>
-        </Col>
-        <Col xs={24} sm={12}>
-          <Form.Item label={t('ui.selectStoragePlan')} required style={{ marginBottom: 8 }}>
-            <Select
-              placeholder={t('ui.selectStoragePlan')}
-              value={config.storagePlanId}
-              onChange={handlePlanChange}
-              options={quote.storagePlans.map((plan) => ({
-                label: `${plan.name} (${Number(plan.monthlyPrice).toLocaleString('vi-VN')} đ/tháng • Bồi thường ${
-                  plan.coveragePercent
-                }%)`,
-                value: plan.id,
-              }))}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-    </Card>
+    <div className="rent-config">
+      <div className="rent-config-head">
+        <Text strong>{t('ui.slotNumber', { slotNumber: slot.slotNumber })}</Text>
+        {slotTotal > 0 && (
+          <Text strong className="rent-config-total">
+            {formatVnd(String(slotTotal))}
+          </Text>
+        )}
+      </div>
+      <Form layout="vertical" component="div">
+        <Row gutter={12}>
+          <Col xs={24} sm={12}>
+            <Form.Item label={t('ui.selectPackage')} required className="rent-config-field">
+              <Select
+                placeholder={t('ui.selectPackage')}
+                value={config.rentalPackageId}
+                onChange={handlePackageChange}
+                options={quote.packages.map((pkg) => ({
+                  label: `${
+                    pkg.discountPercent > 0
+                      ? t('ui.packageWithMonthsDiscount', {
+                          name: pkg.name,
+                          months: pkg.durationMonths,
+                          discount: pkg.discountPercent,
+                        })
+                      : t('ui.packageWithMonths', { name: pkg.name, months: pkg.durationMonths })
+                  } — ${formatVnd(pkg.rentAmount)}`,
+                  value: pkg.rentalPackageId,
+                }))}
+              />
+            </Form.Item>
+          </Col>
+          <Col xs={24} sm={12}>
+            <Form.Item label={t('ui.selectStoragePlan')} required className="rent-config-field">
+              <Select
+                placeholder={t('ui.selectStoragePlan')}
+                value={config.storagePlanId}
+                onChange={handlePlanChange}
+                options={quote.storagePlans.map((plan) => ({
+                  label: t('ui.storagePlanOption', {
+                    name: plan.name,
+                    price: formatVnd(plan.monthlyPrice),
+                    percent: plan.coveragePercent,
+                  }),
+                  value: plan.id,
+                }))}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+      </Form>
+    </div>
   );
 }
 
@@ -177,9 +177,23 @@ export default function AvailableSlotsPage() {
   const [unverifiedEmailAlert, setUnverifiedEmailAlert] = useState(false);
   const [holdLimitAlert, setHoldLimitAlert] = useState(false);
 
-  const slots = data?.items ?? [];
+  const slots = useMemo(() => data?.items ?? [], [data]);
+  const machines = useMemo(() => groupByMachine(slots), [slots]);
+  const slotById = useMemo(() => new Map(slots.map((s) => [s.slotId, s])), [slots]);
+  const selectedIds = useMemo(() => new Set(selectedConfigs.keys()), [selectedConfigs]);
 
-  const handleToggleSlot = (slot: AvailableSlot, checked: boolean) => {
+  // Chưa bấm máy nào thì mở sẵn máy đầu tiên để thấy ngay dãy ô.
+  const [expandedIds, setExpandedIds] = useState<ReadonlySet<string> | null>(null);
+  const isExpanded = (machineId: string) =>
+    expandedIds ? expandedIds.has(machineId) : machines[0]?.machineId === machineId;
+  const toggleExpanded = (machineId: string) => {
+    const next = new Set(expandedIds ?? (machines[0] ? [machines[0].machineId] : []));
+    if (next.has(machineId)) next.delete(machineId);
+    else next.add(machineId);
+    setExpandedIds(next);
+  };
+
+  const handleToggleSlot = (slot: AvailableSlot, checked = !selectedConfigs.has(slot.slotId)) => {
     const next = new Map(selectedConfigs);
     if (checked) {
       next.set(slot.slotId, { slotId: slot.slotId });
@@ -277,15 +291,18 @@ export default function AvailableSlotsPage() {
     0,
   );
 
+  const selectedSlots = Array.from(selectedConfigs.values())
+    .map((cfg) => ({ cfg, slot: slotById.get(cfg.slotId) }))
+    .filter((x): x is { cfg: SelectedSlotConfig; slot: AvailableSlot } => Boolean(x.slot));
+
   return (
     <RequireRole allow={['BRAND_ADMIN']}>
-      <div style={{ padding: '24px', maxWidth: 1200, margin: '0 auto' }}>
-        <div style={{ marginBottom: 24 }}>
-          <Title level={2} style={{ marginBottom: 4 }}>
-            <AppstoreAddOutlined style={{ marginRight: 8, color: '#1677ff' }} />
+      <Space direction="vertical" size="large" style={{ width: '100%' }}>
+        <div>
+          <Title level={3} style={{ margin: 0 }}>
             {t('ui.availableSlotsTitle')}
           </Title>
-          <Paragraph type="secondary">{t('ui.availableSlotsSubtitle')}</Paragraph>
+          <Text type="secondary">{t('ui.availableSlotsSubtitle')}</Text>
         </div>
 
         {unverifiedEmailAlert && (
@@ -303,7 +320,6 @@ export default function AvailableSlotsPage() {
                 {t('ui.resendVerification')}
               </Button>
             }
-            style={{ marginBottom: 16 }}
             closable
             onClose={() => setUnverifiedEmailAlert(false)}
           />
@@ -316,121 +332,116 @@ export default function AvailableSlotsPage() {
             showIcon
             closable
             onClose={() => setHoldLimitAlert(false)}
-            style={{ marginBottom: 16 }}
           />
         )}
 
-        {error && (
-          <Alert
-            type="error"
-            message={errorMessage(error, t)}
-            showIcon
-            style={{ marginBottom: 16 }}
-          />
-        )}
+        {error && <Alert type="error" message={errorMessage(error, t)} showIcon />}
 
         {isLoading ? (
-          <div style={{ textAlign: 'center', padding: '60px 0' }}>
-            <Spin size="large" />
-          </div>
+          <Card>
+            <Skeleton active paragraph={{ rows: 6 }} />
+          </Card>
         ) : slots.length === 0 ? (
-          <Empty description={t('ui.noAvailableSlots')} />
+          <Card>
+            <Empty description={t('ui.noAvailableSlots')} />
+          </Card>
         ) : (
-          <Row gutter={[24, 24]}>
-            <Col xs={24} lg={16}>
-              <Card title={`${t('ui.slots')} (${slots.length})`}>
-                {slots.map((slot) => {
-                  const isSelected = selectedConfigs.has(slot.slotId);
-                  const config = selectedConfigs.get(slot.slotId);
-
-                  return (
-                    <div
-                      key={slot.slotId}
-                      style={{
-                        padding: '12px',
-                        marginBottom: '12px',
-                        border: '1px solid #f0f0f0',
-                        borderRadius: '8px',
-                        background: isSelected ? '#f6ffed' : '#fff',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          onChange={(e) => handleToggleSlot(slot, e.target.checked)}
-                        >
-                          <Text strong style={{ fontSize: 16 }}>
-                            Slot #{slot.slotNumber}
-                          </Text>{' '}
-                          <Text type="secondary">
-                            ({slot.machineDisplayName || slot.machineId} • {slot.locationName})
-                          </Text>
-                        </Checkbox>
-                        <Tag color="green">
-                          {Number(slot.monthlyRentPrice || 0).toLocaleString('vi-VN')} đ/tháng
-                        </Tag>
+          <Row gutter={[24, 24]} align="top">
+            <Col xs={24} xl={16}>
+              <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                <Text type="secondary">
+                  {t('ui.rentMachinesCount', { count: machines.length, slots: slots.length })}
+                </Text>
+                {machines.map((machine) => (
+                  <RentMachineCard
+                    key={machine.machineId}
+                    machine={machine}
+                    expanded={isExpanded(machine.machineId)}
+                    onToggleExpanded={() => toggleExpanded(machine.machineId)}
+                    selectedSlotIds={selectedIds}
+                    onToggleSlot={(slot) => handleToggleSlot(slot)}
+                  >
+                    {selectedSlots.some(({ slot }) => slot.machineId === machine.machineId) && (
+                      <div className="rent-config-list">
+                        <Text strong>{t('ui.rentConfigTitle')}</Text>
+                        {selectedSlots
+                          .filter(({ slot }) => slot.machineId === machine.machineId)
+                          .sort((a, b) => a.slot.slotNumber - b.slot.slotNumber)
+                          .map(({ slot, cfg }) => (
+                            <SlotQuoteSelector
+                              key={slot.slotId}
+                              slot={slot}
+                              config={cfg}
+                              onChange={handleUpdateConfig}
+                            />
+                          ))}
                       </div>
-
-                      {isSelected && config && (
-                        <SlotQuoteSelector
-                          slot={slot}
-                          config={config}
-                          onChange={handleUpdateConfig}
-                        />
-                      )}
-                    </div>
-                  );
-                })}
-              </Card>
+                    )}
+                  </RentMachineCard>
+                ))}
+              </Space>
             </Col>
 
-            <Col xs={24} lg={8}>
+            <Col xs={24} xl={8}>
               <Card
+                className="rent-cart"
                 title={
-                  <span>
-                    <ShoppingCartOutlined style={{ marginRight: 8 }} />
+                  <Space size={8}>
+                    <ShoppingCartOutlined />
                     {t('ui.cartSummary')}
-                  </span>
+                  </Space>
                 }
-                style={{ position: 'sticky', top: 24 }}
+                extra={
+                  <Tag color={selectedConfigs.size > 0 ? 'blue' : 'default'}>
+                    {t('ui.selectedSlotsCount', { count: selectedConfigs.size })}
+                  </Tag>
+                }
               >
-                <Statistic
-                  title={t('ui.selectedSlotsCount', { count: selectedConfigs.size })}
-                  value={selectedConfigs.size}
-                  prefix={<CheckCircleOutlined />}
-                  valueStyle={{ color: '#1677ff' }}
-                />
-
-                {totalEstimatedAmount > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <Statistic
-                      title={t('ui.estimatedTotal')}
-                      value={totalEstimatedAmount.toLocaleString('vi-VN')}
-                      suffix="VND"
-                      valueStyle={{ color: '#52c41a', fontWeight: 600 }}
-                    />
-                  </div>
+                {selectedSlots.length === 0 ? (
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('ui.rentCartEmpty')} />
+                ) : (
+                  <ul className="rent-cart-list">
+                    {selectedSlots.map(({ slot, cfg }) => (
+                      <li key={slot.slotId}>
+                        <div className="rent-cart-item-info">
+                          <Text strong>{t('ui.slotNumber', { slotNumber: slot.slotNumber })}</Text>
+                          <Text type="secondary" ellipsis>
+                            {slot.machineDisplayName || slot.machineId}
+                          </Text>
+                        </div>
+                        <Text className="rent-cart-item-amount">
+                          {cfg.estimatedTotal ? formatVnd(String(cfg.estimatedTotal)) : '—'}
+                        </Text>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<CloseOutlined />}
+                          aria-label={t('ui.rentRemoveSlot')}
+                          onClick={() => handleToggleSlot(slot, false)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
                 )}
 
-                <div style={{ marginTop: 24 }}>
-                  <Button
-                    type="primary"
-                    size="large"
-                    block
-                    icon={<DollarCircleOutlined />}
-                    disabled={selectedConfigs.size === 0}
-                    loading={createCheckout.isPending}
-                    onClick={handleCheckout}
-                  >
-                    {t('ui.holdAndCheckout')}
-                  </Button>
+                <div className="rent-cart-total">
+                  <Text type="secondary">{t('ui.estimatedTotal')}</Text>
+                  <Text strong className="rent-cart-total-amount">
+                    {formatVnd(String(totalEstimatedAmount))}
+                  </Text>
                 </div>
+
+                <Button
+                  type="primary"
+                  size="large"
+                  block
+                  icon={<DollarCircleOutlined />}
+                  disabled={selectedConfigs.size === 0}
+                  loading={createCheckout.isPending}
+                  onClick={handleCheckout}
+                >
+                  {t('ui.holdAndCheckout')}
+                </Button>
               </Card>
             </Col>
           </Row>
@@ -443,7 +454,7 @@ export default function AvailableSlotsPage() {
           onAccepted={handleCheckout}
           busy={createCheckout.isPending}
         />
-      </div>
+      </Space>
     </RequireRole>
   );
 }

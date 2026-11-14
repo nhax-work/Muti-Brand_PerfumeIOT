@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installDomStubs, renderScreen } from '@/test-utils';
@@ -111,13 +111,20 @@ describe('BottleReturnsPage', () => {
     expect(screen.getByText('Chờ nhận hàng')).toBeDefined();
   });
 
-  it('marks a pending return as overdue after its pickup deadline', () => {
-    vi.setSystemTime(new Date('2026-11-10T08:00:00Z'));
+  it.each([
+    ['2026-11-09T07:59:59.999Z', 'Chờ nhận hàng'],
+    ['2026-11-09T08:00:00.000Z', 'Chờ nhận hàng'],
+    ['2026-11-09T08:00:00.001Z', 'Chờ nhận hàng (Quá hạn)'],
+  ])('hiển thị trạng thái nhận hàng tại %s là %s', (now, status) => {
+    vi.setSystemTime(new Date(now));
     renderScreen(<BottleReturnsPage />);
 
-    expect(screen.getByText('Chờ nhận hàng (Quá hạn)')).toBeDefined();
-    expect(screen.queryByText('Chờ nhận hàng')).toBeNull();
-    expect(screen.getByText('Đã bàn giao')).toBeDefined();
+    const pendingRow = screen.getByText('ret-1').closest('tr')!;
+    expect(within(pendingRow).getByText(status)).toBeDefined();
+
+    const handedOverRow = screen.getByText('ret-2').closest('tr')!;
+    expect(within(handedOverRow).getByText('Đã bàn giao')).toBeDefined();
+    expect(within(handedOverRow).queryByText(/Chờ nhận hàng/)).toBeNull();
   });
 
   it('opens detail drawer when clicking details button', () => {

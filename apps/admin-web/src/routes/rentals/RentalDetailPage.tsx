@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   Alert,
   Button,
@@ -25,23 +25,23 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   DeleteOutlined,
-  DollarCircleOutlined,
   FileTextOutlined,
   ReloadOutlined,
+  SettingOutlined,
   StopOutlined,
   SwapOutlined,
-  TagOutlined,
   UndoOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useMyBrand } from '@/routes/brand-profile/api';
 import { useRentalPackages, useStoragePlans } from '@/routes/pricing/api';
 import { errorMessage } from '@/shared/api';
+import { formatVnd } from '@/shared/format';
+import { CONFIGURE_PARAM, PRODUCT_PARAM } from '@/shared/return-to';
 import { useAuth } from '@/shared/auth';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
 import {
-  useAssignProduct,
   useAvailableSlots,
   useBrandProducts,
   useCloseSlotRental,
@@ -50,13 +50,13 @@ import {
   useRenewSlotRental,
   useRequestNonRenewal,
   useSetGracePeriod,
-  useSetPricePerSpray,
   useSlotRental,
   useSwapSlot,
   useWithdrawNonRenewal,
   type BottleReturnMethod,
   type RentalInvoiceStage,
 } from './api';
+import { SlotSetupModal } from './SlotSetupModal';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -87,8 +87,6 @@ export default function RentalDetailPage() {
   const { data: brand } = useMyBrand(isBrandAdmin);
   const { data: packages = [] } = useRentalPackages();
   const { data: plans = [] } = useStoragePlans();
-  const assignProduct = useAssignProduct();
-  const setPricePerSpray = useSetPricePerSpray();
   const swapSlot = useSwapSlot();
   const requestNonRenewal = useRequestNonRenewal();
   const withdrawNonRenewal = useWithdrawNonRenewal();
@@ -97,14 +95,19 @@ export default function RentalDetailPage() {
   const liquidateRental = useLiquidateSlotRental();
   const closeRental = useCloseSlotRental();
 
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
-  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  // `?configure=<id>&product=<sản phẩm>`: quay về từ trang tạo sản phẩm hay khai báo gửi hàng.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(
+    () => searchParams.get(CONFIGURE_PARAM) === id,
+  );
+  const [returnedProductId] = useState(() => searchParams.get(PRODUCT_PARAM) ?? undefined);
+  useEffect(() => {
+    if (searchParams.has(CONFIGURE_PARAM)) setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
   const [isNonRenewalModalOpen, setIsNonRenewalModalOpen] = useState(false);
   const [returnMethod, setReturnMethod] = useState<BottleReturnMethod>('WAREHOUSE_PICKUP');
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState<string | undefined>(undefined);
-  const [priceInput, setPriceInput] = useState<string>('');
   const [selectedTargetSlotId, setSelectedTargetSlotId] = useState<string | undefined>(undefined);
 
   const [isRenewModalOpen, setIsRenewModalOpen] = useState(false);
@@ -210,28 +213,6 @@ export default function RentalDetailPage() {
     }
   };
 
-  const handleAssignProductSubmit = async () => {
-    if (!id || !selectedProductId) return;
-    try {
-      await assignProduct.mutateAsync({ rentalId: id, fragranceProductId: selectedProductId });
-      message.success(t('ui.productAssigned'));
-      setIsAssignModalOpen(false);
-    } catch (err: unknown) {
-      message.error(errorMessage(err, t));
-    }
-  };
-
-  const handleSetPriceSubmit = async () => {
-    if (!id || !priceInput) return;
-    try {
-      await setPricePerSpray.mutateAsync({ rentalId: id, pricePerSpray: priceInput });
-      message.success(t('ui.pricePerSprayUpdated'));
-      setIsPriceModalOpen(false);
-    } catch (err: unknown) {
-      message.error(errorMessage(err, t));
-    }
-  };
-
   const handleNonRenewalSubmit = async () => {
     if (!id) return;
     try {
@@ -259,6 +240,14 @@ export default function RentalDetailPage() {
   };
 
   const canRenew = isBrandAdmin && ['EXPIRING', 'GRACE'].includes(rental?.status ?? invoice.stage);
+  // Cấu hình sản phẩm và giá là việc của thương hiệu khi hóa đơn còn giữ slot (FR-SLT-27, FR-SLT-08).
+  const canConfigure =
+    isBrandAdmin &&
+    Boolean(rental) &&
+    ['AWAITING_STOCK', 'ACTIVE', 'EXPIRING', 'GRACE'].includes(invoice.stage);
+  const assignedProductName = rental?.fragranceProductId
+    ? products.find((p) => p.id === rental.fragranceProductId)?.name
+    : undefined;
   const canEditGracePeriod = isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
   const canLiquidate = isSuperAdmin && (rental?.status ?? invoice.stage) === 'GRACE';
   const canCloseRental = isSuperAdmin && (rental?.status ?? invoice.stage) === 'LIQUIDATED';
@@ -423,27 +412,13 @@ export default function RentalDetailPage() {
                     {t('ui.swapSlot')}
                   </Button>
                 )}
-                {isBrandAdmin && (
+                {canConfigure && (
                   <Button
-                    icon={<TagOutlined />}
-                    onClick={() => {
-                      setSelectedProductId(undefined);
-                      setIsAssignModalOpen(true);
-                    }}
+                    type={canRenew ? 'default' : 'primary'}
+                    icon={<SettingOutlined />}
+                    onClick={() => setIsSetupModalOpen(true)}
                   >
-                    {t('ui.assignProduct')}
-                  </Button>
-                )}
-                {isBrandAdmin && (
-                  <Button
-                    type="primary"
-                    icon={<DollarCircleOutlined />}
-                    onClick={() => {
-                      setPriceInput('');
-                      setIsPriceModalOpen(true);
-                    }}
-                  >
-                    {t('ui.setPricePerSpray')}
+                    {t('ui.configSlot')}
                   </Button>
                 )}
                 {canRequestNonRenewal && (
@@ -548,6 +523,16 @@ export default function RentalDetailPage() {
                 </Text>
               )}
             </Descriptions.Item>
+            {rental && (
+              <Descriptions.Item label={t('ui.mySlotsProduct')}>
+                {assignedProductName ?? '—'}
+              </Descriptions.Item>
+            )}
+            {rental && (
+              <Descriptions.Item label={t('ui.pricePerSpray')}>
+                {formatVnd(rental.pricePerSpray)}
+              </Descriptions.Item>
+            )}
             {rental?.graceEndsAt && (
               <Descriptions.Item label={t('ui.graceEndsAt')}>
                 <Text type="danger">
@@ -584,50 +569,16 @@ export default function RentalDetailPage() {
           </Descriptions>
         </Card>
 
-        {/* Modal Gán/Đổi sản phẩm */}
-        <Modal
-          title={t('ui.assignProduct')}
-          open={isAssignModalOpen}
-          onCancel={() => setIsAssignModalOpen(false)}
-          onOk={handleAssignProductSubmit}
-          confirmLoading={assignProduct.isPending}
-        >
-          <Form layout="vertical" style={{ marginTop: 16 }}>
-            <Form.Item label={t('ui.selectProductPlaceholder')} required>
-              <Select
-                placeholder={t('ui.selectProductPlaceholder')}
-                value={selectedProductId}
-                onChange={setSelectedProductId}
-                options={products.map((p) => ({
-                  label: `${p.name} • SKU: ${p.sku}`,
-                  value: p.id,
-                }))}
-              />
-            </Form.Item>
-          </Form>
-        </Modal>
-
-        {/* Modal Đặt giá lượt xịt */}
-        <Modal
-          title={t('ui.setPricePerSpray')}
-          open={isPriceModalOpen}
-          onCancel={() => setIsPriceModalOpen(false)}
-          onOk={handleSetPriceSubmit}
-          confirmLoading={setPricePerSpray.isPending}
-        >
-          <Form layout="vertical" style={{ marginTop: 16 }}>
-            <Form.Item label={t('ui.pricePerSprayVND')} required>
-              <Input
-                type="number"
-                min="1000"
-                step="1000"
-                placeholder="VD: 15000"
-                value={priceInput}
-                onChange={(e) => setPriceInput(e.target.value)}
-              />
-            </Form.Item>
-          </Form>
-        </Modal>
+        {rental && isSetupModalOpen && (
+          <SlotSetupModal
+            open
+            rental={rental}
+            slotLabel={`${invoice.machineDisplayName ?? ''} · Slot #${invoice.slotNumber}`}
+            locationName={invoice.locationName ?? undefined}
+            initialProductId={returnedProductId}
+            onClose={() => setIsSetupModalOpen(false)}
+          />
+        )}
 
         {/* Modal Đổi slot (FR-SLT-55, ADR-0014) */}
         <Modal

@@ -3,12 +3,16 @@ import { RfqModule } from '../rfq/index.js';
 import { SltCompensationModule, SltModule } from '../slt/index.js';
 import {
   BottlesController,
+  InventoryAdjustmentsController,
   InventoryBatchesController,
   RefillSessionsController,
+  RefillWorklistController,
   ShipmentDeclarationsController,
+  SlotBottleController,
 } from './inv.http.js';
 import { InvQueries } from './inv.queries.js';
 import { InvService } from './inv.service.js';
+import { ShipmentPhotoService } from './shipment-photo.service.js';
 
 @Module({
   // Chai hư hỏng sinh khoản bồi thường; phiếu nạp nối yêu cầu bổ sung và kích hoạt hóa đơn khi lắp
@@ -19,8 +23,11 @@ import { InvService } from './inv.service.js';
     InventoryBatchesController,
     BottlesController,
     RefillSessionsController,
+    SlotBottleController,
+    InventoryAdjustmentsController,
+    RefillWorklistController,
   ],
-  providers: [InvQueries, InvService],
+  providers: [InvQueries, InvService, ShipmentPhotoService],
   exports: [InvService],
 })
 export class InvModule {}

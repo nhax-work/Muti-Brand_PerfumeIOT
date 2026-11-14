@@ -34,3 +34,28 @@ export function useUpdateMyBrandLegalProfile() {
     onSuccess: (brand) => queryClient.setQueryData(['brands', 'me'], brand),
   });
 }
+
+/**
+ * Upload logo thương hiệu (FR-BND-06, ADR-0022). Gửi FormData nguyên trạng — openapi-fetch để trình
+ * duyệt tự đặt Content-Type kèm boundary.
+ */
+export function useUploadMyBrandLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(api.POST('/brands/me/logo', { body: form as unknown as { file: string } }));
+    },
+    onSuccess: (brand) => queryClient.setQueryData(['brands', 'me'], brand),
+  });
+}
+
+/** Xóa logo thương hiệu (ADR-0022). */
+export function useDeleteMyBrandLogo() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.DELETE('/brands/me/logo')),
+    onSuccess: (brand) => queryClient.setQueryData(['brands', 'me'], brand),
+  });
+}

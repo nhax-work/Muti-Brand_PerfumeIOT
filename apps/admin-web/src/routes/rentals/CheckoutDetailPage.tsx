@@ -30,6 +30,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { AgreementDocument } from '@/shared/agreement';
 import { ApiRequestError, errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 import {
@@ -380,21 +381,8 @@ export default function CheckoutDetailPage() {
                       </Text>
                     </div>
 
-                    <div
-                      style={{
-                        maxHeight: 280,
-                        overflowY: 'auto',
-                        padding: '12px 16px',
-                        background: '#fafafa',
-                        border: '1px solid #d9d9d9',
-                        borderRadius: 6,
-                        whiteSpace: 'pre-wrap',
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                        marginBottom: 16,
-                      }}
-                    >
-                      {annex.content}
+                    <div className="agreement-annex-body">
+                      <AgreementDocument content={annex.content} compact />
                     </div>
 
                     {annex.acceptance ? (

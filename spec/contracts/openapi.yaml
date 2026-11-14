@@ -369,6 +369,12 @@ components:
     ShipmentDeclarationStatus:
       type: string
       enum: [DECLARED, RECEIVED, DISCREPANCY, CANCELLED]
+    ShipmentPhotoKind:
+      type: string
+      enum: [BEFORE_PACKING, PACKED]
+      description: >-
+        BEFORE_PACKING — ảnh lô hàng trước khi đóng gói (thấy số chai và nhãn); PACKED — ảnh kiện
+        hàng đã đóng gói (ADR-0024).
     BatchAuthenticityStatus:
       type: string
       enum: [NOT_SUBMITTED, PENDING, APPROVED, REJECTED]
@@ -534,7 +540,11 @@ components:
         id: { type: string, format: uuid }
         code: { type: string, maxLength: 50 }
         name: { type: string, maxLength: 200 }
-        logoUrl: { type: [string, 'null'] }
+        logoUrl:
+          type: [string, 'null']
+          description: >-
+            URL tuyệt đối của logo. Logo upload qua `POST /brands/me/logo` nằm trên kho ảnh công khai,
+            khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0022).
         description: { type: [string, 'null'] }
         contactInfo: { type: [object, 'null'], additionalProperties: true }
         status: { $ref: '#/components/schemas/BrandStatus' }
@@ -544,13 +554,22 @@ components:
         hasPayoutAccount:
           type: boolean
           description: >-
-            Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả
-            nguyên văn qua API.
+            Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa.
+        payoutAccount:
+          type: [object, 'null']
+          description: >-
+            Tài khoản đầy đủ, chỉ trả qua GET /brands/{id} cho PLATFORM_SUPER_ADMIN thuộc nền tảng
+            để xác minh pháp nhân. Không trả trong danh sách, hồ sơ thương hiệu hoặc audit log.
+          required: [bankCode, accountNumber, accountHolder]
+          properties:
+            bankCode: { type: string, maxLength: 20 }
+            accountNumber: { type: string, maxLength: 30 }
+            accountHolder: { type: string, maxLength: 200 }
         payoutAccountMasked:
           type: [object, 'null']
           description: >-
             Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho
-            Super Admin đối soát và Brand Admin xem lại.
+            Brand Admin xem lại và các phản hồi không chứa tài khoản đầy đủ.
           properties:
             bankCode: { type: string, maxLength: 20 }
             maskedAccountNumber: { type: string, maxLength: 30 }
@@ -573,7 +592,7 @@ components:
         payoutAccount:
           type: object
           required: [bankCode, accountNumber, accountHolder]
-          description: Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn.
+          description: Lưu mã hóa tầng ứng dụng; chỉ Super Admin xem đầy đủ qua chi tiết thương hiệu.
           properties:
             bankCode: { type: string, maxLength: 20 }
             accountNumber: { type: string, maxLength: 30 }
@@ -635,7 +654,11 @@ components:
           description: >-
             URL tuyệt đối của ảnh sản phẩm. Ảnh upload qua `POST /products/{id}/image` nằm trên kho
             ảnh công khai (Cloudflare R2), khóa đổi theo nội dung nên cache được vĩnh viễn (ADR-0020).
-        defaultPrice: { $ref: '#/components/schemas/Money' }
+        defaultPrice:
+          $ref: '#/components/schemas/Money'
+          description: >-
+            Giá mỗi lượt xịt của sản phẩm (ADR-0023, FR-SLT-08). Mọi slot bán sản phẩm này dùng đúng
+            giá này: gán sản phẩm thì slot nhận giá, sửa giá thì mọi hóa đơn đang giữ slot đổi theo.
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice:
           oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
@@ -644,7 +667,7 @@ components:
         status: { type: string, enum: [ACTIVE, DISCONTINUED] }
     ProductCreate:
       type: object
-      required: [sku, name, defaultPrice]
+      required: [sku, name, defaultPrice, fullBottleVolumeMl]
       properties:
         sku: { type: string, maxLength: 100 }
         name: { type: string, maxLength: 200 }
@@ -655,10 +678,24 @@ components:
           description: >-
             URL tuyệt đối do người dùng tự nhập. Muốn đưa ảnh lên kho của nền tảng thì dùng
             `POST /products/{id}/image` (ADR-0020).
-        defaultPrice: { $ref: '#/components/schemas/Money' }
+        defaultPrice:
+          $ref: '#/components/schemas/Money'
+          description: Giá mỗi lượt xịt, lớn hơn 0 (ADR-0023).
         currency: { $ref: '#/components/schemas/Currency' }
         fullBottleRetailPrice: { $ref: '#/components/schemas/Money' }
-        fullBottleVolumeMl: { type: number, minimum: 0 }
+        fullBottleVolumeMl: { type: number, minimum: 500 }
+    ProductUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        description: { type: [string, 'null'] }
+        fragranceNotes: { type: [object, 'null'], additionalProperties: true }
+        imageUrl: { type: [string, 'null'], format: uri }
+        defaultPrice: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        fullBottleRetailPrice:
+          oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
+        fullBottleVolumeMl: { type: number, minimum: 500 }
 
     # ---------------------------------------------------------------------------------
     # MCH
@@ -858,8 +895,9 @@ components:
         pricePerSpray:
           oneOf: [{ $ref: '#/components/schemas/Money' }, { type: 'null' }]
           description: >-
-            Null cho tới khi Brand Admin đặt giá ở bước cấu hình slot (FR-SLT-08). Slot chưa có giá
-            không nhận đơn (FR-SLT-29).
+            Giá bán trên slot. Null cho tới khi Brand Admin gán sản phẩm; từ đó luôn bằng giá của sản
+            phẩm (`Product.defaultPrice`, ADR-0023), trừ slot đang bán hàng thanh lý do Platform Super
+            Admin đặt giá (FR-EXP-18). Slot chưa có giá không nhận đơn (FR-SLT-29).
         currency: { $ref: '#/components/schemas/Currency' }
         fixedFee:
           $ref: '#/components/schemas/Money'
@@ -984,7 +1022,7 @@ components:
         reason: { type: string, minLength: 1 }
     AvailableSlot:
       type: object
-      required: [slotId, machineId, slotNumber, locationName, monthlyRentPrice]
+      required: [slotId, machineId, slotNumber, machineSlotCount, locationName, monthlyRentPrice]
       description: >-
         Slot trống hiển thị cho Brand Admin. KHÔNG kèm bất kỳ thông tin nào về thương hiệu đã từng
         thuê trước đó (FR-SLT-19, BR-012).
@@ -993,6 +1031,13 @@ components:
         machineId: { type: string, format: uuid }
         machineDisplayName: { type: string }
         slotNumber: { type: integer }
+        machineSlotCount:
+          type: integer
+          minimum: 1
+          description: >-
+            Tổng số slot đang lắp trên máy (không tính slot đã xóa), để màn thuê vẽ đủ dãy ô như máy
+            thật; ô không có trong danh sách trống hiện "Không khả dụng". Chỉ là con số của máy,
+            không nói slot nào của ai (BR-012).
         locationId: { type: string, format: uuid }
         locationName: { type: string }
         monthlyRentPrice:
@@ -1577,8 +1622,23 @@ components:
         receivedAt: { type: [string, 'null'], format: date-time }
         resultingBatchId: { type: [string, 'null'], format: uuid }
         createdAt: { type: string, format: date-time }
+        photos:
+          type: array
+          description: Ảnh thương hiệu gửi kèm khai báo, cũ trước mới sau (ADR-0024).
+          items: { $ref: '#/components/schemas/ShipmentPhoto' }
+    ShipmentPhoto:
+      type: object
+      required: [id, kind, url, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/ShipmentPhotoKind' }
+        url:
+          type: string
+          description: URL tuyệt đối trên kho ảnh, khóa đổi theo nội dung (ADR-0024).
+        createdAt: { type: string, format: date-time }
     ShipmentDeclarationCreate:
       type: object
+      description: Tổng declaredBottleVolumeMl × declaredQuantity phải tối thiểu 500 ml.
       required: [fragranceProductId, declaredQuantity, declaredBottleVolumeMl]
       properties:
         fragranceProductId: { type: string, format: uuid }
@@ -1591,9 +1651,12 @@ components:
       description: >-
         Đối chiếu số thực nhận với khai báo. Lệch số lượng thì khai báo chuyển DISCREPANCY và
         discrepancyNotes là bắt buộc (FR-INV-24, FR-INV-25). Nhận xong hệ thống tự tạo lô liên kết
-        ngược về khai báo (FR-INV-26).
+        ngược về khai báo và tạo đủ receivedQuantity chai IN_STOCK của lô (FR-INV-26, ADR-0025).
       properties:
-        receivedQuantity: { type: integer, minimum: 0 }
+        receivedQuantity:
+          type: integer
+          minimum: 0
+          description: Tối đa `SHIPMENT_RECEIVE_MAX_BOTTLES`; vượt thì VALIDATION_ERROR (ADR-0025).
         batchNumber: { type: string, maxLength: 100 }
         expiresAt: { type: string, format: date-time }
         discrepancyNotes: { type: string }
@@ -1778,6 +1841,110 @@ components:
         notes: { type: [string, 'null'] }
         startedAt: { type: string, format: date-time }
         completedAt: { type: [string, 'null'], format: date-time }
+        slotNumber: { type: integer, description: 'Số slot trên máy (ADR-0026).' }
+        brandName: { type: string, description: 'Tên thương hiệu của phiếu (ADR-0026).' }
+        fragranceProductId:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            Sản phẩm hóa đơn thuê slot đang gán — sản phẩm của chai cần lắp (ADR-0026). Null khi
+            thương hiệu chưa gán sản phẩm.
+        productName: { type: [string, 'null'], description: 'Tên sản phẩm ở trên (ADR-0026).' }
+    RefillWorkKind:
+      type: string
+      enum: [FIRST_INSTALL, REFILL_REQUEST, LOW_STOCK]
+      description: >-
+        ADR-0026. FIRST_INSTALL: hóa đơn đã thanh toán, chưa lắp chai đầu tiên. REFILL_REQUEST: slot
+        có yêu cầu bổ sung đang mở (FR-RFQ). LOW_STOCK: slot đang bán sắp hết hoặc không còn chai mà
+        chưa có yêu cầu bổ sung.
+    RefillWorkBlocker:
+      type: string
+      enum: [PRODUCT_NOT_ASSIGNED, REQUEST_NOT_APPROVED, NO_STOCK, DOCS_NOT_APPROVED]
+      description: >-
+        ADR-0026 — lý do việc chưa làm được. PRODUCT_NOT_ASSIGNED: thương hiệu chưa gán sản phẩm cho
+        slot. REQUEST_NOT_APPROVED: yêu cầu bổ sung còn SUBMITTED. NO_STOCK: kho không có chai còn
+        hạn của sản phẩm. DOCS_NOT_APPROVED: có chai nhưng không lô nào đã duyệt giấy tờ (FR-INV-35).
+    RefillWorkBottle:
+      type: object
+      required: [id, identifier, currentEstimatedMl, expiresAt]
+      description: Chai gợi ý lắp — hết hạn sớm nhất trước (ADR-0026).
+      properties:
+        id: { type: string, format: uuid }
+        identifier: { type: string }
+        currentEstimatedMl: { type: number }
+        expiresAt: { type: [string, 'null'], format: date-time }
+    RefillWorkItem:
+      type: object
+      required:
+        - slotId
+        - slotNumber
+        - machineId
+        - machineName
+        - machineSerial
+        - locationName
+        - slotRentalId
+        - brandId
+        - brandName
+        - fragranceProductId
+        - productName
+        - kind
+        - blocker
+        - pendingShipment
+        - estimatedRemainingSprays
+        - refillRequestId
+        - refillRequestReason
+        - refillRequestStatus
+        - scheduledAt
+        - openRefillSessionId
+        - suggestedBottle
+        - availableBottleCount
+      description: >-
+        Một việc nạp của một slot (ADR-0026), máy chủ tính từ hóa đơn, yêu cầu bổ sung, tồn kho và lô
+        — không có bảng riêng.
+      properties:
+        slotId: { type: string, format: uuid }
+        slotNumber: { type: integer }
+        machineId: { type: string, format: uuid }
+        machineName: { type: string }
+        machineSerial: { type: string }
+        locationName: { type: string }
+        slotRentalId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        brandName: { type: string }
+        fragranceProductId: { type: [string, 'null'], format: uuid }
+        productName: { type: [string, 'null'] }
+        kind: { $ref: '#/components/schemas/RefillWorkKind' }
+        blocker:
+          oneOf:
+            - $ref: '#/components/schemas/RefillWorkBlocker'
+            - type: 'null'
+        pendingShipment:
+          type: boolean
+          description: Thương hiệu đã khai báo gửi hàng sản phẩm này, kho chưa nhận.
+        estimatedRemainingSprays:
+          type: [integer, 'null']
+          description: Null khi slot chưa có chai.
+        refillRequestId: { type: [string, 'null'], format: uuid }
+        refillRequestReason:
+          oneOf:
+            - $ref: '#/components/schemas/RefillRequestReason'
+            - type: 'null'
+        refillRequestStatus:
+          oneOf:
+            - $ref: '#/components/schemas/RefillRequestStatus'
+            - type: 'null'
+        scheduledAt: { type: [string, 'null'], format: date-time }
+        openRefillSessionId:
+          type: [string, 'null']
+          format: uuid
+          description: Phiếu nạp đang mở trên slot — việc đang được làm.
+        suggestedBottle:
+          oneOf:
+            - $ref: '#/components/schemas/RefillWorkBottle'
+            - type: 'null'
+        availableBottleCount:
+          type: integer
+          description: Số chai lắp được (đúng sản phẩm, lô đã duyệt, còn hạn).
     RefillSessionOpen:
       type: object
       required: [slotId]
@@ -1788,6 +1955,52 @@ components:
           type: string
           format: uuid
           description: Yêu cầu bổ sung được xử lý bởi phiên này, nếu có (FR-RFQ-08).
+    RefillSessionCancel:
+      type: object
+      required: [reason]
+      description: >-
+        Hủy phiếu nạp đang mở mà không lắp chai (ADR-0028) — mở nhầm slot, không có chai đúng. Máy bán
+        lại ngay khi không còn phiếu mở nào.
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000 }
+    SalesStopReason:
+      type: string
+      enum: [OFFLINE, DRAINING, MAINTENANCE, DISABLED, REFILL_SESSION]
+      description: >-
+        Vì sao máy không nhận đơn mới — cùng luật kiosk áp khi tạo đơn (FR-ORD-04, FR-MNT-06, FR-INV-30,
+        ADR-0015): mất kết nối trước, rồi chế độ khác NORMAL, rồi phiếu nạp đang mở.
+    MachineSalesStop:
+      type: object
+      required: [machineId, machineName, serialNumber, locationName, reason, since]
+      description: >-
+        Một máy đang dừng nhận đơn (ADR-0028). refillSession chỉ có với tài khoản nền tảng; Brand Admin
+        chỉ thấy máy có slot mình đang thuê và lý do chung.
+      properties:
+        machineId: { type: string, format: uuid }
+        machineName: { type: string }
+        serialNumber: { type: string }
+        locationName: { type: string }
+        reason: { $ref: '#/components/schemas/SalesStopReason' }
+        since:
+          type: [string, 'null']
+          format: date-time
+          description: Thời điểm bắt đầu dừng bán theo lý do hiện tại, nếu biết.
+        refillSession:
+          type: object
+          required: [id, slotNumber, performedByName, startedAt]
+          properties:
+            id: { type: string, format: uuid }
+            slotNumber: { type: integer }
+            performedByName: { type: string }
+            startedAt: { type: string, format: date-time }
+    NotificationUnreadCount:
+      type: object
+      required: [unread]
+      properties:
+        unread:
+          type: integer
+          minimum: 0
+          description: Số thông báo trong ứng dụng gửi cho người gọi mà chưa đọc (ADR-0028).
     RefillSessionClose:
       type: object
       required: [newBottleId, checklistCompleted]
@@ -2931,6 +3144,56 @@ paths:
               schema: { $ref: '#/components/schemas/Brand' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /brands/me/logo:
+    post:
+      tags: [BND]
+      summary: Upload logo thương hiệu
+      operationId: uploadMyBrandLogo
+      description: >-
+        FR-BND-06, ADR-0022: Brand Admin đưa logo cho thương hiệu của mình. Chỉ nhận JPEG, PNG, WebP
+        (kiểm theo nội dung tệp), tối đa `BRAND_LOGO_MAX_BYTES`. Máy chủ mã hóa lại sang WebP, cạnh
+        dài nhất tối đa `BRAND_LOGO_MAX_EDGE_PX`, bỏ metadata, rồi lưu lên kho ảnh và đặt `logoUrl`.
+        Thay logo cũ nếu có. Tài khoản không thuộc thương hiệu nào nhận FORBIDDEN_SCOPE.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Đã cập nhật logo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413':
+          description: Tệp vượt `BRAND_LOGO_MAX_BYTES` (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [BND]
+      summary: Xóa logo thương hiệu
+      operationId: deleteMyBrandLogo
+      description: 'FR-BND-06, ADR-0022: xóa logo khỏi kho ảnh và đặt logoUrl = null.'
+      responses:
+        '200':
+          description: Đã xóa logo
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Brand' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   # -----------------------------------------------------------------------------------
   # USR — Người dùng
   # -----------------------------------------------------------------------------------
@@ -3118,7 +3381,7 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/ProductCreate' }
+            schema: { $ref: '#/components/schemas/ProductUpdate' }
       responses:
         '200':
           description: Đã cập nhật
@@ -3435,6 +3698,29 @@ paths:
               schema: { $ref: '#/components/schemas/MachineSlot' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+
+  /machine-sales-stops:
+    get:
+      tags: [MCH]
+      summary: Máy đang dừng bán
+      operationId: listMachineSalesStops
+      description: >-
+        ADR-0028: máy hiện không nhận đơn mới và lý do — để web quản trị hiện banner đầu trang. Tài
+        khoản nền tảng thấy mọi máy kèm phiếu nạp đang mở; Brand Admin chỉ thấy máy có slot mình đang
+        thuê (BR-012), không kèm chi tiết phiếu nạp. Không cần quyền riêng.
+      responses:
+        '200':
+          description: Danh sách máy dừng bán
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/MachineSalesStop' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
 
   /machines/{id}/status-history:
     parameters:
@@ -3860,13 +4146,13 @@ paths:
       - $ref: '#/components/parameters/idPath'
     put:
       tags: [SLT]
-      summary: Đặt giá mỗi lượt xịt
+      summary: Đặt giá slot đang bán hàng thanh lý
       operationId: setSlotRentalPrice
       description: >-
-        FR-SLT-08, FR-SLT-09: Brand Admin tự do đặt giá, không có giá sàn hay giá trần. Giá mới chỉ
-        áp cho đơn tạo sau thời điểm đổi; đơn đang chờ thanh toán giữ giá đã chụp (FR-ORD-06).
-        Hóa đơn đang bán hàng thanh lý thì giá do Platform Super Admin đặt (FR-EXP-18). Mở ngay sau
-        khi thanh toán; hóa đơn DRAFT chưa thanh toán trả RENTAL_NOT_ACTIVE (ADR-0006). Ghi nhật ký
+        FR-EXP-18, ADR-0023: Platform Super Admin đặt giá mỗi lượt xịt cho slot có hóa đơn LIQUIDATED.
+        Giá thương hiệu bán đặt ở sản phẩm (`Product.defaultPrice`) và slot lấy theo khi gán sản phẩm,
+        nên hóa đơn ở trạng thái khác trả VALIDATION_ERROR; thương hiệu gọi cho hóa đơn LIQUIDATED
+        nhận FORBIDDEN_SCOPE. Giá mới chỉ áp cho đơn tạo sau thời điểm đổi (FR-SLT-09). Ghi nhật ký
         (FR-AUD-04).
       requestBody:
         required: true
@@ -4740,8 +5026,11 @@ paths:
         FR-INV-24, FR-INV-25, FR-INV-26: Inventory Staff đối chiếu số thực nhận với khai báo. Lệch
         số lượng thì khai báo chuyển DISCREPANCY và ghi chú là bắt buộc. Xác nhận tiếp nhận thì hệ
         thống tự tạo lô nước hoa liên kết ngược về khai báo, trong cùng transaction; nhận 0 chai
-        thì không tạo lô và batch là null (FR-INV-25 AC3). Khai báo không còn DECLARED trả
-        SHIPMENT_ALREADY_PROCESSED. Ghi nhật ký (FR-AUD-07).
+        thì không tạo lô và batch là null (FR-INV-25 AC3). Cùng transaction đó tạo receivedQuantity
+        chai IN_STOCK của lô (ADR-0025): mã `{sku}-{batchNumber}-{số thứ tự}` đệm 0 ít nhất 3 chữ
+        số, initialVolumeMl bằng declaredBottleVolumeMl, hạn dùng theo lô. Mã chai trùng chai đã
+        có hoặc dài quá 150 ký tự trả VALIDATION_ERROR trên batchNumber. Khai báo không còn
+        DECLARED trả SHIPMENT_ALREADY_PROCESSED. Ghi nhật ký (FR-AUD-07).
       requestBody:
         required: true
         content:
@@ -4763,6 +5052,79 @@ paths:
                       - type: 'null'
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /shipment-declarations/{id}/photos:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Thêm ảnh cho khai báo gửi hàng
+      operationId: addShipmentDeclarationPhoto
+      description: >-
+        FR-INV-22, ADR-0024: Brand Admin thêm ảnh lô hàng trước khi đóng gói hoặc kiện hàng đã đóng
+        gói cho khai báo của thương hiệu mình. Chỉ nhận JPEG, PNG, WebP (kiểm theo nội dung tệp), tối
+        đa `SHIPMENT_PHOTO_MAX_BYTES`; máy chủ mã hóa lại sang WebP, cạnh dài nhất tối đa
+        `SHIPMENT_PHOTO_MAX_EDGE_PX`, bỏ metadata. Mỗi loại tối đa `SHIPMENT_PHOTO_MAX_PER_KIND` ảnh
+        (vượt thì VALIDATION_ERROR). Khai báo không còn DECLARED trả SHIPMENT_ALREADY_PROCESSED. Ghi
+        nhật ký.
+      parameters:
+        - name: kind
+          in: query
+          required: true
+          schema: { $ref: '#/components/schemas/ShipmentPhotoKind' }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        '200':
+          description: Đã thêm ảnh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentDeclaration' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: Tệp vượt `SHIPMENT_PHOTO_MAX_BYTES` (FILE_TOO_LARGE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: Không phải ảnh JPEG, PNG hay WebP hợp lệ (UNSUPPORTED_MEDIA_TYPE)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /shipment-declarations/{id}/photos/{photoId}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - name: photoId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    delete:
+      tags: [INV]
+      summary: Xóa ảnh của khai báo gửi hàng
+      operationId: deleteShipmentDeclarationPhoto
+      description: >-
+        FR-INV-22, ADR-0024: xóa một ảnh khi khai báo còn DECLARED; sau khi kho đã nhận, ảnh là bằng
+        chứng nên bị khóa (SHIPMENT_ALREADY_PROCESSED).
+      responses:
+        '200':
+          description: Đã xóa ảnh
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShipmentDeclaration' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /inventory-batches:
@@ -4911,6 +5273,10 @@ paths:
         - name: batchId
           in: query
           schema: { type: string, format: uuid }
+        - name: fragranceProductId
+          in: query
+          description: Lọc theo sản phẩm — ô chọn chai khi hoàn tất nạp (ADR-0026).
+          schema: { type: string, format: uuid }
       responses:
         '200':
           description: Danh sách chai
@@ -5003,6 +5369,30 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
+  /refill-worklist:
+    get:
+      tags: [INV]
+      summary: Việc cần nạp
+      operationId: getRefillWorklist
+      description: >-
+        ADR-0026: mỗi slot có hóa đơn đã thanh toán mà cần lắp hoặc thay chai — lắp chai đầu tiên,
+        yêu cầu bổ sung đang mở, hoặc sắp hết chưa có yêu cầu — kèm lý do chưa làm được (nếu có),
+        chai gợi ý và phiếu nạp đang mở. Việc làm được xếp trước, rồi theo loại và hạn. Quyền
+        inventory.manage.
+      responses:
+        '200':
+          description: Danh sách việc
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/RefillWorkItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /refill-sessions:
     get:
       tags: [INV]
@@ -5089,6 +5479,34 @@ paths:
               schema: { $ref: '#/components/schemas/RefillSession' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /refill-sessions/{id}/cancel:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [INV]
+      summary: Hủy phiếu nạp
+      operationId: cancelRefillSession
+      description: >-
+        ADR-0028: hủy phiếu đang mở mà không lắp chai — slot giữ nguyên chai cũ, máy nhận đơn lại khi
+        không còn phiếu mở. Lý do bắt buộc, ghi vào notes và nhật ký. Yêu cầu bổ sung đã gắn với phiếu
+        được gỡ liên kết để gắn được với phiếu sau (FR-RFQ-08). Phiếu không còn STARTED trả
+        REFILL_SESSION_NOT_OPEN. Brand Admin không gọi được (FR-RFQ-11).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefillSessionCancel' }
+      responses:
+        '200':
+          description: Đã hủy phiếu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefillSession' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
   /slots/{id}/bottle:
@@ -6584,6 +7002,12 @@ paths:
         - name: brandId
           in: query
           schema: { type: string, format: uuid }
+        - name: mine
+          in: query
+          description: >-
+            true = chỉ thông báo gửi cho người gọi, kể cả với notification.manage — danh sách dưới
+            chuông của web quản trị (ADR-0028).
+          schema: { type: string, enum: ['true', 'false'] }
       responses:
         '200':
           description: Danh sách thông báo
@@ -6642,6 +7066,55 @@ paths:
   # -----------------------------------------------------------------------------------
   # AUD — Nhật ký kiểm toán
   # -----------------------------------------------------------------------------------
+  /notifications/unread-count:
+    get:
+      tags: [RPT]
+      summary: Số thông báo chưa đọc
+      operationId: countUnreadNotifications
+      description: >-
+        ADR-0028: số thông báo IN_APP gửi cho người gọi mà chưa đọc — chuông trên header của web quản
+        trị. Luôn chỉ đếm thông báo của chính người gọi, kể cả Super Admin.
+      responses:
+        '200':
+          description: Số chưa đọc
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationUnreadCount' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/read-all:
+    post:
+      tags: [RPT]
+      summary: Đánh dấu đã đọc tất cả
+      operationId: markAllNotificationsRead
+      description: ADR-0028 — mọi thông báo IN_APP chưa đọc của người gọi chuyển READ.
+      responses:
+        '200':
+          description: Số còn chưa đọc sau thao tác (luôn 0)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationUnreadCount' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /notifications/{id}/read:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [RPT]
+      summary: Đánh dấu đã đọc
+      operationId: markNotificationRead
+      description: >-
+        ADR-0028 — chỉ thông báo IN_APP gửi cho chính người gọi; của người khác trả 404. Đọc rồi thì
+        giữ nguyên thời điểm đọc đầu tiên.
+      responses:
+        '200':
+          description: Thông báo sau khi đánh dấu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
   /audit-logs:
     get:
       tags: [AUD]
