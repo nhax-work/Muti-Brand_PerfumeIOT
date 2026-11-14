@@ -89,8 +89,9 @@ describe('BottleReturnsPage', () => {
   });
 
   beforeEach(() => {
-    // Giữ ngày hiện tại trước hạn nhận của dữ liệu mẫu, không phụ thuộc ngày chạy CI.
-    vi.setSystemTime(new Date('2026-11-01T08:00:00Z'));
+    // Cố định ngày để trạng thái quá hạn không phụ thuộc ngày chạy CI.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-28T08:00:00Z'));
   });
 
   afterEach(() => {

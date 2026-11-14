@@ -1,3 +1,9 @@
+# Firmware cho bảng mạch Rev C hiện tại
+
+Bảng mạch hiện tại: [Rev C — hồ sơ và chân nối](<../../AI gen/Documents/RevC/README.md>), lấy từ `AI gen/KiCad/RevC/`. Đã đối chiếu các pad điều khiển trên PCB: chân bơm, đèn, nút, PCF8575, RUN_REQUEST và watchdog giữ nguyên so với Rev B. Dùng sketch này cho Rev C; các mục Rev B bên dưới mô tả kiến trúc driver kế thừa.
+
+Rev C thêm cầu chì F1 5A giữa 12V_IN và 12V_LOAD, diode D11–D15 và lỗ bắt vít; các thay đổi này không cần đổi GPIO. Chưa xác nhận hoạt động trên bo thật.
+
 # Firmware riêng cho bơm và van trên bo Rev B
 
 Sketch `ScentStationValveDevice.ino` bổ sung van cho bo `hardware/driver15/rev-b` và biến thể `rev-b-1oz`. Bản `arduino/ScentStationDevice` dùng bơm rời được giữ riêng. Không nạp bản này cho mạch chỉ có module MOSFET bơm hoặc mạch van đấu trực tiếp vào GPIO khác.

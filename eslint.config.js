@@ -20,6 +20,9 @@ export default tseslint.config(
       // Thư mục runtime/cấu hình của dev-harness — không thuộc quyền kiểm soát của dự án
       // (spec/PROJECT.md §7 "Do not touch")
       '.agents/**',
+      '.codex/**',
+      '.tmp/**',
+      'AI gen/**',
       '.claude/**',
       // Sinh tự động từ openapi.yaml
       'packages/contracts/src/openapi.ts',

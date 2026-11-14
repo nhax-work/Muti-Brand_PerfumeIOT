@@ -1,3 +1,5 @@
+> **Bảng mạch hiện tại: Rev C.** Dùng firmware `arduino/ScentStationValveDevice` cho PCB có van, PCF8575 và khóa tải. Xem [hồ sơ Rev C](<../../AI gen/Documents/RevC/README.md>). `ScentStationDevice` là bản cho hệ bơm rời.
+
 # ScentStation ESP32 system firmware
 
 `Test5Buttons` remains the standalone wiring test. Upload this sketch for the connected system: in CUSTOMER mode a button only works after the backend authorizes a paid order. Power-up never authorizes a pump.

@@ -34,6 +34,8 @@
     "sim:many": "tsx scripts/device-simulator.ts --machines=50",
     "pay:mock": "tsx scripts/mock-pay.ts",
     "sim:press": "tsx scripts/press-button.ts",
+    "device:test:wifi": "tsx scripts/device-test-wifi.ts",
+    "device:test": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/device-test.ps1",
     "device:activate": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/activate-device-button.ps1",
     "device:prepare": "tsx scripts/prepare-device.ts",
     "device:inspect": "tsx scripts/inspect-device.ts",
