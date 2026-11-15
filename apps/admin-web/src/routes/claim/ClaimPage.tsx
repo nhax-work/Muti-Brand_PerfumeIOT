@@ -54,7 +54,7 @@ export default function ClaimPage() {
 
   if (!orderId || !claimToken) {
     return (
-      <Card style={{ maxWidth: 480, margin: '24px auto' }}>
+      <Card className="login-card">
         <Result status="warning" title={t('ui.claimLinkInvalid')} />
       </Card>
     );
@@ -63,7 +63,7 @@ export default function ClaimPage() {
   if (submit.data) {
     const amount = `${Number(submit.data.amount).toLocaleString('vi-VN')} ${submit.data.currency}`;
     return (
-      <Card style={{ maxWidth: 480, margin: '24px auto' }}>
+      <Card className="login-card">
         <Result
           status="success"
           title={t('ui.claimSubmitted')}
@@ -88,7 +88,7 @@ export default function ClaimPage() {
   };
 
   return (
-    <Card style={{ maxWidth: 480, margin: '24px auto' }}>
+    <Card className="login-card">
       <Typography.Title level={3}>{t('ui.claimPageTitle')}</Typography.Title>
       <Typography.Paragraph>
         {t('ui.claimPageIntro', { hours: SPEC_CONSTRAINTS.REFUND_CLAIM_SLA_HOURS })}

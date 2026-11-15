@@ -1349,4 +1349,17 @@ export const ui = {
   rentConfigTitle: 'Gói thuê cho slot đã chọn',
   rentCartEmpty: 'Chưa chọn slot nào. Mở một máy và bấm vào ô còn trống.',
   rentRemoveSlot: 'Bỏ chọn slot',
+  authHeroEyebrow: 'Hệ sinh thái khứu giác',
+  authHeroTitle: 'Nghệ thuật tiếp cận hương thơm.',
+  authHeroDesc:
+    'Nền tảng cho thuê slot trên máy xịt nước hoa thông minh. Khách thử hương bằng một lần bấm nút ngay tại kiosk.',
+  authTabsLabel: 'Chọn đăng nhập hoặc đăng ký',
+  authTabLogin: 'Đăng nhập',
+  authTabRegister: 'Đăng ký thương hiệu',
+  authFooter: '© {year} ScentStation. Bảo lưu mọi quyền.',
+  loginHeading: 'Truy cập bảng điều khiển',
+  loginSubmit: 'Đăng nhập vào bảng điều khiển',
+  loginNoAccount: 'Chưa có tài khoản thương hiệu?',
+  loginRegisterNow: 'Đăng ký ngay',
+  authBackHome: 'Về trang chủ',
 } as const;

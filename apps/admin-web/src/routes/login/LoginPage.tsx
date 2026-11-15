@@ -1,5 +1,6 @@
+import { MailOutlined } from '@ant-design/icons';
 import type { LoginRequest } from '@scentstation/contracts';
-import { Alert, Button, Card, Form, Input } from 'antd';
+import { Alert, Button, Form, Input, Typography } from 'antd';
 import { Link, Navigate, useLocation, useNavigate, type Location } from 'react-router';
 import { errorMessage } from '@/shared/api';
 import { useAuth } from '@/shared/auth';
@@ -21,7 +22,10 @@ export default function LoginPage() {
   };
 
   return (
-    <Card title={t('ui.loginTitle')} className="login-card">
+    <div className="auth-form">
+      <Typography.Title level={3} className="auth-title">
+        {t('ui.loginHeading')}
+      </Typography.Title>
       {login.isError && (
         <Alert
           type="error"
@@ -30,7 +34,12 @@ export default function LoginPage() {
           className="login-error"
         />
       )}
-      <Form<LoginRequest> layout="vertical" onFinish={handleFinish} disabled={login.isPending}>
+      <Form<LoginRequest>
+        layout="vertical"
+        requiredMark={false}
+        onFinish={handleFinish}
+        disabled={login.isPending}
+      >
         <Form.Item
           name="email"
           label={t('ui.email')}
@@ -39,7 +48,12 @@ export default function LoginPage() {
             { type: 'email', message: t('validation.invalidEmail') },
           ]}
         >
-          <Input autoComplete="username" autoFocus />
+          <Input
+            autoComplete="username"
+            autoFocus
+            placeholder="brand@perfume.com"
+            suffix={<MailOutlined className="auth-input-icon" />}
+          />
         </Form.Item>
         <Form.Item
           name="password"
@@ -51,13 +65,19 @@ export default function LoginPage() {
         <div className="login-forgot">
           <Link to="/forgot-password">{t('ui.forgotPasswordLink')}</Link>
         </div>
-        <Button type="primary" htmlType="submit" block loading={login.isPending}>
-          {t('ui.login')}
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          loading={login.isPending}
+          className="auth-submit"
+        >
+          {t('ui.loginSubmit')}
         </Button>
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <Link to="/register">{t('ui.registerBrandLink')}</Link>
-        </div>
       </Form>
-    </Card>
+      <p className="auth-switch">
+        {t('ui.loginNoAccount')} <Link to="/register">{t('ui.loginRegisterNow')}</Link>
+      </p>
+    </div>
   );
 }

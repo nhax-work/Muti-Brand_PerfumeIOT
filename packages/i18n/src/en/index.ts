@@ -1831,6 +1831,19 @@ export const en: SameKeysAs<typeof vi> = {
     rentConfigTitle: 'Plans for the selected slots',
     rentCartEmpty: 'No slot selected yet. Open a machine and click a free bay.',
     rentRemoveSlot: 'Remove slot',
+    authHeroEyebrow: 'An olfactory ecosystem',
+    authHeroTitle: 'The art of reaching fragrance.',
+    authHeroDesc:
+      'A platform for renting slots on smart perfume dispensers. Shoppers try a scent with a single button press at the kiosk.',
+    authTabsLabel: 'Choose sign in or registration',
+    authTabLogin: 'Sign in',
+    authTabRegister: 'Register a brand',
+    authFooter: '© {year} ScentStation. All rights reserved.',
+    loginHeading: 'Access the dashboard',
+    loginSubmit: 'Sign in to the dashboard',
+    loginNoAccount: "Don't have a brand account?",
+    loginRegisterNow: 'Register now',
+    authBackHome: 'Back to home',
   },
 
   kiosk: {
