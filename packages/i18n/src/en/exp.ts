@@ -14,6 +14,6 @@ export const exp = {
 } as const;
 
 export const bottleReturnMethod = {
-  PICKUP_AT_STATION: 'Pickup at station / warehouse',
+  WAREHOUSE_PICKUP: 'Pickup at warehouse',
   SHIP_TO_BRAND: 'Ship to brand',
 } as const;

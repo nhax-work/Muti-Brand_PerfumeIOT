@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **47 bảng**, **31 kiểu enum**.
+Tổng: **48 bảng**, **31 kiểu enum**.
 
 ---
 
@@ -257,6 +257,33 @@ Xác minh email của tài khoản Brand Admin tự đăng ký (FR-USR-07, ADR-0
 - `email_verifications_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_email_verification_token` (UNIQUE) — `USING btree (token_hash)`
 - `uq_email_verification_user` (UNIQUE) — `USING btree (user_id)`
+
+### `password_reset_tokens`
+
+Mã đặt lại mật khẩu gửi qua email (FR-AUTH-13, ADR-0030). Mỗi tài khoản một dòng: yêu cầu mới thay mã cũ. used_at khác NULL = mã đã dùng.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `user_id` | `uuid` | — |  |  |
+| `token_hash` | `character(64)` | — |  | SHA-256 (hex) của mã gửi trong email. Không lưu mã gốc (NFR-SEC-05). |
+| `expires_at` | `timestamp with time zone` | — |  |  |
+| `used_at` | `timestamp with time zone` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_password_reset_expiry` — `CHECK ((expires_at > created_at))`
+
+**Khóa ngoại**
+
+- `password_reset_tokens_user_id_fkey` — `FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE`
+
+**Index**
+
+- `password_reset_tokens_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_password_reset_token` (UNIQUE) — `USING btree (token_hash)`
+- `uq_password_reset_user` (UNIQUE) — `USING btree (user_id)`
 
 ## Nhóm Catalog và Machines
 
@@ -1546,7 +1573,7 @@ Cảnh báo, bảo trì, yêu cầu bổ sung, thông báo và nhật ký kiểm
 | Cột | Kiểu | Null | Mặc định | Mô tả |
 |---|---|---|---|---|
 | `id` | `uuid` | — | `gen_random_uuid()` |  |
-| `brand_id` | `uuid` | — |  |  |
+| `brand_id` | `uuid` | có |  | Thương hiệu của sự kiện — để Super Admin lọc bằng chứng gửi (ADR-0017). NULL = thông báo nội bộ nền tảng, ví dụ phân công cảnh báo mức máy hay phiếu bảo trì (ADR-0029). |
 | `recipient_user_id` | `uuid` | — |  |  |
 | `type` | `character varying(80)` | — |  |  |
 | `channel` | `character varying(30)` | — |  |  |

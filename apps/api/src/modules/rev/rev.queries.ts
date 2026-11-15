@@ -18,6 +18,12 @@ type Executor = Kysely<DB>;
 /** Kỳ là tháng dương lịch theo giờ Việt Nam (ADR-0013 mục 3) — không phụ thuộc múi giờ của máy. */
 export const PAYOUT_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
+/** Kỳ vừa chốt số — phần đủ để soạn thông báo. */
+export type ConfirmedPayout = Pick<
+  PayoutRecord,
+  'id' | 'brandId' | 'periodMonth' | 'currency' | 'orderCount' | 'amount'
+>;
+
 export interface PayoutRecord {
   readonly id: string;
   readonly brandId: string;
@@ -131,14 +137,24 @@ export class RevQueries {
    * Chốt mọi kỳ DRAFT của tháng đã kết thúc (giờ Việt Nam) tính tới `now`. Gọi ngay sau
    * `refreshDraftPayouts` trong cùng transaction để số được khóa là số vừa tính lại.
    */
-  async confirmEndedPeriods(now: Date, executor: Executor): Promise<number> {
-    const result = await executor
+  /** @returns các kỳ vừa chốt — để báo Brand Admin trong cùng transaction (FR-ALR-16 sự kiện 8) */
+  async confirmEndedPeriods(now: Date, executor: Executor): Promise<ConfirmedPayout[]> {
+    const rows = await executor
       .updateTable('brand_payouts')
       .set({ status: 'CONFIRMED', confirmed_at: now })
       .where('status', '=', 'DRAFT')
       .where(sql<boolean>`period_month < ${vnMonthOf(sql`${now}::timestamptz`)}`)
-      .executeTakeFirst();
-    return Number(result.numUpdatedRows);
+      .returning(['id', 'brand_id', 'currency', 'order_count', 'amount'])
+      .returning(sql<string>`to_char(period_month, 'YYYY-MM-DD')`.as('period_month'))
+      .execute();
+    return rows.map((r) => ({
+      id: r.id,
+      brandId: r.brand_id,
+      periodMonth: r.period_month,
+      currency: r.currency,
+      orderCount: Number(r.order_count),
+      amount: String(r.amount),
+    }));
   }
 
   // -----------------------------------------------------------------------------------

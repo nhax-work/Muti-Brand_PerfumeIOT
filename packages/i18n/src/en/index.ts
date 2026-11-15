@@ -68,6 +68,12 @@ export const en: SameKeysAs<typeof vi> = {
     verificationEmailSubject: 'Verify your ScentStation brand account',
     verificationEmailBody:
       'Welcome to ScentStation. Please click the following link to verify your email address: {link}. This link will expire in {hours} hours.',
+    passwordResetEmailSubject: 'Reset your ScentStation password',
+    passwordResetEmailBody:
+      'We received a request to reset the password of your ScentStation account. Click the following link to set a new password: {link}. The link works once and expires in {minutes} minutes. If you did not ask for this, ignore this email — your current password stays the same.',
+    invalidResetToken:
+      'This password reset link is invalid, expired or already used. Please request a new link.',
+    passwordResetRateLimited: 'Too many requests. Please try again in a minute.',
   },
 
   mch: {
@@ -106,6 +112,14 @@ export const en: SameKeysAs<typeof vi> = {
     resolutionRequired: 'A resolution summary is required before resolving.',
     cannotAssignClosed: 'Cannot assign a closed alert.',
     cannotResolveClosed: 'Cannot resolve a closed alert.',
+    machineOfflineAlertTitle: 'Machine offline',
+    alertAssignedSubject: 'An alert has been assigned to you: {title}',
+    alertAssignedContent:
+      'You have been assigned a {severity} alert at machine {machine}: {title}.',
+    alertForBrandSubject: 'Alert at machine {machine}: {title}',
+    alertForBrandContent:
+      'A {severity} alert was raised at machine {machine}: {title}. ' +
+      'The platform is handling it; see Alerts for details.',
   },
 
   alertSeverity: {
@@ -261,6 +275,18 @@ export const en: SameKeysAs<typeof vi> = {
     logoFileRequired: 'Choose an image file for the logo',
     logoTooLarge: 'The logo is larger than {maxMb} MB',
     logoUnsupported: 'Only valid JPEG, PNG or WebP images are accepted for the logo',
+    newBrandRegisteredSubject: 'New brand registered: {brand}',
+    newBrandRegisteredContent:
+      'The brand {brand} ({email}) has signed up and verified its email. It can rent slots right ' +
+      'away; its legal entity must be verified before the first revenue payout.',
+    legalProfileSubmittedSubject: '{brand} is waiting for legal verification',
+    legalProfileSubmittedContent:
+      'The brand {brand} has submitted its legal profile (tax code {taxCode}). ' +
+      'Review it and record the verification so the brand can receive revenue payouts.',
+    legalVerifiedSubject: 'Legal entity of {brand} verified',
+    legalVerifiedContent:
+      'The platform has verified the legal profile of {brand}. Locked revenue payouts will be ' +
+      'transferred to the payout account the brand declared.',
   },
 
   prd: {
@@ -359,6 +385,10 @@ export const en: SameKeysAs<typeof vi> = {
       'The compensation of {amount} VND for bottle {bottle} has been transferred. Transaction reference: {reference}.',
     pricePerSprayFollowsProduct:
       'The price per spray is set per product. Change it on the Products page; every slot selling that product follows.',
+    nonRenewalRequestedSubject: 'A brand will not renew invoice {invoiceNumber}',
+    nonRenewalRequestedContent:
+      'Invoice {invoiceNumber} will not be renewed and ends on {endsAt}. Return method: {method}. ' +
+      'Prepare to remove the bottles and create a return ticket when the invoice ends.',
   },
 
   storageCompensationStatus: {
@@ -392,6 +422,18 @@ export const en: SameKeysAs<typeof vi> = {
     assigneeNotOperations: 'The assignee must be an active Operations Staff member',
     claimRateLimited: 'Too many attempts. Please try again in a minute.',
     orderRateLimited: 'This machine is receiving too many requests. Please try again shortly.',
+    claimSubmittedSubject: 'New refund claim: {amount} {currency}',
+    claimSubmittedContent:
+      'A customer has filed a refund claim of {amount} {currency} for order {orderId}. ' +
+      'Deadline: {deadline}.',
+    claimAssignedSubject: 'A refund claim has been assigned to you',
+    claimAssignedContent:
+      'You have been assigned the refund claim of {amount} {currency} for order {orderId}. ' +
+      'Deadline: {deadline}.',
+    manualReviewSubject: 'Order needs manual review: {amount} {currency}',
+    manualReviewContent:
+      'Order {orderId} was paid but its spray was not delivered normally. ' +
+      'Check it under Orders needing review and refund if needed.',
   },
 
   dsp: {
@@ -425,6 +467,10 @@ export const en: SameKeysAs<typeof vi> = {
     payoutDisputeAnsweredSubject: 'Your dispute for the {period} payout has been answered',
     payoutDisputeAnsweredContent:
       'The platform has answered your dispute about the {period} payout figures. See the details under Payouts.',
+    payoutConfirmedSubject: 'Payout figures for {period} are locked',
+    payoutConfirmedContent:
+      'Your spray revenue for {period} is locked: {orderCount} order(s), {amount} {currency} in total. ' +
+      'If anything looks wrong, you can dispute it once under Payouts.',
     payoutPaidSubject: 'Revenue for {period} has been transferred',
     payoutPaidContent:
       'The platform has transferred your spray revenue for {period}. The transaction reference is under Payouts.',
@@ -1004,6 +1050,22 @@ export const en: SameKeysAs<typeof vi> = {
     invalidToken: 'Verification link is missing a valid token.',
     resendVerification: 'Resend verification email',
     resendVerificationSuccess: 'Verification email resent. Please check your inbox.',
+    forgotPasswordLink: 'Forgot password?',
+    forgotPasswordTitle: 'Forgot password',
+    forgotPasswordDesc:
+      'Enter your sign-in email. If it belongs to an account, we will send a password reset link.',
+    sendResetLink: 'Send reset link',
+    forgotPasswordSentTitle: 'Check your inbox',
+    forgotPasswordSentDesc:
+      'If {email} has a ScentStation account, a password reset link has been sent to it. The link expires in {minutes} minutes.',
+    resetPasswordTitle: 'Set a new password',
+    resetPasswordSubmit: 'Set new password',
+    resetPasswordSuccessTitle: 'New password set',
+    resetPasswordSuccessDesc:
+      'Sign in with your new password. All previous sessions on other devices have been signed out.',
+    resetPasswordMissingToken:
+      'This password reset link is missing a valid token. Please request a new link.',
+    requestNewResetLink: 'Request a new link',
     // Framework agreement (ADR-0013)
     frameworkAgreementTitle: 'Master Framework Agreement',
     frameworkAgreementDesc:
@@ -1770,6 +1832,19 @@ export const en: SameKeysAs<typeof vi> = {
     rentConfigTitle: 'Plans for the selected slots',
     rentCartEmpty: 'No slot selected yet. Open a machine and click a free bay.',
     rentRemoveSlot: 'Remove slot',
+    authHeroEyebrow: 'An olfactory ecosystem',
+    authHeroTitle: 'The art of reaching fragrance.',
+    authHeroDesc:
+      'A platform for renting slots on smart perfume dispensers. Shoppers try a scent with a single button press at the kiosk.',
+    authTabsLabel: 'Choose sign in or registration',
+    authTabLogin: 'Sign in',
+    authTabRegister: 'Register a brand',
+    authFooter: '© {year} ScentStation. All rights reserved.',
+    loginHeading: 'Access the dashboard',
+    loginSubmit: 'Sign in to the dashboard',
+    loginNoAccount: "Don't have a brand account?",
+    loginRegisterNow: 'Register now',
+    authBackHome: 'Back to home',
   },
 
   kiosk: {
@@ -1942,6 +2017,10 @@ export const en: SameKeysAs<typeof vi> = {
     newShipmentSubject: 'New shipment declaration: {product}',
     newShipmentContent:
       'A brand has declared {quantity} bottles of {product} on the way to the warehouse.',
+    authenticitySubmittedSubject: 'Batch {batch} is waiting for authenticity review',
+    authenticitySubmittedContent:
+      'A brand has submitted authenticity documents for batch {batch} ({product}). ' +
+      'Bottles of this batch cannot be installed until the documents are approved.',
     authenticityApprovedSubject: 'Batch {batch} authenticity approved',
     authenticityApprovedContent:
       'The authenticity documents of batch {batch} ({product}) were approved. Its bottles can now be installed.',
@@ -1954,6 +2033,12 @@ export const en: SameKeysAs<typeof vi> = {
     slotEmptyAlertTitle: 'Slot {slot} is empty',
     slotEmptyAlertContent:
       'Slot {slot} has {remainingMl} ml left, not enough for one {dosageMl} ml spray — the slot has stopped selling.',
+    shipmentReceivedSubject: 'The warehouse received your goods: {product}',
+    shipmentReceivedContent:
+      'The warehouse received all {received} bottles of {product} from your shipment declaration.',
+    shipmentDiscrepancySubject: 'Received quantity differs: {product}',
+    shipmentDiscrepancyContent:
+      'You declared {declared} bottles of {product}; the warehouse received {received}. Warehouse note: {notes}',
   },
 
   shipmentStatus: {
@@ -2061,6 +2146,9 @@ export const en: SameKeysAs<typeof vi> = {
     postTestIncomplete:
       'Machine has an active ticket with incomplete post-maintenance checklist (PASS required to restore NORMAL)',
     ticketClosed: 'Maintenance ticket is closed',
+    ticketAssignedSubject: 'Maintenance ticket {ticket} has been assigned to you',
+    ticketAssignedContent:
+      'You have been assigned maintenance ticket {ticket} at machine {machine}, priority {priority}. Deadline: {deadline}.',
   },
 
   ticketStatus: {
@@ -2091,10 +2179,24 @@ export const en: SameKeysAs<typeof vi> = {
     bottleNotOwnedByBrand: 'Perfume bottle is not owned by the renting brand',
     returnAlreadyClosed: 'Bottle return ticket is already handed over or forfeited',
     trackingNumberRequiredForShipping: 'Tracking number is required when shipping to brand',
+    bottleReturnReadySubject: '[ScentStation] Returned goods are ready ({invoiceNumber})',
+    bottleReturnReadyContent:
+      'Invoice {invoiceNumber} has ended and {count} bottle(s) have been removed from the slot. ' +
+      'Return method: {method}. Handover deadline: {deadline}. ' +
+      'Bottles not handed over by then become the property of the platform.',
+    bottleReturnReminderSubject: '[ScentStation] Returned goods deadline is near ({invoiceNumber})',
+    bottleReturnReminderContent:
+      'The handover deadline for the returned goods of invoice {invoiceNumber} is {deadline}. ' +
+      'Bottles not handed over by then will be liquidated and become the property of the platform.',
+    bottleReturnForfeitedSubject:
+      '[ScentStation] Overdue returned goods have been liquidated ({invoiceNumber})',
+    bottleReturnForfeitedContent:
+      'The returned goods of invoice {invoiceNumber} passed the handover deadline ({deadline}). ' +
+      'The bottles in the return ticket now belong to the platform.',
   },
 
   bottleReturnMethod: {
-    PICKUP_AT_STATION: 'Pickup at station / warehouse',
+    WAREHOUSE_PICKUP: 'Pickup at warehouse',
     SHIP_TO_BRAND: 'Ship to brand',
   },
 };

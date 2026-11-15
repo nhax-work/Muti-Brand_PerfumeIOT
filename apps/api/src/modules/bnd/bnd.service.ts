@@ -6,15 +6,20 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { decryptJson, encryptJson, PII_KEY_VERSION } from '../../shared/crypto/pii-cipher.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { BndQueries, type BrandFilter, type BrandRecord, type BrandStatus } from './bnd.queries.js';
 
 type Brand = Schema<'Brand'>;
+
+/** Quyền quản lý thương hiệu — người xác minh pháp nhân (FR-BND-10). */
+const BRAND_MANAGE = 'brand.manage';
 
 export interface CreateBrandInput {
   readonly code: string;
@@ -58,8 +63,10 @@ type Queries = Pick<
   | 'setStatus'
   | 'updateLegalProfile'
   | 'verifyLegal'
+  | 'transaction'
 >;
 type Audit = Pick<AuditService, 'log'>;
+type Notifier = Pick<AlrService, 'notifyPermissionHolders' | 'notifyBrandAdmins'>;
 type Config = Pick<AppConfig, 'refundAccountEncKey'>;
 
 @Injectable()
@@ -69,6 +76,7 @@ export class BndService {
     @Inject(AuditService) private readonly audit: Audit,
     @Inject(APP_CONFIG) private readonly config: Config,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AlrService) private readonly alr: Notifier,
   ) {}
 
   async list(filter: BrandFilter): Promise<{ items: Brand[]; total: number }> {
@@ -238,30 +246,55 @@ export class BndService {
       payoutAccountKeyVersion = PII_KEY_VERSION;
     }
 
-    await this.queries.updateLegalProfile(actor.brandId, {
-      taxCode: input.taxCode,
-      businessLicenseNumber:
-        input.businessLicenseNumber ?? before.businessLicenseNumber ?? undefined,
-      payoutAccountCiphertext,
-      payoutAccountKeyVersion,
+    const brandId = actor.brandId;
+    return this.queries.transaction(async (tx) => {
+      await this.queries.updateLegalProfile(
+        brandId,
+        {
+          taxCode: input.taxCode,
+          businessLicenseNumber:
+            input.businessLicenseNumber ?? before.businessLicenseNumber ?? undefined,
+          payoutAccountCiphertext,
+          payoutAccountKeyVersion,
+        },
+        tx,
+      );
+
+      const updated = await this.queries.findById(brandId, tx);
+      if (!updated) throw notFoundFor(actor);
+
+      const dto = this.toDto(updated);
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId,
+          action: 'bnd.brand.legal_profile_updated',
+          targetType: 'brand',
+          targetId: brandId,
+          before: this.toDto(before),
+          after: dto,
+        },
+        tx,
+      );
+
+      // Khai mới hay sửa đều xóa xác minh cũ — người quản lý thương hiệu phải xác minh lại.
+      const params = { brand: updated.name, taxCode: input.taxCode };
+      await this.alr.notifyPermissionHolders(
+        tx,
+        {
+          brandId,
+          type: 'BRAND_LEGAL_PROFILE_SUBMITTED',
+          subject: translate(DEFAULT_LOCALE, 'bnd.legalProfileSubmittedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'bnd.legalProfileSubmittedContent', params),
+          referenceId: brandId,
+          at: this.clock.now(),
+        },
+        BRAND_MANAGE,
+      );
+
+      return dto;
     });
-
-    const updated = await this.queries.findById(actor.brandId);
-    if (!updated) throw notFoundFor(actor);
-
-    const dto = this.toDto(updated);
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      brandId: actor.brandId,
-      action: 'bnd.brand.legal_profile_updated',
-      targetType: 'brand',
-      targetId: actor.brandId,
-      before: this.toDto(before),
-      after: dto,
-    });
-
-    return dto;
   }
 
   /**
@@ -282,26 +315,44 @@ export class BndService {
     }
 
     const now = this.clock.now();
-    await this.queries.verifyLegal(brandId, actor.userId, now);
+    return this.queries.transaction(async (tx) => {
+      const verified = await this.queries.verifyLegal(brandId, actor.userId, now, tx);
 
-    const updated = await this.queries.findById(brandId);
-    if (!updated) throw notFoundFor(actor);
+      const updated = await this.queries.findById(brandId, tx);
+      if (!updated) throw notFoundFor(actor);
 
-    const dto = this.toDto(updated);
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      brandId,
-      action: 'bnd.legal.verified',
-      targetType: 'brand',
-      targetId: brandId,
-      after: {
-        legalVerifiedAt: now.toISOString(),
-        legalVerifiedBy: actor.userId,
-      },
+      const dto = this.toDto(updated);
+      // Người khác vừa xác minh trước — giữ idempotent, không audit hay báo lần hai.
+      if (!verified) return dto;
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          brandId,
+          action: 'bnd.legal.verified',
+          targetType: 'brand',
+          targetId: brandId,
+          after: {
+            legalVerifiedAt: now.toISOString(),
+            legalVerifiedBy: actor.userId,
+          },
+        },
+        tx,
+      );
+
+      const params = { brand: updated.name };
+      await this.alr.notifyBrandAdmins(tx, {
+        brandId,
+        type: 'BRAND_LEGAL_VERIFIED',
+        subject: translate(DEFAULT_LOCALE, 'bnd.legalVerifiedSubject', params),
+        content: translate(DEFAULT_LOCALE, 'bnd.legalVerifiedContent', params),
+        referenceId: brandId,
+        at: now,
+      });
+
+      return dto;
     });
-
-    return dto;
   }
 
   private toDto(record: BrandRecord, includePayoutAccount = false): Brand {

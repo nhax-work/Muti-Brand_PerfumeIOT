@@ -529,6 +529,23 @@ components:
           type: string
           minLength: 16
           description: Mã trong email xác minh. Sai hoặc quá hạn trả VALIDATION_ERROR.
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token:
+          type: string
+          minLength: 16
+          description: Mã trong liên kết đặt lại mật khẩu. Sai, quá hạn hoặc đã dùng trả VALIDATION_ERROR.
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
 
     # ---------------------------------------------------------------------------------
     # BND, USR, PRD
@@ -2740,7 +2757,12 @@ components:
       required: [id, recipientUserId, type, channel, content, status, createdAt]
       properties:
         id: { type: string, format: uuid }
-        brandId: { type: string, format: uuid }
+        brandId:
+          type: [string, 'null']
+          format: uuid
+          description: >-
+            Thương hiệu của sự kiện. null = thông báo nội bộ nền tảng, ví dụ phân công cảnh báo mức máy
+            hay phiếu bảo trì (ADR-0029).
         recipientUserId: { type: string, format: uuid }
         type: { type: string }
         channel: { type: string, enum: [IN_APP, EMAIL] }
@@ -2951,6 +2973,50 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/forgot-password:
+    post:
+      tags: [AUTH]
+      summary: Yêu cầu liên kết đặt lại mật khẩu
+      operationId: forgotPassword
+      security: []
+      description: >-
+        FR-AUTH-13 (ADR-0030): luôn trả 204 — email không có tài khoản, tài khoản bị khóa và tài khoản
+        hợp lệ nhận cùng một câu trả lời. Tài khoản ACTIVE hoặc INVITED nhận email chứa liên kết dùng một
+        lần, hết hạn sau PASSWORD_RESET_TOKEN_TTL_MIN phút; yêu cầu mới thay mã cũ. Vượt
+        PASSWORD_RESET_RATE_LIMIT_PER_MIN theo IP hoặc theo email trả RATE_LIMITED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ForgotPasswordRequest' }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '429':
+          description: Yêu cầu quá nhiều lần — mã RATE_LIMITED
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /auth/reset-password:
+    post:
+      tags: [AUTH]
+      summary: Đặt mật khẩu mới bằng mã trong email
+      operationId: resetPassword
+      security: []
+      description: >-
+        FR-AUTH-13 (ADR-0030): mã đúng, còn hạn, chưa dùng và tài khoản còn ACTIVE hoặc INVITED thì đặt
+        mật khẩu mới, đưa tài khoản về ACTIVE, thu hồi mọi phiên và ghi AuditLog auth.password.reset.
+        Trường hợp còn lại trả VALIDATION_ERROR.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResetPasswordRequest' }
+      responses:
+        '204': { $ref: '#/components/responses/NoContent' }
+        '400': { $ref: '#/components/responses/BadRequest' }
 
   # -----------------------------------------------------------------------------------
   # BND — Thương hiệu

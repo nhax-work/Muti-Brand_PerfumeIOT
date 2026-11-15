@@ -12,11 +12,13 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate, type MessageKey } from '@scentstation/i18n';
 import { AuditService } from '../../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../../shared/config/index.js';
 import { decryptJson, encryptJson, PII_KEY_VERSION } from '../../../shared/crypto/pii-cipher.js';
 import { AppError, invalidField } from '../../../shared/errors/index.js';
+import { formatAmount, formatVnDateTime } from '../../../shared/format/index.js';
 import type { RequestOrigin } from '../../../shared/http/request-origin.js';
 import { PerMinuteRateLimiter } from '../../../shared/http/rate-limiter.js';
 import type { RefundClaimStatus } from '../../../shared/db/types.generated.js';
@@ -48,6 +50,8 @@ interface AccountSecret {
 }
 
 const JOB_BATCH = 100;
+/** Quyền xử lý phiếu khiếu nại và đơn cần kiểm tra (FR-ORD-20) — người nhận phiếu mới. */
+const ORDER_REFUND = 'order.refund';
 
 @Injectable()
 export class RefundClaimsService {
@@ -132,6 +136,12 @@ export class RefundClaimsService {
         },
         tx,
       );
+      // Phiếu có hạn REFUND_CLAIM_SLA_HOURS — báo người xử lý ngay, không đợi tới lúc quá hạn.
+      await this.alr.notifyPermissionHolders(
+        tx,
+        this.claimNotice(created, 'REFUND_CLAIM_SUBMITTED', 'ord.claimSubmitted', now),
+        ORDER_REFUND,
+      );
       return created;
     });
     if (!claim) throw new AppError('CLAIM_ALREADY_OPEN', 'ord.claimAlreadyOpen');
@@ -194,8 +204,43 @@ export class RefundClaimsService {
         },
         tx,
       );
+      // Tự nhận việc thì không cần báo chính mình; giao lại cho cùng người cũng không báo lần hai.
+      if (assigneeId !== actor.userId && assigneeId !== claim.assignedTo) {
+        await this.alr.notifyUsers(
+          tx,
+          this.claimNotice(claim, 'REFUND_CLAIM_ASSIGNED', 'ord.claimAssigned', at),
+          [assigneeId],
+        );
+      }
     });
     return this.get(id);
+  }
+
+  /** Nội dung thông báo về một phiếu — hạn xử lý tính từ lúc khách gửi (FR-ORD-31). */
+  private claimNotice(
+    claim: Pick<
+      RefundClaimRecord,
+      'id' | 'orderId' | 'brandId' | 'amount' | 'currency' | 'createdAt'
+    >,
+    type: string,
+    key: 'ord.claimSubmitted' | 'ord.claimAssigned',
+    at: Date,
+  ) {
+    const slaMs = this.config.constraint('REFUND_CLAIM_SLA_HOURS') * 60 * 60 * 1000;
+    const params = {
+      amount: formatAmount(claim.amount),
+      currency: claim.currency,
+      orderId: claim.orderId,
+      deadline: formatVnDateTime(new Date(claim.createdAt.getTime() + slaMs)),
+    };
+    return {
+      brandId: claim.brandId,
+      type,
+      subject: translate(DEFAULT_LOCALE, `${key}Subject` as MessageKey, params),
+      content: translate(DEFAULT_LOCALE, `${key}Content` as MessageKey, params),
+      referenceId: claim.id,
+      at,
+    };
   }
 
   /** FR-ORD-30: chỉ người được phân công, đã xác thực lại (guard). */

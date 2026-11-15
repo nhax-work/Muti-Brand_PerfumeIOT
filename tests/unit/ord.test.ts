@@ -174,7 +174,15 @@ class FakeInteractionQueries {
 /** OrdService chỉ với OrdQueries — recordKioskInteractions không chạm phụ thuộc khác. */
 function interactionService(queries: FakeInteractionQueries): OrdService {
   const unused = undefined as never;
-  return new OrdService(queries as unknown as OrdQueries, unused, unused, unused, unused, unused);
+  return new OrdService(
+    queries as unknown as OrdQueries,
+    unused,
+    unused,
+    unused,
+    unused,
+    unused,
+    unused,
+  );
 }
 
 describe('ORD — tương tác kiosk (FR-RPT-06)', () => {
@@ -435,6 +443,7 @@ describe('ORD — ADR-0015: MACHINE_BUSY và QUEUE_TIMEOUT', () => {
       {} as never,
       { constraint: () => 300 } as never,
       { now: () => new Date() } as never,
+      {} as never,
     );
 
     await expect(
@@ -499,6 +508,7 @@ describe('ORD — ADR-0015: MACHINE_BUSY và QUEUE_TIMEOUT', () => {
       fakeAudit as never,
       fakeConfig as never,
       { now: () => now } as never,
+      { notifyPermissionHolders: async () => 0 } as never,
     );
 
     const view = await service.getKioskOrderStatus('order-paid-timed-out');

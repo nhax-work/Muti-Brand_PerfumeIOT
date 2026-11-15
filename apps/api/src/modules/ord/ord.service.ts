@@ -7,6 +7,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
@@ -14,8 +15,10 @@ import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type { KioskInteractionType, RevenueOwnerType } from '../../shared/db/types.generated.js';
 import { AppError, notFoundFor } from '../../shared/errors/index.js';
+import { formatAmount } from '../../shared/format/index.js';
 import { PerMinuteRateLimiter } from '../../shared/http/rate-limiter.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
+import { AlrService } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import { canCreateDispenseCommand, canTransition } from './order-status.js';
 import {
@@ -42,6 +45,8 @@ type Executor = Kysely<DB>;
 
 /** Số lần thử lại khi mã tham chiếu ngẫu nhiên trùng (xác suất ~1/31⁶ mỗi ngày mỗi lần). */
 const REFERENCE_ATTEMPTS = 3;
+/** Quyền xử lý đơn cần kiểm tra và phiếu khiếu nại (FR-ORD-20). */
+const ORDER_REFUND = 'order.refund';
 
 /** Trạng thái khách cần mã tham chiếu sự cố để liên hệ hỗ trợ (FR-ORD-21). */
 const SUPPORT_STATUSES = new Set(['FAILED', 'REFUND_PENDING', 'REFUNDED']);
@@ -97,6 +102,7 @@ export class OrdService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(AlrService) private readonly alr: Pick<AlrService, 'notifyPermissionHolders'>,
   ) {
     // Ngưỡng đọc lười: hằng có thể bị ghi đè qua biến môi trường (app-config.ts).
     this.orderLimiter = new PerMinuteRateLimiter(clock, () =>
@@ -506,13 +512,49 @@ export class OrdService {
         `Chuyển trạng thái đơn không hợp lệ: ${change.from} → ${change.to} (FR-ORD-10)`,
       );
     }
+    // Người gọi đã khóa đơn, nên đọc cờ trước khi chuyển là nhất quán với lúc ghi.
+    const wasFlagged =
+      columns.needsManualReview === true
+        ? ((await this.queries.lockOrder(change.orderId, tx))?.needsManualReview ?? false)
+        : true;
     const updated = await this.queries.applyTransition(change, columns, tx);
     if (!updated) {
       throw new Error(
         `Đơn ${change.orderId} không còn ở ${change.from} — người gọi phải lockOrder trước khi chuyển`,
       );
     }
+    if (!wasFlagged) await this.notifyManualReview(tx, updated);
     return updated;
+  }
+
+  /** Cắm cờ kiểm tra thủ công; báo người xử lý khi cờ vừa bật (không báo lại đơn đã có cờ). */
+  private async flagForReview(tx: Executor, orderId: string): Promise<void> {
+    const flagged = await this.queries.flagManualReview(orderId, tx);
+    if (flagged) await this.notifyManualReview(tx, flagged);
+  }
+
+  /**
+   * Đơn đã trả tiền mà cần người xem để hoàn (FR-ORD-19, FR-ORD-20) — báo người có `order.refund`
+   * thay vì đợi họ tự mở danh sách đơn cần kiểm tra.
+   */
+  private async notifyManualReview(tx: Executor, order: OrderRecord): Promise<void> {
+    const params = {
+      orderId: order.id,
+      amount: formatAmount(order.amount),
+      currency: order.currency,
+    };
+    await this.alr.notifyPermissionHolders(
+      tx,
+      {
+        brandId: order.brandId,
+        type: 'ORDER_MANUAL_REVIEW',
+        subject: translate(DEFAULT_LOCALE, 'ord.manualReviewSubject', params),
+        content: translate(DEFAULT_LOCALE, 'ord.manualReviewContent', params),
+        referenceId: order.id,
+        at: this.clock.now(),
+      },
+      ORDER_REFUND,
+    );
   }
 
   /** Khóa đơn trong `tx` — cho webhook và (tuần 5) luồng lệnh xịt. */
@@ -603,13 +645,13 @@ export class OrdService {
 
     // Đơn đã đi tiếp bằng đường khác — không thể xảy ra khi mỗi đơn một payment, nhưng tiền đã về
     // thì phải có người xem, không được im lặng.
-    await this.queries.flagManualReview(order.id, tx);
+    await this.flagForReview(tx, order.id);
     return { kind: 'REFUND_PENDING', reason: 'ORDER_NOT_PAYABLE' };
   }
 
   /** FR-ORD-14 AC2: số tiền lệch thì cắm cờ kiểm tra thủ công, không đổi trạng thái. */
   async flagOrderForReview(tx: Executor, orderId: string): Promise<void> {
-    await this.queries.flagManualReview(orderId, tx);
+    await this.flagForReview(tx, orderId);
   }
 
   // -----------------------------------------------------------------------------------

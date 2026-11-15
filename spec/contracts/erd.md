@@ -6,10 +6,11 @@
 Nguồn: `seed_document/DB_DIAGRAM_MERMAID.md` · Chuẩn đặt tên: `spec/decisions/0002-chuan-dat-ten-va-kieu-du-lieu-csdl.md`
 Lược đồ thi hành: `spec/contracts/schema.sql` · Mô tả từng cột: `spec/contracts/data-dictionary.md`
 
-46 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
+47 bảng, chia theo 6 nhóm (35 bảng ban đầu + `rental_packages`, `storage_plans`,
 `storage_compensations` theo ADR-0006 + `rental_checkouts` theo ADR-0008 + `refund_claims` theo ADR-0012
 + `email_verifications`, `agreement_versions`, `agreement_acceptances`, `brand_payouts` theo ADR-0013 +
-`bottle_returns` theo ADR-0014 + `shipment_declaration_photos` theo ADR-0024). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
+`bottle_returns` theo ADR-0014 + `shipment_declaration_photos` theo ADR-0024 + `password_reset_tokens`
+theo ADR-0030). Vẽ tất cả vào một hình thì không đọc được, nên tài liệu này có một sơ đồ
 tổng quan các quan hệ cốt lõi, rồi 6 sơ đồ chi tiết theo nhóm.
 
 ---
@@ -90,6 +91,13 @@ erDiagram
         timestamptz expires_at
         timestamptz verified_at
     }
+    PASSWORD_RESET_TOKENS {
+        uuid id PK
+        uuid user_id FK,UK "mỗi tài khoản một mã hiệu lực"
+        char token_hash UK
+        timestamptz expires_at
+        timestamptz used_at "NULL = chưa dùng"
+    }
     USERS {
         uuid id PK
         uuid brand_id FK "NULL với tài khoản nền tảng"
@@ -134,6 +142,7 @@ erDiagram
     PERMISSIONS ||--o{ ROLE_PERMISSIONS : "thuộc"
     USERS  ||--o{ REFRESH_SESSIONS : "mở phiên"
     USERS  ||--o| EMAIL_VERIFICATIONS : "xác minh email"
+    USERS  ||--o| PASSWORD_RESET_TOKENS : "đặt lại mật khẩu"
 ```
 
 Vai trò là **dữ liệu**, không phải enum: đổi tập vai trò chỉ cần sửa dữ liệu seed, không cần
@@ -146,6 +155,10 @@ Brand Admin (`docs/FR_NFR_SCENTSTATION.md` Phần D).
 transaction, kèm một hàng `email_verifications`. Tài khoản do Super Admin tạo không có hàng nào ở đó
 và không phải xác minh — có hàng mà `verified_at` NULL thì chưa tạo được phiên thanh toán thuê slot.
 `brands.legal_verified_at` chỉ chặn chuyển kỳ chi trả sang `PAID`, không chặn việc thuê slot.
+
+**Quên mật khẩu** (ADR-0030, FR-AUTH-13): mỗi yêu cầu thay mã của dòng `password_reset_tokens` duy
+nhất của tài khoản; đặt lại xong thì `used_at` khác NULL. Xóa tài khoản thì mã đi theo (`ON DELETE
+CASCADE`).
 
 ---
 

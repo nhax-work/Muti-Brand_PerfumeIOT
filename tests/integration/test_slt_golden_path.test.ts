@@ -179,6 +179,15 @@ describe('Golden Path Integration Test (Task 6)', () => {
       payload: { token: rawVerificationToken },
     });
     expect(verifyRes.statusCode).toBe(204);
+    // Super Admin (có brand.manage) được báo có thương hiệu mới để xác minh pháp nhân (ADR-0013).
+    const signupNotice = await raw.query<{ subject: string }>(
+      `SELECT subject FROM notifications
+        WHERE type = 'BRAND_REGISTERED' AND brand_id = $1 AND recipient_user_id = $2`,
+      [regData.brandId, fx.superAdminId],
+    );
+    expect(signupNotice.rows.map((r) => r.subject)).toEqual([
+      `Thương hiệu mới đăng ký: ${brandName}`,
+    ]);
 
     // 3. Đăng nhập Brand Admin (FR-AUTH-01)
     const loginRes = await app.inject({

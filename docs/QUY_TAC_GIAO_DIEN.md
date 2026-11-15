@@ -188,8 +188,8 @@ Cùng một nghĩa thì cùng một màu ở mọi màn. Chọn theo nhóm nghĩ
 ### 2.7 Kích thước màn hình
 
 - Admin thiết kế cho **≥ 1280px**, dùng được ở 1024px (menu thu gọn).
-- Trang công khai `/login`, `/register`, `/verify-email`, `/claim` mở trên điện thoại — phải dùng được
-  ở **360px**.
+- Trang công khai `/login`, `/register`, `/verify-email`, `/forgot-password`, `/reset-password`,
+  `/claim` mở trên điện thoại — phải dùng được ở **360px**.
 
 ### 2.8 Style viết tay
 

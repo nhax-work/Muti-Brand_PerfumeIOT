@@ -381,6 +381,16 @@ describe('DSP — kết quả từ thiết bị (mqtt.md §6)', () => {
     // Lệnh không được gửi lại tự động (FR-DSP-19): đơn đã rời PAID nên vòng ghi lệnh bỏ qua.
     await dsp.armQueuedOrders();
     expect(await flow.commandsOf(early.id)).toHaveLength(1);
+
+    // Mỗi đơn vừa cắm cờ báo người có order.refund đúng một lần (Super Admin của fixture có quyền này).
+    for (const orderId of [pressed.id, early.id]) {
+      const notices = await client.query(
+        `SELECT 1 FROM notifications WHERE type = 'ORDER_MANUAL_REVIEW'
+            AND reference_id = $1 AND recipient_user_id = $2`,
+        [orderId, fx.superAdminId],
+      );
+      expect(notices.rowCount).toBe(1);
+    }
   });
 
   it('test_FR_DSP_09_result_from_other_machine_is_ignored', async () => {

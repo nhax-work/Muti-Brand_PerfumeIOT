@@ -78,6 +78,8 @@ afterAll(async () => {
   await client.query(`DELETE FROM alerts WHERE machine_id = $1`, [fx.machineId]);
   await client.query(`DELETE FROM refresh_sessions WHERE user_id = $1`, [opsUserId]);
   await client.query(`DELETE FROM user_roles WHERE user_id = $1`, [opsUserId]);
+  // Phiếu mới và phân công báo cho Ops (người có order.refund) — xóa trước khi xóa tài khoản.
+  await client.query(`DELETE FROM notifications WHERE recipient_user_id = $1`, [opsUserId]);
   await client.query(`DELETE FROM users WHERE id = $1`, [opsUserId]);
   await client.query(`DELETE FROM role_permissions WHERE role_id = $1`, [opsRoleId]);
   await client.query(`DELETE FROM roles WHERE id = $1`, [opsRoleId]);
@@ -238,6 +240,25 @@ describe('Phiếu khiếu nại — kiosk và khách (FR-ORD-28, FR-ORD-29)', ()
     expect(row.account_ciphertext!.toString('utf8')).not.toContain(ACCOUNT_NUMBER);
     expect(row.contact_ciphertext!.toString('utf8')).not.toContain(CONTACT);
 
+    // Phiếu mới báo người có order.refund, không báo Brand Admin, không mang dữ liệu cá nhân.
+    const notices = await client.query<{ recipient_user_id: string; content: string }>(
+      `SELECT recipient_user_id, content FROM notifications
+        WHERE type = 'REFUND_CLAIM_SUBMITTED' AND reference_id = $1`,
+      [receipt['id']],
+    );
+    const recipients = notices.rows.map((r) => r.recipient_user_id);
+    expect(recipients).toContain(opsUserId);
+    const brandRecipients = await client.query(
+      `SELECT 1 FROM users WHERE brand_id IS NOT NULL AND id = ANY($1::uuid[])`,
+      [recipients],
+    );
+    expect(brandRecipients.rowCount).toBe(0);
+    for (const n of notices.rows) {
+      expect(n.content).toContain(order.id);
+      expect(n.content).not.toContain(ACCOUNT_NUMBER);
+      expect(n.content).not.toContain(CONTACT);
+    }
+
     // Mã khiếu nại chỉ dùng một lần.
     const again = await submitClaim(order.id, {}, '10.0.2.2');
     expect(again.statusCode).toBe(409);
@@ -324,6 +345,14 @@ describe('Phiếu khiếu nại — Operations Staff (FR-ORD-20, FR-ORD-30)', ()
     expect(asAdmin.json()).toMatchObject({ code: 'CLAIM_NOT_ASSIGNED' });
 
     await assignToOps(claim.id);
+    // Giao lại cho cùng người không báo lần hai.
+    await assignToOps(claim.id);
+    const assigned = await client.query(
+      `SELECT 1 FROM notifications
+        WHERE type = 'REFUND_CLAIM_ASSIGNED' AND reference_id = $1 AND recipient_user_id = $2`,
+      [claim.id, opsUserId],
+    );
+    expect(assigned.rowCount).toBe(1);
 
     // Được phân công nhưng chưa xác thực lại → REAUTH_REQUIRED.
     const noReauth = await asOps('GET', `/refund-claims/${claim.id}/refund-account`);

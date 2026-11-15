@@ -609,7 +609,10 @@ export interface MaintenanceTickets {
 }
 
 export interface Notifications {
-  brand_id: string;
+  /**
+   * Thương hiệu của sự kiện — để Super Admin lọc bằng chứng gửi (ADR-0017). NULL = thông báo nội bộ nền tảng, ví dụ phân công cảnh báo mức máy hay phiếu bảo trì (ADR-0029).
+   */
+  brand_id: string | null;
   channel: string;
   content: string;
   created_at: Generated<Timestamp>;
@@ -694,6 +697,18 @@ export interface OrderStatusHistories {
   order_id: string;
   reason: string | null;
   to_status: OrderStatus;
+}
+
+export interface PasswordResetTokens {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: Generated<string>;
+  /**
+   * SHA-256 (hex) của mã gửi trong email. Không lưu mã gốc (NFR-SEC-05).
+   */
+  token_hash: string;
+  used_at: Timestamp | null;
+  user_id: string;
 }
 
 export interface PaymentEvents {
@@ -1152,6 +1167,7 @@ export interface DB {
   notifications: Notifications;
   order_status_histories: OrderStatusHistories;
   orders: Orders;
+  password_reset_tokens: PasswordResetTokens;
   payment_events: PaymentEvents;
   payments: Payments;
   permissions: Permissions;

@@ -285,6 +285,15 @@ describe('Tiếp nhận và đối chiếu (FR-INV-24, 25, 26)', () => {
       declaration: { status: 'DISCREPANCY', discrepancyNotes: 'Vỡ 1 chai khi vận chuyển' },
       batch: { quantityReceived: 9 },
     });
+
+    // Brand Admin của thương hiệu khai báo được báo lệch số lượng kèm ghi chú của kho.
+    const notices = await client.query<{ email: string; content: string }>(
+      `SELECT u.email, n.content FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+        WHERE n.type = 'SHIPMENT_DISCREPANCY' AND n.reference_id = $1`,
+      [declaration.id],
+    );
+    expect(notices.rows.map((r) => r.email)).toEqual([fx.brandAdminAEmail]);
+    expect(notices.rows[0]!.content).toContain('Vỡ 1 chai khi vận chuyển');
   });
 
   it('test_FR_INV_25_receive_zero_creates_no_batch — nhận 0 chai: DISCREPANCY, batch null, không tạo lô', async () => {
@@ -494,6 +503,23 @@ describe('Giấy tờ chính hãng của lô (FR-INV-33, 34)', () => {
       [batch.id],
     );
     expect(audit.rowCount).toBe(1);
+
+    // Lô chờ duyệt → báo trong ứng dụng cho người có inventory.verify (Super Admin của fixture);
+    // nhân viên kho không có quyền duyệt và Brand Admin không nhận.
+    const notices = await client.query<{ recipient_user_id: string; channel: string }>(
+      `SELECT recipient_user_id, channel FROM notifications
+        WHERE type = 'BATCH_AUTHENTICITY_SUBMITTED' AND reference_id = $1`,
+      [batch.id],
+    );
+    const recipients = notices.rows.map((r) => r.recipient_user_id);
+    expect(recipients).toContain(fx.superAdminId);
+    expect(recipients).not.toContain(inventoryStaff.userId);
+    const brandAdmins = await client.query<{ id: string }>(
+      `SELECT id FROM users WHERE brand_id IS NOT NULL AND id = ANY($1::uuid[])`,
+      [recipients],
+    );
+    expect(brandAdmins.rowCount).toBe(0);
+    expect(notices.rows.every((r) => r.channel === 'IN_APP')).toBe(true);
   });
 
   it('test_FR_INV_33_forbid_other_brand — Brand B nộp giấy tờ cho lô của A trả FORBIDDEN_SCOPE', async () => {
@@ -580,9 +606,11 @@ describe('Giấy tờ chính hãng của lô (FR-INV-33, 34)', () => {
     });
     expect(approved.json<Batch>().authenticityVerifiedAt).not.toBeNull();
 
-    // Kết quả duyệt gửi Brand Admin trong ứng dụng và qua email (FR-INV-34, FR-ALR-16).
+    // Kết quả duyệt gửi Brand Admin trong ứng dụng và qua email (FR-INV-34, FR-ALR-16). Chỉ xét
+    // người nhận của thương hiệu — thông báo "chờ duyệt" gửi tài khoản nền tảng.
     const notices = await client.query<{ type: string; channel: string; status: string }>(
       `SELECT type, channel, status FROM notifications WHERE reference_id = $1 AND brand_id = $2
+          AND recipient_user_id IN (SELECT id FROM users WHERE brand_id = $2)
         ORDER BY created_at, channel DESC`,
       [batch.id, fx.brandA],
     );

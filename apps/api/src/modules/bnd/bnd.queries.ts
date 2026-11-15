@@ -58,6 +58,11 @@ export interface UpdateLegalProfileData {
 export class BndQueries {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
+  /** Ghi hồ sơ pháp nhân cùng thông báo và audit trong một transaction. */
+  transaction<T>(work: (tx: Database) => Promise<T>): Promise<T> {
+    return this.db.transaction().execute(work);
+  }
+
   async list(filter: BrandFilter): Promise<{ items: BrandRecord[]; total: number }> {
     let base = this.db.selectFrom('brands as b');
     if (filter.status) {
@@ -82,8 +87,8 @@ export class BndQueries {
     };
   }
 
-  async findById(id: string): Promise<BrandRecord | undefined> {
-    const row = await this.db
+  async findById(id: string, executor: Database = this.db): Promise<BrandRecord | undefined> {
+    const row = await executor
       .selectFrom('brands')
       .selectAll()
       .where('id', '=', id)
@@ -146,8 +151,12 @@ export class BndQueries {
       .execute();
   }
 
-  async updateLegalProfile(id: string, input: UpdateLegalProfileData): Promise<void> {
-    await this.db
+  async updateLegalProfile(
+    id: string,
+    input: UpdateLegalProfileData,
+    executor: Database = this.db,
+  ): Promise<void> {
+    await executor
       .updateTable('brands')
       .set({
         tax_code: input.taxCode,
@@ -162,8 +171,17 @@ export class BndQueries {
       .execute();
   }
 
-  async verifyLegal(id: string, adminId: string, verifiedAt: Date): Promise<void> {
-    await this.db
+  /**
+   * @returns true nếu lần gọi này ghi nhận xác minh — hai Super Admin bấm cùng lúc thì chỉ một người
+   * ghi, người kia thấy đã xác minh
+   */
+  async verifyLegal(
+    id: string,
+    adminId: string,
+    verifiedAt: Date,
+    executor: Database = this.db,
+  ): Promise<boolean> {
+    const result = await executor
       .updateTable('brands')
       .set({
         legal_verified_at: verifiedAt,
@@ -171,7 +189,9 @@ export class BndQueries {
         updated_at: new Date(),
       })
       .where('id', '=', id)
-      .execute();
+      .where('legal_verified_at', 'is', null)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
   }
 }
 

@@ -11,6 +11,7 @@
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
+import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { EMAIL_PROVIDER, type EmailProvider } from '../../adapters/email/index.js';
 import { AuditService } from '../../shared/audit/index.js';
@@ -20,7 +21,7 @@ import type { DB } from '../../shared/db/index.js';
 import type { AlertSeverity } from '../../shared/db/types.generated.js';
 import { AppError } from '../../shared/errors/index.js';
 import { hasPermission } from '../../shared/scoping/index.js';
-import type { AuthenticatedUser } from '../auth/index.js';
+import type { AuthenticatedUser, BrandSignupListener } from '../auth/index.js';
 import {
   AlrQueries,
   type AlertDuplicatePolicy,
@@ -42,6 +43,16 @@ export type Alert = Schema<'Alert'>;
 export const NOTIFICATION_MANAGE = 'notification.manage';
 /** Quyền tiếp nhận, phân công, xử lý và đóng cảnh báo (FR-ALR-11). */
 export const ALERT_HANDLE = 'alert.handle';
+/** Quyền quản lý thương hiệu — người xác minh pháp nhân (FR-BND-10). */
+const BRAND_MANAGE = 'brand.manage';
+/**
+ * Loại cảnh báo KHÔNG báo Brand Admin (FR-ALR-10): quá hạn xử lý phiếu khiếu nại là việc nội bộ
+ * của nền tảng; dừng bán bắt buộc đã có thông báo MACHINE_MAINTENANCE riêng (ADR-0015).
+ */
+const ALERT_TYPES_NOT_FOR_BRANDS: ReadonlySet<string> = new Set([
+  'REFUND_CLAIM_SLA_BREACHED',
+  'FORCED_MAINTENANCE',
+]);
 
 /** Số email mỗi nhịp job — đủ cho một đợt chốt kỳ chi trả mà không giữ nhịp quá lâu. */
 const DISPATCH_BATCH = 50;
@@ -51,7 +62,7 @@ const MAX_ERROR_LENGTH = 1000;
 type Executor = Kysely<DB>;
 
 @Injectable()
-export class AlrService {
+export class AlrService implements BrandSignupListener {
   private readonly logger = new Logger(AlrService.name);
 
   constructor(
@@ -86,6 +97,46 @@ export class AlrService {
     recipientUserIds: readonly string[],
   ): Promise<void> {
     return this.queries.insertInAppForUsers(notification, recipientUserIds, tx);
+  }
+
+  /**
+   * Thông báo trong ứng dụng cho mọi tài khoản nền tảng ACTIVE có quyền `permission` — những người
+   * xử lý được việc vừa phát sinh (duyệt giấy tờ, xác minh pháp nhân…), trong `tx` của người gọi.
+   *
+   * @returns số người nhận
+   */
+  async notifyPermissionHolders(
+    tx: Executor,
+    notification: UserNotification,
+    permission: string,
+  ): Promise<number> {
+    const recipients = await this.queries.activePlatformUserIdsWithPermission(permission, tx);
+    await this.queries.insertInAppForUsers(notification, recipients, tx);
+    return recipients.length;
+  }
+
+  /**
+   * Cổng `BRAND_SIGNUP_LISTENER` của auth: thương hiệu tự đăng ký vừa xác minh email → báo người có
+   * quyền quản lý thương hiệu để xác minh pháp nhân trước kỳ chi trả đầu tiên (ADR-0013).
+   */
+  async onBrandEmailVerified(userId: string, at: Date): Promise<void> {
+    await this.queries.transaction(async (tx) => {
+      const signup = await this.queries.findBrandOfUser(userId, tx);
+      if (!signup) return;
+      const params = { brand: signup.brandName, email: signup.email };
+      await this.notifyPermissionHolders(
+        tx,
+        {
+          brandId: signup.brandId,
+          type: 'BRAND_REGISTERED',
+          subject: translate(DEFAULT_LOCALE, 'bnd.newBrandRegisteredSubject', params),
+          content: translate(DEFAULT_LOCALE, 'bnd.newBrandRegisteredContent', params),
+          referenceId: signup.brandId,
+          at,
+        },
+        BRAND_MANAGE,
+      );
+    });
   }
 
   /**
@@ -301,6 +352,26 @@ export class AlrService {
         },
         tx,
       );
+      // ADR-0029: báo người được giao. Cảnh báo mức máy không có thương hiệu → thông báo nội bộ.
+      if (assignedTo !== actor.userId && assignedTo !== record.assignedTo) {
+        const params = {
+          title: record.title,
+          machine: await this.queries.machineName(record.machineId, tx),
+          severity: translate(DEFAULT_LOCALE, `alertSeverity.${record.severity}`),
+        };
+        await this.notifyUsers(
+          tx,
+          {
+            brandId: record.brandId,
+            type: 'ALERT_ASSIGNED',
+            subject: translate(DEFAULT_LOCALE, 'alr.alertAssignedSubject', params),
+            content: translate(DEFAULT_LOCALE, 'alr.alertAssignedContent', params),
+            referenceId: record.id,
+            at: now,
+          },
+          [assignedTo],
+        );
+      }
     });
     return this.getAlert(actor, id);
   }
@@ -384,15 +455,65 @@ export class AlrService {
     onDuplicate: AlertDuplicatePolicy = 'COUNT',
   ): Promise<boolean> {
     const at = data.at ?? this.clock.now();
-    return this.queries.insertOrUpdateAlert(
+    const executor = tx ?? this.queries.database;
+    const created = await this.queries.insertOrUpdateAlert(
       {
         ...data,
         firstOccurredAt: at,
         lastOccurredAt: at,
       },
-      tx ?? this.queries.database,
+      executor,
       onDuplicate,
     );
+    // Chỉ cảnh báo mới — lần xảy ra lặp lại đã gộp vào cảnh báo đang mở (FR-ALR-07) thì không báo.
+    if (created && !ALERT_TYPES_NOT_FOR_BRANDS.has(data.type)) {
+      await this.notifyAffectedBrands(executor, data, at);
+    }
+    return created;
+  }
+
+  /**
+   * FR-ALR-10: báo Brand Admin các thương hiệu bị ảnh hưởng. Chỉ đưa tên máy, mức độ và tiêu đề —
+   * cảnh báo mức máy không mang dữ liệu slot của thương hiệu khác.
+   */
+  private async notifyAffectedBrands(
+    executor: Executor,
+    alert: {
+      readonly brandId?: string | null;
+      readonly machineId: string;
+      readonly severity: AlertSeverity;
+      readonly title: string;
+      readonly deduplicationKey: string;
+    },
+    at: Date,
+  ): Promise<void> {
+    const { alertId, machineName, brandIds } = await this.queries.brandsAffectedByAlert(
+      {
+        machineId: alert.machineId,
+        brandId: alert.brandId ?? null,
+        deduplicationKey: alert.deduplicationKey,
+      },
+      executor,
+    );
+    const params = {
+      machine: machineName,
+      title: alert.title,
+      severity: translate(DEFAULT_LOCALE, `alertSeverity.${alert.severity}`),
+    };
+    for (const brandId of brandIds) {
+      await this.notifyBrandAdmins(
+        executor,
+        {
+          brandId,
+          type: 'ALERT_RAISED',
+          subject: translate(DEFAULT_LOCALE, 'alr.alertForBrandSubject', params),
+          content: translate(DEFAULT_LOCALE, 'alr.alertForBrandContent', params),
+          referenceId: alertId ?? alert.deduplicationKey,
+          at,
+        },
+        ['IN_APP'],
+      );
+    }
   }
 
   /**

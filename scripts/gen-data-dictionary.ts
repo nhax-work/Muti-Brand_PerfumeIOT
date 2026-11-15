@@ -36,6 +36,7 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'role_permissions',
       'refresh_sessions',
       'email_verifications',
+      'password_reset_tokens',
     ],
   },
   {

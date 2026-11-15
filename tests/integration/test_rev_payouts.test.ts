@@ -106,6 +106,17 @@ async function payoutRow(brandId: string, month: string) {
   return res.rows[0];
 }
 
+/** Kênh của thông báo `type` gắn với kỳ `payoutId`, theo người nhận — FR-ALR-16 AC1 sự kiện 8. */
+async function payoutNotices(type: string, payoutId: string) {
+  const res = await client.query<{ email: string; channel: string; content: string }>(
+    `SELECT u.email, n.channel, n.content FROM notifications n
+       JOIN users u ON u.id = n.recipient_user_id
+      WHERE n.type = $1 AND n.reference_id = $2 ORDER BY n.channel`,
+    [type, payoutId],
+  );
+  return res.rows;
+}
+
 async function verifyBrand(brandId: string): Promise<void> {
   await client.query(
     `UPDATE brands SET tax_code = '0312345678', legal_verified_at = now(), legal_verified_by = $2,
@@ -138,6 +149,16 @@ describe('FR-SLT-52 — kỳ chi trả hằng tháng', () => {
     const row = await payoutRow(fx.brandA, '2025-01-01');
     expect(row).toMatchObject({ status: 'CONFIRMED', order_count: 3, amount: '98000.0000' });
     expect(row!.confirmed_at).not.toBeNull();
+
+    // Chốt số → báo Brand Admin của A cả trong ứng dụng lẫn email, đúng một lần.
+    await rev.refreshPayouts();
+    const notices = await payoutNotices('PAYOUT_CONFIRMED', row!.id);
+    expect(notices.map((n) => [n.email, n.channel])).toEqual([
+      [fx.brandAdminAEmail, 'EMAIL'],
+      [fx.brandAdminAEmail, 'IN_APP'],
+    ]);
+    expect(notices[0]!.content).toContain('98.000');
+    expect(notices[0]!.content).toContain('3 đơn');
   });
 
   it('test_FR_SLT_52_current_month_accumulates_as_draft — DRAFT tính lại mỗi lần chạy', async () => {
@@ -269,6 +290,11 @@ describe('FR-SLT-53 — ghi nhận chuyển khoản', () => {
       [payout!.id],
     );
     expect(audit.rowCount).toBe(1);
+    const notices = await payoutNotices('PAYOUT_PAID', payout!.id);
+    expect(notices.map((n) => [n.email, n.channel])).toEqual([
+      [fx.brandAdminAEmail, 'EMAIL'],
+      [fx.brandAdminAEmail, 'IN_APP'],
+    ]);
 
     // Trả hai lần → kỳ không còn CONFIRMED.
     const again = await call('POST', url, { payload, headers: await withReauth(superToken) });

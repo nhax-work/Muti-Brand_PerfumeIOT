@@ -47,6 +47,15 @@ const RegisterBrandBody = z.object({
 /** openapi.yaml: EmailVerificationConfirm — token có minLength 16. */
 const VerifyEmailBody = z.object({ token: z.string().min(16) });
 
+/** openapi.yaml: ForgotPasswordRequest. */
+const ForgotPasswordBody = z.object({ email: z.string().email() });
+
+/** openapi.yaml: ResetPasswordRequest — token minLength 16, newPassword minLength 8. */
+const ResetPasswordBody = z.object({
+  token: z.string().min(16),
+  newPassword: z.string().min(8),
+});
+
 type HttpRequest = Parameters<typeof originOf>[0];
 
 @Controller('auth')
@@ -79,6 +88,24 @@ export class AuthController {
     @Req() request: HttpRequest,
   ): Promise<void> {
     await this.auth.resendVerification(user, originOf(request));
+  }
+
+  /** FR-AUTH-13 (ADR-0030) — luôn 204, không lộ email nào có tài khoản. */
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(204)
+  async forgotPassword(@Body() body: unknown, @Req() request: HttpRequest): Promise<void> {
+    const { email } = parseBody(ForgotPasswordBody, body);
+    await this.auth.requestPasswordReset(email, originOf(request));
+  }
+
+  /** FR-AUTH-13 (ADR-0030) */
+  @Public()
+  @Post('reset-password')
+  @HttpCode(204)
+  async resetPassword(@Body() body: unknown, @Req() request: HttpRequest): Promise<void> {
+    const { token, newPassword } = parseBody(ResetPasswordBody, body);
+    await this.auth.resetPassword(token, newPassword, originOf(request));
   }
 
   /** FR-AUTH-01, FR-AUTH-02, FR-AUTH-03 */

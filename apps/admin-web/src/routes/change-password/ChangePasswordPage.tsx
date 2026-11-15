@@ -43,7 +43,7 @@ export default function ChangePasswordPage() {
   };
 
   return (
-    <Card style={{ maxWidth: 420, margin: '10vh auto' }}>
+    <Card className="login-card">
       <Typography.Title level={3}>
         <LockOutlined /> {t('ui.changePassword')}
       </Typography.Title>
