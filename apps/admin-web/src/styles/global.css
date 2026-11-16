@@ -84,7 +84,23 @@ body {
   scroll-behavior: smooth;
 }
 
+/* Logo chữ SS: ảnh dùng làm mặt nạ, tô bằng màu chữ nơi đặt (trắng trên nền tối, đen trên nền
+   sáng) — một file cho mọi nền. Cao theo cỡ chữ của khối chứa. */
+.brand-logo {
+  display: inline-block;
+  flex: none;
+  height: 1.4em;
+  aspect-ratio: 155 / 192;
+  vertical-align: middle;
+  background-color: currentColor;
+  -webkit-mask: url('../assets/logo-mark.webp') center / contain no-repeat;
+  mask: url('../assets/logo-mark.webp') center / contain no-repeat;
+}
+
 .admin-brand.ant-typography {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   color: #fff;
   padding: 20px 24px;
   margin: 0;
@@ -95,10 +111,10 @@ body {
   overflow: hidden;
 }
 
-/* Menu thu gọn: chỉ còn icon, logo căn giữa */
+/* Menu thu gọn: chỉ còn logo, căn giữa */
 .admin-sider.ant-layout-sider-collapsed .admin-brand.ant-typography {
+  justify-content: center;
   padding: 20px 0;
-  text-align: center;
   font-size: 20px;
 }
 
@@ -411,10 +427,8 @@ body {
   text-transform: uppercase;
 }
 
-.auth-hero-mark-dot {
-  width: 8px;
-  height: 8px;
-  background: var(--auth-on-ink);
+.auth-hero-mark .brand-logo {
+  height: 28px;
 }
 
 .auth-hero-body {
@@ -511,12 +525,19 @@ body {
 }
 
 .auth-panel-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
   font-family: var(--font-serif);
   font-size: var(--auth-fs-brand);
   font-weight: 500;
   letter-spacing: -0.01em;
-  text-align: center;
   text-transform: uppercase;
+}
+
+.auth-panel-brand .brand-logo {
+  height: 1.3em;
 }
 
 .auth-panel-body {

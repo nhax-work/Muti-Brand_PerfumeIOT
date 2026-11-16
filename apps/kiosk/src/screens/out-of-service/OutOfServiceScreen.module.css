@@ -13,9 +13,22 @@
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
   font-family: var(--font-serif);
   font-size: var(--fs-h2);
   letter-spacing: 0.04em;
+}
+
+/* Logo chữ SS: ảnh làm mặt nạ, tô bằng màu chữ. */
+.logo {
+  flex: none;
+  height: 1.15em;
+  aspect-ratio: 155 / 192;
+  background-color: currentColor;
+  -webkit-mask: url('../../assets/logo-mark.webp') center / contain no-repeat;
+  mask: url('../../assets/logo-mark.webp') center / contain no-repeat;
 }
 
 .title {
