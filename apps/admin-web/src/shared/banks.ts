@@ -29,4 +29,3 @@ export function formatBankName(bin: string): string {
   const found = VIETQR_BANKS.find((b) => b.bin === bin);
   return found ? `${found.name} (${bin})` : bin;
 }
-
