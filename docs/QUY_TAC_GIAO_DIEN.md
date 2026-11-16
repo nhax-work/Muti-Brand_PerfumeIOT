@@ -34,15 +34,19 @@ Component, CSS module và phần còn lại của file CSS **chỉ tham chiếu 
 hay bóng rời. Cần giá trị mới thì thêm biến vào đúng chỗ trên, đặt tên theo vai trò (`--line`,
 `--action`), không theo màu (`--gray-2`).
 
-**Kiosk và landing cùng một nhận diện**: landing chép bộ token của kiosk. Đổi màu, font hay bo góc ở
-một bên thì đổi bên kia trong cùng thay đổi.
+**Kiosk và landing dùng chung** font (Playfair Display + Be Vietnam Pro), màu đèn nút `--accent` và bộ
+chuyển động `--dur` / `--ease` / `--shift`. Đổi một trong các giá trị này ở một bên thì đổi bên kia
+trong cùng thay đổi. Riêng màu nền, chữ, nút và bo góc của landing theo cột ảnh trang đăng nhập web
+quản trị (nền đen, góc vuông — mục 4), không theo kiosk.
 
 ### 1.2 Chữ và giọng văn
 
 - Admin và kiosk: mọi chuỗi hiển thị qua `packages/i18n`, thêm cả `vi` và `en` cùng lúc (FE4). Khóa mới
   thêm vào **cuối** namespace (`ui` cho admin, `kiosk` cho kiosk), không sắp xếp lại khóa có sẵn — để
   hai người cùng thêm khóa không xung đột merge.
-- Landing: chữ tiếng Việt viết thẳng trong HTML (landing là trang tĩnh, không đi qua i18n).
+- Landing: chữ viết thẳng trong HTML (landing là trang tĩnh, không đi qua i18n). Hai bản: tiếng Việt
+  `index.html` (`/`) và tiếng Anh `en/index.html` (`/en/`) — sửa nội dung một bản thì sửa bản kia trong
+  cùng thay đổi.
 - **Viết hoa chữ đầu câu**, không Viết Hoa Mọi Chữ. Nhãn nút là động từ: "Tạo phiếu", "Gia hạn",
   "Lưu", "Đăng ký thương hiệu" — không "OK", "Submit".
 - Admin: xưng hô trung tính, không "bạn/quý khách". Kiosk và landing nói với khách: ngắn, một ý mỗi
@@ -239,44 +243,87 @@ Bản tối (`data-theme="dark"`) đã có sẵn token; mặc định là bản 
 
 ## 4. Landing (`apps/landing`)
 
-Trang giới thiệu tĩnh ở tên miền gốc: `index.html` + `styles.css` + `favicon.svg`, không JavaScript,
-không build. Caddy phục vụ nguyên thư mục (`infra/staging/web.Dockerfile`), nên sửa file là xong, không
+Trang giới thiệu tĩnh ở tên miền gốc: `index.html` (tiếng Việt, `/`) + `en/index.html` (tiếng Anh,
+`/en/`) + `styles.css` + ảnh, không JavaScript, không build. Caddy phục vụ nguyên thư mục (`infra/staging/web.Dockerfile`), nên sửa file là xong, không
 có bước build nào.
 
-**Nhận diện** — cùng kiosk (mục 3.1): nền trắng, chữ đen, nút chính đen, Playfair Display cho tiêu đề,
-Be Vietnam Pro cho nội dung, `--accent` chỉ gắn với hình ảnh đèn nút, `--radius` 4px. Token ở đầu
-`styles.css` chép từ kiosk, thêm riêng `--container` 1120px (khung nội dung tối đa).
+**Người đọc** — thương hiệu nước hoa đang cân nhắc thuê slot. Trang quảng bá việc thuê slot (lợi ích,
+cách hợp tác, gói thuê, hỏi đáp cho thương hiệu); phần trải nghiệm của khách chỉ để thương hiệu hình
+dung sản phẩm của mình được bán thế nào. Mọi câu chữ phải khớp nghiệp vụ hiện hành (mục 1.2): giá lượt
+xịt đặt **theo sản phẩm**, nền tảng không lấy phần trăm tiền lượt xịt, thời hạn tính từ lúc lắp chai đầu
+tiên. Không nêu số liệu, khách hàng hay địa điểm chưa có thật, không ghi giá gói cụ thể (giá niêm yết
+theo từng slot).
+
+**Nhận diện** — cùng ngôn ngữ với cột ảnh ở trang đăng nhập web quản trị: nền than chì trung tính
+(`--bg` `#111111`, không đen tuyền, không ngả ấm), chữ trắng,
+nút chính trắng chữ đen, góc vuông (`--radius: 0`), nhãn chữ in nhỏ giãn rộng có gạch dẫn (`.eyebrow`),
+đường kẻ mảnh `--line` thay cho khung và bóng. Tiêu đề Playfair Display nét mảnh (400, có thể nhấn một
+cụm bằng `<em>` nghiêng màu `--text-muted`), nội dung Be Vietnam Pro, đoạn dẫn nét 300. `--accent` chỉ
+gắn với hình ảnh đèn nút. Ảnh máy đầu trang (`machine.webp`, đã tách nền) đặt trên quầng sáng `--halo`,
+viền sáng mờ `--photo-glow`; dưới 960px ảnh xuống dưới phần chữ. Thêm riêng
+`--container` 1120px (khung nội dung tối đa).
+
+**Logo** — chữ SS lồng nhau. Trên nền tối dùng bản trắng `images/logo-mark.webp` (class `.brand-logo`,
+cao 30px ở header, 24px ở footer) đứng trước chữ ScentStation; dưới 380px header chỉ giữ logo. Biểu
+tượng tab trình duyệt: `favicon.ico`, `favicon-32.png`, `icon-192.png`, `apple-touch-icon.png` (chữ SS
+trắng trên ô vuông bo góc màu `--bg`). Web quản trị và kiosk dùng cùng bộ favicon (trong `public/` của từng app)
+và cùng logo `src/assets/logo-mark.webp`, hiển thị bằng mặt nạ CSS tô `currentColor` (class `.brand-logo`
+ở admin, `styles.logo` ở kiosk) nên tự trắng trên nền tối, đen trên nền sáng.
+
+Thanh điều hướng trải hết chiều ngang (lề `--header-pad`, không bó trong `--container`): chữ
+ScentStation sát trái, nút sát phải, menu cách đều hai bên. Dưới 1180px ẩn menu.
 
 **Thành phần** — dùng lại class có sẵn trong `styles.css`, không tạo kiểu nút mới:
 
 | Class | Dùng cho |
 |---|---|
-| `.btn .btn-primary` | Nút đen — hành động chính ("Đăng ký thương hiệu") |
-| `.btn .btn-outline` | Nút viền — hành động phụ ("Xem cách hoạt động") |
-| `.btn .btn-inverse` / `.btn .btn-outline-inverse` | Hai nút trên nền tối ở khối kêu gọi cuối trang |
+| `.btn .btn-primary` | Nút trắng — hành động chính ("Đăng ký thương hiệu") |
+| `.btn .btn-outline` | Nút viền mảnh — hành động phụ ("Xem cách hoạt động", "Đăng nhập") |
 | `.btn-small` | Thêm vào nút trong header |
 | `.link-quiet` | Liên kết chữ phụ ("Đăng nhập" ở header) |
+| `.section-head` | Nhãn `.eyebrow` + `h2` + `.lead` mở đầu mỗi khối |
+| `.features` / `.feature` | Lưới lợi ích 3 cột, ngăn bằng đường kẻ mảnh, tự đánh số 01, 02… |
+| `.timeline` / `.tl-item` | Các bước theo trình tự: trục dọc ở giữa, thẻ `.tl-card` so le trái/phải, ô số `.tl-node` (bước cuối `.tl-node-lit` màu đèn nút), nhãn `.tl-tag`; dưới 760px trục sang trái |
+| `.plans` / `.plan` | Thẻ gói thuê 3 · 6 · 12 tháng, kèm `.plan-notes` |
 
 Khối nội dung mới theo khung có sẵn: `<section class="section">` (hoặc `section section-alt` cho khối
-nền xám xen kẽ), có `id` để menu nhảy tới và `aria-labelledby` trỏ vào tiêu đề `h2` của khối.
+nền `--surface` xen kẽ), có `id` để menu nhảy tới và `aria-labelledby` trỏ vào tiêu đề `h2` của khối.
 
 **Bố cục và hiệu năng**
 
 - Dùng được từ **360px** tới màn rộng; khung `--container`, lề `--gutter`.
 - Một trang, cuộn dọc; menu header nhảy tới khối bằng `#anchor`.
-- Ảnh có `width`/`height` và `loading="lazy"` (trừ ảnh đầu trang). Chuyển động chỉ bằng CSS, dùng đúng
-  `--dur` / `--ease` / `--shift` như kiosk và tắt khi `prefers-reduced-motion`.
+- Ảnh đặt trong `apps/landing/images/`, tên file chữ thường nối gạch ngang, định dạng WebP đã nén
+  (dưới khoảng 200 KB), gọi bằng `/images/…` để hai bản ngôn ngữ dùng chung. Không để file gốc PNG/JPG
+  dung lượng lớn trong thư mục này — Caddy phục vụ nguyên thư mục nên ai cũng tải được. Ảnh bối cảnh
+  không được lộ logo hay biển hiệu thương hiệu thật (cắt hoặc làm mờ trước khi dùng). Ảnh chụp ở nơi
+  sáng dùng `filter: var(--photo-tone)` để dịu lại trên nền tối.
+- Ảnh có `width`/`height` và `loading="lazy"` (trừ ảnh đầu trang). Chuyển động chỉ bằng CSS, chỉ fade +
+  dịch dọc, không nảy, tắt khi `prefers-reduced-motion`. Phản hồi nhỏ (hover, mở hỏi đáp) dùng `--dur` /
+  `--ease` / `--shift` như kiosk. Nội dung hiện ra khi vào trang và khi cuộn tới dùng `--reveal-dur`,
+  `--reveal-shift` (64px), `--reveal-stagger`; các ô cùng hàng hiện lần lượt. Riêng timeline: thẻ dịch
+  ngang về phía trục, trục sáng dần xuống theo tiến độ cuộn.
+  Quầng sáng sau ảnh máy ở đầu trang (`.hero-visual::before`, token `--glow`, `--glow-dur`) sáng lên
+  rồi dịu xuống chậm rãi bằng độ trong suốt, đứng yên khi `prefers-reduced-motion`. Hiện dần khi cuộn dùng
+  `animation-timeline: view()` bọc trong `@supports`: trình duyệt chưa hỗ trợ thì hiện nội dung ngay,
+  không cần JavaScript.
 - Không gọi API. Trang chỉ chứa nội dung giới thiệu và liên kết sang web quản trị.
 
 **Truy cập** — giữ liên kết "Bỏ qua tới nội dung", một `h1` duy nhất, ảnh có `alt`, hỏi đáp dùng
 `<details>`/`<summary>` để mở được bằng bàn phím, tương phản chữ đủ đọc.
 
-**Liên kết** `/login` và `/register` trỏ sang web quản trị — không đổi đường dẫn.
+**Liên kết** `/login` và `/register` trỏ sang web quản trị — không đổi đường dẫn. Tài nguyên dùng
+đường dẫn tuyệt đối (`/styles.css`, `/machine.webp`) để hai bản dùng chung.
+
+**Hai ngôn ngữ** — hai trang tĩnh có cùng cấu trúc, cùng class; chỉ khác chữ, `lang`, `id` của khối
+(`#loi-ich` ↔ `#benefits`…). Chuyển ngôn ngữ bằng `.lang-switch` (VI | EN) trên header, mục đang xem có
+`aria-current="page"`; mỗi trang khai báo bản kia bằng `<link rel="alternate" hreflang>`. Nút đăng ký
+trên header có `.label-long` / `.label-short` ("Đăng ký" / "Register") cho màn từ 760px trở xuống.
 
 ## 5. Checklist trước khi mở PR giao diện
 
 - [ ] Không có mã hex, cỡ chữ, bóng viết rời — chỉ tham chiếu token (mục 1.1)
-- [ ] Đổi token kiosk thì đã đổi theo ở landing, và ngược lại
+- [ ] Đổi font, `--accent` hay chuyển động ở kiosk thì đã đổi theo ở landing, và ngược lại
 - [ ] Admin: tiêu đề `level={3}` có mô tả, một nút primary mỗi khu vực, màu trạng thái đúng bảng 2.4
 - [ ] Không UUID thô, không mã lỗi; ô rỗng `—`; tiền và ngày qua `formatVnd` / `formatDateTime`
 - [ ] Có trạng thái đang tải, rỗng, lỗi
@@ -302,5 +349,5 @@ Việc 1–2 là nền tảng, làm trước để các thay đổi màn hình d
 3. **545 chỗ `style={{…}}`** trong `admin-web/src/routes/`, kèm khoảng 20 mã hex khác nhau (`#e2e8f0`,
    `#64748b`, `#888`, `#aaa`, `#1677ff`…). Sửa khi chạm vào màn đó, không cần một lần dọn hết.
 4. **Tiêu đề trang admin chưa đồng nhất:** phần lớn `level={3}`, một số trang `level={2}` hoặc `4`.
-5. **Token landing lệch kiosk:** `--surface-2` trong `apps/landing/styles.css` đang là `#f5f4f2`
-   (ngả ấm), kiosk là `#f3f3f3` — đổi theo kiosk.
+5. ~~Token landing lệch kiosk~~ — không còn áp dụng: landing chuyển sang nền đen theo trang đăng nhập
+   (mục 4).

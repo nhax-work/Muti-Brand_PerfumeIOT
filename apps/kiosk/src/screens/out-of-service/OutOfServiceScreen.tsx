@@ -11,7 +11,10 @@ export default function OutOfServiceScreen() {
 
   return (
     <section className={styles.screen} role="alert">
-      <span className={styles.wordmark}>ScentStation</span>
+      <span className={styles.wordmark}>
+        <span className={styles.logo} aria-hidden="true" />
+        ScentStation
+      </span>
       <h1 className={styles.title}>{t('kiosk.outOfServiceTitle')}</h1>
       <p className={styles.hint}>{t('kiosk.outOfServiceHint')}</p>
       {config.supportContact && (

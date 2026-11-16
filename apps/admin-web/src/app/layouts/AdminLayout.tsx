@@ -1,5 +1,4 @@
 import {
-  ExperimentOutlined,
   GlobalOutlined,
   LockOutlined,
   LogoutOutlined,
@@ -118,7 +117,14 @@ export function AdminLayout() {
         onBreakpoint={(narrow) => narrow && setCollapsed(true)}
       >
         <Typography.Title level={5} className="admin-brand">
-          {collapsed ? <ExperimentOutlined aria-label={t('ui.appName')} /> : t('ui.appName')}
+          {collapsed ? (
+            <span className="brand-logo" role="img" aria-label={t('ui.appName')} />
+          ) : (
+            <>
+              <span className="brand-logo" aria-hidden="true" />
+              {t('ui.appName')}
+            </>
+          )}
         </Typography.Title>
         <Menu
           theme="dark"

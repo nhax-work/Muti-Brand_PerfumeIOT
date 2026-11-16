@@ -2,243 +2,396 @@
 <!--
   Landing page công khai ở tên miền gốc. Trang tĩnh, không build: Caddy phục vụ thẳng thư mục này
   (infra/staging/Caddyfile). /login và /register được Caddy chuyển sang web quản trị.
+  Đối tượng đọc chính: thương hiệu nước hoa đang cân nhắc thuê slot.
+  Bản tiếng Anh ở en/index.html (/en/) — sửa nội dung ở trang này thì sửa cả trang kia.
 -->
 <html lang="vi">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ScentStation — Máy trải nghiệm nước hoa</title>
-    <meta
-      name="description"
-      content="Chọn mùi trên màn hình, quét mã QR, bấm nút để nhận một lượt xịt. Thương hiệu nước hoa thuê slot trên máy và tự đặt giá mỗi lượt xịt."
-    />
-    <meta property="og:title" content="ScentStation — Máy trải nghiệm nước hoa" />
-    <meta
-      property="og:description"
-      content="Một lượt xịt, đúng mùi bạn chọn. Thương hiệu thuê slot tự phục vụ, tự đặt giá."
-    />
-    <meta property="og:type" content="website" />
-    <meta name="theme-color" content="#ffffff" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Playfair+Display:wght@400;500&display=swap"
-    />
-    <link rel="stylesheet" href="/styles.css" />
-  </head>
-  <body>
-    <a class="skip-link" href="#noi-dung">Bỏ qua tới nội dung</a>
 
-    <header class="site-header">
-      <div class="container header-inner">
-        <a class="wordmark" href="/" aria-label="ScentStation — trang chủ">ScentStation</a>
-        <nav class="nav" aria-label="Điều hướng chính">
-          <a href="#cach-hoat-dong">Cách hoạt động</a>
-          <a href="#thuong-hieu">Dành cho thương hiệu</a>
-          <a href="#hoi-dap">Hỏi đáp</a>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nền tảng cho máy trải nghiệm nước hoa</title>
+  <meta name="description"
+    content="Thuê slot trên máy trải nghiệm nước hoa đặt ở nơi công cộng. Thương hiệu tự đặt giá mỗi lượt xịt, nền tảng lo vận hành và chi trả doanh thu hằng tháng." />
+  <meta property="og:title" content="ScentStation — Thuê slot máy nước hoa cho thương hiệu" />
+  <meta property="og:description"
+    content="Để khách thử mùi hương của bạn bằng một lượt xịt. Thuê slot tự phục vụ, tự đặt giá, nhận doanh thu hằng tháng." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#111111" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="alternate" hreflang="en" href="/en/" />
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+  <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="/icon-192.png" type="image/png" sizes="192x192" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+
+<body>
+  <a class="skip-link" href="#noi-dung">Bỏ qua tới nội dung</a>
+
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="wordmark" href="/" aria-label="ScentStation — trang chủ">
+        <img class="brand-logo" src="/images/logo-mark.webp" width="155" height="192" alt="" /><span
+          class="wordmark-text">ScentStation</span>
+      </a>
+      <nav class="nav" aria-label="Điều hướng chính">
+        <a href="#loi-ich">Lợi ích</a>
+        <a href="#hop-tac">Cách hợp tác</a>
+        <a href="#goi-thue">Gói thuê</a>
+        <a href="#hoi-dap">Hỏi đáp</a>
+      </nav>
+      <div class="header-actions">
+        <nav class="lang-switch" aria-label="Ngôn ngữ">
+          <a href="/" lang="vi" aria-current="page">VI</a>
+          <a href="/en/" lang="en" hreflang="en">EN</a>
         </nav>
-        <div class="header-actions">
-          <a class="link-quiet" href="/login">Đăng nhập</a>
-          <a class="btn btn-primary btn-small" href="/register">Đăng ký thương hiệu</a>
-        </div>
+        <a class="link-quiet" href="/login">Đăng nhập</a>
+        <a class="btn btn-primary btn-small" href="/register">
+          <span class="label-long">Đăng ký thương hiệu</span><span class="label-short">Đăng ký</span>
+        </a>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <main id="noi-dung">
-      <section class="hero">
-        <div class="container hero-inner">
-          <div class="hero-copy">
-            <p class="eyebrow">Máy trải nghiệm nước hoa</p>
-            <h1>Một lượt xịt, đúng&nbsp;mùi bạn&nbsp;chọn.</h1>
-            <p class="lead">
-              ScentStation đặt máy nước hoa nhiều thương hiệu ở nơi công cộng. Khách chọn mùi trên
-              màn hình, quét mã QR để trả tiền, rồi bấm nút sáng đèn để nhận đúng một lượt xịt.
-            </p>
-            <div class="hero-actions">
-              <a class="btn btn-primary" href="/register">Đăng ký thương hiệu</a>
-              <a class="btn btn-outline" href="#cach-hoat-dong">Xem cách hoạt động</a>
-            </div>
-          </div>
-
-          <figure class="machine" aria-hidden="true">
-            <svg viewBox="0 0 400 480" role="presentation" focusable="false">
-              <rect class="m-body" x="24" y="8" width="352" height="464" rx="14" />
-              <rect class="m-screen" x="56" y="40" width="288" height="112" rx="6" />
-              <rect class="m-line" x="80" y="68" width="132" height="10" rx="5" />
-              <rect class="m-line m-line-soft" x="80" y="90" width="168" height="8" rx="4" />
-              <rect class="m-line m-line-soft" x="80" y="108" width="164" height="8" rx="4" />
-              <rect class="m-qr" x="270" y="66" width="48" height="48" rx="3" />
-
-              <g class="m-slots">
-                <rect class="m-slot" x="56" y="180" width="60" height="196" rx="6" />
-                <rect class="m-slot" x="132" y="180" width="60" height="196" rx="6" />
-                <rect class="m-slot" x="208" y="180" width="60" height="196" rx="6" />
-                <rect class="m-slot" x="284" y="180" width="60" height="196" rx="6" />
-
-                <rect class="m-bottle" x="74" y="236" width="24" height="10" rx="2" />
-                <rect class="m-bottle" x="68" y="248" width="36" height="96" rx="8" />
-                <rect class="m-bottle" x="150" y="226" width="24" height="10" rx="2" />
-                <rect class="m-bottle" x="142" y="238" width="40" height="106" rx="10" />
-                <rect class="m-bottle" x="226" y="242" width="24" height="10" rx="2" />
-                <rect class="m-bottle" x="219" y="254" width="38" height="90" rx="18" />
-                <rect class="m-bottle" x="302" y="232" width="24" height="10" rx="2" />
-                <rect class="m-bottle" x="296" y="244" width="36" height="100" rx="4" />
-              </g>
-
-              <circle class="m-button" cx="86" cy="416" r="14" />
-              <circle class="m-glow" cx="162" cy="416" r="30" />
-              <circle class="m-button m-button-lit" cx="162" cy="416" r="14" />
-              <circle class="m-button" cx="238" cy="416" r="14" />
-              <circle class="m-button" cx="314" cy="416" r="14" />
-            </svg>
-            <figcaption class="machine-caption">
-              Đèn sáng ở nút của mùi khách vừa trả tiền.
-            </figcaption>
-          </figure>
-        </div>
-      </section>
-
-      <section class="section" id="cach-hoat-dong" aria-labelledby="cach-hoat-dong-title">
-        <div class="container">
-          <p class="eyebrow">Cho khách</p>
-          <h2 id="cach-hoat-dong-title">Ba bước, không cần tải ứng dụng.</h2>
-          <ol class="steps">
-            <li class="step">
-              <span class="step-no">01</span>
-              <h3>Chọn mùi trên màn hình</h3>
-              <p>Xem thương hiệu, nhóm hương và giá mỗi lượt xịt của từng mùi đang có trên máy.</p>
-            </li>
-            <li class="step">
-              <span class="step-no">02</span>
-              <h3>Quét mã QR để trả tiền</h3>
-              <p>Chuyển khoản bằng app ngân hàng quen thuộc. Không cần tạo tài khoản.</p>
-            </li>
-            <li class="step">
-              <span class="step-no step-no-lit">03</span>
-              <h3>Bấm nút sáng đèn</h3>
-              <p>
-                Máy không tự xịt: đèn sáng ở đúng nút của mùi bạn chọn, bạn bấm thì máy xịt một
-                lượt.
-              </p>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="section section-alt" id="thuong-hieu" aria-labelledby="thuong-hieu-title">
-        <div class="container brand-grid">
-          <div>
-            <p class="eyebrow">Cho thương hiệu</p>
-            <h2 id="thuong-hieu-title">Thuê slot trên máy, bán từng lượt xịt.</h2>
-            <p class="lead">
-              Mỗi máy có nhiều slot độc lập. Thương hiệu thuê slot để trưng bày sản phẩm của mình,
-              trên một máy hoặc nhiều máy — dữ liệu kinh doanh của mỗi slot chỉ thương hiệu đó thấy.
-            </p>
+  <main id="noi-dung">
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="eyebrow-line"></span>Dành cho thương hiệu nước hoa</p>
+          <h1>Bán mùi hương của bạn <em>theo từng lượt&nbsp;xịt.</em></h1>
+          <p class="lead">
+            Thuê slot trên máy trải nghiệm nước hoa ScentStation đặt ở nơi công cộng. Khách chọn
+            đúng mùi của bạn, trả tiền cho một lượt xịt và cảm nhận ngay tại chỗ. Bạn tự đặt giá,
+            nền tảng lo vận hành và chuyển doanh thu cho bạn mỗi tháng.
+          </p>
+          <div class="hero-actions">
             <a class="btn btn-primary" href="/register">Đăng ký thương hiệu</a>
+            <a class="btn btn-outline" href="#hop-tac">Xem cách hợp tác</a>
           </div>
-
-          <ul class="features">
-            <li class="feature">
-              <h3>Thuê tự phục vụ</h3>
-              <p>
-                Chọn slot trống, gói 3, 6 hoặc 12 tháng kèm gói bảo quản, thanh toán một lần và nhận
-                hóa đơn ngay. Không chờ duyệt.
-              </p>
-            </li>
-            <li class="feature">
-              <h3>Tự đặt giá</h3>
-              <p>Giá mỗi lượt xịt do thương hiệu quyết định cho từng slot mình thuê.</p>
-            </li>
-            <li class="feature">
-              <h3>Không lo vận hành</h3>
-              <p>
-                Nền tảng sở hữu và vận hành máy: lắp chai, theo dõi lượng còn lại, bảo trì. Thời hạn
-                thuê tính từ lúc lắp chai đầu tiên.
-              </p>
-            </li>
-            <li class="feature">
-              <h3>Doanh thu rõ ràng</h3>
-              <p>
-                Báo cáo theo từng slot. Tiền lượt xịt do nền tảng thu hộ và chi trả cho thương hiệu
-                theo kỳ hằng tháng.
-              </p>
-            </li>
+          <ul class="hero-facts" aria-label="Điểm chính">
+            <li>Gói 3 · 6 · 12 tháng</li>
+            <li>Tự đặt giá lượt xịt</li>
+            <li>Không chờ duyệt</li>
           </ul>
         </div>
 
-        <div class="container">
-          <h3 class="onboard-title">Bắt đầu trong bốn bước</h3>
-          <ol class="onboard">
-            <li><span>1</span>Đăng ký bằng tên, email và mật khẩu</li>
-            <li><span>2</span>Xác minh email</li>
-            <li><span>3</span>Đồng ý hợp đồng khung</li>
-            <li><span>4</span>Chọn slot và thanh toán</li>
+        <figure class="hero-visual">
+          <img src="/machine.webp" width="1086" height="937"
+            alt="Máy ScentStation: màn hình chọn mùi phía trên, hàng vòi xịt và nút bấm có đèn phía dưới"
+            fetchpriority="high" />
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="loi-ich" aria-labelledby="loi-ich-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow"><span class="eyebrow-line"></span>Vì sao chọn ScentStation</p>
+          <h2 id="loi-ich-title">Một kênh bán mới, <em>không cần mở cửa hàng.</em></h2>
+          <p class="lead">
+            Khách không phải mua cả chai mới biết mình có hợp mùi hay không. Một lượt xịt trả tiền
+            ngay tại máy là cách để mùi hương của bạn được thử, được nhớ và được bán.
+          </p>
+        </div>
+
+        <figure class="photo-banner">
+          <img src="/images/mall-machine.webp" width="1295" height="1024"
+            alt="Máy ScentStation gắn tường trong sảnh một trung tâm thương mại" loading="lazy" decoding="async" />
+        </figure>
+
+        <ul class="features">
+          <li class="feature">
+            <h3>Gặp khách ở nơi họ đi qua</h3>
+            <p>
+              Máy đặt ở nơi công cộng. Khách xem tên thương hiệu, nhóm hương và giá trên màn hình,
+              rồi thử đúng mùi của bạn.
+            </p>
+          </li>
+          <li class="feature">
+            <h3>Tự đặt giá mỗi lượt xịt</h3>
+            <p>
+              Giá do bạn quyết định cho từng sản phẩm, không giá sàn, không giá trần. Mọi slot bán
+              cùng sản phẩm dùng chung một giá.
+            </p>
+          </li>
+          <li class="feature">
+            <h3>Tiền lượt xịt là của bạn</h3>
+            <p>
+              Nền tảng thu hộ và chuyển trả theo kỳ tháng. Phí cổng thanh toán và khoản hoàn cho
+              khách do nền tảng chịu.
+            </p>
+          </li>
+          <li class="feature">
+            <h3>Không lo vận hành</h3>
+            <p>
+              Bạn gửi chai về kho. Nền tảng lắp chai, theo dõi lượng còn lại, nạp thêm và bảo trì
+              máy.
+            </p>
+          </li>
+          <li class="feature">
+            <h3>Hàng hóa được bảo quản</h3>
+            <p>
+              Mỗi slot kèm một gói bảo quản. Chai hư hỏng khi nền tảng đang giữ được bồi thường
+              theo tỷ lệ và hạn mức của gói.
+            </p>
+          </li>
+          <li class="feature">
+            <h3>Số liệu chỉ bạn thấy</h3>
+            <p>
+              Báo cáo doanh thu và lượt xịt theo từng slot. Thương hiệu khác trên cùng máy không
+              biết bạn có mặt.
+            </p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="trai-nghiem" aria-labelledby="trai-nghiem-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow"><span class="eyebrow-line"></span>Khách mua lượt xịt thế nào</p>
+          <h2 id="trai-nghiem-title">Ba bước để khách thử mùi sản phẩm.</h2>
+        </div>
+
+        <div class="how-grid">
+          <figure class="how-photo">
+            <img src="/images/customer-press.webp" width="820" height="1024"
+              alt="Khách bấm nút sáng đèn trên máy ScentStation để nhận lượt xịt" loading="lazy" decoding="async" />
+            <figcaption class="photo-caption">Một lần bấm, một lượt xịt.</figcaption>
+          </figure>
+
+          <ol class="steps">
+            <li class="step">
+              <span class="step-no">01</span>
+              <div>
+                <h3>Chọn mùi trên màn hình</h3>
+                <p>
+                  Sản phẩm của bạn hiện cùng tên thương hiệu, nhóm hương và giá mỗi lượt xịt bạn
+                  đã đặt.
+                </p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-no">02</span>
+              <div>
+                <h3>Quét mã QR để trả tiền</h3>
+                <p>
+                  Khách chuyển khoản bằng app ngân hàng. Không cần tải ứng dụng hay tạo tài khoản.
+                </p>
+              </div>
+            </li>
+            <li class="step">
+              <span class="step-no step-no-lit">03</span>
+              <div>
+                <h3>Bấm nút sáng đèn</h3>
+                <p>
+                  Đèn sáng ở đúng nút của mùi khách đã chọn. Khách bấm thì máy xịt một lượt, và
+                  lượt đó được ghi vào báo cáo của bạn.
+                </p>
+              </div>
+            </li>
           </ol>
         </div>
-      </section>
-
-      <section class="section" id="hoi-dap" aria-labelledby="hoi-dap-title">
-        <div class="container faq-wrap">
-          <h2 id="hoi-dap-title">Hỏi đáp</h2>
-          <div class="faq">
-            <details>
-              <summary>Khách có cần tải ứng dụng hay tạo tài khoản không?</summary>
-              <p>Không. Khách chỉ cần app ngân hàng để quét mã QR thanh toán.</p>
-            </details>
-            <details>
-              <summary>Đã trả tiền nhưng máy gặp sự cố thì sao?</summary>
-              <p>
-                Màn hình hiện mã QR sự cố. Khách quét mã đó để gửi yêu cầu hoàn tiền, nhân viên vận
-                hành xử lý và chuyển khoản lại.
-              </p>
-            </details>
-            <details>
-              <summary>Nếu khách trả tiền rồi không bấm nút?</summary>
-              <p>
-                Mỗi lượt có thời gian chờ bấm, được nêu rõ trên màn hình trước khi thanh toán. Quá
-                thời gian đó lượt xịt bị hủy và không hoàn tiền.
-              </p>
-            </details>
-            <details>
-              <summary>Thương hiệu thuê được bao nhiêu slot?</summary>
-              <p>
-                Nhiều slot, trên một hoặc nhiều máy. Có thể chọn nhiều slot và thanh toán một lần;
-                mỗi slot vẫn có hóa đơn riêng.
-              </p>
-            </details>
-            <details>
-              <summary>Đã thanh toán gói thuê có hủy được không?</summary>
-              <p>
-                Gói đã thanh toán không hủy và không hoàn tiền. Nếu chưa lắp chai, thương hiệu được
-                đổi sang một slot trống cùng giá một lần trong thời hạn cho phép.
-              </p>
-            </details>
-          </div>
-        </div>
-      </section>
-
-      <section class="cta">
-        <div class="container cta-inner">
-          <h2>Đưa mùi hương của bạn tới gần khách hơn.</h2>
-          <div class="hero-actions">
-            <a class="btn btn-inverse" href="/register">Đăng ký thương hiệu</a>
-            <a class="btn btn-outline-inverse" href="/login">Đăng nhập</a>
-          </div>
-        </div>
-      </section>
-    </main>
-
-    <footer class="site-footer">
-      <div class="container footer-inner">
-        <span class="wordmark wordmark-small">ScentStation</span>
-        <nav class="footer-nav" aria-label="Liên kết cuối trang">
-          <a href="/login">Đăng nhập</a>
-          <a href="/register">Đăng ký thương hiệu</a>
-        </nav>
-        <span class="footer-copy">© 2026 ScentStation</span>
       </div>
-    </footer>
-  </body>
+    </section>
+
+    <section class="section" id="hop-tac" aria-labelledby="hop-tac-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow"><span class="eyebrow-line"></span>Cách hợp tác</p>
+          <h2 id="hop-tac-title">Từ đăng ký tới lượt xịt đầu tiên.</h2>
+          <p class="lead">
+            Mọi thủ tục làm trên web quản trị. Không cần gặp mặt, không thương lượng riêng.
+          </p>
+        </div>
+
+        <ol class="timeline">
+          <li class="tl-item">
+            <span class="tl-node">1</span>
+            <div class="tl-card">
+              <p class="tl-tag">Trên web</p>
+              <h3>Đăng ký</h3>
+              <p>Tên thương hiệu, email và mật khẩu. Xác minh email là dùng được ngay.</p>
+            </div>
+          </li>
+          <li class="tl-item">
+            <span class="tl-node">2</span>
+            <div class="tl-card">
+              <p class="tl-tag">Một lần duy nhất</p>
+              <h3>Đồng ý hợp đồng khung</h3>
+              <p>Đồng ý một lần, áp dụng cho mọi lần thuê slot về sau.</p>
+            </div>
+          </li>
+          <li class="tl-item">
+            <span class="tl-node">3</span>
+            <div class="tl-card">
+              <p class="tl-tag">Trên web</p>
+              <h3>Chọn slot và thanh toán</h3>
+              <p>
+                Chọn slot trống theo máy và địa điểm, chọn gói, trả một lần cho nhiều slot. Mỗi slot
+                có hóa đơn riêng.
+              </p>
+            </div>
+          </li>
+          <li class="tl-item">
+            <span class="tl-node">4</span>
+            <div class="tl-card">
+              <p class="tl-tag">Gửi hàng</p>
+              <h3>Gửi hàng về kho</h3>
+              <p>
+                Khai báo lô hàng kèm giấy tờ chính hãng. Nền tảng lắp chai — thời hạn thuê bắt đầu
+                từ đây.
+              </p>
+            </div>
+          </li>
+          <li class="tl-item">
+            <span class="tl-node tl-node-lit">5</span>
+            <div class="tl-card">
+              <p class="tl-tag">Hằng tháng</p>
+              <h3>Bán và nhận doanh thu</h3>
+              <p>
+                Theo dõi lượt xịt theo từng slot. Doanh thu được chốt và chuyển khoản theo kỳ tháng.
+              </p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section section-alt" id="goi-thue" aria-labelledby="goi-thue-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow"><span class="eyebrow-line"></span>Gói thuê</p>
+          <h2 id="goi-thue-title">Trả trước theo gói, <em>không phí ẩn.</em></h2>
+          <p class="lead">
+            Nền tảng chỉ thu tiền gói thuê slot và gói bảo quản, không lấy phần trăm trên tiền
+            lượt xịt. Giá niêm yết theo từng slot, xem khi chọn slot trống.
+          </p>
+        </div>
+
+        <ul class="plans">
+          <li class="plan">
+            <p class="plan-term"><span>3</span> tháng</p>
+            <p>Ra mắt một mùi mới hoặc thử một địa điểm trước khi gắn bó lâu hơn.</p>
+          </li>
+          <li class="plan">
+            <p class="plan-term"><span>6</span> tháng</p>
+            <p>Đủ dài để đo phản hồi của khách qua báo cáo lượt xịt và điều chỉnh giá.</p>
+          </li>
+          <li class="plan">
+            <p class="plan-term"><span>12</span> tháng</p>
+            <p>Hiện diện cả năm trên máy. Gói càng dài, ưu đãi càng nhiều.</p>
+          </li>
+        </ul>
+
+        <ul class="plan-notes">
+          <li>Mỗi slot kèm đúng một gói bảo quản</li>
+          <li>Thời hạn tính từ lúc lắp chai đầu tiên</li>
+          <li>Gia hạn ngay trên web khi sắp hết hạn</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section" id="hoi-dap" aria-labelledby="hoi-dap-title">
+      <div class="container faq-wrap">
+        <div>
+          <p class="eyebrow"><span class="eyebrow-line"></span>Câu hỏi thường gặp</p>
+          <h2 id="hoi-dap-title">Hỏi đáp cho thương hiệu</h2>
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Chi phí gồm những gì?</summary>
+            <p>
+              Mỗi slot gồm một gói thuê 3, 6 hoặc 12 tháng trả trước và một gói bảo quản. Nền tảng
+              không lấy phần trăm trên tiền lượt xịt.
+            </p>
+          </details>
+          <details>
+            <summary>Khi nào tôi nhận được doanh thu?</summary>
+            <p>
+              Tiền lượt xịt cộng dồn trong tháng, được chốt số sau khi hết tháng rồi chuyển khoản
+              cho bạn. Trước lần chuyển đầu tiên, bạn khai báo mã số thuế, giấy phép kinh doanh và
+              tài khoản nhận tiền để nền tảng xác minh. Số liệu chưa đúng thì bạn gửi khiếu nại
+              trước khi tiền được chuyển.
+            </p>
+          </details>
+          <details>
+            <summary>Ai cung cấp và nạp chai nước hoa?</summary>
+            <p>
+              Bạn gửi chai về kho nền tảng kèm giấy tờ chứng minh hàng chính hãng. Nhân viên kho
+              lắp chai vào slot. Khi slot sắp hết, hệ thống nhắc bạn gửi yêu cầu bổ sung.
+            </p>
+          </details>
+          <details>
+            <summary>Thương hiệu khác trên cùng máy có thấy số liệu của tôi không?</summary>
+            <p>
+              Không. Mỗi thương hiệu chỉ thấy slot, sản phẩm và doanh thu của mình; slot của bên
+              khác chỉ hiện là không khả dụng.
+            </p>
+          </details>
+          <details>
+            <summary>Khách trả tiền mà máy gặp sự cố thì sao?</summary>
+            <p>
+              Màn hình hiện mã QR sự cố để khách gửi yêu cầu hoàn tiền. Nhân viên vận hành xử lý
+              và nền tảng chịu khoản hoàn đó.
+            </p>
+          </details>
+          <details>
+            <summary>Đã thanh toán gói thuê có hủy được không?</summary>
+            <p>
+              Gói đã thanh toán không hủy và không hoàn tiền. Nếu chưa lắp chai, bạn được đổi sang
+              một slot trống cùng giá một lần trong thời hạn cho phép.
+            </p>
+          </details>
+          <details>
+            <summary>Hết hạn mà không muốn gia hạn thì làm gì?</summary>
+            <p>
+              Báo không gia hạn trên web trước ngày hết hạn để nhận lại hàng, không mất phí ân
+              hạn. Nếu không báo và không gia hạn, slot vào thời gian ân hạn có tính phí; hết ân
+              hạn, hàng còn lại được thanh lý.
+            </p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta" aria-labelledby="cta-title">
+      <img class="cta-bg" src="/images/perfume-smoke.webp" width="1672" height="941" alt="" loading="lazy"
+        decoding="async" />
+      <div class="container cta-inner">
+        <p class="eyebrow"><span class="eyebrow-line"></span>Bắt đầu hôm nay</p>
+        <h2 id="cta-title">Đưa mùi hương của bạn tới <em>gần khách hàng.</em></h2>
+        <p class="lead">
+          Đăng ký không mất phí. Xác minh email và đồng ý hợp đồng khung là thuê được slot ngay.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/register">Đăng ký thương hiệu</a>
+          <a class="btn btn-outline" href="/login">Đăng nhập</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span class="wordmark wordmark-small">
+        <img class="brand-logo" src="/images/logo-mark.webp" width="155" height="192" alt="" /><span
+          class="wordmark-text">ScentStation</span>
+      </span>
+      <nav class="footer-nav" aria-label="Liên kết cuối trang">
+        <a href="#goi-thue">Gói thuê</a>
+        <a href="/login">Đăng nhập</a>
+        <a href="/register">Đăng ký thương hiệu</a>
+      </nav>
+      <span class="footer-copy">© 2026 ScentStation. Bảo lưu mọi quyền.</span>
+    </div>
+  </footer>
+</body>
+
 </html>

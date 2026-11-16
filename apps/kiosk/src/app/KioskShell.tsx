@@ -80,7 +80,10 @@ export function KioskShell() {
               CatalogScreen tự lo điều hướng — lỡ chạm là mất màn đếm ngược. */}
         </div>
 
-        <span className={styles.wordmark}>ScentStation</span>
+        <span className={styles.wordmark}>
+          <span className={styles.logo} aria-hidden="true" />
+          ScentStation
+        </span>
 
         <div className={styles.navRight}>
           {/* Màn nhấn nút: khách chỉ cần nhìn nút số N — ẩn đổi ngôn ngữ để không chạm nhầm. */}
