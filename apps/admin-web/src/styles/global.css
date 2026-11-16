@@ -977,7 +977,28 @@ body {
   content: 'Giây';
 }
 
-/* Modal cấu hình slot của Brand Admin (SlotSetupModal). */
+/* Modal cấu hình slot của Brand Admin (SlotSetupModal) & Modal sản phẩm (ProductsPage). */
+.slot-setup-modal .ant-modal-header,
+.product-form-modal .ant-modal-header {
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.slot-setup-modal .ant-modal-footer,
+.product-form-modal .ant-modal-footer {
+  padding-top: 16px;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.slot-setup-modal .ant-modal-body,
+.product-form-modal .ant-modal-body {
+  max-height: calc(85vh - 160px);
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .slot-setup-heading {
   display: flex;
   justify-content: space-between;

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 import { type StoragePlan, useSavePlan, useStoragePlans } from '../api';
-import { formatVnd } from '@/shared/format';
+import { formatVnd, formatVndInput, parseVndInput } from '@/shared/format';
 
 interface PlanForm {
   name: string;
@@ -120,7 +120,13 @@ export function PlansTab() {
     },
   ];
 
-  const money = { min: 0, precision: 0, style: { width: '100%' } } as const;
+  const money = {
+    min: 0,
+    precision: 0,
+    style: { width: '100%' },
+    formatter: formatVndInput,
+    parser: parseVndInput,
+  } as const;
 
   return (
     <>
