@@ -23,7 +23,7 @@ import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
 import type { Kysely } from 'kysely';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
-import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { APP_CONFIG, SPEC_CONSTRAINTS, type AppConfig } from '../../shared/config/index.js';
 import type { DB } from '../../shared/db/index.js';
 import type {
   BatchAuthenticityStatus,
@@ -58,6 +58,8 @@ export type BottleHistoryEntry = Schema<'AuditLogEntry'>;
 
 /** Bỏ trống `documentType` thì coi là hóa đơn mua hàng (openapi `AuthenticityDocumentSubmit`). */
 const DEFAULT_DOCUMENT_TYPE = 'PURCHASE_INVOICE';
+/** Quyền duyệt giấy tờ chính hãng của lô (FR-INV-34) — người nhận thông báo lô chờ duyệt. */
+const INVENTORY_VERIFY = 'inventory.verify';
 /** `bottles.identifier varchar(150)`. */
 const BOTTLE_IDENTIFIER_MAX_LENGTH = 150;
 /** Số thứ tự chai trong mã tự sinh đệm 0 ít nhất tới 3 chữ số: `…-001` (ADR-0025). */
@@ -159,6 +161,11 @@ export class InvService {
       const productBrand = await this.queries.findProductBrand(input.fragranceProductId, tx);
       if (productBrand !== scope.brandId) {
         throw new AppError('PRODUCT_NOT_OWNED', 'inv.productNotOwned');
+      }
+      const totalVolumeMl = input.declaredBottleVolumeMl * input.declaredQuantity;
+      const min = SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML;
+      if (!Number.isFinite(totalVolumeMl) || totalVolumeMl < min) {
+        throw invalidField('declaredBottleVolumeMl', 'inv.shipmentVolumeMinimum', { min });
       }
       const now = this.clock.now();
       const shipmentId = await this.queries.insertShipment(
@@ -310,6 +317,27 @@ export class InvService {
         },
         tx,
       );
+      // Thương hiệu biết hàng đã tới kho, nhất là khi số nhận lệch số khai (FR-INV-28).
+      const product = (await this.queries.findShipment(shipment.id, tx))!.productName;
+      const params = {
+        product,
+        declared: shipment.declaredQuantity,
+        received: input.receivedQuantity,
+        notes: notes ?? '',
+      };
+      const key = discrepancy ? 'Discrepancy' : 'Received';
+      await this.alr.notifyBrandAdmins(
+        tx,
+        {
+          brandId: shipment.brandId,
+          type: discrepancy ? 'SHIPMENT_DISCREPANCY' : 'SHIPMENT_RECEIVED',
+          subject: translate(DEFAULT_LOCALE, `inv.shipment${key}Subject`, params),
+          content: translate(DEFAULT_LOCALE, `inv.shipment${key}Content`, params),
+          referenceId: shipment.id,
+          at: now,
+        },
+        ['IN_APP'],
+      );
       return createdBatchId;
     });
 
@@ -385,6 +413,21 @@ export class InvService {
           after: { authenticityStatus: 'PENDING', documentType },
         },
         tx,
+      );
+      // Lô chưa duyệt thì chai không lắp được (FR-INV-34) — báo người duyệt ngay.
+      const detail = (await this.queries.findBatch(batch.id, scope, tx))!;
+      const params = { batch: detail.batchNumber, product: detail.productName };
+      await this.alr.notifyPermissionHolders(
+        tx,
+        {
+          brandId: batch.brandId,
+          type: 'BATCH_AUTHENTICITY_SUBMITTED',
+          subject: translate(DEFAULT_LOCALE, 'inv.authenticitySubmittedSubject', params),
+          content: translate(DEFAULT_LOCALE, 'inv.authenticitySubmittedContent', params),
+          referenceId: batch.id,
+          at: now,
+        },
+        INVENTORY_VERIFY,
       );
     });
     return toBatchDto((await this.queries.findBatch(batchId, scope))!);

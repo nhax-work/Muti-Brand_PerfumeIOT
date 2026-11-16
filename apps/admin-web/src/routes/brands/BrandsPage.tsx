@@ -25,6 +25,7 @@ import { useI18n } from '@/shared/i18n';
 import {
   type Brand,
   type BrandStatus,
+  useBrand,
   useBrands,
   useSaveBrand,
   useSetBrandStatus,
@@ -68,6 +69,8 @@ export default function BrandsPage() {
   const verifyLegal = useVerifyBrandLegal();
   const [editing, setEditing] = useState<Brand | 'new' | null>(null);
   const [verifyingBrand, setVerifyingBrand] = useState<Brand | null>(null);
+  const brandDetail = useBrand(verifyingBrand?.id);
+  const payoutAccount = brandDetail.data?.payoutAccount;
   const [form] = Form.useForm<BrandForm>();
 
   const open = (brand: Brand | 'new') => {
@@ -291,10 +294,12 @@ export default function BrandsPage() {
                 <Descriptions.Item label={t('ui.brandBusinessLicense')}>
                   {verifyingBrand.businessLicenseNumber || '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label={t('ui.brandPayoutAccountMasked')}>
-                  {verifyingBrand.payoutAccountMasked
-                    ? `${verifyingBrand.payoutAccountMasked.bankCode} · ${verifyingBrand.payoutAccountMasked.maskedAccountNumber} (${verifyingBrand.payoutAccountMasked.accountHolder})`
-                    : '—'}
+                <Descriptions.Item label={t('ui.brandPayoutAccount')}>
+                  {payoutAccount
+                    ? `${payoutAccount.bankCode} · ${payoutAccount.accountNumber} (${payoutAccount.accountHolder})`
+                    : brandDetail.isLoading
+                      ? t('ui.loading')
+                      : '—'}
                 </Descriptions.Item>
                 <Descriptions.Item label={t('ui.brandLegal')}>
                   {verifyingBrand.legalVerifiedAt ? (
@@ -307,6 +312,10 @@ export default function BrandsPage() {
                   )}
                 </Descriptions.Item>
               </Descriptions>
+
+              {brandDetail.isError && (
+                <Alert type="error" showIcon message={errorMessage(brandDetail.error, t)} />
+              )}
 
               {!verifyingBrand.taxCode && (
                 <Alert type="warning" showIcon message={t('ui.brandVerifyLegalTaxCodeMissing')} />

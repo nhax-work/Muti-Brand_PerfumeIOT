@@ -453,13 +453,20 @@ export class OrdQueries {
     return toOrderRecord(row);
   }
 
-  /** Cắm cờ kiểm tra thủ công mà không đổi trạng thái (FR-ORD-14 AC2). */
-  async flagManualReview(orderId: string, executor: Executor): Promise<void> {
-    await executor
+  /**
+   * Cắm cờ kiểm tra thủ công mà không đổi trạng thái (FR-ORD-14 AC2).
+   *
+   * @returns đơn vừa được cắm cờ; null nếu đơn đã có cờ từ trước — người gọi chỉ báo một lần
+   */
+  async flagManualReview(orderId: string, executor: Executor): Promise<OrderRecord | null> {
+    const row = await executor
       .updateTable('orders')
       .set({ needs_manual_review: true })
       .where('id', '=', orderId)
-      .execute();
+      .where('needs_manual_review', '=', false)
+      .returningAll()
+      .executeTakeFirst();
+    return row ? toOrderRecord(row) : null;
   }
 
   async clearManualReview(orderId: string, executor: Executor): Promise<void> {

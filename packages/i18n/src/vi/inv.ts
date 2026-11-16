@@ -2,6 +2,7 @@
  * Tồn kho, Khai báo gửi hàng, Giấy tờ chính hãng và Phiếu nạp (FR-INV-01..35).
  */
 export const inv = {
+  shipmentVolumeMinimum: 'Tổng dung tích lô hàng (ml/chai × số lượng) phải tối thiểu {min} ml',
   shipmentDeclared: 'Đã tạo khai báo gửi hàng đến kho',
   shipmentReceived: 'Đã xác nhận tiếp nhận hàng tại kho',
   shipmentDiscrepancy: 'Đã ghi nhận đối soát có chênh lệch số lượng',
@@ -64,6 +65,10 @@ export const inv = {
 
   newShipmentSubject: 'Khai báo gửi hàng mới: {product}',
   newShipmentContent: 'Thương hiệu vừa khai báo gửi {quantity} chai {product} đến kho.',
+  authenticitySubmittedSubject: 'Lô {batch} chờ duyệt giấy tờ chính hãng',
+  authenticitySubmittedContent:
+    'Thương hiệu vừa nộp giấy tờ chính hãng cho lô {batch} ({product}). ' +
+    'Chai của lô chưa lắp được vào slot cho tới khi giấy tờ được duyệt.',
   authenticityApprovedSubject: 'Lô {batch} đã được duyệt giấy tờ chính hãng',
   authenticityApprovedContent:
     'Giấy tờ chính hãng của lô {batch} ({product}) đã được duyệt. Chai của lô này lắp được vào slot.',
@@ -76,6 +81,11 @@ export const inv = {
   slotEmptyAlertTitle: 'Slot {slot} đã hết nước hoa',
   slotEmptyAlertContent:
     'Slot {slot} còn {remainingMl} ml, không đủ một lượt {dosageMl} ml — slot đã ngừng bán.',
+  shipmentReceivedSubject: 'Kho đã nhận hàng: {product}',
+  shipmentReceivedContent: 'Kho đã nhận đủ {received} chai {product} theo khai báo gửi hàng.',
+  shipmentDiscrepancySubject: 'Hàng nhận về lệch số lượng: {product}',
+  shipmentDiscrepancyContent:
+    'Bạn khai gửi {declared} chai {product}, kho nhận {received} chai. Ghi chú của kho: {notes}',
 } as const;
 
 export const shipmentStatus = {

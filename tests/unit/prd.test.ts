@@ -169,6 +169,42 @@ beforeEach(() => {
 });
 
 describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thương hiệu', () => {
+  it.each([0, 499.99, Number.NaN, Number.POSITIVE_INFINITY, undefined])(
+    'từ chối dung tích sản phẩm không hợp lệ: %s',
+    async (volume) => {
+      await expect(
+        service.create(brandAdminA, {
+          sku: 'MIN-VOLUME',
+          name: 'Minimum volume',
+          defaultPrice: '30000',
+          fullBottleVolumeMl: volume as number,
+        }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', messageKey: 'prd.bottleVolumeMinimum' });
+      expect(queries.products.size).toBe(0);
+      expect(audit.entries).toHaveLength(0);
+    },
+  );
+
+  it('chấp nhận đúng 500 ml và chặn cập nhật dưới ngưỡng hoặc xóa dung tích', async () => {
+    const product = await service.create(brandAdminA, {
+      sku: 'MIN-VOLUME',
+      name: 'Minimum volume',
+      defaultPrice: '30000',
+      fullBottleVolumeMl: 500,
+    });
+    expect(product.fullBottleVolumeMl).toBe(500);
+    for (const fullBottleVolumeMl of [499.99, null]) {
+      await expect(
+        service.update(brandAdminA, scopeA, product.id, { fullBottleVolumeMl }),
+      ).rejects.toMatchObject({ code: 'VALIDATION_ERROR', messageKey: 'prd.bottleVolumeMinimum' });
+    }
+    expect((await service.get(brandAdminA, scopeA, product.id)).fullBottleVolumeMl).toBe(500);
+    expect(
+      (await service.update(brandAdminA, scopeA, product.id, { fullBottleVolumeMl: 600 }))
+        .fullBottleVolumeMl,
+    ).toBe(600);
+  });
+
   it('test_FR_PRD_01_create_product_success', async () => {
     const input: CreateProductInput = {
       sku: 'NO5-EDP-50',
@@ -181,9 +217,9 @@ describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thươn
       },
       imageUrl: 'https://example.com/no5.png',
       defaultPrice: '35000.0000',
+      fullBottleVolumeMl: 500,
       currency: 'VND',
       fullBottleRetailPrice: '3500000.0000',
-      fullBottleVolumeMl: 50,
     };
 
     const product = await service.create(brandAdminA, input);
@@ -204,6 +240,7 @@ describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thươn
       sku: 'SKU-001',
       name: 'Product 1',
       defaultPrice: '30000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     await expect(
@@ -211,6 +248,7 @@ describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thươn
         sku: 'sku-001',
         name: 'Product 1 Duplicate',
         defaultPrice: '30000.0000',
+        fullBottleVolumeMl: 500,
       }),
     ).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
@@ -222,12 +260,14 @@ describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thươn
       sku: 'ROSE-01',
       name: 'Rose Brand A',
       defaultPrice: '30000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     const pB = await service.create(brandAdminB, {
       sku: 'ROSE-01',
       name: 'Rose Brand B',
       defaultPrice: '40000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     expect(pA.brandId).toBe(BRAND_A);
@@ -240,6 +280,7 @@ describe('PrdService — FR-PRD-01, FR-PRD-03: Tạo sản phẩm & gán thươn
         sku: 'SKU-ADMIN',
         name: 'Admin Product',
         defaultPrice: '30000.0000',
+        fullBottleVolumeMl: 500,
       }),
     ).rejects.toMatchObject({
       code: 'FORBIDDEN_SCOPE',
@@ -253,6 +294,7 @@ describe('PrdService — FR-PRD-02: Cập nhật & ngừng kinh doanh', () => {
       sku: 'BLEU-EDP',
       name: 'Bleu de Chanel',
       defaultPrice: '40000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     const updated = await service.update(brandAdminA, scopeA, created.id, {
@@ -272,6 +314,7 @@ describe('PrdService — FR-PRD-02: Cập nhật & ngừng kinh doanh', () => {
       sku: 'GAB-EDP',
       name: 'Gabrielle',
       defaultPrice: '50000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     const discontinued = await service.discontinue(brandAdminA, scopeA, created.id);
@@ -289,6 +332,7 @@ describe('PrdService — FR-PRD-03, FR-BND-08: Cô lập dữ liệu giữa các
       sku: 'PROD-A',
       name: 'Exclusive A',
       defaultPrice: '30000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     // Brand A đọc được
@@ -310,6 +354,7 @@ describe('PrdService — FR-PRD-03, FR-BND-08: Cô lập dữ liệu giữa các
       sku: 'PROD-A2',
       name: 'Exclusive A2',
       defaultPrice: '30000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     // Brand B cố tình cập nhật sản phẩm của Brand A -> bị chặn
@@ -325,16 +370,19 @@ describe('PrdService — FR-PRD-03, FR-BND-08: Cô lập dữ liệu giữa các
       sku: 'A1',
       name: 'Product A1',
       defaultPrice: '10000.0000',
+      fullBottleVolumeMl: 500,
     });
     await service.create(brandAdminA, {
       sku: 'A2',
       name: 'Product A2',
       defaultPrice: '20000.0000',
+      fullBottleVolumeMl: 500,
     });
     await service.create(brandAdminB, {
       sku: 'B1',
       name: 'Product B1',
       defaultPrice: '30000.0000',
+      fullBottleVolumeMl: 500,
     });
 
     const listA = await service.list(scopeA, { page: 1, pageSize: 10 });

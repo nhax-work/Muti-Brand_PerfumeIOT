@@ -6,7 +6,7 @@
  * Nhờ vậy unit test khởi tạo service trực tiếp với các phụ thuộc giả, không cần dựng server.
  */
 
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type {
   BrandRegistered,
   BrandRegistration,
@@ -25,6 +25,7 @@ import {
   LOGIN_FAILED,
   LOGIN_REJECTED_LOCKED,
   LOGIN_SUCCEEDED,
+  PASSWORD_RESET,
   type PrincipalRow,
 } from './auth.queries.js';
 import {
@@ -43,6 +44,8 @@ import {
   EMAIL_VERIFICATION_SENDER,
   type EmailVerificationSender,
 } from './email-verification-sender.js';
+import { BRAND_SIGNUP_LISTENER, type BrandSignupListener } from './brand-signup-listener.js';
+import { PASSWORD_RESET_SENDER, type PasswordResetSender } from './password-reset-sender.js';
 import { TOKEN_SERVICE } from './auth.tokens.provider.js';
 import {
   hashRefreshToken,
@@ -76,17 +79,27 @@ type Queries = Pick<
   | 'findEmailVerificationByUser'
   | 'markEmailVerified'
   | 'replaceEmailVerificationToken'
+  | 'upsertPasswordResetToken'
+  | 'findPasswordResetByTokenHash'
+  | 'consumePasswordResetToken'
 >;
+
+/** Trạng thái được tự lấy lại mật khẩu — DISABLED và LOCKED là khóa có chủ ý (ADR-0030). */
+const RESETTABLE_STATUSES: ReadonlySet<string> = new Set(['ACTIVE', 'INVITED']);
 
 type Loader = Pick<PrincipalLoader, 'invalidateUser' | 'invalidateSession'>;
 type Audit = Pick<AuditService, 'log'>;
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger('Auth');
   /** FR-USR-06: theo IP. */
   private readonly registerLimiter: PerMinuteRateLimiter;
   /** FR-USR-07: gửi lại mã, theo tài khoản — dùng chung ngưỡng với đăng ký. */
   private readonly resendLimiter: PerMinuteRateLimiter;
+  /** FR-AUTH-13: theo IP (chặn dò email) và theo email (chặn dội thư vào một hòm). */
+  private readonly resetIpLimiter: PerMinuteRateLimiter;
+  private readonly resetEmailLimiter: PerMinuteRateLimiter;
 
   constructor(
     @Inject(AuthQueries) private readonly queries: Queries,
@@ -98,10 +111,19 @@ export class AuthService {
     @Optional()
     @Inject(EMAIL_VERIFICATION_SENDER)
     private emailSender?: EmailVerificationSender,
+    @Optional()
+    @Inject(BRAND_SIGNUP_LISTENER)
+    private readonly signupListener?: BrandSignupListener,
+    @Optional()
+    @Inject(PASSWORD_RESET_SENDER)
+    private readonly resetSender?: PasswordResetSender,
   ) {
     const limit = () => config.constraint('BRAND_REGISTER_RATE_LIMIT_PER_MIN');
     this.registerLimiter = new PerMinuteRateLimiter(clock, limit);
     this.resendLimiter = new PerMinuteRateLimiter(clock, limit);
+    const resetLimit = () => config.constraint('PASSWORD_RESET_RATE_LIMIT_PER_MIN');
+    this.resetIpLimiter = new PerMinuteRateLimiter(clock, resetLimit);
+    this.resetEmailLimiter = new PerMinuteRateLimiter(clock, resetLimit);
   }
 
   setEmailSender(sender?: EmailVerificationSender): void {
@@ -431,6 +453,13 @@ export class AuthService {
       targetId: record.userId,
       metadata: { email: record.email },
     });
+
+    // Báo Super Admin có thương hiệu mới. Xác minh đã ghi xong — lỗi báo tin chỉ ghi log.
+    try {
+      await this.signupListener?.onBrandEmailVerified(record.userId, now);
+    } catch (err: unknown) {
+      this.logger.warn(`Không báo được thương hiệu mới đăng ký: ${String(err)}`);
+    }
   }
 
   /**
@@ -465,6 +494,76 @@ export class AuthService {
     });
 
     await this.emailSender?.sendVerificationEmail(record.email, rawToken);
+  }
+
+  /**
+   * FR-AUTH-13 (ADR-0030): gửi liên kết đặt lại mật khẩu. Không ném lỗi theo tài khoản — email không
+   * có thật, tài khoản bị khóa và tài khoản hợp lệ cho cùng một kết quả, để không lộ email nào có
+   * tài khoản. Chỉ vượt giới hạn tần suất mới trả lỗi.
+   */
+  async requestPasswordReset(email: string, origin: RequestOrigin): Promise<void> {
+    const normalized = email.trim().toLowerCase();
+    if (
+      !this.resetIpLimiter.tryAcquire(origin.ip ?? 'unknown') ||
+      !this.resetEmailLimiter.tryAcquire(normalized)
+    ) {
+      throw new AppError('RATE_LIMITED', 'auth.passwordResetRateLimited');
+    }
+
+    const user = await this.queries.findUserForLogin(normalized);
+    if (!user || !RESETTABLE_STATUSES.has(user.status)) return;
+
+    const now = this.clock.now();
+    const ttlMs = this.config.constraint('PASSWORD_RESET_TOKEN_TTL_MIN') * MS_PER_MINUTE;
+    const rawToken = newVerificationToken();
+    await this.queries.upsertPasswordResetToken(
+      user.id,
+      hashVerificationToken(rawToken),
+      new Date(now.getTime() + ttlMs),
+      now,
+    );
+    await this.audit.log({
+      actorType: 'ANONYMOUS',
+      brandId: user.brandId,
+      action: 'auth.password.reset_requested',
+      targetType: 'user',
+      targetId: user.id,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+    });
+    // Không chờ gửi xong: thời gian trả lời không được để lộ email có tài khoản. Cổng gửi tự bắt lỗi.
+    void this.resetSender?.sendPasswordResetEmail(user.email, rawToken);
+  }
+
+  /**
+   * FR-AUTH-13 (ADR-0030): mã đúng, còn hạn, chưa dùng và tài khoản còn ACTIVE/INVITED → đặt mật khẩu
+   * mới, tài khoản về ACTIVE, thu hồi mọi phiên. Mọi trường hợp khác cùng một lỗi VALIDATION_ERROR.
+   */
+  async resetPassword(token: string, newPassword: string, origin: RequestOrigin): Promise<void> {
+    const record = await this.queries.findPasswordResetByTokenHash(hashVerificationToken(token));
+    const now = this.clock.now();
+    if (
+      !record ||
+      record.usedAt !== null ||
+      record.expiresAt <= now ||
+      !RESETTABLE_STATUSES.has(record.userStatus) ||
+      !(await this.queries.consumePasswordResetToken(record.id, now))
+    ) {
+      throw new AppError('VALIDATION_ERROR', 'auth.invalidResetToken');
+    }
+
+    await this.queries.setPassword(record.userId, await hashPassword(newPassword), 'ACTIVE');
+    await this.revokeAllAccess(record.userId);
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: record.userId,
+      brandId: record.brandId,
+      action: PASSWORD_RESET,
+      targetType: 'user',
+      targetId: record.userId,
+      sourceIp: origin.ip,
+      userAgent: origin.userAgent,
+    });
   }
 
   private verificationExpiry(): Date {

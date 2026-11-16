@@ -72,6 +72,7 @@ services:
       args:
         VITE_CLAIM_PAGE_URL: https://${ADMIN_HOST}/claim
         VITE_SUPPORT_CONTACT: ${SUPPORT_CONTACT:-}
+        VITE_LANDING_URL: https://${APEX_HOST}
     image: scentstation-staging-web
     restart: unless-stopped
     environment:

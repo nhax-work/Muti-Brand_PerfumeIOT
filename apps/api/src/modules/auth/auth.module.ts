@@ -11,6 +11,7 @@ import {
   EMAIL_VERIFICATION_SENDER,
   DefaultEmailVerificationSender,
 } from './email-verification-sender.js';
+import { DefaultPasswordResetSender, PASSWORD_RESET_SENDER } from './password-reset-sender.js';
 
 @Module({
   controllers: [AuthController],
@@ -20,9 +21,10 @@ import {
     tokenServiceProvider,
     AuthService,
     { provide: EMAIL_VERIFICATION_SENDER, useClass: DefaultEmailVerificationSender },
+    { provide: PASSWORD_RESET_SENDER, useClass: DefaultPasswordResetSender },
     // Guard toàn cục: MỌI endpoint của MỌI module đều qua đây, trừ endpoint gắn @Public().
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
-  exports: [AuthService, EMAIL_VERIFICATION_SENDER],
+  exports: [AuthService, EMAIL_VERIFICATION_SENDER, PASSWORD_RESET_SENDER],
 })
 export class AuthModule {}

@@ -20,6 +20,10 @@ export const rev = {
   payoutDisputeAnsweredSubject: 'Khiếu nại kỳ chi trả {period} đã được trả lời',
   payoutDisputeAnsweredContent:
     'Nền tảng đã trả lời khiếu nại số liệu kỳ chi trả tháng {period}. Xem chi tiết trong mục Kỳ chi trả.',
+  payoutConfirmedSubject: 'Đã chốt số liệu kỳ chi trả {period}',
+  payoutConfirmedContent:
+    'Số liệu doanh thu lượt xịt kỳ tháng {period} đã được chốt: {orderCount} đơn, tổng {amount} {currency}. ' +
+    'Nếu thấy chưa đúng, bạn có thể gửi khiếu nại một lần trong mục Kỳ chi trả.',
   payoutPaidSubject: 'Đã chuyển khoản doanh thu kỳ {period}',
   payoutPaidContent:
     'Nền tảng đã chuyển khoản doanh thu lượt xịt kỳ tháng {period}. Mã giao dịch có trong mục Kỳ chi trả.',

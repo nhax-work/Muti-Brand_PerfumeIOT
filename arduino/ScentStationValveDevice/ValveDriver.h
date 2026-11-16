@@ -1,7 +1,7 @@
 #pragma once
 #include <stdint.h>
 
-// Rev B: P00..P04 -> AHCT04 -> valves, P05 -> AHCT04 -> EXP_READY.
+// Rev C (same control pinout as Rev B): P00..P04 -> AHCT04 -> valves, P05 -> AHCT04 -> EXP_READY.
 // Bus writes/reads a complete PCF8575 word, low byte first. Gate is GPIO14.
 // No I2C operation is ever required to disable the loads.
 template <class Bus, class Gate> class ValveDriver {

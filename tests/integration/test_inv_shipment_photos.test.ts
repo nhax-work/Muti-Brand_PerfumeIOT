@@ -73,7 +73,7 @@ async function declare(): Promise<Declaration> {
     payload: {
       fragranceProductId: fx.products[0],
       declaredQuantity: 4,
-      declaredBottleVolumeMl: 50,
+      declaredBottleVolumeMl: 500,
     },
   });
   expect(res.statusCode, res.body).toBe(201);

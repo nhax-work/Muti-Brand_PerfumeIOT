@@ -38,6 +38,19 @@ vi.mock('./api', async () => ({
     isLoading: false,
   }),
   useSaveBrand: () => ({ mutateAsync: mockSave, isPending: false }),
+  useBrand: (id: string | undefined) => ({
+    data: id
+      ? {
+          payoutAccount: {
+            bankCode: 'VCB',
+            accountNumber: '001234568888',
+            accountHolder: 'CONG TY MAISON',
+          },
+        }
+      : undefined,
+    isLoading: false,
+    isError: false,
+  }),
   useSetBrandStatus: () => ({ mutateAsync: mockSetStatus, isPending: false }),
   useVerifyBrandLegal: () => ({ mutateAsync: mockVerifyLegal, isPending: false }),
 }));
@@ -65,14 +78,15 @@ describe('BrandsPage (FR-BND-01 ÷ 03, 07, FR-BND-10)', () => {
     expect(within(dialog).getByDisplayValue('MAISON_AURORE')).toBeTruthy();
   });
 
-  it('FR-BND-10: Super Admin mở modal xác minh pháp nhân, thấy tài khoản che và xác nhận', async () => {
+  it('FR-BND-10: Super Admin mở modal xác minh pháp nhân, thấy đầy đủ tài khoản và xác nhận', async () => {
     renderScreen(<BrandsPage />);
     fireEvent.click(screen.getByText('Xác minh pháp nhân'));
     const dialog = await screen.findByRole('dialog');
-    // Modal shows tax code, license number, and masked payout account
+    // Số tài khoản giữ nguyên cả số 0 ở đầu để đối chiếu hồ sơ.
     expect(within(dialog).getByText('0123456789')).toBeTruthy();
     expect(within(dialog).getByText('GP-999')).toBeTruthy();
-    expect(within(dialog).getByText(/VCB · \*\*\*\*8888/)).toBeTruthy();
+    expect(within(dialog).getByText(/VCB · 001234568888/)).toBeTruthy();
+    expect(within(dialog).queryByText(/\*\*\*\*8888/)).toBeNull();
 
     // Confirm verification button in modal footer
     const confirmBtn = within(dialog).getByRole('button', { name: 'Xác minh pháp nhân' });

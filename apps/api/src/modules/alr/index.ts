@@ -3,3 +3,4 @@
  */
 export { AlrModule } from './alr.module.js';
 export { AlrService } from './alr.service.js';
+export type { NotificationChannel } from './alr.queries.js';

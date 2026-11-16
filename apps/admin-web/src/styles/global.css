@@ -21,6 +21,29 @@
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+
+  /* Trang xác thực (AuthLayout) — đen trắng như kiosk/landing; khớp AUTH_THEME ở app/providers.tsx. */
+  --font-serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --auth-ink: #000000;
+  --auth-on-ink: #ffffff;
+  --auth-on-ink-soft: rgba(255, 255, 255, 0.8);
+  --auth-on-ink-faint: rgba(255, 255, 255, 0.4);
+  --auth-scrim: linear-gradient(
+    to top,
+    #000000 0%,
+    rgba(0, 0, 0, 0.6) 50%,
+    rgba(0, 0, 0, 0.3) 100%
+  );
+  --auth-surface: #ffffff;
+  --auth-text: #1a1c1c;
+  --auth-text-muted: #5f5e5e;
+  --auth-line: #e2e2e2;
+  --auth-fs-hero: clamp(3rem, 5.2vw, 5rem);
+  --auth-fs-brand: 1.5rem;
+  --auth-fs-title: 1.5rem;
+  --auth-fs-lead: 1.125rem;
+  --auth-fs-body: 0.875rem;
+  --auth-fs-caps: 0.6875rem;
 }
 
 body {
@@ -336,23 +359,344 @@ body {
   min-height: 0;
 }
 
-/* Auth Layout */
+/* =========================================================================
+   AUTH LAYOUT — hai cột: ảnh + lời giới thiệu bên trái, biểu mẫu bên phải.
+   Dưới 992px chỉ còn cột biểu mẫu (trang công khai phải dùng được ở 360px).
+   ========================================================================= */
+/* Khung cao đúng một màn; chỉ cột biểu mẫu cuộn, ảnh bên trái đứng yên. */
 .auth-layout {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
   display: grid;
-  place-items: center;
-  background: radial-gradient(circle at 50% 50%, #f1f5f9 0%, #e2e8f0 100%);
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  background: var(--auth-surface);
+  color: var(--auth-text);
 }
 
-.login-card {
-  width: min(420px, calc(100vw - 32px));
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  border: 1px solid #e2e8f0;
+.auth-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 64px;
+  background: var(--auth-ink);
+  color: var(--auth-on-ink);
+}
+
+.auth-hero-image {
+  position: absolute;
+  inset: 0;
+  background: url('../app/layouts/auth-hero.jpg') center / cover no-repeat;
+  opacity: 0.4;
+}
+
+.auth-hero-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--auth-scrim);
+}
+
+.auth-hero-mark,
+.auth-hero-body {
+  position: relative;
+}
+
+.auth-hero-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.auth-hero-mark-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--auth-on-ink);
+}
+
+.auth-hero-body {
+  margin: auto 0;
+  padding: 48px 0;
+  max-width: 36rem;
+}
+
+.auth-hero-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--auth-on-ink-soft);
+}
+
+.auth-hero-eyebrow-line {
+  width: 32px;
+  height: 1px;
+  background: var(--auth-on-ink-faint);
+}
+
+.auth-hero-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--auth-fs-hero);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+}
+
+.auth-hero-desc {
+  margin: 24px 0 0;
+  font-size: var(--auth-fs-lead);
+  font-weight: 300;
+  line-height: 1.65;
+  color: var(--auth-on-ink-soft);
+}
+
+.auth-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 64px;
+  overflow-y: auto;
+  /* Luôn chừa chỗ thanh cuộn: trang dài (đăng ký) và trang ngắn không lệch ngang nhau. */
+  scrollbar-gutter: stable;
+  background: var(--auth-surface);
+  border-left: 1px solid var(--auth-line);
+}
+
+/* Hàng đầu cột biểu mẫu: nút về landing bên trái, chữ ScentStation ở giữa. */
+.auth-panel-head {
+  position: relative;
+  container-type: inline-size;
+  padding-bottom: 32px;
+  border-bottom: 1px solid var(--auth-line);
+}
+
+.auth-layout a.auth-back {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(calc(-50% - 16px));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--auth-text);
+}
+
+.auth-layout a.auth-back:hover {
+  color: var(--auth-text-muted);
+}
+
+.auth-back .anticon {
+  font-size: var(--auth-fs-lead);
+}
+
+/* Cột chưa đủ rộng: chỉ còn mũi tên (kèm tooltip) để không dính vào chữ ScentStation. */
+@container (max-width: 560px) {
+  .auth-back-text {
+    display: none;
+  }
+}
+
+.auth-panel-brand {
+  font-family: var(--font-serif);
+  font-size: var(--auth-fs-brand);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.auth-panel-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  /* Neo trên, không canh giữa: đổi sang trang có biểu mẫu ngắn/dài thì tiêu đề vẫn đứng yên. */
+  justify-content: flex-start;
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: clamp(32px, 7vh, 72px) 0 40px;
+}
+
+.auth-panel-footer {
+  padding-top: 24px;
+  border-top: 1px solid var(--auth-line);
+  font-size: var(--auth-fs-caps);
+  color: var(--auth-text-muted);
+}
+
+/* Thanh chuyển Đăng nhập / Đăng ký thương hiệu — gạch chân dưới mục đang mở. */
+.auth-tabs {
+  display: flex;
+  gap: 32px;
+  margin-bottom: 40px;
+  border-bottom: 1px solid var(--auth-line);
+}
+
+.auth-tab {
+  position: relative;
+  padding-bottom: 12px;
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-layout a.auth-tab {
+  color: var(--auth-text-muted);
+  text-decoration: none;
+}
+
+.auth-layout a.auth-tab:hover,
+.auth-layout a.auth-tab.active {
+  color: var(--auth-text);
+}
+
+.auth-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--auth-ink);
+}
+
+/* Liên kết chữ trong vùng xác thực: đen, gạch chân. */
+.auth-layout a {
+  color: var(--auth-text);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+/* Nhãn ô nhập kiểu chữ in nhỏ, giãn chữ. */
+.auth-layout .ant-form-item-label > label {
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--auth-text-muted);
+}
+
+.auth-input-icon {
+  color: var(--auth-text-muted);
+}
+
+.auth-title.ant-typography,
+.login-card .ant-card-head-title {
+  margin: 0 0 32px;
+  font-family: var(--font-serif);
+  font-size: var(--auth-fs-title);
+  font-weight: 600;
+  white-space: normal;
+}
+
+.auth-submit.ant-btn,
+.auth-layout .ant-btn-primary {
+  font-size: var(--auth-fs-caps);
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Nhãn nút dài: cho xuống dòng trên màn hẹp thay vì đẩy tràn khung. */
+.auth-submit.ant-btn {
+  height: auto;
+  min-height: 52px;
+  white-space: normal;
+}
+
+.auth-layout a:hover {
+  color: var(--auth-text-muted);
+}
+
+.auth-switch {
+  margin: 32px 0 0;
+  padding-top: 32px;
+  border-top: 1px solid var(--auth-line);
+  text-align: center;
+  font-size: var(--auth-fs-body);
+  color: var(--auth-text-muted);
+}
+
+.auth-switch a {
+  margin-left: 4px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Các trang xác thực còn dùng Card: phẳng, không viền, không bóng — nằm thẳng trong cột biểu mẫu. */
+.login-card.ant-card {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.login-card > .ant-card-head {
+  min-height: 0;
+  padding: 0;
+  border-bottom: 0;
+}
+
+.login-card > .ant-card-body {
+  padding: 0;
 }
 
 .login-error {
   margin-bottom: 16px;
+}
+
+/* Liên kết "Quên mật khẩu?" ngay dưới ô mật khẩu, kéo sát lên ô nhập. */
+.login-forgot {
+  margin: -8px 0 24px;
+  text-align: right;
+  font-size: var(--auth-fs-body);
+}
+
+/* Liên kết phụ dưới nút chính của các thẻ xác thực (quay lại đăng nhập…). */
+.login-links {
+  margin-top: 16px;
+  text-align: center;
+}
+
+@media (max-width: 991px) {
+  .auth-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .auth-hero {
+    display: none;
+  }
+
+  .auth-panel {
+    border-left: 0;
+    padding: 32px 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .auth-panel {
+    padding: 24px 16px;
+  }
+
+  .auth-tabs {
+    gap: 20px;
+  }
 }
 
 /* =========================================================================

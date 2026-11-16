@@ -9,6 +9,10 @@ export const mnt = {
   postTestIncomplete:
     'Máy còn phiếu bảo trì chưa hoàn tất checklist sau bảo trì (yêu cầu PASS để trở lại NORMAL)',
   ticketClosed: 'Phiếu bảo trì đã đóng',
+  // ADR-0029: phân công phiếu bảo trì
+  ticketAssignedSubject: 'Bạn được giao phiếu bảo trì {ticket}',
+  ticketAssignedContent:
+    'Bạn được giao phiếu bảo trì {ticket} tại máy {machine}, độ ưu tiên {priority}. Hạn xử lý: {deadline}.',
 } as const;
 
 export const ticketStatus = {

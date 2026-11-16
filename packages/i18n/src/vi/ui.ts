@@ -360,6 +360,23 @@ export const ui = {
   invalidToken: 'Đường dẫn xác minh thiếu mã token hợp lệ.',
   resendVerification: 'Gửi lại email xác minh',
   resendVerificationSuccess: 'Đã gửi lại email xác minh. Vui lòng kiểm tra hộp thư.',
+  // Quên mật khẩu (FR-AUTH-13, ADR-0030)
+  forgotPasswordLink: 'Quên mật khẩu?',
+  forgotPasswordTitle: 'Quên mật khẩu',
+  forgotPasswordDesc:
+    'Nhập email đăng nhập. Nếu email có tài khoản, chúng tôi sẽ gửi liên kết đặt lại mật khẩu.',
+  sendResetLink: 'Gửi liên kết đặt lại',
+  forgotPasswordSentTitle: 'Kiểm tra hộp thư của bạn',
+  forgotPasswordSentDesc:
+    'Nếu {email} có tài khoản ScentStation, liên kết đặt lại mật khẩu đã được gửi tới hòm thư này. Liên kết hết hạn sau {minutes} phút.',
+  resetPasswordTitle: 'Đặt mật khẩu mới',
+  resetPasswordSubmit: 'Đặt mật khẩu mới',
+  resetPasswordSuccessTitle: 'Đã đặt mật khẩu mới',
+  resetPasswordSuccessDesc:
+    'Đăng nhập bằng mật khẩu mới. Mọi phiên đăng nhập cũ trên các thiết bị khác đã bị đăng xuất.',
+  resetPasswordMissingToken:
+    'Đường dẫn đặt lại mật khẩu thiếu mã hợp lệ. Vui lòng yêu cầu liên kết mới.',
+  requestNewResetLink: 'Yêu cầu liên kết mới',
   // Hợp đồng khung (ADR-0013)
   frameworkAgreementTitle: 'Hợp đồng khung dịch vụ',
   frameworkAgreementDesc:
@@ -1332,4 +1349,17 @@ export const ui = {
   rentConfigTitle: 'Gói thuê cho slot đã chọn',
   rentCartEmpty: 'Chưa chọn slot nào. Mở một máy và bấm vào ô còn trống.',
   rentRemoveSlot: 'Bỏ chọn slot',
+  authHeroEyebrow: 'Hệ sinh thái khứu giác',
+  authHeroTitle: 'Nghệ thuật tiếp cận hương thơm.',
+  authHeroDesc:
+    'Nền tảng cho thuê slot trên máy xịt nước hoa thông minh. Khách thử hương bằng một lần bấm nút ngay tại kiosk.',
+  authTabsLabel: 'Chọn đăng nhập hoặc đăng ký',
+  authTabLogin: 'Đăng nhập',
+  authTabRegister: 'Đăng ký thương hiệu',
+  authFooter: '© {year} ScentStation. Bảo lưu mọi quyền.',
+  loginHeading: 'Truy cập bảng điều khiển',
+  loginSubmit: 'Đăng nhập vào bảng điều khiển',
+  loginNoAccount: 'Chưa có tài khoản thương hiệu?',
+  loginRegisterNow: 'Đăng ký ngay',
+  authBackHome: 'Về trang chủ',
 } as const;

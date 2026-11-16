@@ -11,6 +11,11 @@ export const LOGIN_SUCCEEDED = 'auth.login.succeeded';
 export const LOGIN_FAILED = 'auth.login.failed';
 /** Lần thử trong lúc đang bị khóa. KHÔNG tính vào chuỗi sai liên tiếp — xem AuthService.login. */
 export const LOGIN_REJECTED_LOCKED = 'auth.login.locked';
+/**
+ * Đặt lại mật khẩu qua email (ADR-0030). Nằm trong chuỗi đếm của FR-AUTH-03 để ngắt chuỗi đăng nhập
+ * sai liên tiếp — người vừa đặt lại mật khẩu không phải chờ hết thời gian khóa.
+ */
+export const PASSWORD_RESET = 'auth.password.reset';
 
 export type UserStatus = 'INVITED' | 'ACTIVE' | 'LOCKED' | 'DISABLED';
 
@@ -106,7 +111,7 @@ export class AuthQueries {
       .select(['action', 'occurred_at'])
       .where('target_type', '=', 'user')
       .where('target_id', '=', userId)
-      .where('action', 'in', [LOGIN_SUCCEEDED, LOGIN_FAILED])
+      .where('action', 'in', [LOGIN_SUCCEEDED, LOGIN_FAILED, PASSWORD_RESET])
       .orderBy('occurred_at', 'desc')
       .limit(limit)
       .execute();
@@ -405,6 +410,76 @@ export class AuthQueries {
       .where('verified_at', 'is', null)
       .execute();
   }
+
+  // -----------------------------------------------------------------------------------
+  // Quên mật khẩu (FR-AUTH-13, ADR-0030)
+  // -----------------------------------------------------------------------------------
+
+  /** Mỗi tài khoản một mã hiệu lực: yêu cầu mới thay mã cũ, kể cả mã đã dùng. */
+  async upsertPasswordResetToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+    now: Date,
+  ): Promise<void> {
+    await this.db
+      .insertInto('password_reset_tokens')
+      .values({ user_id: userId, token_hash: tokenHash, expires_at: expiresAt, created_at: now })
+      .onConflict((oc) =>
+        oc.column('user_id').doUpdateSet({
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+          used_at: null,
+          created_at: now,
+        }),
+      )
+      .execute();
+  }
+
+  async findPasswordResetByTokenHash(tokenHash: string): Promise<PasswordResetRow | null> {
+    const row = await this.db
+      .selectFrom('password_reset_tokens as t')
+      .innerJoin('users as u', 'u.id', 't.user_id')
+      .select(['t.id', 't.user_id', 't.expires_at', 't.used_at', 'u.status', 'u.brand_id'])
+      .where('t.token_hash', '=', tokenHash)
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          userId: row.user_id,
+          brandId: row.brand_id,
+          userStatus: row.status,
+          expiresAt: row.expires_at,
+          usedAt: row.used_at,
+        }
+      : null;
+  }
+
+  /**
+   * Đánh dấu mã đã dùng. Chỉ mã chưa dùng và còn hạn mới đổi — hai lần gửi cùng mã thì chỉ một lần
+   * đặt được mật khẩu.
+   *
+   * @returns true nếu lần gọi này là lần dùng mã
+   */
+  async consumePasswordResetToken(id: string, now: Date): Promise<boolean> {
+    const result = await this.db
+      .updateTable('password_reset_tokens')
+      .set({ used_at: now })
+      .where('id', '=', id)
+      .where('used_at', 'is', null)
+      .where('expires_at', '>', now)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows) > 0;
+  }
+}
+
+export interface PasswordResetRow {
+  readonly id: string;
+  readonly userId: string;
+  readonly brandId: string | null;
+  readonly userStatus: UserStatus;
+  readonly expiresAt: Date;
+  readonly usedAt: Date | null;
 }
 
 export interface EmailVerificationRow {

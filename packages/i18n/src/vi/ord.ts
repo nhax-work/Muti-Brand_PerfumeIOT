@@ -28,4 +28,17 @@ export const ord = {
   assigneeNotOperations: 'Người nhận xử lý phải là Operations Staff đang hoạt động',
   claimRateLimited: 'Bạn gửi quá nhiều lần. Vui lòng thử lại sau một phút.',
   orderRateLimited: 'Máy đang nhận quá nhiều yêu cầu. Vui lòng thử lại sau ít phút.',
+  // Thông báo trong ứng dụng cho nhân sự nền tảng
+  claimSubmittedSubject: 'Phiếu khiếu nại hoàn tiền mới: {amount} {currency}',
+  claimSubmittedContent:
+    'Khách vừa gửi phiếu khiếu nại hoàn tiền {amount} {currency} cho đơn {orderId}. ' +
+    'Hạn xử lý: {deadline}.',
+  claimAssignedSubject: 'Bạn được giao phiếu khiếu nại hoàn tiền',
+  claimAssignedContent:
+    'Bạn được giao xử lý phiếu khiếu nại hoàn tiền {amount} {currency} của đơn {orderId}. ' +
+    'Hạn xử lý: {deadline}.',
+  manualReviewSubject: 'Đơn cần kiểm tra thủ công: {amount} {currency}',
+  manualReviewContent:
+    'Đơn {orderId} đã nhận tiền nhưng chưa giao được lượt xịt bình thường. ' +
+    'Kiểm tra trong mục Đơn cần kiểm tra và hoàn tiền nếu cần.',
 } as const;

@@ -7,6 +7,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { AuditService } from '../../shared/audit/index.js';
+import { SPEC_CONSTRAINTS } from '../../shared/config/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
@@ -23,7 +24,7 @@ export interface CreateProductInput {
   readonly defaultPrice: string;
   readonly currency?: string;
   readonly fullBottleRetailPrice?: string;
-  readonly fullBottleVolumeMl?: number;
+  readonly fullBottleVolumeMl: number;
 }
 
 export interface UpdateProductInput {
@@ -72,6 +73,8 @@ export class PrdService {
       throw new AppError('FORBIDDEN_SCOPE', 'prd.brandAccountOnly');
     }
 
+    validateBottleVolume(input.fullBottleVolumeMl);
+
     if (await this.queries.skuExists(actor.brandId, input.sku)) {
       throw invalidField('sku', 'prd.skuTaken');
     }
@@ -118,6 +121,8 @@ export class PrdService {
     const before = await this.queries.findById(scope, id);
     if (!before) throw notFoundFor(actor);
 
+    if (input.fullBottleVolumeMl !== undefined) validateBottleVolume(input.fullBottleVolumeMl);
+
     await this.queries.update(id, input);
     const updated = await this.queries.findById(scope, id);
     if (!updated) throw notFoundFor(actor);
@@ -163,6 +168,13 @@ export class PrdService {
     });
 
     return dto;
+  }
+}
+
+function validateBottleVolume(volume: number | null | undefined): void {
+  const min = SPEC_CONSTRAINTS.PRODUCT_MIN_BOTTLE_VOLUME_ML;
+  if (volume == null || !Number.isFinite(volume) || volume < min) {
+    throw invalidField('fullBottleVolumeMl', 'prd.bottleVolumeMinimum', { min });
   }
 }
 

@@ -15,6 +15,15 @@ export function useBrands(params: { page: number; pageSize: number; status?: Bra
   });
 }
 
+/** Chỉ tải chi tiết chứa tài khoản đầy đủ khi Super Admin mở hồ sơ xác minh. */
+export function useBrand(id: string | undefined) {
+  return useQuery({
+    queryKey: ['brands', 'detail', id],
+    enabled: !!id,
+    queryFn: () => unwrap(api.GET('/brands/{id}', { params: { path: { id: id! } } })),
+  });
+}
+
 function useInvalidateBrands() {
   const queryClient = useQueryClient();
   return () => void queryClient.invalidateQueries({ queryKey: ['brands'] });

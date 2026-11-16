@@ -136,6 +136,20 @@ describe('SLT Non-Renewal Integration Tests (Task 8 / ADR-0014)', () => {
       [rentalId],
     );
     expect(auditRes.rows.length).toBe(1);
+
+    // Kho (người có inventory.manage) được báo để chuẩn bị tháo chai; Brand Admin không nhận.
+    const notices = await raw.query<{ recipient_user_id: string }>(
+      `SELECT recipient_user_id FROM notifications
+        WHERE type = 'RENTAL_NON_RENEWAL_REQUESTED' AND reference_id = $1`,
+      [rentalId],
+    );
+    const recipients = notices.rows.map((r) => r.recipient_user_id);
+    expect(recipients).toContain(fx.superAdminId);
+    const brandRecipients = await raw.query(
+      `SELECT 1 FROM users WHERE brand_id IS NOT NULL AND id = ANY($1::uuid[])`,
+      [recipients],
+    );
+    expect(brandRecipients.rowCount).toBe(0);
   });
 
   it('test_FR_EXP_23_idempotent_repeat — idempotent khi gọi lại POST với cùng returnMethod — không sinh thêm audit log', async () => {

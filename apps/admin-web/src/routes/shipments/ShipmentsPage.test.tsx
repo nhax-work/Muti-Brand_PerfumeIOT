@@ -438,7 +438,7 @@ describe('ShipmentsPage — ảnh khai báo gửi hàng (FR-INV-22, ADR-0024)', 
 
   /** Điền phần số liệu của pop-up khai báo (sản phẩm đã chọn sẵn qua `?product=`). */
   function fillNumbers(dialog: HTMLElement) {
-    fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '4' } });
+    fireEvent.change(within(dialog).getAllByRole('spinbutton')[0]!, { target: { value: '8' } });
   }
 
   it('test_FR_INV_22_declare_requires_both_photo_kinds', async () => {
@@ -470,7 +470,7 @@ describe('ShipmentsPage — ảnh khai báo gửi hàng (FR-INV-22, ADR-0024)', 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         fragranceProductId: 'prod-1',
-        declaredQuantity: 4,
+        declaredQuantity: 8,
         declaredBottleVolumeMl: 75,
       }),
     );
@@ -484,6 +484,41 @@ describe('ShipmentsPage — ảnh khai báo gửi hàng (FR-INV-22, ADR-0024)', 
       kind: 'PACKED',
       file: packed,
     });
+  });
+
+  it('tổng lô phải đủ 500 ml; sửa số lượng hoặc thể tích đều kiểm tra lại', async () => {
+    mockUser = BRAND_ADMIN;
+    renderAt('/shipments?declare=1&product=prod-1');
+    const dialog = await screen.findByRole('dialog');
+    const [quantity, volume] = within(dialog).getAllByRole('spinbutton');
+    await waitFor(() => expect((volume as HTMLInputElement).value).toBe('75'));
+    const inputs = dialog.querySelectorAll<HTMLInputElement>('input[type=file]');
+    for (const input of inputs) {
+      fireEvent.change(input, {
+        target: { files: [new File(['a'], 'photo.jpg', { type: 'image/jpeg' })] },
+      });
+    }
+    fireEvent.change(quantity!, { target: { value: '5' } });
+    fireEvent.change(volume!, { target: { value: '99' } });
+    fireEvent.click(within(dialog).getByText('Khai báo'));
+    const errorText = 'Tổng dung tích lô hàng (ml/chai × số lượng) phải tối thiểu 500 ml';
+    await waitFor(() => expect(within(dialog).getAllByText(errorText)).toHaveLength(2));
+    expect(mockCreate).not.toHaveBeenCalled();
+    fireEvent.change(quantity!, { target: { value: '6' } });
+    await waitFor(() => expect(within(dialog).getAllByText(errorText)).toHaveLength(1));
+    fireEvent.change(volume!, { target: { value: '80' } });
+    await waitFor(() => expect(within(dialog).getAllByText(errorText)).toHaveLength(2));
+    fireEvent.change(quantity!, { target: { value: '5' } });
+    fireEvent.change(volume!, { target: { value: '100' } });
+    fireEvent.click(within(dialog).getByText('Khai báo'));
+    await waitFor(() =>
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          declaredQuantity: 5,
+          declaredBottleVolumeMl: 100,
+        }),
+      ),
+    );
   });
 
   it('test_FR_INV_22_bottle_volume_from_product — thể tích chai lấy từ sản phẩm, vẫn sửa được', async () => {

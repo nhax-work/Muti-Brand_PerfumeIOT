@@ -338,7 +338,30 @@ export function ShipmentsTab({
           <Form.Item
             name="declaredBottleVolumeMl"
             label={t('ui.bottleVolume')}
-            rules={[{ required: true, message: t('validation.required') }]}
+            dependencies={['declaredQuantity']}
+            extra={t('inv.shipmentVolumeMinimum', {
+              min: SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML,
+            })}
+            rules={[
+              { required: true, message: t('validation.required') },
+              ({ getFieldValue }) => ({
+                validator(_, volume: number | null | undefined) {
+                  const quantity = getFieldValue('declaredQuantity') as number | undefined;
+                  if (volume == null || quantity == null) return Promise.resolve();
+                  const total = volume * quantity;
+                  return Number.isFinite(total) &&
+                    total >= SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML
+                    ? Promise.resolve()
+                    : Promise.reject(
+                        new Error(
+                          t('inv.shipmentVolumeMinimum', {
+                            min: SPEC_CONSTRAINTS.SHIPMENT_MIN_TOTAL_VOLUME_ML,
+                          }),
+                        ),
+                      );
+                },
+              }),
+            ]}
           >
             <InputNumber min={0.1} style={{ width: '100%' }} />
           </Form.Item>

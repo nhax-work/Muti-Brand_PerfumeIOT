@@ -22,14 +22,14 @@
 // Formatting removes existing files in the LittleFS partition.
 #define INITIALIZE_DEVICE_STORAGE false
 
-// Match the active-HIGH AOD4184 modules used in Test5Buttons.
+// Rev C AHCT541 drives the on-board MOSFET stages with active-HIGH signals.
 #define PUMP_ON_LEVEL HIGH
 #define LIGHT_ON_LEVEL HIGH
 
 // Optional door switch: open = HIGH, closed = LOW. -1 means no physical door sensor.
 #define DOOR_SENSOR_PIN -1
 
-// Rev B / Rev B 1 oz only: PCF8575 -> AHCT04 -> AHCT541 + RUN_REQUEST.
+// Rev C (current), electrically compatible with Rev B / Rev B 1 oz: PCF8575 -> AHCT04 -> AHCT541 + RUN_REQUEST.
 // I2C on 16/17 avoids the pump GPIO21/22. Pull-ups must be to 3V3.
 #define VALVE_I2C_SDA 16
 #define VALVE_I2C_SCL 17

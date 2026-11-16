@@ -2,7 +2,7 @@
  * Controller HTTP cho module MNT (Bảo trì) — FR-MNT-01 ÷ 14.
  */
 
-import { Body, Controller, Get, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
 import { z } from 'zod';
 import { parseBody } from '../../shared/http/validation.js';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
@@ -101,6 +101,8 @@ export class MntController {
 
   /** FR-MNT-02: Phân công phiếu bảo trì. */
   @Post(':id/assign')
+  // openapi.yaml trả 200 — NestJS mặc định 201 cho POST.
+  @HttpCode(200)
   @RequirePermissions(MAINTENANCE_HANDLE)
   assignTicket(
     @CurrentUser() actor: AuthenticatedUser,
@@ -114,6 +116,7 @@ export class MntController {
 
   /** FR-MNT-10, FR-MNT-13: Ghi kết quả xử lý phiếu bảo trì. */
   @Post(':id/resolve')
+  @HttpCode(200)
   @RequirePermissions(MAINTENANCE_HANDLE)
   resolveTicket(
     @CurrentUser() actor: AuthenticatedUser,
@@ -127,6 +130,7 @@ export class MntController {
 
   /** FR-MNT-11, FR-MNT-12: Hoàn thành checklist kiểm tra sau bảo trì. */
   @Post(':id/post-test')
+  @HttpCode(200)
   @RequirePermissions(MAINTENANCE_HANDLE)
   submitPostTest(
     @CurrentUser() actor: AuthenticatedUser,

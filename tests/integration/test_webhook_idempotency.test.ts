@@ -146,6 +146,33 @@ async function paidTransitions(orderId: string): Promise<number> {
 }
 
 describe('Idempotency webhook — đơn kiosk', () => {
+  it('giao dịch thứ hai cùng QR được ghi nhận để tra soát, không tạo lượt xịt thứ hai', async () => {
+    const order = await flow.createOrder(0);
+    const first = flow.paidWebhook(order);
+    expect(await results([flow.sendWebhook(first)])).toEqual(['PROCESSED']);
+    const extra = { ...first, eventId: randomUUID(), transactionId: randomUUID() };
+    expect(await results([flow.sendWebhook(extra)])).toEqual(['PROCESSED']);
+    expect((await flow.orderRow(order.id))?.status).toBe('PAID');
+    expect(await paidTransitions(order.id)).toBe(1);
+    const payment = (
+      await client.query('SELECT provider_transaction_id FROM payments WHERE order_id = $1', [
+        order.id,
+      ])
+    ).rows[0];
+    expect(payment.provider_transaction_id).toBe(first.transactionId);
+    const event = (
+      await client.query(
+        'SELECT processing_result FROM payment_events WHERE provider_event_id = $1',
+        [extra.eventId],
+      )
+    ).rows[0];
+    expect(event.processing_result).toBe('EXTRA_TRANSFER_REFUND_PENDING');
+    expect(
+      (await client.query('SELECT needs_manual_review FROM orders WHERE id = $1', [order.id]))
+        .rows[0].needs_manual_review,
+    ).toBe(true);
+    await client.query('UPDATE orders SET status = $2 WHERE id = $1', [order.id, 'FAILED']);
+  });
   it('test_FR_ORD_15_webhook_idempotent', async () => {
     const order = await flow.createOrder(0);
     const webhook = flow.paidWebhook(order);

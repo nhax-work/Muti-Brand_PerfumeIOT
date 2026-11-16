@@ -79,7 +79,7 @@ async function declare(quantity = 10, product = 0): Promise<Declaration> {
     payload: {
       fragranceProductId: fx.products[product],
       declaredQuantity: quantity,
-      declaredBottleVolumeMl: 50,
+      declaredBottleVolumeMl: 500,
       expectedShipDate: '2026-11-01',
     },
   });
@@ -107,6 +107,26 @@ async function receivedBatch(): Promise<Batch> {
 }
 
 describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
+  it('chặn tổng dung tích dưới 500 ml, chấp nhận đúng 500 ml từ nhiều chai nhỏ', async () => {
+    const payload = {
+      fragranceProductId: fx.products[0],
+      declaredQuantity: 5,
+      declaredBottleVolumeMl: 99.99,
+    };
+    const rejected = await brandA('POST', '/shipment-declarations', { payload });
+    expect(rejected.statusCode, rejected.body).toBe(400);
+    expect(rejected.json()).toMatchObject({
+      code: 'VALIDATION_ERROR',
+      details: { messageKey: 'inv.shipmentVolumeMinimum' },
+    });
+
+    const accepted = await brandA('POST', '/shipment-declarations', {
+      payload: { ...payload, declaredBottleVolumeMl: 100 },
+    });
+    expect(accepted.statusCode, accepted.body).toBe(201);
+    expect(accepted.json()).toMatchObject({ declaredQuantity: 5, declaredBottleVolumeMl: 100 });
+  });
+
   it('test_FR_INV_22_declare_shipment — Brand Admin khai báo, bản ghi DECLARED gắn đúng thương hiệu', async () => {
     const declaration = await declare(12);
     expect(declaration).toMatchObject({
@@ -127,7 +147,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[2],
         declaredQuantity: 5,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -139,7 +159,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 0,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(400);
@@ -170,7 +190,7 @@ describe('Khai báo gửi hàng (FR-INV-22, 23, 27, 28)', () => {
       payload: {
         fragranceProductId: fx.products[0],
         declaredQuantity: 1,
-        declaredBottleVolumeMl: 50,
+        declaredBottleVolumeMl: 500,
       },
     });
     expect(res.statusCode).toBe(403);
@@ -265,6 +285,15 @@ describe('Tiếp nhận và đối chiếu (FR-INV-24, 25, 26)', () => {
       declaration: { status: 'DISCREPANCY', discrepancyNotes: 'Vỡ 1 chai khi vận chuyển' },
       batch: { quantityReceived: 9 },
     });
+
+    // Brand Admin của thương hiệu khai báo được báo lệch số lượng kèm ghi chú của kho.
+    const notices = await client.query<{ email: string; content: string }>(
+      `SELECT u.email, n.content FROM notifications n JOIN users u ON u.id = n.recipient_user_id
+        WHERE n.type = 'SHIPMENT_DISCREPANCY' AND n.reference_id = $1`,
+      [declaration.id],
+    );
+    expect(notices.rows.map((r) => r.email)).toEqual([fx.brandAdminAEmail]);
+    expect(notices.rows[0]!.content).toContain('Vỡ 1 chai khi vận chuyển');
   });
 
   it('test_FR_INV_25_receive_zero_creates_no_batch — nhận 0 chai: DISCREPANCY, batch null, không tạo lô', async () => {
@@ -365,9 +394,9 @@ describe('Tự tạo chai khi tiếp nhận (FR-INV-26 AC4, AC5 — ADR-0025)', 
         brand_id: fx.brandA,
         fragrance_product_id: fx.products[1],
       });
-      // declare() khai báo 50 ml mỗi chai.
-      expect(Number(b.initial_volume_ml)).toBe(50);
-      expect(Number(b.current_estimated_ml)).toBe(50);
+      // declare() khai báo 500 ml mỗi chai.
+      expect(Number(b.initial_volume_ml)).toBe(500);
+      expect(Number(b.current_estimated_ml)).toBe(500);
       expect(b.expires_at?.toISOString()).toBe(expiresAt);
     }
 
@@ -474,6 +503,23 @@ describe('Giấy tờ chính hãng của lô (FR-INV-33, 34)', () => {
       [batch.id],
     );
     expect(audit.rowCount).toBe(1);
+
+    // Lô chờ duyệt → báo trong ứng dụng cho người có inventory.verify (Super Admin của fixture);
+    // nhân viên kho không có quyền duyệt và Brand Admin không nhận.
+    const notices = await client.query<{ recipient_user_id: string; channel: string }>(
+      `SELECT recipient_user_id, channel FROM notifications
+        WHERE type = 'BATCH_AUTHENTICITY_SUBMITTED' AND reference_id = $1`,
+      [batch.id],
+    );
+    const recipients = notices.rows.map((r) => r.recipient_user_id);
+    expect(recipients).toContain(fx.superAdminId);
+    expect(recipients).not.toContain(inventoryStaff.userId);
+    const brandAdmins = await client.query<{ id: string }>(
+      `SELECT id FROM users WHERE brand_id IS NOT NULL AND id = ANY($1::uuid[])`,
+      [recipients],
+    );
+    expect(brandAdmins.rowCount).toBe(0);
+    expect(notices.rows.every((r) => r.channel === 'IN_APP')).toBe(true);
   });
 
   it('test_FR_INV_33_forbid_other_brand — Brand B nộp giấy tờ cho lô của A trả FORBIDDEN_SCOPE', async () => {
@@ -560,9 +606,11 @@ describe('Giấy tờ chính hãng của lô (FR-INV-33, 34)', () => {
     });
     expect(approved.json<Batch>().authenticityVerifiedAt).not.toBeNull();
 
-    // Kết quả duyệt gửi Brand Admin trong ứng dụng và qua email (FR-INV-34, FR-ALR-16).
+    // Kết quả duyệt gửi Brand Admin trong ứng dụng và qua email (FR-INV-34, FR-ALR-16). Chỉ xét
+    // người nhận của thương hiệu — thông báo "chờ duyệt" gửi tài khoản nền tảng.
     const notices = await client.query<{ type: string; channel: string; status: string }>(
       `SELECT type, channel, status FROM notifications WHERE reference_id = $1 AND brand_id = $2
+          AND recipient_user_id IN (SELECT id FROM users WHERE brand_id = $2)
         ORDER BY created_at, channel DESC`,
       [batch.id, fx.brandA],
     );

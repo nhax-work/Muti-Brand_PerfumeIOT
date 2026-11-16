@@ -21,11 +21,13 @@ import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
 import type { DB } from '../../shared/db/index.js';
 import { AppError, invalidField, notFoundFor } from '../../shared/errors/index.js';
+import { formatAmount } from '../../shared/format/index.js';
 import type { BrandScope } from '../../shared/scoping/index.js';
-import { AlrService } from '../alr/index.js';
+import { AlrService, type NotificationChannel } from '../alr/index.js';
 import type { AuthenticatedUser } from '../auth/index.js';
 import {
   RevQueries,
+  type ConfirmedPayout,
   type PayoutFilter,
   type PayoutRecord,
   type SettlementLineRecord,
@@ -69,8 +71,11 @@ export class RevService {
     const now = this.clock.now();
     const result = await this.queries.transaction(async (tx) => {
       const refreshed = await this.queries.refreshDraftPayouts(tx);
-      const confirmed = await this.queries.confirmEndedPeriods(now, tx);
-      return { refreshed, confirmed };
+      const confirmedPayouts = await this.queries.confirmEndedPeriods(now, tx);
+      for (const payout of confirmedPayouts) {
+        await this.notifyBrandAdmins(tx, payout, 'PAYOUT_CONFIRMED', 'rev.payoutConfirmed', now);
+      }
+      return { refreshed, confirmed: confirmedPayouts.length };
     });
     if (result.confirmed > 0)
       this.logger.log(`Đã chốt ${result.confirmed} kỳ chi trả sang CONFIRMED`);
@@ -208,12 +213,14 @@ export class RevService {
         },
         tx,
       );
+      // Không thuộc 8 sự kiện bắt buộc email của FR-ALR-16 — chỉ báo trong ứng dụng.
       await this.notifyBrandAdmins(
         tx,
         payout,
         'PAYOUT_DISPUTE_ANSWERED',
         'rev.payoutDisputeAnswered',
         now,
+        ['IN_APP'],
       );
       return this.queries.lockPayout({ kind: 'UNRESTRICTED' }, id, tx);
     });
@@ -278,24 +285,35 @@ export class RevService {
     };
   }
 
+  /**
+   * Báo mọi Brand Admin ACTIVE của thương hiệu. Kỳ chốt số và kỳ đã chuyển khoản là sự kiện 8 của
+   * FR-ALR-16 AC1 nên mặc định gửi cả email.
+   */
   private async notifyBrandAdmins(
     tx: Kysely<DB>,
-    payout: PayoutRecord,
+    payout: ConfirmedPayout,
     type: string,
-    keyPrefix: 'rev.payoutPaid' | 'rev.payoutDisputeAnswered',
+    keyPrefix: 'rev.payoutConfirmed' | 'rev.payoutPaid' | 'rev.payoutDisputeAnswered',
     at: Date,
+    channels: readonly NotificationChannel[] = ['IN_APP', 'EMAIL'],
   ): Promise<void> {
-    const params = { period: payout.periodMonth.slice(0, 7) };
-    await this.alr.notifyUsers(
+    const params = {
+      period: payout.periodMonth.slice(0, 7),
+      orderCount: payout.orderCount,
+      amount: formatAmount(payout.amount),
+      currency: payout.currency,
+    };
+    await this.alr.notifyBrandAdmins(
       tx,
       {
         brandId: payout.brandId,
         type,
         subject: translate(DEFAULT_LOCALE, `${keyPrefix}Subject` as MessageKey, params),
         content: translate(DEFAULT_LOCALE, `${keyPrefix}Content` as MessageKey, params),
+        referenceId: payout.id,
         at,
       },
-      await this.queries.activeUserIdsWithRole('BRAND_ADMIN', payout.brandId, tx),
+      channels,
     );
   }
 }

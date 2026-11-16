@@ -184,6 +184,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Yêu cầu liên kết đặt lại mật khẩu
+         * @description FR-AUTH-13 (ADR-0030): luôn trả 204 — email không có tài khoản, tài khoản bị khóa và tài khoản hợp lệ nhận cùng một câu trả lời. Tài khoản ACTIVE hoặc INVITED nhận email chứa liên kết dùng một lần, hết hạn sau PASSWORD_RESET_TOKEN_TTL_MIN phút; yêu cầu mới thay mã cũ. Vượt PASSWORD_RESET_RATE_LIMIT_PER_MIN theo IP hoặc theo email trả RATE_LIMITED.
+         */
+        post: operations["forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đặt mật khẩu mới bằng mã trong email
+         * @description FR-AUTH-13 (ADR-0030): mã đúng, còn hạn, chưa dùng và tài khoản còn ACTIVE hoặc INVITED thì đặt mật khẩu mới, đưa tài khoản về ACTIVE, thu hồi mọi phiên và ghi AuditLog auth.password.reset. Trường hợp còn lại trả VALIDATION_ERROR.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/brands": {
         parameters: {
             query?: never;
@@ -3672,6 +3712,16 @@ export interface components {
             /** @description Mã trong email xác minh. Sai hoặc quá hạn trả VALIDATION_ERROR. */
             token: string;
         };
+        ForgotPasswordRequest: {
+            /** Format: email */
+            email: string;
+        };
+        ResetPasswordRequest: {
+            /** @description Mã trong liên kết đặt lại mật khẩu. Sai, quá hạn hoặc đã dùng trả VALIDATION_ERROR. */
+            token: string;
+            /** Format: password */
+            newPassword: string;
+        };
         Brand: {
             /** Format: uuid */
             id: string;
@@ -3689,9 +3739,15 @@ export interface components {
             /** @description Mã số thuế (FR-BND-09). */
             taxCode?: string | null;
             businessLicenseNumber?: string | null;
-            /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa, không bao giờ trả nguyên văn qua API. */
+            /** @description Đã khai tài khoản nhận doanh thu (FR-BND-09). Số tài khoản lưu mã hóa. */
             hasPayoutAccount?: boolean;
-            /** @description Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho Super Admin đối soát và Brand Admin xem lại. */
+            /** @description Tài khoản đầy đủ, chỉ trả qua GET /brands/{id} cho PLATFORM_SUPER_ADMIN thuộc nền tảng để xác minh pháp nhân. Không trả trong danh sách, hồ sơ thương hiệu hoặc audit log. */
+            payoutAccount?: {
+                bankCode: string;
+                accountNumber: string;
+                accountHolder: string;
+            } | null;
+            /** @description Tài khoản nhận doanh thu dạng che (FR-BND-09). Chỉ hiển thị 4 số cuối số tài khoản cho Brand Admin xem lại và các phản hồi không chứa tài khoản đầy đủ. */
             payoutAccountMasked?: {
                 bankCode?: string;
                 maskedAccountNumber?: string;
@@ -3707,7 +3763,7 @@ export interface components {
         BrandLegalProfileUpdate: {
             taxCode: string;
             businessLicenseNumber?: string;
-            /** @description Lưu mã hóa tầng ứng dụng; không trả lại nguyên văn. */
+            /** @description Lưu mã hóa tầng ứng dụng; chỉ Super Admin xem đầy đủ qua chi tiết thương hiệu. */
             payoutAccount?: {
                 bankCode: string;
                 accountNumber: string;
@@ -3792,6 +3848,19 @@ export interface components {
             defaultPrice: components["schemas"]["Money"];
             currency?: components["schemas"]["Currency"];
             fullBottleRetailPrice?: components["schemas"]["Money"];
+            fullBottleVolumeMl: number;
+        };
+        ProductUpdate: {
+            name?: string;
+            description?: string | null;
+            fragranceNotes?: {
+                [key: string]: unknown;
+            } | null;
+            /** Format: uri */
+            imageUrl?: string | null;
+            defaultPrice?: components["schemas"]["Money"];
+            currency?: components["schemas"]["Currency"];
+            fullBottleRetailPrice?: components["schemas"]["Money"] | null;
             fullBottleVolumeMl?: number;
         };
         Location: {
@@ -4591,6 +4660,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @description Tổng declaredBottleVolumeMl × declaredQuantity phải tối thiểu 500 ml. */
         ShipmentDeclarationCreate: {
             /** Format: uuid */
             fragranceProductId: string;
@@ -5536,8 +5606,11 @@ export interface components {
         Notification: {
             /** Format: uuid */
             id: string;
-            /** Format: uuid */
-            brandId?: string;
+            /**
+             * Format: uuid
+             * @description Thương hiệu của sự kiện. null = thông báo nội bộ nền tảng, ví dụ phân công cảnh báo mức máy hay phiếu bảo trì (ADR-0029).
+             */
+            brandId?: string | null;
             /** Format: uuid */
             recipientUserId: string;
             type: string;
@@ -5857,6 +5930,49 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            204: components["responses"]["NoContent"];
+            400: components["responses"]["BadRequest"];
+            /** @description Yêu cầu quá nhiều lần — mã RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            204: components["responses"]["NoContent"];
+            400: components["responses"]["BadRequest"];
         };
     };
     listBrands: {
@@ -6383,7 +6499,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ProductCreate"];
+                "application/json": components["schemas"]["ProductUpdate"];
             };
         };
         responses: {

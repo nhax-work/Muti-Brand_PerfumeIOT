@@ -1,4 +1,4 @@
-name: Firmware van Rev B
+name: Firmware van Rev C
 
 on:
   pull_request:

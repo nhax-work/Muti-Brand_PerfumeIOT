@@ -23,8 +23,10 @@ COPY apps/kiosk apps/kiosk
 # Vite chỉ đưa biến có tiền tố VITE_ vào bundle; giá trị được chốt lúc build.
 ARG VITE_CLAIM_PAGE_URL=
 ARG VITE_SUPPORT_CONTACT=
+ARG VITE_LANDING_URL=
 ENV VITE_CLAIM_PAGE_URL=$VITE_CLAIM_PAGE_URL \
-    VITE_SUPPORT_CONTACT=$VITE_SUPPORT_CONTACT
+    VITE_SUPPORT_CONTACT=$VITE_SUPPORT_CONTACT \
+    VITE_LANDING_URL=$VITE_LANDING_URL
 RUN npm run build -w @scentstation/admin-web -w @scentstation/kiosk
 
 FROM caddy:2.8.4-alpine

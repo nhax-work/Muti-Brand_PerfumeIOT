@@ -1,4 +1,4 @@
-// System firmware based on Test5Buttons: identical GPIO mapping and button debounce.
+// Rev C board firmware; control GPIO mapping remains compatible with Rev B.
 // ESP32 Arduino core 3.x; ArduinoJson 7, ArduinoMqttClient 0.1.8, Crypto 0.4.0.
 #include <Arduino.h>
 #include <Wire.h>
@@ -56,7 +56,7 @@ static_assert(VALVE_LEAD_MS <= 1000 && VALVE_TAIL_MS <= 1000 &&
               PUMP_RUN_MS + VALVE_LEAD_MS + VALVE_TAIL_MS < ACTUATOR_MAX_MS,
               "Valve and pump cycle must fit below the hardware cutoff");
 static_assert(PUMP_ON_LEVEL == HIGH && LIGHT_ON_LEVEL == HIGH,
-              "Rev B AHCT541 uses active-HIGH pump/light signals");
+              "Rev C / Rev B AHCT541 uses active-HIGH pump/light signals");
 constexpr unsigned long RESTART_GAP_MS = 500;
 constexpr uint16_t HISTORY_SIZE = 500;
 constexpr uint16_t OUTBOX_SIZE = 500;

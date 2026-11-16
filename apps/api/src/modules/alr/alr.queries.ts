@@ -58,7 +58,8 @@ export interface AlertFilter {
 
 export interface NotificationRecord {
   readonly id: string;
-  readonly brandId: string;
+  /** null = thông báo nội bộ nền tảng (ADR-0029). */
+  readonly brandId: string | null;
   readonly recipientUserId: string;
   readonly type: string;
   readonly channel: NotificationChannel;
@@ -105,7 +106,8 @@ export interface QueuedNotification {
 
 /** Thông báo trong ứng dụng gửi tới người nhận do module gọi tự chọn (không chỉ Brand Admin). */
 export interface UserNotification {
-  readonly brandId: string;
+  /** null = thông báo nội bộ nền tảng, không gắn thương hiệu (ADR-0029). */
+  readonly brandId: string | null;
   readonly type: string;
   readonly subject: string;
   readonly content: string;
@@ -661,6 +663,93 @@ export class AlrQueries {
     return rows[0]?.inserted === true;
   }
 
+  /**
+   * Tài khoản nền tảng ACTIVE đang giữ quyền `permission` qua bất kỳ vai trò nào. Quyền cấp theo dữ
+   * liệu (`role_permissions`), nên người nhận đi theo việc ai được phép xử lý — không gắn cứng mã
+   * vai trò.
+   */
+  async activePlatformUserIdsWithPermission(
+    permission: string,
+    executor: Executor,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('users as u')
+      .select('u.id')
+      .where('u.status', '=', 'ACTIVE')
+      .where('u.brand_id', 'is', null)
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('user_roles as ur')
+            .innerJoin('role_permissions as rp', 'rp.role_id', 'ur.role_id')
+            .innerJoin('permissions as p', 'p.id', 'rp.permission_id')
+            .select('ur.id')
+            .whereRef('ur.user_id', '=', 'u.id')
+            .where('p.code', '=', permission),
+        ),
+      )
+      .execute();
+    return rows.map((r) => r.id);
+  }
+
+  /** Thương hiệu của tài khoản vừa xác minh email — null nếu không phải tài khoản thương hiệu. */
+  async findBrandOfUser(
+    userId: string,
+    executor: Executor,
+  ): Promise<{ brandId: string; brandName: string; email: string } | null> {
+    const row = await executor
+      .selectFrom('users as u')
+      .innerJoin('brands as b', 'b.id', 'u.brand_id')
+      .select(['b.id', 'b.name', 'u.email'])
+      .where('u.id', '=', userId)
+      .executeTakeFirst();
+    return row ? { brandId: row.id, brandName: row.name, email: String(row.email) } : null;
+  }
+
+  /**
+   * Thương hiệu bị ảnh hưởng bởi một cảnh báo (FR-ALR-09) — cùng quy tắc với danh sách cảnh báo của
+   * Brand Admin: cảnh báo gắn thương hiệu thì chỉ thương hiệu đó; cảnh báo mức máy thì mọi thương
+   * hiệu đang có hóa đơn hiệu lực trên máy. Kèm tên máy để soạn thông báo.
+   */
+  async brandsAffectedByAlert(
+    alert: {
+      readonly machineId: string;
+      readonly brandId: string | null;
+      readonly deduplicationKey: string;
+    },
+    executor: Executor,
+  ): Promise<{ alertId: string | null; machineName: string; brandIds: string[] }> {
+    const open = await executor
+      .selectFrom('alerts')
+      .select('id')
+      .where('deduplication_key', '=', alert.deduplicationKey)
+      .where('status', 'in', ['OPEN', 'ACKNOWLEDGED'])
+      .executeTakeFirst();
+    const alertId = open?.id ?? null;
+    const machineName = await this.machineName(alert.machineId, executor);
+    if (alert.brandId) return { alertId, machineName, brandIds: [alert.brandId] };
+
+    const rows = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .select('sr.brand_id')
+      .distinct()
+      .where('ms.machine_id', '=', alert.machineId)
+      .where('sr.status', 'in', ['ACTIVE', 'EXPIRING', 'GRACE'])
+      .execute();
+    return { alertId, machineName, brandIds: rows.map((r) => r.brand_id) };
+  }
+
+  /** Tên hiển thị của máy cho nội dung thông báo; không thấy máy thì dùng mã máy. */
+  async machineName(machineId: string, executor: Executor): Promise<string> {
+    const machine = await executor
+      .selectFrom('machines')
+      .select('display_name')
+      .where('id', '=', machineId)
+      .executeTakeFirst();
+    return machine?.display_name ?? machineId;
+  }
+
   /** Thông báo trong ứng dụng cho từng người nhận — hiện ngay nên ghi SENT luôn. */
   async insertInAppForUsers(
     notification: UserNotification,
@@ -893,7 +982,7 @@ export class AlrQueries {
 
 function toRecord(r: {
   id: string;
-  brand_id: string;
+  brand_id: string | null;
   recipient_user_id: string;
   type: string;
   channel: string;
