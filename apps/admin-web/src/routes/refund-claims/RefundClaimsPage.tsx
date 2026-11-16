@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { ReauthCancelled, useAuth } from '@/shared/auth';
+import { formatBankName } from '@/shared/banks';
 import { useI18n } from '@/shared/i18n';
 import {
   type RefundAccountView,
@@ -297,7 +298,9 @@ function ClaimDrawer({
             <>
               <Alert type="warning" showIcon message={t('ui.claimAccountWarning')} />
               <Descriptions column={1} size="small" bordered>
-                <Descriptions.Item label={t('ui.claimBank')}>{account.bankBin}</Descriptions.Item>
+                <Descriptions.Item label={t('ui.claimBank')}>
+                  {formatBankName(account.bankBin)}
+                </Descriptions.Item>
                 <Descriptions.Item label={t('ui.claimAccountNumber')}>
                   <Typography.Text copyable={false} strong>
                     {account.accountNumber}

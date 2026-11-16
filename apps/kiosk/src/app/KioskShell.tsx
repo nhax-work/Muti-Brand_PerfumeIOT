@@ -103,12 +103,6 @@ export function KioskShell() {
         </div>
       </header>
 
-      {outOfService && (
-        <p className={styles.connectionBanner} role="alert">
-          {t('kiosk.connectionLost')}
-        </p>
-      )}
-
       <main className={styles.content}>
         <ShellChromeContext.Provider value={setDarkHeader}>
           <Outlet />
