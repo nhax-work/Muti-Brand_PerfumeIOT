@@ -30,7 +30,7 @@ export function AuthLayout() {
           <div className="auth-hero-image" />
           <div className="auth-hero-scrim" />
           <div className="auth-hero-mark">
-            <span className="auth-hero-mark-dot" />
+            <span className="brand-logo" />
             ScentStation
           </div>
           <div className="auth-hero-body">
@@ -56,7 +56,10 @@ export function AuthLayout() {
                 <span className="auth-back-text">{t('ui.authBackHome')}</span>
               </a>
             )}
-            <div className="auth-panel-brand">ScentStation</div>
+            <div className="auth-panel-brand">
+              <span className="brand-logo" aria-hidden="true" />
+              ScentStation
+            </div>
           </header>
           <div className="auth-panel-body">
             {showTabs && (
