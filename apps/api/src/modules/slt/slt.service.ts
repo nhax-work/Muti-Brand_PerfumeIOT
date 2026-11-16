@@ -1638,6 +1638,16 @@ function toCheckoutDto(
  * `graceFeeRate` lấy từ GRACE_FEE_RATE_DEFAULT: đổi cấu hình này làm đổi phụ lục của phiên chưa đồng ý
  * — đúng ý đồ, vì tỷ lệ áp cho hóa đơn là tỷ lệ hiện hành lúc thương hiệu đồng ý.
  */
+/**
+ * Định dạng số tiền theo chuẩn Việt Nam (phân tách hàng nghìn bằng dấu chấm, ví dụ: 1000 -> 1.000).
+ */
+function formatMoneyAmount(amount: string | number | null | undefined): string {
+  if (amount === null || amount === undefined || amount === '') return '0';
+  const num = Number(amount);
+  if (Number.isNaN(num)) return String(amount);
+  return num.toLocaleString('vi-VN');
+}
+
 export function buildAnnexContent(
   checkout: RentalCheckoutRecord,
   items: readonly AnnexItemRecord[],
@@ -1652,7 +1662,7 @@ export function buildAnnexContent(
     `Mã phiên thanh toán: ${checkout.id}`,
     `Mã thương hiệu: ${checkout.brandId}`,
     `Hợp đồng khung: ${checkout.agreementVersionId ?? 'N/A'}`,
-    `Tổng tiền: ${checkout.totalAmount} ${checkout.currency}`,
+    `Tổng tiền: ${formatMoneyAmount(checkout.totalAmount)} ${checkout.currency}`,
     ``,
     `## Danh sách slot thuê`,
     ``,
@@ -1663,16 +1673,20 @@ export function buildAnnexContent(
     lines.push(`- Mã hóa đơn: ${item.rentalId}`);
     lines.push(`- Mã slot: ${item.originalSlotId}`);
     lines.push(`- Thời hạn thuê: ${item.durationMonths ?? 0} tháng`);
-    lines.push(`- Giá thuê niêm yết: ${item.monthlyRentPrice ?? '0'} ${item.currency}/tháng`);
-    lines.push(`- Chiết khấu: ${item.discountPercent ?? '0'}%`);
-    lines.push(`- Tiền thuê slot: ${item.rentAmount ?? '0'} ${item.currency}`);
-    lines.push(`- Phí bảo quản: ${item.storageMonthlyPrice ?? '0'} ${item.currency}/tháng`);
     lines.push(
-      `- Mức bồi thường tối đa: ${item.storageCoverageCap ?? '0'} ${item.currency} (${item.storageCoveragePercent ?? '0'}%)`,
+      `- Giá thuê niêm yết: ${formatMoneyAmount(item.monthlyRentPrice)} ${item.currency}/tháng`,
     );
-    lines.push(`- Tiền bảo quản: ${item.storageAmount ?? '0'} ${item.currency}`);
+    lines.push(`- Chiết khấu: ${item.discountPercent ?? '0'}%`);
+    lines.push(`- Tiền thuê slot: ${formatMoneyAmount(item.rentAmount)} ${item.currency}`);
+    lines.push(
+      `- Phí bảo quản: ${formatMoneyAmount(item.storageMonthlyPrice)} ${item.currency}/tháng`,
+    );
+    lines.push(
+      `- Mức bồi thường tối đa: ${formatMoneyAmount(item.storageCoverageCap)} ${item.currency} (${item.storageCoveragePercent ?? '0'}%)`,
+    );
+    lines.push(`- Tiền bảo quản: ${formatMoneyAmount(item.storageAmount)} ${item.currency}`);
     lines.push(`- Tỷ lệ phí ân hạn: ${graceFeePercent}%`);
-    lines.push(`- Tổng cộng hóa đơn: ${item.totalAmount ?? '0'} ${item.currency}`);
+    lines.push(`- Tổng cộng hóa đơn: ${formatMoneyAmount(item.totalAmount)} ${item.currency}`);
     lines.push(``);
   }
 

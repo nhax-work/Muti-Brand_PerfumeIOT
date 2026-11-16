@@ -308,11 +308,11 @@ describe('FR-SLT-50: Phụ lục thanh toán & Chữ ký điện tử', () => {
 
     // Kiểm tra các trường thông tin trong phụ lục (FR-SLT-50 AC1)
     expect(data1.content).toContain('PHỤ LỤC HỢP ĐỒNG THUÊ SLOT');
-    expect(data1.content).toContain('1000000'); // monthly_rent_price
-    expect(data1.content).toContain('100000'); // storage_monthly_price
-    expect(data1.content).toContain('3000000'); // coverage_cap
+    expect(data1.content).toContain('1.000.000'); // monthly_rent_price
+    expect(data1.content).toContain('100.000'); // storage_monthly_price
+    expect(data1.content).toContain('3.000.000'); // coverage_cap
     expect(data1.content).toContain('Tỷ lệ phí ân hạn: 5%'); // GRACE_FEE_RATE_DEFAULT
-    expect(data1.content).toContain(checkout.totalAmount); // tổng tiền
+    expect(data1.content).toContain(Number(checkout.totalAmount).toLocaleString('vi-VN')); // tổng tiền
     expect(data1.contentHash).toMatch(/^[0-9a-f]{64}$/);
 
     // Thay đổi giá niêm yết trong danh mục sau khi tạo phiên
