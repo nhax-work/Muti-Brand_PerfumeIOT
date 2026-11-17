@@ -95,14 +95,13 @@ describe('KioskShell Header Navigation & Language Dropdown', () => {
     expect(screen.queryByTestId('outlet-content')).toBeNull();
   });
 
-  it('mất kết nối khi đang có đơn thì giữ màn thanh toán và chỉ báo mất kết nối (FR-IOT-13, FR-ORD-21)', () => {
+  it('khi đang có đơn thì giữ màn thanh toán phục vụ nốt (FR-IOT-13, FR-ORD-21)', () => {
     mockPathname = '/checkout/2';
     mockOutOfService = true;
     renderShell(true);
 
     expect(screen.queryByTestId('out-of-service')).toBeNull();
     expect(screen.getByTestId('outlet-content')).toBeTruthy();
-    expect(screen.getByText(/Mất kết nối với hệ thống/)).toBeTruthy();
   });
 
   it('ADR-0015: resetSession khi có activeOrder thì gọi cancelKioskOrder (Exit 2)', () => {

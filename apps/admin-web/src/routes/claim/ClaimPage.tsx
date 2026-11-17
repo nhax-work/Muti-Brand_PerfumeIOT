@@ -3,32 +3,13 @@ import type { components } from '@scentstation/contracts';
 import { Alert, Button, Card, Checkbox, Form, Input, Result, Select, Typography } from 'antd';
 import { useSearchParams } from 'react-router';
 import { api, errorMessage, unwrap } from '@/shared/api';
+import { VIETQR_BANKS } from '@/shared/banks';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useI18n } from '@/shared/i18n';
 
 type ClaimCreate = components['schemas']['RefundClaimCreate'];
 
-/**
- * Ngân hàng phổ biến theo mã BIN của VietQR. Tên ngân hàng là danh từ riêng, không dịch.
- * Thiếu ngân hàng của khách thì bổ sung vào danh sách này.
- */
-const BANKS: readonly { bin: string; name: string }[] = [
-  { bin: '970436', name: 'Vietcombank' },
-  { bin: '970415', name: 'VietinBank' },
-  { bin: '970418', name: 'BIDV' },
-  { bin: '970405', name: 'Agribank' },
-  { bin: '970422', name: 'MB Bank' },
-  { bin: '970407', name: 'Techcombank' },
-  { bin: '970416', name: 'ACB' },
-  { bin: '970432', name: 'VPBank' },
-  { bin: '970423', name: 'TPBank' },
-  { bin: '970403', name: 'Sacombank' },
-  { bin: '970441', name: 'VIB' },
-  { bin: '970443', name: 'SHB' },
-  { bin: '970437', name: 'HDBank' },
-  { bin: '970448', name: 'OCB' },
-  { bin: '970426', name: 'MSB' },
-];
+const BANKS = VIETQR_BANKS;
 
 interface ClaimFormValues {
   contact: string;

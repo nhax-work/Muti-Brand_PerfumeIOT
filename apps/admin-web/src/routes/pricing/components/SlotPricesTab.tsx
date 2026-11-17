@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { errorMessage } from '@/shared/api';
 import { useI18n } from '@/shared/i18n';
 import { type MachineSlot, usePricingMachines, usePricingSlots, useSetRentPrice } from '../api';
-import { formatVnd } from '@/shared/format';
+import { formatVnd, formatVndInput, parseVndInput } from '@/shared/format';
 
 /**
  * Giá thuê niêm yết từng slot (FR-SLT-32). Slot có giá mới hiện trong danh sách slot trống cho
@@ -148,7 +148,9 @@ export function SlotPricesTab() {
           style={{ width: '100%' }}
           suffix="VND"
           value={price}
-          onChange={(v) => setPriceInput(v)}
+          onChange={(v) => setPriceInput(v === null || v === '' ? null : Number(v))}
+          formatter={formatVndInput}
+          parser={parseVndInput}
           placeholder={t('ui.pricingMonthlyRentPrice')}
         />
       </Modal>

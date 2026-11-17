@@ -23,7 +23,7 @@ import { RequireRole } from '@/app/guards/RequireRole';
 import { errorMessage } from '@/shared/api';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { useAuth } from '@/shared/auth';
-import { formatVnd } from '@/shared/format';
+import { formatVnd, formatVndInput, parseVndInput } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import { PRODUCT_PARAM, RETURN_TO_PARAM, safeReturnTo, withParams } from '@/shared/return-to';
 import {
@@ -291,7 +291,27 @@ export default function ProductsPage() {
           confirmLoading={save.isPending || uploadImage.isPending || deleteImage.isPending}
           onOk={() => void submit()}
           onCancel={() => setEditing(null)}
+          centered
+          width={640}
           destroyOnHidden
+          className="product-form-modal"
+          styles={{
+            header: {
+              paddingBottom: 16,
+              marginBottom: 20,
+              borderBottom: '1px solid var(--line, #f0f0f0)',
+            },
+            body: {
+              maxHeight: 'calc(85vh - 160px)',
+              overflowY: 'auto',
+              paddingRight: 6,
+            },
+            footer: {
+              paddingTop: 16,
+              marginTop: 20,
+              borderTop: '1px solid var(--line, #f0f0f0)',
+            },
+          }}
         >
           <Form form={form} layout="vertical">
             <Form.Item
@@ -324,13 +344,27 @@ export default function ProductsPage() {
               extra={t('ui.productDefaultPriceHint')}
               rules={[{ required: true, message: t('validation.required') }]}
             >
-              <InputNumber min={0} precision={0} suffix="VND" style={{ width: '100%' }} />
+              <InputNumber
+                min={0}
+                precision={0}
+                suffix="VND"
+                style={{ width: '100%' }}
+                formatter={formatVndInput}
+                parser={parseVndInput}
+              />
             </Form.Item>
             {/* Lưới co theo bề rộng modal — chiều rộng cố định từng làm ô dung tích tràn ra ngoài. */}
             <Row gutter={12}>
               <Col xs={24} sm={14}>
                 <Form.Item name="fullBottleRetailPrice" label={t('ui.productRetailPrice')}>
-                  <InputNumber min={0} precision={0} suffix="VND" style={{ width: '100%' }} />
+                  <InputNumber
+                    min={0}
+                    precision={0}
+                    suffix="VND"
+                    style={{ width: '100%' }}
+                    formatter={formatVndInput}
+                    parser={parseVndInput}
+                  />
                 </Form.Item>
               </Col>
               <Col xs={24} sm={10}>

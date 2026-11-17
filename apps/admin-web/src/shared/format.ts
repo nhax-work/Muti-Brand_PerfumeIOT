@@ -8,3 +8,16 @@ export function formatVnd(amount: string | null | undefined): string {
 export function formatDateTime(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('vi-VN') : '—';
 }
+
+/** Định dạng số tiền VND cho InputNumber của Ant Design (dấu chấm phân tách hàng nghìn). */
+export function formatVndInput(value: number | string | undefined): string {
+  if (value === undefined || value === null || value === '') return '';
+  const parts = String(value).split('.');
+  const intPart = parts[0]!.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return parts.length > 1 ? `${intPart},${parts[1]}` : intPart;
+}
+
+/** Chuyển chuỗi hiển thị tiền VND về dạng số thô cho Form / InputNumber. */
+export function parseVndInput(displayValue: string | undefined): string {
+  return displayValue ? displayValue.replace(/\D/g, '') : '';
+}

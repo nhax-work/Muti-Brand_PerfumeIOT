@@ -13,7 +13,7 @@ import type { AuditEntry, AuditService } from '../../apps/api/src/shared/audit/i
 import type { AuthenticatedUser } from '../../apps/api/src/modules/auth/principal.loader.js';
 import type { BrandScope } from '../../apps/api/src/shared/scoping/index.js';
 import { AppError } from '../../apps/api/src/shared/errors/index.js';
-import { SltService } from '../../apps/api/src/modules/slt/slt.service.js';
+import { SltService, buildAnnexContent } from '../../apps/api/src/modules/slt/slt.service.js';
 import {
   stageOf,
   type BottleReturnMethod,
@@ -1062,6 +1062,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       expect(annex.agreementVersionId).toBe('ag-1');
       expect(annex.content).toContain('PHỤ LỤC HỢP ĐỒNG THUÊ SLOT KIOSK NƯỚC HOA');
       expect(annex.content).toContain('Mã phiên thanh toán: ' + checkout.id);
+      expect(annex.content).toContain('Giá thuê niêm yết: 1.000.000 VND/tháng');
       // Tỷ lệ phí ân hạn lấy từ GRACE_FEE_RATE_DEFAULT (0.05), không viết cứng
       expect(annex.content).toContain('Tỷ lệ phí ân hạn: 5%');
       expect(annex.acceptance).toBeNull();
@@ -1179,6 +1180,50 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       );
       expect(payment.paymentId).toBe('pay-1');
       expect(payment.status).toBe('PENDING');
+    });
+
+    it('buildAnnexContent định dạng số tiền từ phải sang trái 3 số 1 dấu chấm (1000.0000 -> 1.000 VND)', () => {
+      const dummyCheckout: RentalCheckoutRecord = {
+        id: 'chk-fmt-1',
+        brandId: BRAND_A,
+        totalAmount: '34000.0000',
+        currency: 'VND',
+        holdExpiresAt: new Date(),
+        paidAt: null,
+        cancelledAt: null,
+        createdBy: 'usr-1',
+        createdAt: new Date(),
+        agreementVersionId: 'ag-1',
+      };
+
+      const items = [
+        {
+          rentalId: '984f5c29-50fb-48e1-962c-48550cec314b',
+          originalSlotId: '66666666-6666-4666-8666-000000000012',
+          slotNumber: 2,
+          machineSerialNumber: 'M002',
+          durationMonths: 3,
+          discountPercent: '0.00',
+          monthlyRentPrice: '1000.0000',
+          rentAmount: '3000.0000',
+          storageMonthlyPrice: '10000.0000',
+          storageCoveragePercent: '30.00',
+          storageCoverageCap: '3000000.0000',
+          storageAmount: '30000.0000',
+          totalAmount: '33000.0000',
+          currency: 'VND',
+        },
+      ];
+
+      const content = buildAnnexContent(dummyCheckout, items, 0.05);
+
+      expect(content).toContain('Giá thuê niêm yết: 1.000 VND/tháng');
+      expect(content).toContain('Tiền thuê slot: 3.000 VND');
+      expect(content).toContain('Phí bảo quản: 10.000 VND/tháng');
+      expect(content).toContain('Mức bồi thường tối đa: 3.000.000 VND (30.00%)');
+      expect(content).toContain('Tiền bảo quản: 30.000 VND');
+      expect(content).toContain('Tổng cộng hóa đơn: 33.000 VND');
+      expect(content).toContain('Tổng tiền: 34.000 VND');
     });
   });
 

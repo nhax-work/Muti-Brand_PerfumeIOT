@@ -245,7 +245,26 @@ export function SlotSetupModal({
       open={open}
       onCancel={onClose}
       width={720}
+      centered
       destroyOnHidden
+      className="slot-setup-modal"
+      styles={{
+        header: {
+          paddingBottom: 16,
+          marginBottom: 20,
+          borderBottom: '1px solid var(--line, #f0f0f0)',
+        },
+        body: {
+          maxHeight: 'calc(85vh - 160px)',
+          overflowY: 'auto',
+          paddingRight: 6,
+        },
+        footer: {
+          paddingTop: 16,
+          marginTop: 20,
+          borderTop: '1px solid var(--line, #f0f0f0)',
+        },
+      }}
       footer={[
         <Button key="cancel" onClick={onClose}>
           {t('ui.cancel')}
