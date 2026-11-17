@@ -65,6 +65,7 @@ function toMachineDto(r: MachineRecord): MachineDto {
     firmwareVersion: r.firmwareVersion,
     configurationVersion: r.configurationVersion,
     slotCount: r.slotCount,
+    cameraLabel: r.cameraLabel,
     ...(r.drainingOrdersCount !== undefined ? { drainingOrdersCount: r.drainingOrdersCount } : {}),
   };
 }
@@ -274,6 +275,29 @@ export class MchService {
     });
 
     return toMachineDto(created);
+  }
+
+  /** FR-MCH-20 (ADR-0032 mục 5): nhãn camera an ninh — chuỗi rỗng hay null là xóa nhãn. */
+  async setCameraLabel(
+    actor: AuthenticatedUser,
+    id: string,
+    label: string | null,
+  ): Promise<MachineDto> {
+    const value = label?.trim() || null;
+    const changed = await this.queries.setCameraLabel(id, value);
+    if (!changed) throw new AppError('NOT_FOUND', 'mch.machineNotFound');
+    if (changed.before !== value) {
+      await this.audit.log({
+        actorType: 'USER',
+        actorId: actor.userId,
+        action: 'mch.machine.camera_label_changed',
+        targetType: 'Machine',
+        targetId: id,
+        before: { cameraLabel: changed.before },
+        after: { cameraLabel: value },
+      });
+    }
+    return this.getMachine(id);
   }
 
   async updateMachine(

@@ -163,6 +163,23 @@ export function useProducts() {
   });
 }
 
+/** Nhãn camera an ninh của máy (FR-MCH-20, ADR-0032) — Super Admin. */
+export function useSetCameraLabel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, cameraLabel }: { id: string; cameraLabel: string | null }) =>
+      unwrap(
+        api.PUT('/machines/{id}/camera-label', {
+          params: { path: { id } },
+          body: { cameraLabel },
+        }),
+      ),
+    onSuccess: (_, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['machine', id] });
+    },
+  });
+}
+
 /** Đổi chế độ hoạt động của máy — thao tác nhạy cảm yêu cầu xác thực lại (FR-MCH-11, FR-AUTH-09). */
 export function useSetMachineMode() {
   const queryClient = useQueryClient();

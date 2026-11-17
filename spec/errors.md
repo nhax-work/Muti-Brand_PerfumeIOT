@@ -34,8 +34,8 @@ thương hiệu (FR-BND-06).
 
 | Mã | HTTP | Khi nào |
 |---|---|---|
-| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt ngưỡng dung lượng của loại ảnh tương ứng: `PRODUCT_IMAGE_MAX_BYTES` (ảnh sản phẩm), `BRAND_LOGO_MAX_BYTES` (logo thương hiệu), `SHIPMENT_PHOTO_MAX_BYTES` (ảnh khai báo gửi hàng) |
-| `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải ảnh JPEG, PNG hay WebP hợp lệ — kiểm theo nội dung tệp, không theo đuôi tên hay `Content-Type` |
+| `FILE_TOO_LARGE` | 413 | Tệp ảnh gửi lên vượt ngưỡng dung lượng của loại ảnh tương ứng: `PRODUCT_IMAGE_MAX_BYTES` (ảnh sản phẩm), `BRAND_LOGO_MAX_BYTES` (logo thương hiệu), `SHIPMENT_PHOTO_MAX_BYTES` (ảnh khai báo gửi hàng), `CAMERA_CLIP_MAX_BYTES` / `CAMERA_IMAGE_MAX_BYTES` (bằng chứng camera, ADR-0032) |
+| `UNSUPPORTED_MEDIA_TYPE` | 415 | Tệp không phải ảnh JPEG, PNG hay WebP hợp lệ — kiểm theo nội dung tệp, không theo đuôi tên hay `Content-Type`. Bằng chứng camera nhận thêm video MP4 (kiểm hộp `ftyp`, ADR-0032) |
 
 ## Hóa đơn thuê slot
 
@@ -127,3 +127,16 @@ Thêm ngày 2026-10-13 theo ADR-0012 (hoàn tiền thủ công qua phiếu khi�
 | `ORDER_NOT_CLAIMABLE` | 409 | Đơn không thuộc trường hợp được khiếu nại hoàn tiền (đơn đã xịt, khách bỏ lượt, chưa thanh toán…) |
 | `CLAIM_ALREADY_OPEN` | 409 | Đơn đã có phiếu khiếu nại — mã khiếu nại chỉ dùng một lần |
 | `CLAIM_NOT_ASSIGNED` | 403 | Người gọi không phải Operations Staff đang được phân công cho phiếu |
+
+## Bằng chứng camera an ninh
+
+Thêm ngày 2026-11-17 theo ADR-0032 (bằng chứng hình ảnh từ camera an ninh độc lập với máy).
+
+| Mã | HTTP | Khi nào |
+|---|---|---|
+| `EVIDENCE_REQUIRED` | 409 | Từ chối phiếu khiếu nại khách khai không nhận được lượt xịt (`refundOrder = true`) khi chưa gắn bằng chứng camera nào |
+| `EVIDENCE_LIMIT_REACHED` | 409 | Hồ sơ (phiếu khiếu nại hoặc phiếu nạp) đã đủ `CAMERA_EVIDENCE_MAX_PER_TARGET` tệp bằng chứng |
+| `EVIDENCE_TARGET_CLOSED` | 409 | Gỡ bằng chứng khi hồ sơ đã đóng (phiếu khiếu nại không còn `OPEN`, hoặc yêu cầu trích hình đã đóng) |
+| `EVIDENCE_SELF_REVIEW` | 403 | Người tải bằng chứng phiếu nạp chính là người đã thực hiện phiếu nạp đó |
+| `FOOTAGE_REQUEST_EXPIRED` | 409 | Yêu cầu trích hình phiếu nạp mở quá `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` ngày |
+| `FOOTAGE_REQUEST_ALREADY_OPEN` | 409 | Phiếu nạp đã có yêu cầu trích hình đang mở |

@@ -10,11 +10,17 @@
 import { randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import type pg from 'pg';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  EMAIL_PROVIDER,
+  type EmailProvider,
+  type EmailSendOptions,
+} from '../../apps/api/src/adapters/email/index.js';
 import { buildMockWebhook } from '../../apps/api/src/modules/ord/payment/mock-gateway.js';
 import { claimTokenFor } from '../../apps/api/src/modules/ord/refund-claims/claimability.js';
 import { RefundClaimsService } from '../../apps/api/src/modules/ord/index.js';
 import { createTestApp, login, reauth, TEST_REFUND_CLAIM_TOKEN_SECRET } from './helpers/app.js';
+import { fakeMp4, uploadEvidence } from './helpers/evidence.js';
 import { openRawClient } from './helpers/db.js';
 import { kioskFlow } from './helpers/kiosk-flow.js';
 import {
@@ -26,7 +32,8 @@ import {
 
 /** Số tài khoản dùng để soi rò rỉ — đủ dài và lạ để không trùng dữ liệu khác. */
 const ACCOUNT_NUMBER = '9704229988776655';
-const CONTACT = '0909123456';
+/** Email liên hệ (ADR-0031) — cũng dùng để soi rò rỉ địa chỉ khách. */
+const CONTACT = 'khach.ro-ri.7731@test.local';
 
 let app: NestFastifyApplication;
 let client: pg.Client;
@@ -71,6 +78,11 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  await client.query(
+    `DELETE FROM camera_evidence WHERE refund_claim_id IN (
+       SELECT rc.id FROM refund_claims rc JOIN orders o ON o.id = rc.order_id WHERE o.machine_id = $1)`,
+    [fx.machineId],
+  );
   await client.query(
     `DELETE FROM refund_claims WHERE order_id IN (SELECT id FROM orders WHERE machine_id = $1)`,
     [fx.machineId],
@@ -161,6 +173,22 @@ async function assignToOps(claimId: string) {
     payload: { assigneeId: opsUserId },
   });
   expect(res.statusCode, res.body).toBe(200);
+}
+
+/**
+ * Gắn một đoạn video camera vào phiếu (ADR-0032) qua HTTP thật — điều kiện để từ chối phiếu khách
+ * khai không nhận được lượt xịt (FR-ORD-38). Người gọi phải là Ops đã được phân công.
+ */
+async function attachEvidence(claimId: string) {
+  const window = await asOps('GET', `/refund-claims/${claimId}/evidence-window`);
+  expect(window.statusCode, window.body).toBe(200);
+  const { from, to } = window.json<{ from: string; to: string }>();
+  const res = await uploadEvidence(app, opsToken, `/refund-claims/${claimId}/evidence`, fakeMp4(), {
+    recordedFrom: from,
+    recordedTo: to,
+  });
+  expect(res.statusCode, res.body).toBe(201);
+  return res.json<{ id: string }>();
 }
 
 async function claimRow(claimId: string) {
@@ -425,6 +453,13 @@ describe('Phiếu khiếu nại — Operations Staff (FR-ORD-20, FR-ORD-30)', ()
     expect(
       (await asOps('POST', `/refund-claims/${claim.id}/reject`, { reason: '' })).statusCode,
     ).toBe(400);
+    // FR-ORD-38: khách nói không nhận được lượt xịt — không có hình camera thì không bác được.
+    const noEvidence = await asOps('POST', `/refund-claims/${claim.id}/reject`, {
+      reason: 'Khách đã được xịt bù tại chỗ',
+    });
+    expect(noEvidence.statusCode).toBe(409);
+    expect(noEvidence.json()).toMatchObject({ code: 'EVIDENCE_REQUIRED' });
+    await attachEvidence(claim.id);
     const rejected = await asOps('POST', `/refund-claims/${claim.id}/reject`, {
       reason: 'Khách đã được xịt bù tại chỗ',
     });
@@ -473,6 +508,7 @@ describe('Tài khoản hoàn tiền — bất biến dữ liệu (FR-ORD-31, FR-
     const order = await failedPaidOrder();
     const claim = await openClaim(order.id, '10.0.10.1');
     await assignToOps(claim.id);
+    await attachEvidence(claim.id);
     await asOps('POST', `/refund-claims/${claim.id}/reject`, { reason: 'Không đủ điều kiện' });
 
     // Giả lập dịch vụ tắt qua mốc giữ liên hệ: phiếu đã đóng từ 31 ngày trước.
@@ -511,5 +547,214 @@ describe('Tài khoản hoàn tiền — bất biến dữ liệu (FR-ORD-31, FR-
       [`REFUND_CLAIM_SLA:${late.id}`],
     );
     expect(alerts.rowCount).toBe(1);
+  });
+});
+
+// -------------------------------------------------------------------------------------
+// ADR-0031 — mã khiếu nại, tra cứu công khai, email cho khách
+// -------------------------------------------------------------------------------------
+
+const CODE_FORMAT = /^KN-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/;
+
+function track(code: string, ip: string) {
+  return app.inject({
+    method: 'GET',
+    url: `/api/v1/public/refund-claims/${encodeURIComponent(code)}`,
+    remoteAddress: ip,
+  });
+}
+
+/** Ghi lại thư gửi qua EMAIL_PROVIDER — không cần SMTP, đọc được nội dung để soi rò rỉ. */
+function captureEmails(result: { success: boolean; error?: string } = { success: true }) {
+  const provider = app.get<EmailProvider>(EMAIL_PROVIDER);
+  const sent: EmailSendOptions[] = [];
+  vi.spyOn(provider, 'send').mockImplementation((options) => {
+    sent.push(options);
+    return Promise.resolve(result);
+  });
+  return sent;
+}
+
+async function notifiedAudits(claimId: string) {
+  const res = await client.query<{ metadata: Record<string, unknown> }>(
+    `SELECT metadata FROM audit_logs
+      WHERE action = 'ord.refund_claim.customer_notified' AND target_id = $1
+      ORDER BY occurred_at`,
+    [claimId],
+  );
+  return res.rows.map((r) => r.metadata);
+}
+
+describe('Khách theo dõi phiếu khiếu nại (ADR-0031, FR-ORD-36, FR-ORD-37)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('test_FR_ORD_29_requires_email_and_returns_claim_code', async () => {
+    const order = await failedPaidOrder();
+    const phone = await submitClaim(order.id, { contact: '0909123456' }, '10.1.0.1');
+    expect(phone.statusCode).toBe(400);
+
+    const res = await submitClaim(order.id, { locale: 'en' }, '10.1.0.2');
+    expect(res.statusCode, res.body).toBe(201);
+    const receipt = res.json<{ id: string; code: string }>();
+    expect(receipt.code).toMatch(CODE_FORMAT);
+
+    const row = await client.query<{ public_code: string; locale: string }>(
+      `SELECT public_code, locale FROM refund_claims WHERE id = $1`,
+      [receipt.id],
+    );
+    expect(receipt.code.replace(/^KN-|-/g, '')).toBe(row.rows[0]!.public_code);
+    expect(row.rows[0]!.locale).toBe('en');
+  });
+
+  it('test_FR_ORD_36_track_claim_progress_by_code_without_personal_data', async () => {
+    const order = await failedPaidOrder();
+    const claim = (await submitClaim(order.id, {}, '10.1.1.1')).json<{
+      id: string;
+      code: string;
+    }>();
+
+    const received = await track(claim.code, '10.1.1.2');
+    expect(received.statusCode, received.body).toBe(200);
+    expect(received.json()).toMatchObject({
+      code: claim.code,
+      status: 'OPEN',
+      stage: 'RECEIVED',
+      amount: order.amount,
+      currency: order.currency,
+      payoutReference: null,
+      resolutionNote: null,
+    });
+    expect(received.json<{ dueAt: string | null }>().dueAt).not.toBeNull();
+
+    // Khách gõ thường, không dấu gạch, nhầm 0 thành O — vẫn ra đúng phiếu.
+    const typed = claim.code.replace(/-/g, '').toLowerCase().replace(/0/g, 'o');
+    expect((await track(typed, '10.1.1.2')).json()).toMatchObject({ code: claim.code });
+
+    await assignToOps(claim.id);
+    expect((await track(claim.code, '10.1.1.2')).json()).toMatchObject({ stage: 'PROCESSING' });
+
+    await attachEvidence(claim.id);
+    await asOps('POST', `/refund-claims/${claim.id}/reject`, {
+      reason: 'Hình camera cho thấy khách đã nhận lượt xịt',
+    });
+    const closed = await track(claim.code, '10.1.1.2');
+    expect(closed.json()).toMatchObject({
+      status: 'REJECTED',
+      stage: 'REJECTED',
+      dueAt: null,
+      resolutionNote: 'Hình camera cho thấy khách đã nhận lượt xịt',
+      hasEvidence: true,
+    });
+    // Không bao giờ lộ tài khoản, email, mã đơn hay người xử lý.
+    for (const needle of [ACCOUNT_NUMBER, CONTACT, order.id, opsUserId]) {
+      expect(closed.body).not.toContain(needle);
+    }
+
+    // Mã sai định dạng và mã đúng định dạng nhưng không tồn tại: cùng câu trả lời.
+    for (const wrong of ['khong-phai-ma', 'KN-00000-00000']) {
+      const res = await track(wrong, '10.1.1.3');
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ code: 'NOT_FOUND' });
+    }
+  });
+
+  it('test_FR_ORD_36_lookup_rate_limit_per_ip', async () => {
+    const ip = '10.1.2.1';
+    const codes: number[] = [];
+    for (let i = 0; i < 11; i++) codes.push((await track('KN-00000-00000', ip)).statusCode);
+    expect(codes.slice(0, 10).every((c) => c === 404)).toBe(true);
+    expect(codes[10]).toBe(429);
+    // IP khác không bị ảnh hưởng.
+    expect((await track('KN-00000-00000', '10.1.2.2')).statusCode).toBe(404);
+  });
+
+  it('test_FR_ORD_36_staff_finds_claim_by_code', async () => {
+    const order = await failedPaidOrder();
+    const claim = (await submitClaim(order.id, {}, '10.1.3.1')).json<{
+      id: string;
+      code: string;
+    }>();
+    const spoken = claim.code.toLowerCase();
+    const res = await asOps('GET', `/refund-claims?code=${encodeURIComponent(spoken)}`);
+    expect(res.statusCode, res.body).toBe(200);
+    const body = res.json<{ items: { id: string; code: string }[]; meta: { total: number } }>();
+    expect(body.meta.total).toBe(1);
+    expect(body.items[0]).toMatchObject({ id: claim.id, code: claim.code });
+
+    const none = await asOps('GET', '/refund-claims?code=khong-hop-le');
+    expect(none.json<{ meta: { total: number } }>().meta.total).toBe(0);
+  });
+
+  it('test_FR_ORD_37_email_on_create_and_close_without_bank_account', async () => {
+    const sent = captureEmails();
+    const order = await failedPaidOrder();
+    const claim = (await submitClaim(order.id, { locale: 'en' }, '10.1.4.1')).json<{
+      id: string;
+      code: string;
+    }>();
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe(CONTACT);
+    expect(sent[0]!.subject).toContain(claim.code);
+    // Ngôn ngữ theo trang khiếu nại lúc gửi.
+    expect(sent[0]!.subject).toContain('received your claim');
+    expect(sent[0]!.text).toContain(`/claim/status?code=${claim.code}&key=`);
+
+    await assignToOps(claim.id);
+    await asOps(
+      'POST',
+      `/refund-claims/${claim.id}/refund`,
+      { payoutReference: 'FT26111700001' },
+      await reauth(app, opsToken, TEST_PASSWORD),
+    );
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.text).toContain('refunded');
+
+    // Thư chỉ có mã, số tiền, trạng thái, liên kết — không tài khoản, không mã giao dịch.
+    for (const mail of sent) {
+      expect(mail.subject + mail.text).not.toContain(ACCOUNT_NUMBER);
+      expect(mail.subject + mail.text).not.toContain('NGUYEN VAN A');
+      expect(mail.subject + mail.text).not.toContain('FT26111700001');
+    }
+
+    // Mỗi lần gửi có AuditLog, không kèm địa chỉ email.
+    expect(await notifiedAudits(claim.id)).toEqual([
+      { kind: 'RECEIPT', status: 'OPEN', delivered: true },
+      { kind: 'CLOSED', status: 'REFUNDED', delivered: true },
+    ]);
+    expect(await leaksOf(CONTACT)).toEqual([]);
+  });
+
+  it('test_FR_ORD_37_email_failure_never_blocks_and_is_audited', async () => {
+    captureEmails({ success: false, error: 'SMTP down' });
+    const order = await failedPaidOrder();
+    const res = await submitClaim(order.id, {}, '10.1.5.1');
+    expect(res.statusCode, res.body).toBe(201);
+    const claim = res.json<{ id: string }>();
+    expect(await notifiedAudits(claim.id)).toEqual([
+      { kind: 'RECEIPT', status: 'OPEN', delivered: false },
+    ]);
+  });
+
+  it('test_FR_ORD_37_expired_claim_notifies_customer_once', async () => {
+    const sent = captureEmails();
+    const claim = (await submitClaim((await failedPaidOrder()).id, {}, '10.1.6.1')).json<{
+      id: string;
+      code: string;
+    }>();
+    await client.query(
+      `UPDATE refund_claims SET created_at = now() - interval '31 days' WHERE id = $1`,
+      [claim.id],
+    );
+    const service = app.get(RefundClaimsService);
+    await service.runMaintenance();
+    await service.runMaintenance();
+
+    const closing = sent.filter(
+      (m) => m.subject.includes(claim.code) && m.text.includes('hết hạn'),
+    );
+    expect(closing).toHaveLength(1);
   });
 });

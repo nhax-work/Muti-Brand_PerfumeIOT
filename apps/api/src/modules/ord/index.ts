@@ -14,6 +14,17 @@ export {
   type SalesStopReason,
 } from './sales-stop.js';
 export { RefundClaimsService } from './refund-claims/refund-claims.service.js';
+export {
+  formatClaimCode,
+  isValidClaimViewKey,
+  normalizeClaimCode,
+} from './refund-claims/claimability.js';
+export {
+  REFUND_CLAIM_MAILER,
+  type ClaimClosedEmail,
+  type ClaimReceiptEmail,
+  type RefundClaimMailer,
+} from './refund-claims/refund-claim-mailer.js';
 
 // Thanh toán dùng chung (ADR-0008) — SLT dùng để tạo thanh toán phiên và nhận kết quả webhook.
 export { PaymentModule } from './payment/payment.module.js';

@@ -41,4 +41,22 @@ export const ord = {
   manualReviewContent:
     'Đơn {orderId} đã nhận tiền nhưng chưa giao được lượt xịt bình thường. ' +
     'Kiểm tra trong mục Đơn cần kiểm tra và hoàn tiền nếu cần.',
+  // Email gửi khách và tra cứu phiếu (ADR-0031) — không bao giờ chèn tài khoản ngân hàng vào đây.
+  claimLookupRateLimited: 'Bạn tra cứu quá nhiều lần. Vui lòng thử lại sau một phút.',
+  claimReceiptEmailSubject: 'ScentStation đã nhận khiếu nại {code}',
+  claimReceiptEmailBody:
+    'Chúng tôi đã nhận khiếu nại hoàn tiền của bạn.\n\n' +
+    'Mã khiếu nại: {code}\n' +
+    'Số tiền: {amount} {currency}\n' +
+    'Hạn xử lý dự kiến: {deadline}\n\n' +
+    'Xem tiến độ tại: {link}\n\n' +
+    'Hãy giữ lại mã khiếu nại. Email này được gửi tự động, vui lòng không trả lời.',
+  claimClosedEmailSubject: 'Khiếu nại {code} đã có kết quả',
+  claimClosedEmailBody:
+    'Khiếu nại hoàn tiền {code} của bạn đã có kết quả: {outcome}.\n\n' +
+    'Xem chi tiết tại: {link}\n\n' +
+    'Email này được gửi tự động, vui lòng không trả lời.',
+  claimOutcomeRefunded: 'đã hoàn tiền',
+  claimOutcomeRejected: 'không được chấp nhận',
+  claimOutcomeExpired: 'đã hết hạn xử lý',
 } as const;

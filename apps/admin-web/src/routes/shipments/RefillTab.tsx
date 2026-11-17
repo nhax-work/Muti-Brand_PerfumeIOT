@@ -1,4 +1,9 @@
-import { CheckCircleOutlined, CloseCircleOutlined, ToolOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ToolOutlined,
+  VideoCameraOutlined,
+} from '@ant-design/icons';
 import type { MessageKey } from '@scentstation/i18n';
 import {
   Alert,
@@ -17,6 +22,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useEffect, useMemo, useState } from 'react';
 import { errorMessage } from '@/shared/api';
+import { RefillEvidenceDrawer } from '@/shared/evidence';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
 import {
@@ -68,11 +74,21 @@ interface CloseValues {
 export function RefillTab({
   canOperate,
   canSeeMachines,
+  canHandleEvidence = false,
+  isBrand = false,
+  currentUserId = null,
 }: {
   readonly canOperate: boolean;
   readonly canSeeMachines: boolean;
+  /** `machine.operate`: gắn hình camera, đóng yêu cầu trích hình (ADR-0032). */
+  readonly canHandleEvidence?: boolean;
+  /** Brand Admin: xem hình camera phiếu nạp của mình, gửi yêu cầu trích hình. */
+  readonly isBrand?: boolean;
+  readonly currentUserId?: string | null;
 }) {
   const { t } = useI18n();
+  const [evidenceFor, setEvidenceFor] = useState<RefillSession | null>(null);
+  const canSeeEvidence = canHandleEvidence || isBrand;
   const sessions = useRefillSessions();
   const worklist = useRefillWorklist(canOperate);
   const machines = useMachinesForRefill(canSeeMachines);
@@ -386,6 +402,24 @@ export function RefillTab({
           },
         ]
       : []),
+    ...(canSeeEvidence
+      ? [
+          {
+            title: t('ui.refillEvidenceAction'),
+            key: 'evidence',
+            render: (_: unknown, record: RefillSession) => (
+              <Button
+                type="link"
+                size="small"
+                icon={<VideoCameraOutlined />}
+                onClick={() => setEvidenceFor(record)}
+              >
+                {t('ui.refillEvidenceAction')}
+              </Button>
+            ),
+          },
+        ]
+      : []),
   ];
 
   const selectedWork = selectedSlot ? workBySlot.get(selectedSlot) : undefined;
@@ -604,6 +638,14 @@ export function RefillTab({
           </Form.Item>
         </Form>
       </Modal>
+
+      <RefillEvidenceDrawer
+        session={evidenceFor}
+        canOperate={canHandleEvidence}
+        isBrand={isBrand}
+        currentUserId={currentUserId}
+        onClose={() => setEvidenceFor(null)}
+      />
     </Space>
   );
 }

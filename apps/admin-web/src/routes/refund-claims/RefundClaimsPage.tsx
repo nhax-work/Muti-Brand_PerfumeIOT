@@ -16,9 +16,11 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import { useState } from 'react';
 import { RequireRole } from '@/app/guards/RequireRole';
+import { OrderDispenseCommand } from '@/routes/orders/OrderDispenseCommand';
 import { errorMessage } from '@/shared/api';
 import { ReauthCancelled, useAuth } from '@/shared/auth';
 import { formatBankName } from '@/shared/banks';
+import { EvidencePanel } from '@/shared/evidence';
 import { useI18n } from '@/shared/i18n';
 import {
   type RefundAccountView,
@@ -57,12 +59,15 @@ export default function RefundClaimsPage() {
   const [page, setPage] = useState(1);
   const [status, setStatus] = useState<RefundClaimStatus | undefined>('OPEN');
   const [onlyMine, setOnlyMine] = useState(false);
+  const [code, setCode] = useState('');
   const [selected, setSelected] = useState<RefundClaim | null>(null);
 
+  // Tìm theo mã thì bỏ lọc trạng thái — khách gọi hỏi phiếu nào cũng phải ra.
   const { data, isLoading } = useRefundClaims({
     page,
-    status,
+    status: code ? undefined : status,
     assignedToMe: onlyMine || undefined,
+    code: code || undefined,
   });
 
   const assigneeLabel = (claim: RefundClaim) =>
@@ -74,10 +79,20 @@ export default function RefundClaimsPage() {
 
   const columns: ColumnsType<RefundClaim> = [
     {
+      title: t('ui.claimCodeLabel'),
+      dataIndex: 'code',
+      key: 'code',
+      render: (value: string) => (
+        <Typography.Text strong copyable>
+          {value}
+        </Typography.Text>
+      ),
+    },
+    {
       title: t('ui.claimPaymentReference'),
       dataIndex: 'paymentReference',
       key: 'paymentReference',
-      render: (ref: string) => <Typography.Text strong>{ref}</Typography.Text>,
+      render: (ref: string) => <Typography.Text>{ref}</Typography.Text>,
     },
     {
       title: t('ui.claimAmount'),
@@ -127,8 +142,19 @@ export default function RefundClaimsPage() {
       <div style={{ padding: 24, maxWidth: 1200, margin: '0 auto' }}>
         <Typography.Title level={3}>{t('ui.refundClaims')}</Typography.Title>
         <Space style={{ marginBottom: 16 }} wrap>
+          <Input.Search
+            allowClear
+            style={{ width: 240 }}
+            placeholder={t('ui.claimSearchByCode')}
+            aria-label={t('ui.claimSearchByCode')}
+            onSearch={(value) => {
+              setCode(value.trim());
+              setPage(1);
+            }}
+          />
           <Select<RefundClaimStatus | 'ALL'>
             style={{ width: 180 }}
+            disabled={code !== ''}
             value={status ?? 'ALL'}
             onChange={(v) => {
               setStatus(v === 'ALL' ? undefined : v);
@@ -219,8 +245,11 @@ function ClaimDrawer({
   const mine = claim.assignedTo === currentUserId;
 
   return (
-    <Drawer open width={480} title={t('ui.claimDetail')} onClose={close} destroyOnHidden>
+    <Drawer open width={560} title={t('ui.claimDetail')} onClose={close} destroyOnHidden>
       <Descriptions column={1} size="small" bordered>
+        <Descriptions.Item label={t('ui.claimCodeLabel')}>
+          <Typography.Text copyable>{claim.code}</Typography.Text>
+        </Descriptions.Item>
         <Descriptions.Item label={t('ui.claimPaymentReference')}>
           {claim.paymentReference}
         </Descriptions.Item>
@@ -250,6 +279,9 @@ function ClaimDrawer({
           </Descriptions.Item>
         )}
       </Descriptions>
+
+      {/* Đối chiếu máy có thật sự xịt hay không trước khi hoàn hoặc từ chối. */}
+      <OrderDispenseCommand orderId={claim.orderId} />
 
       {open && isOps && !mine && currentUserId && (
         <Button
@@ -291,6 +323,19 @@ function ClaimDrawer({
           />
         </Space>
       )}
+
+      {/* ADR-0032: hình camera độc lập — điều kiện để bác khiếu nại "không nhận được lượt xịt". */}
+      <div className="claim-evidence">
+        {open && mine && claim.refundOrder && (
+          <Alert type="info" showIcon title={t('ui.evidenceRequiredHint')} />
+        )}
+        <EvidencePanel
+          target={{ kind: 'claim', id: claim.id }}
+          canUpload={open && mine}
+          closed={!open}
+          currentUserId={currentUserId}
+        />
+      </div>
 
       {open && mine && (
         <Space direction="vertical" style={{ width: '100%', marginTop: 24 }} size="middle">
@@ -352,7 +397,8 @@ function ClaimDrawer({
           </Button>
 
           <Input.TextArea
-            placeholder={t('ui.claimRejectReason')}
+            placeholder={t('ui.claimRejectReasonForCustomer')}
+            aria-label={t('ui.claimRejectReasonForCustomer')}
             value={reason}
             maxLength={1000}
             rows={2}

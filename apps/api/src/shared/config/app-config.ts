@@ -11,6 +11,7 @@
  * Không hardcode ngưỡng ở đâu khác trong apps/api — luôn đọc qua `constraint()` (spec/PROJECT.md Mục 3).
  */
 
+import path from 'node:path';
 import { SPEC_CONSTRAINTS, type ConstraintName } from './constraints.generated.js';
 
 type ConstraintValue<K extends ConstraintName> = (typeof SPEC_CONSTRAINTS)[K];
@@ -95,6 +96,12 @@ export interface MediaConfig {
   readonly publicBaseUrl: string;
   /** Thư mục lưu khi driver `local` (MEDIA_DIR). */
   readonly localDir: string;
+  /**
+   * Thư mục của kho riêng tư — bằng chứng camera (ADR-0032), MEDIA_PRIVATE_DIR, mặc định
+   * `storage/private-media`. Không nằm dưới đường phục vụ tĩnh /api/v1/media. Dùng khi driver `local`,
+   * và khi driver `r2` mà chưa khai R2_PRIVATE_BUCKET.
+   */
+  readonly privateLocalDir: string;
   readonly r2: R2Config | null;
 }
 
@@ -103,6 +110,11 @@ export interface R2Config {
   readonly accessKeyId: string;
   readonly secretAccessKey: string;
   readonly bucket: string;
+  /**
+   * Bucket KHÔNG có tên miền công khai cho bằng chứng camera (R2_PRIVATE_BUCKET, ADR-0032). `null` thì
+   * kho riêng tư lưu ở `privateLocalDir`.
+   */
+  readonly privateBucket: string | null;
 }
 
 export interface PayosConfig {
@@ -286,10 +298,16 @@ function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
     throw new Error(`MEDIA_STORAGE_DRIVER phải là local hoặc r2, nhận được: ${driver}`);
   }
   const localDir = env['MEDIA_DIR'] || 'storage/media';
+  const privateLocalDir = env['MEDIA_PRIVATE_DIR'] || 'storage/private-media';
+  if (path.resolve(privateLocalDir).startsWith(path.resolve(localDir) + path.sep)) {
+    throw new Error(
+      'MEDIA_PRIVATE_DIR không được nằm trong MEDIA_DIR — tệp sẽ bị phục vụ công khai.',
+    );
+  }
   const rawBase = env['MEDIA_PUBLIC_BASE_URL'];
   if (driver === 'local') {
     const publicBaseUrl = (rawBase || `http://localhost:${port}/api/v1/media`).replace(/\/+$/, '');
-    return { driver, publicBaseUrl, localDir, r2: null };
+    return { driver, publicBaseUrl, localDir, privateLocalDir, r2: null };
   }
 
   const read = (name: string) => {
@@ -318,7 +336,14 @@ function loadMediaConfig(env: NodeJS.ProcessEnv, port: number): MediaConfig {
     driver,
     publicBaseUrl: rawBase.replace(/\/+$/, ''),
     localDir,
-    r2: { accountId, accessKeyId, secretAccessKey, bucket },
+    privateLocalDir,
+    r2: {
+      accountId,
+      accessKeyId,
+      secretAccessKey,
+      bucket,
+      privateBucket: read('R2_PRIVATE_BUCKET'),
+    },
   };
 }
 

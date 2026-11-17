@@ -1,6 +1,6 @@
 # FR-INV — Tồn kho và nạp nước hoa
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 37 mục = 35 FR hiệu lực + 2 FR bãi bỏ (mức X); FR-INV-36, 37 thêm ngày 2026-11-12 theo ADR-0026, ADR-0028  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` Mục A9 · 37 mục = 35 FR hiệu lực + 2 FR bãi bỏ (mức X); FR-INV-36, 37 thêm ngày 2026-11-12 theo ADR-0026, ADR-0028; FR-INV-38, 39 thêm ngày 2026-11-17 theo ADR-0032  
 > Trạng thái AC: **hoàn thành** (FR-INV-04, 30, 31 soát lại và FR-INV-32÷35 thêm ngày 2026-10-17 theo ADR-0013, ADR-0014, ADR-0015; FR-INV-05, 13, 15 sửa và FR-INV-18, 19 bãi bỏ ngày 2026-10-28 theo ADR-0019 — máy không có load cell)  
 > Phụ trách: Hoàng (TV4) / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu
@@ -513,3 +513,40 @@
 - AC5 (Quyền): Cho Brand Admin, Khi gọi hủy phiếu, Thì hệ thống trả 403.
 
 **Kiểm tra:** `test_FR_INV_37_*` (`tests/integration/test_adr_0028_sales_stop_cancel_bell.test.ts`)
+
+---
+
+## FR-INV-38 — Bằng chứng camera cho phiếu nạp
+
+**Tuyên bố:** Hệ thống phải cho Operations Staff hoặc Platform Super Admin, không phải người đã nạp, gắn đoạn video hoặc ảnh từ camera an ninh vào phiếu nạp; Brand Admin xem được bằng chứng phiếu nạp của thương hiệu mình (ADR-0032).
+
+**Dấu vết:** BR-005, BR-012 · **Ưu tiên:** M · ADR-0032 · **API:** `GET /refill-sessions/{id}/evidence-window`, `GET|POST /refill-sessions/{id}/evidence`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Không tự làm chứng): Cho phiếu nạp do một nhân sự thực hiện, Khi chính người đó tải bằng chứng, Thì hệ thống trả 403 `EVIDENCE_SELF_REVIEW`; người khác có `machine.operate` thì tải được.
+- AC2 (Inventory Staff): Cho Inventory Staff, Khi tải lên hoặc xem bằng chứng phiếu nạp, Thì hệ thống trả 403.
+- AC3 (Khung giờ): Khoảng ghi phải giao khoảng từ lúc mở tới lúc đóng (hoặc hủy) phiếu, nới `CAMERA_WINDOW_PADDING_SEC`; không giao thì 400.
+- AC4 (Phạm vi thương hiệu): Cho Brand Admin của thương hiệu sở hữu phiếu, Khi xem, Thì thấy bằng chứng kèm đường dẫn có hạn; thương hiệu khác trả `FORBIDDEN_SCOPE`. Brand Admin không tải lên được.
+- AC5 (Hạn lưu): Bằng chứng phiếu nạp tải lên quá `CAMERA_REFILL_EVIDENCE_RETENTION_DAYS` ngày bị job xóa tệp, dòng còn `purged_at`.
+
+**Kiểm tra:** `test_FR_INV_38_*` (`tests/integration/test_evd_camera_evidence.test.ts`)
+
+---
+
+## FR-INV-39 — Yêu cầu trích hình phiếu nạp
+
+**Tuyên bố:** Hệ thống phải cho Brand Admin yêu cầu trích hình một phiếu nạp của thương hiệu mình trong `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` ngày, và thông báo kết quả: đã đính hình hoặc không có hình kèm lý do (ADR-0032).
+
+**Dấu vết:** BR-005, BR-012 · **Ưu tiên:** M · ADR-0032 · **API:** `POST /refill-sessions/{id}/footage-requests`, `GET /footage-requests`, `POST /footage-requests/{id}/resolve`
+
+**Tiêu chí xét tuyển**
+
+- AC1 (Gửi yêu cầu): Cho phiếu nạp của thương hiệu mình mở chưa quá `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` ngày, Khi Brand Admin gửi kèm lý do, Thì yêu cầu `OPEN` và mọi tài khoản nền tảng có `machine.operate` nhận thông báo; quá hạn trả `FOOTAGE_REQUEST_EXPIRED`; phiếu của thương hiệu khác trả `FORBIDDEN_SCOPE`.
+- AC2 (Một yêu cầu mở): Cho phiếu đã có yêu cầu đang mở, Khi gửi thêm, Thì `FOOTAGE_REQUEST_ALREADY_OPEN` (cưỡng chế bằng `uq_footage_request_open`).
+- AC3 (Đã đính hình): Đóng `FULFILLED` khi phiếu nạp chưa có bằng chứng còn hiệu lực trả `EVIDENCE_REQUIRED`; có thì đóng được và Brand Admin đã gửi nhận thông báo.
+- AC4 (Không có hình): Đóng `UNAVAILABLE` bắt buộc ghi lý do (thiếu thì 400); Brand Admin nhận thông báo kèm lý do.
+- AC5 (Khóa bằng chứng): Sau khi một yêu cầu của phiếu đã đóng, bằng chứng của phiếu không gỡ được (`EVIDENCE_TARGET_CLOSED`).
+- AC6 (Danh sách): Brand Admin chỉ thấy yêu cầu của thương hiệu mình; Inventory Staff không xem được.
+
+**Kiểm tra:** `test_FR_INV_39_*` (`tests/integration/test_evd_camera_evidence.test.ts`)

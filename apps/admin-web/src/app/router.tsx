@@ -45,6 +45,14 @@ export const router = createBrowserRouter([
         path: '/claim',
         lazy: () => import('@/routes/claim/ClaimPage').then((m) => ({ Component: m.default })),
       },
+      {
+        // Công khai: khách tra cứu phiếu bằng mã khiếu nại, mở từ email (ADR-0031).
+        path: '/claim/status',
+        lazy: () =>
+          import('@/routes/claim-status/ClaimStatusPage').then((m) => ({
+            Component: m.default,
+          })),
+      },
     ],
   },
   {

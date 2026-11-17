@@ -185,6 +185,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-MCH-16 | Hệ thống phải chuyển slot sang AVAILABLE khi đồng thời thỏa: có hóa đơn ở trạng thái ACTIVE, EXPIRING, GRACE hoặc LIQUIDATED; đã gán sản phẩm và đặt giá lượt xịt; có chai đang lắp với lượng còn lại đủ cho một lượt xịt; và slot không bị tắt thủ công | BR-002, BR-005 | M |
 | FR-MCH-17 | Hệ thống phải chuyển slot sang UNAVAILABLE ngay khi bất kỳ điều kiện tại FR-MCH-16 không còn thỏa | BR-002, BR-005 | M |
 | FR-MCH-18 | Hệ thống phải tự chuyển slot sang MAINTENANCE khi `CONSECUTIVE_FAIL_ALERT` lệnh xịt khách hàng liên tiếp trên slot kết thúc bằng FAILED, UNKNOWN hoặc REJECTED với mã khác `PRESS_TIMEOUT` và `CMD_DUPLICATE`; slot chỉ bán lại khi Operations Staff bật lại (FR-MCH-12) (ADR-0015) | BR-002, BR-006 | M |
+| FR-MCH-20 | Hệ thống phải cho Platform Super Admin ghi nhãn camera an ninh gắn với mỗi máy | BR-004 | S |
 
 ## A6. FR-SLT — Hóa đơn thuê slot
 
@@ -335,6 +336,8 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-INV-33 | Hệ thống phải cho phép Brand Admin nộp giấy tờ chứng minh hàng chính hãng cho lô hàng gửi đến kho trong `RENTAL_MAX_STOCKING_DAYS` ngày kể từ lúc thanh toán hóa đơn (ADR-0013) | BR-005, BR-008 | M |
 | FR-INV-34 | Hệ thống phải cho phép Platform Super Admin duyệt hoặc từ chối giấy tờ chính hãng của lô hàng, kèm lý do bắt buộc khi từ chối (ADR-0013) | BR-005, BR-008 | M |
 | FR-INV-35 | Hệ thống phải từ chối lắp vào slot chai thuộc lô hàng chưa có giấy tờ chính hãng được duyệt (ADR-0013) | BR-005, BR-008 | M |
+| FR-INV-38 | Hệ thống phải cho Operations Staff hoặc Platform Super Admin, không phải người đã nạp, gắn đoạn video hoặc ảnh từ camera an ninh vào phiếu nạp; Brand Admin xem được bằng chứng phiếu nạp của thương hiệu mình | BR-005, BR-012 | M |
+| FR-INV-39 | Hệ thống phải cho Brand Admin yêu cầu trích hình một phiếu nạp của thương hiệu mình trong `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` ngày, và thông báo kết quả: đã đính hình hoặc không có hình kèm lý do | BR-005, BR-012 | M |
 
 ## A10. FR-RFQ — Yêu cầu bổ sung nước hoa
 
@@ -385,13 +388,17 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-26 | Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ | BR-001 | M |
 | FR-ORD-27 | Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn | BR-002, BR-009 | M |
 | FR-ORD-28 | Hệ thống phải hiển thị trên kiosk một mã QR sự cố cho đơn khách đã trả tiền mà không nhận được lượt xịt hoặc đã chuyển khoản thừa, dẫn tới trang khiếu nại công khai kèm mã khiếu nại dùng một lần | BR-002 | M |
-| FR-ORD-29 | Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm thông tin liên hệ, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu | BR-002, BR-008 | M |
+| FR-ORD-29 | Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm email, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu; sau khi gửi hiển thị mã khiếu nại cho khách | BR-002, BR-008 | M |
 | FR-ORD-30 | Hệ thống phải chỉ cho Operations Staff đang được phân công xem tài khoản nhận hoàn tiền của phiếu, sau khi xác thực lại, và ghi nhật ký mỗi lần xem không kèm dữ liệu tài khoản | BR-002, BR-008 | M |
 | FR-ORD-31 | Hệ thống phải xóa tài khoản nhận hoàn tiền ngay khi phiếu đóng, và xóa thông tin liên hệ sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày kể từ khi phiếu đóng | BR-002 | M |
 | FR-ORD-32 | Hệ thống phải tự chuyển phiếu còn mở quá `REFUND_CLAIM_MAX_OPEN_DAYS` ngày sang EXPIRED, và sinh cảnh báo cho phiếu quá `REFUND_CLAIM_SLA_HOURS` giờ chưa xử lý | BR-002, BR-006 | M |
 | FR-ORD-33 | Hệ thống phải cho kiosk hủy đơn đang chờ thanh toán khi khách xác nhận rời màn mã QR: hủy link thanh toán ở cổng và chuyển đơn sang EXPIRED với lý do `CUSTOMER_CANCELLED`; nếu cổng đã hoặc đang nhận tiền thì không hủy | BR-001, BR-002 | M |
 | FR-ORD-34 | Hệ thống phải chuyển đơn đã thanh toán sang FAILED với mã `QUEUE_TIMEOUT` và đánh dấu kiểm tra thủ công khi quá `PAID_QUEUE_MAX_SEC` giây kể từ lúc thanh toán mà chưa tạo được lệnh xịt (ADR-0015) | BR-002 | M |
 | FR-ORD-35 | Hệ thống phải bảo đảm mỗi máy có tối đa một đơn ở trạng thái CREATED hoặc PENDING_PAYMENT, và từ chối tạo đơn mới với `MACHINE_BUSY` khi đã có (ADR-0015) | BR-002 | M |
+| FR-ORD-36 | Hệ thống phải cho khách tra cứu tiến độ và kết quả phiếu khiếu nại trên trang công khai bằng mã khiếu nại, không hiển thị tài khoản ngân hàng hay thông tin liên hệ | BR-002 | M |
+| FR-ORD-37 | Hệ thống phải gửi email cho khách khi phiếu khiếu nại được tạo và khi phiếu đóng, kèm mã khiếu nại và liên kết tra cứu, không kèm tài khoản ngân hàng | BR-002 | M |
+| FR-ORD-38 | Hệ thống phải cho Operations Staff được phân công gắn đoạn video hoặc ảnh từ camera an ninh độc lập vào phiếu khiếu nại, với khoảng thời gian ghi khớp thời gian giao dịch của đơn, và bắt buộc có ít nhất một bằng chứng trước khi từ chối phiếu khách khai không nhận được lượt xịt | BR-002 | M |
+| FR-ORD-39 | Hệ thống phải cho khách xem bằng chứng hình ảnh của phiếu bị từ chối qua liên kết trong email, bằng đường dẫn có hạn, và ghi nhật ký mỗi lần xem | BR-002, BR-008 | M |
 
 ## A12. FR-DSP — Điều khiển lượt xịt an toàn
 
@@ -759,3 +766,17 @@ tạm vì chưa có hạ tầng email; nay đã có (ADR-0013, ADR-0017). FR-USR
 AUTH 12 → 13. Hằng `PASSWORD_RESET_TOKEN_TTL_MIN`, `PASSWORD_RESET_RATE_LIMIT_PER_MIN` đã thêm vào
 `spec/constraints.md`; không có mã lỗi mới. Contract áp cùng migration
 `1791700060000_adr-0030-quen-mat-khau.sql`.
+
+**Ghi chú bổ sung (2026-11-17).** Khách theo dõi phiếu khiếu nại theo
+`spec/decisions/0031-theo-doi-phieu-khieu-nai-qua-email.md` (**đề xuất**, chờ TV1 duyệt): mã khiếu nại
+ngắn `KN-XXXXX-XXXXX`, email bắt buộc, trang tra cứu công khai, email khi tạo và khi đóng phiếu. Viết lại
+FR-ORD-29; thêm FR-ORD-36, 37. Thống kê: M +2, ORD +2. Hằng `REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN` đã
+thêm vào `spec/constraints.md`; không có mã lỗi mới. Contract áp cùng migration
+`1791800000000_adr-0031-theo-doi-phieu-khieu-nai.sql`.
+
+**Ghi chú bổ sung (2026-11-17).** Bằng chứng hình ảnh từ camera an ninh độc lập với máy theo
+`spec/decisions/0032-bang-chung-camera-an-ninh-doc-lap.md` (**đề xuất**, chờ TV1 duyệt): hội đồng chỉ ra
+dữ liệu do chính máy gửi về không đủ để bác khiếu nại "chưa nhận lượt xịt" hay nghi vấn tráo chai khi
+nạp. Thêm FR-ORD-38, 39, FR-INV-38, 39 (mức M) và FR-MCH-20 (mức S). Thống kê: M +4, S +1; ORD +2, INV +2,
+MCH +1. Bảy hằng `CAMERA_*` đã thêm vào `spec/constraints.md`; sáu mã lỗi mới ở `spec/errors.md`. Module
+mới EVD (`spec/PROJECT.md`). Contract áp cùng migration `1791800060000_adr-0032-bang-chung-camera.sql`.

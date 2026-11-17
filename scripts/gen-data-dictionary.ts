@@ -92,6 +92,8 @@ const GROUPS: { title: string; intro: string; tables: string[] }[] = [
       'dispense_results',
       'kiosk_interaction_events',
       'refund_claims',
+      'camera_evidence',
+      'footage_requests',
     ],
   },
   {

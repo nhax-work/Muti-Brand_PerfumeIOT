@@ -2,7 +2,8 @@
  * Cửa vào HTTP của phiếu khiếu nại hoàn tiền (ADR-0012). Đường dẫn và dữ liệu theo
  * spec/contracts/openapi.yaml, tag ORD.
  *
- *   /public/refund-claims — @Public: khách mở từ QR sự cố, không đăng nhập.
+ *   /public/refund-claims — @Public: khách mở từ QR sự cố, không đăng nhập; tra cứu bằng mã
+ *                            khiếu nại (ADR-0031).
  *   /refund-claims/*       — quyền `order.refund` (Operations Staff, Super Admin). Xem tài khoản và
  *                            ghi nhận hoàn tiền cần xác thực lại (FR-AUTH-09).
  */
@@ -26,7 +27,9 @@ type HttpRequest = Parameters<typeof originOf>[0];
 const ClaimCreateBody = z.object({
   orderId: z.string().uuid(),
   claimToken: z.string().min(1).max(200),
-  contact: z.string().trim().min(5).max(200),
+  // ADR-0031: email bắt buộc — mã khiếu nại và kết quả gửi về đây (FR-ORD-37).
+  contact: z.string().trim().min(5).max(200).email(),
+  locale: z.enum(['vi', 'en']).optional(),
   refundAccount: z.object({
     bankBin: z.string().regex(/^[0-9]{6}$/),
     accountNumber: z.string().regex(/^[0-9]{6,19}$/),
@@ -43,9 +46,11 @@ const ListQuery = z.object({
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
     .optional(),
+  code: z.string().max(20).optional(),
 });
 
 const IdParam = z.object({ id: z.string().uuid() });
+const CodeParam = z.object({ code: z.string().min(1).max(20) });
 const AssignBody = z.object({ assigneeId: z.string().uuid() });
 const PayoutBody = z.object({
   payoutReference: z.string().trim().min(1).max(100),
@@ -63,6 +68,12 @@ export class PublicRefundClaimsController {
   submit(@Body() body: unknown, @Req() request: HttpRequest) {
     const { consent: _consent, ...input } = parseBody(ClaimCreateBody, body);
     return this.claims.submit(input, originOf(request));
+  }
+
+  /** FR-ORD-36. */
+  @Get(':code')
+  track(@Param() params: unknown, @Req() request: HttpRequest) {
+    return this.claims.track(parseBody(CodeParam, params).code, originOf(request));
   }
 }
 

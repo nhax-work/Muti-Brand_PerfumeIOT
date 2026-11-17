@@ -6,7 +6,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   claimTokenFor,
+  claimViewKeyFor,
+  formatClaimCode,
+  generateClaimCode,
   isValidClaimToken,
+  isValidClaimViewKey,
+  normalizeClaimCode,
   refundablePartsOf,
 } from '../../apps/api/src/modules/ord/refund-claims/claimability.js';
 import { decryptJson, encryptJson } from '../../apps/api/src/shared/crypto/pii-cipher.js';
@@ -61,6 +66,50 @@ describe('mã khiếu nại', () => {
     expect(isValidClaimToken('bi-mat-khac', orderId, token)).toBe(false);
     expect(isValidClaimToken('bi-mat', '6f1c2b0a-0000-4000-8000-000000000002', token)).toBe(false);
     expect(isValidClaimToken('bi-mat', orderId, 'ngan')).toBe(false);
+  });
+});
+
+describe('mã khiếu nại cho khách tra cứu (ADR-0031)', () => {
+  it('test_FR_ORD_36_generated_codes_are_crockford_and_distinct', () => {
+    const codes = new Set(Array.from({ length: 2000 }, generateClaimCode));
+    expect(codes.size).toBe(2000);
+    for (const code of codes) expect(code).toMatch(/^[0-9A-HJKMNP-TV-Z]{10}$/);
+    expect(formatClaimCode('7F3K92QDXA')).toBe('KN-7F3K9-2QDXA');
+  });
+
+  it('test_FR_ORD_36_normalize_accepts_what_customers_type', () => {
+    for (const typed of [
+      'KN-7F3K9-2QDXA',
+      'kn-7f3k9-2qdxa',
+      '7F3K92QDXA',
+      ' 7f3k9 2qdxa ',
+      'KN7F3K92QDXA',
+    ]) {
+      expect(normalizeClaimCode(typed)).toBe('7F3K92QDXA');
+    }
+    // I/L đọc thành 1, O đọc thành 0.
+    expect(normalizeClaimCode('KN-IL0O0-00000')).toBe('1100000000');
+    // Sai độ dài, có U, có ký tự lạ → không phải mã.
+    for (const wrong of [
+      '',
+      'KN-7F3K9',
+      '7F3K92QDXAB',
+      'U000000000',
+      '7F3K9_2QDX',
+      'KN-7F3K9-2QDX?',
+    ]) {
+      expect(normalizeClaimCode(wrong)).toBeNull();
+    }
+  });
+
+  it('test_FR_ORD_37_view_key_bound_to_claim_and_secret', () => {
+    const claimId = '6f1c2b0a-0000-4000-8000-000000000003';
+    const key = claimViewKeyFor('bi-mat', claimId);
+    expect(isValidClaimViewKey('bi-mat', claimId, key)).toBe(true);
+    expect(isValidClaimViewKey('bi-mat-khac', claimId, key)).toBe(false);
+    expect(isValidClaimViewKey('bi-mat', '6f1c2b0a-0000-4000-8000-000000000004', key)).toBe(false);
+    // Mã khiếu nại trong QR và khóa xem không thay được cho nhau.
+    expect(key).not.toBe(claimTokenFor('bi-mat', claimId));
   });
 });
 

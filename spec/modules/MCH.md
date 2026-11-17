@@ -1,6 +1,6 @@
 # FR-MCH — Máy và slot
 
-> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 19 FR; FR-MCH-19 thêm ngày 2026-11-12 theo ADR-0028  
+> Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A5 · 19 FR; FR-MCH-19 thêm ngày 2026-11-12 theo ADR-0028; FR-MCH-20 thêm ngày 2026-11-17 theo ADR-0032  
 > Trạng thái AC: **một phần** — FR-MCH-09 (soát lại), FR-MCH-15÷17, và FR-MCH-18 (thêm mới theo ADR-0015) đã hoàn thành; FR-MCH-01÷08, 10÷14 dạng CRUD/phát biểu  
 > Phụ trách: TV4 / Tài  
 > Mức chi tiết: AC cho FR có điều kiện; CRUD để dạng phát biểu  
@@ -116,3 +116,19 @@
 - AC3 (Phạm vi thương hiệu): Cho Brand Admin, Khi xem danh sách, Thì chỉ có máy mà thương hiệu đang khai thác slot, và không kèm thông tin phiếu nạp (người mở, slot); tài khoản nền tảng thấy mọi máy kèm phiếu nạp đang mở.
 
 **Kiểm tra:** `test_FR_MCH_19_*` (`tests/integration/test_adr_0028_sales_stop_cancel_bell.test.ts`)
+
+---
+
+## FR-MCH-20 — Nhãn camera an ninh của máy
+
+**Tuyên bố:** Hệ thống phải cho Platform Super Admin ghi nhãn camera an ninh gắn với mỗi máy (ADR-0032).
+
+**Dấu vết:** BR-004 · **Ưu tiên:** S · ADR-0032 · **API:** `PUT /machines/{id}/camera-label`
+
+**Tiêu chí xét tuyển**
+
+- AC1: Cho Super Admin, Khi ghi nhãn, Thì máy trả `cameraLabel` đã cắt khoảng trắng; chuỗi rỗng hoặc null là xóa nhãn; mỗi lần đổi ghi AuditLog.
+- AC2: Cho tài khoản không có `machine.manage`, Khi ghi nhãn, Thì 403.
+- AC3: Khung giờ đề xuất của phiếu khiếu nại và phiếu nạp trên máy hiện nhãn camera này.
+
+**Kiểm tra:** `test_FR_MCH_20_*` (`tests/integration/test_evd_camera_evidence.test.ts`)

@@ -131,6 +131,7 @@ class FakeMchQueries {
       firmwareVersion: '1.0.0',
       configurationVersion: 1,
       simulatorEnabled: false,
+      cameraLabel: null,
       slotCount: data.slotCount,
       createdAt: new Date(),
       updatedAt: new Date(),

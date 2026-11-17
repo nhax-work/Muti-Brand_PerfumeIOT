@@ -12,17 +12,19 @@ export interface RefundClaimsParams {
   readonly pageSize?: number;
   readonly status?: RefundClaimStatus;
   readonly assignedToMe?: boolean;
+  /** Mã khiếu nại khách đọc qua điện thoại (ADR-0031). */
+  readonly code?: string;
 }
 
 /** Hàng phiếu khiếu nại, cũ nhất trước (FR-ORD-20, FR-ORD-32). */
 export function useRefundClaims(params: RefundClaimsParams = {}) {
-  const { page = 1, pageSize = 20, status, assignedToMe } = params;
+  const { page = 1, pageSize = 20, status, assignedToMe, code } = params;
   return useQuery({
-    queryKey: ['refund-claims', { page, pageSize, status, assignedToMe }],
+    queryKey: ['refund-claims', { page, pageSize, status, assignedToMe, code }],
     queryFn: () =>
       unwrap(
         api.GET('/refund-claims', {
-          params: { query: { page, pageSize, status, assignedToMe } },
+          params: { query: { page, pageSize, status, assignedToMe, code } },
         }),
       ),
   });

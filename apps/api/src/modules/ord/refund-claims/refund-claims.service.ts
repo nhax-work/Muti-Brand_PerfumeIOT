@@ -8,11 +8,20 @@
  *   - chỉ người được phân công giải mã, sau khi xác thực lại — mỗi lần ghi AuditLog KHÔNG kèm dữ liệu;
  *   - tài khoản bị xóa ngay khi phiếu đóng (CHECK ở CSDL), liên hệ xóa sau
  *     REFUND_CLAIM_CONTACT_RETENTION_DAYS.
+ *
+ * Khách theo dõi phiếu bằng mã khiếu nại và email (ADR-0031, FR-ORD-36, FR-ORD-37): email gửi SAU
+ * khi transaction đã commit, gửi lỗi chỉ ghi log và AuditLog — không làm hỏng thao tác.
  */
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
-import { DEFAULT_LOCALE, translate, type MessageKey } from '@scentstation/i18n';
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  translate,
+  type Locale,
+  type MessageKey,
+} from '@scentstation/i18n';
 import { AuditService } from '../../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../../shared/clock.js';
 import { APP_CONFIG, type AppConfig } from '../../../shared/config/index.js';
@@ -25,13 +34,28 @@ import type { RefundClaimStatus } from '../../../shared/db/types.generated.js';
 import { AlrService } from '../../alr/index.js';
 import type { AuthenticatedUser } from '../../auth/index.js';
 import { OrdService } from '../ord.service.js';
-import { claimTokenFor, isValidClaimToken, refundablePartsOf } from './claimability.js';
+import {
+  claimTokenFor,
+  claimViewKeyFor,
+  formatClaimCode,
+  generateClaimCode,
+  isValidClaimToken,
+  normalizeClaimCode,
+  refundablePartsOf,
+} from './claimability.js';
+import {
+  REFUND_CLAIM_MAILER,
+  type ClaimOutcome,
+  type RefundClaimMailer,
+} from './refund-claim-mailer.js';
 import { RefundClaimsQueries, type RefundClaimRecord } from './refund-claims.queries.js';
 
 export interface ClaimSubmission {
   readonly orderId: string;
   readonly claimToken: string;
+  /** Email nhận mã khiếu nại và kết quả (ADR-0031). */
   readonly contact: string;
+  readonly locale?: Locale | undefined;
   readonly refundAccount: {
     readonly bankBin: string;
     readonly accountNumber: string;
@@ -41,6 +65,7 @@ export interface ClaimSubmission {
 
 type RefundClaim = Schema<'RefundClaim'>;
 type RefundClaimReceipt = Schema<'RefundClaimReceipt'>;
+type RefundClaimTracking = Schema<'RefundClaimTracking'>;
 type RefundAccountView = Schema<'RefundAccountView'>;
 
 interface AccountSecret {
@@ -50,6 +75,10 @@ interface AccountSecret {
 }
 
 const JOB_BATCH = 100;
+/** Số lần thử lại khi mã khiếu nại sinh ra trùng mã đã có — xác suất ~ số phiếu / 2^50. */
+const CODE_ATTEMPTS = 3;
+/** Đủ để phân biệt email với số điện thoại của phiếu tạo trước ADR-0031; định dạng đã kiểm lúc nhận. */
+const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+$/;
 /** Quyền xử lý phiếu khiếu nại và đơn cần kiểm tra (FR-ORD-20) — người nhận phiếu mới. */
 const ORDER_REFUND = 'order.refund';
 
@@ -57,6 +86,7 @@ const ORDER_REFUND = 'order.refund';
 export class RefundClaimsService {
   private readonly logger = new Logger('ORD/refund-claims');
   private readonly limiter: PerMinuteRateLimiter;
+  private readonly lookupLimiter: PerMinuteRateLimiter;
 
   constructor(
     @Inject(RefundClaimsQueries) private readonly queries: RefundClaimsQueries,
@@ -65,9 +95,13 @@ export class RefundClaimsService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(REFUND_CLAIM_MAILER) private readonly mailer: RefundClaimMailer,
   ) {
     this.limiter = new PerMinuteRateLimiter(clock, () =>
       config.constraint('REFUND_CLAIM_RATE_LIMIT_PER_MIN'),
+    );
+    this.lookupLimiter = new PerMinuteRateLimiter(clock, () =>
+      config.constraint('REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN'),
     );
   }
 
@@ -101,57 +135,90 @@ export class RefundClaimsService {
     if (!parts) throw new AppError('ORDER_NOT_CLAIMABLE', 'ord.orderNotClaimable');
 
     const now = this.clock.now();
-    const claim = await this.queries.transaction(async (tx) => {
-      const created = await this.queries.insert(
-        {
-          orderId: order.id,
-          brandId: order.brandId,
-          refundOrder: parts.refundOrder,
-          amount: parts.amount,
-          currency: order.currency,
-          accountCiphertext: encryptJson(key, input.refundAccount satisfies AccountSecret),
-          contactCiphertext: encryptJson(key, input.contact),
-          keyVersion: PII_KEY_VERSION,
-          consentedAt: now,
-        },
-        tx,
-      );
-      if (!created) return null;
-      // AuditLog chỉ thêm, không xóa được (FR-AUD-09) — tuyệt đối không ghi tài khoản hay liên hệ.
-      await this.audit.log(
-        {
-          actorType: 'ANONYMOUS',
-          brandId: order.brandId,
-          action: 'ord.refund_claim.created',
-          targetType: 'RefundClaim',
-          targetId: created.id,
-          sourceIp: origin.ip,
-          userAgent: origin.userAgent,
-          metadata: {
+    const claim = await this.withFreshCode((publicCode) =>
+      this.queries.transaction(async (tx) => {
+        const created = await this.queries.insert(
+          {
+            publicCode,
+            locale: input.locale ?? DEFAULT_LOCALE,
             orderId: order.id,
-            amount: parts.amount,
+            brandId: order.brandId,
             refundOrder: parts.refundOrder,
-            extraTransfers: parts.extraTransfers,
+            amount: parts.amount,
+            currency: order.currency,
+            accountCiphertext: encryptJson(key, input.refundAccount satisfies AccountSecret),
+            contactCiphertext: encryptJson(key, input.contact),
+            keyVersion: PII_KEY_VERSION,
+            consentedAt: now,
           },
-        },
-        tx,
-      );
-      // Phiếu có hạn REFUND_CLAIM_SLA_HOURS — báo người xử lý ngay, không đợi tới lúc quá hạn.
-      await this.alr.notifyPermissionHolders(
-        tx,
-        this.claimNotice(created, 'REFUND_CLAIM_SUBMITTED', 'ord.claimSubmitted', now),
-        ORDER_REFUND,
-      );
-      return created;
-    });
+          tx,
+        );
+        if (!created) return null;
+        // AuditLog chỉ thêm, không xóa được (FR-AUD-09) — tuyệt đối không ghi tài khoản hay liên hệ.
+        await this.audit.log(
+          {
+            actorType: 'ANONYMOUS',
+            brandId: order.brandId,
+            action: 'ord.refund_claim.created',
+            targetType: 'RefundClaim',
+            targetId: created.id,
+            sourceIp: origin.ip,
+            userAgent: origin.userAgent,
+            metadata: {
+              orderId: order.id,
+              amount: parts.amount,
+              refundOrder: parts.refundOrder,
+              extraTransfers: parts.extraTransfers,
+            },
+          },
+          tx,
+        );
+        // Phiếu có hạn REFUND_CLAIM_SLA_HOURS — báo người xử lý ngay, không đợi tới lúc quá hạn.
+        await this.alr.notifyPermissionHolders(
+          tx,
+          this.claimNotice(created, 'REFUND_CLAIM_SUBMITTED', 'ord.claimSubmitted', now),
+          ORDER_REFUND,
+        );
+        return created;
+      }),
+    );
     if (!claim) throw new AppError('CLAIM_ALREADY_OPEN', 'ord.claimAlreadyOpen');
 
+    await this.notifyCustomer(claim.id, 'RECEIPT');
     return {
       id: claim.id,
+      code: formatClaimCode(claim.publicCode),
       status: claim.status,
       amount: claim.amount,
       currency: claim.currency as RefundClaimReceipt['currency'],
       createdAt: claim.createdAt.toISOString(),
+    };
+  }
+
+  /** FR-ORD-36: tiến độ cho khách — không có tài khoản, liên hệ hay tên nhân viên. */
+  async track(rawCode: string, origin: RequestOrigin): Promise<RefundClaimTracking> {
+    if (!this.lookupLimiter.tryAcquire(origin.ip ?? 'unknown')) {
+      throw new AppError('RATE_LIMITED', 'ord.claimLookupRateLimited');
+    }
+    const code = normalizeClaimCode(rawCode);
+    // Sai định dạng và không tồn tại: cùng một câu trả lời.
+    const claim = code ? await this.queries.findByCode(code) : null;
+    if (!claim) throw new AppError('NOT_FOUND', 'ord.claimNotFound');
+
+    const open = claim.status === 'OPEN';
+    const rejected = claim.status === 'REJECTED';
+    return {
+      code: formatClaimCode(claim.publicCode),
+      status: claim.status,
+      stage: open ? (claim.assignedAt ? 'PROCESSING' : 'RECEIVED') : claim.status,
+      amount: claim.amount,
+      currency: claim.currency as RefundClaimTracking['currency'],
+      createdAt: claim.createdAt.toISOString(),
+      dueAt: open ? this.slaDueAt(claim).toISOString() : null,
+      closedAt: claim.closedAt?.toISOString() ?? null,
+      payoutReference: claim.status === 'REFUNDED' ? claim.payoutReference : null,
+      resolutionNote: rejected ? claim.resolutionNote : null,
+      hasEvidence: rejected && (await this.queries.countEvidence(claim.id)).stored > 0,
     };
   }
 
@@ -166,13 +233,22 @@ export class RefundClaimsService {
       pageSize: number;
       status?: RefundClaimStatus | undefined;
       assignedToMe?: boolean | undefined;
+      code?: string | undefined;
     },
   ): Promise<{ items: RefundClaim[]; total: number }> {
+    let publicCode: string | undefined;
+    if (filter.code !== undefined) {
+      const normalized = normalizeClaimCode(filter.code);
+      // Mã sai định dạng thì không phiếu nào khớp — trả danh sách rỗng, không báo lỗi.
+      if (!normalized) return { items: [], total: 0 };
+      publicCode = normalized;
+    }
     const { items, total } = await this.queries.list({
       page: filter.page,
       pageSize: filter.pageSize,
       status: filter.status,
       assignedTo: filter.assignedToMe ? actor.userId : undefined,
+      publicCode,
     });
     return { items: items.map((c) => this.toDto(c)), total };
   }
@@ -302,11 +378,17 @@ export class RefundClaimsService {
         after: { status: 'REFUNDED', payoutReference: input.payoutReference, amount: claim.amount },
       };
     });
+    await this.notifyCustomer(id, 'CLOSED');
     return this.get(id);
   }
 
   async reject(actor: AuthenticatedUser, id: string, reason: string): Promise<RefundClaim> {
     await this.closeAsAssignee(actor, id, async (claim, tx, at) => {
+      // FR-ORD-38 (ADR-0032): khách nói không nhận được lượt xịt mà dữ liệu máy không đủ tin — muốn bác
+      // thì phải có hình camera độc lập. Chỉ khiếu nại chuyển khoản thừa thì bằng chứng là sao kê.
+      if (claim.refundOrder && (await this.queries.countEvidence(claim.id, tx)).active === 0) {
+        throw new AppError('EVIDENCE_REQUIRED', 'evd.evidenceRequired');
+      }
       // Đã có người xem và quyết không hoàn — đơn rời danh sách kiểm tra thủ công.
       await this.orders.clearManualReview(tx, claim.orderId);
       await this.queries.close(
@@ -316,6 +398,7 @@ export class RefundClaimsService {
       );
       return { action: 'ord.refund_claim.rejected', after: { status: 'REJECTED', reason } };
     });
+    await this.notifyCustomer(id, 'CLOSED');
     return this.get(id);
   }
 
@@ -350,7 +433,10 @@ export class RefundClaimsService {
         );
         return true;
       });
-      if (closed) expired += 1;
+      if (closed) {
+        expired += 1;
+        await this.notifyCustomer(id, 'CLOSED');
+      }
     }
 
     let alerted = 0;
@@ -422,6 +508,80 @@ export class RefundClaimsService {
     });
   }
 
+  /**
+   * Thử lại khi mã khiếu nại vừa sinh trùng mã đã có (uq_refund_claim_public_code). Lỗi trùng làm hỏng
+   * transaction nên phải chạy lại cả transaction, không chỉ câu INSERT.
+   */
+  private async withFreshCode<T>(work: (publicCode: string) => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return await work(generateClaimCode());
+      } catch (err: unknown) {
+        if (attempt >= CODE_ATTEMPTS || !isPublicCodeConflict(err)) throw err;
+      }
+    }
+  }
+
+  /**
+   * FR-ORD-37: email cho khách, gửi sau khi transaction đã commit. Không bao giờ ném — khách vẫn có
+   * mã trên màn hình và tra cứu được. Không gửi khi liên hệ đã bị xóa hoặc là số điện thoại (phiếu
+   * tạo trước ADR-0031). AuditLog ghi kết quả, KHÔNG ghi địa chỉ email.
+   */
+  private async notifyCustomer(claimId: string, kind: 'RECEIPT' | 'CLOSED'): Promise<void> {
+    const { refundAccountEncKey: key, refundClaimTokenSecret: secret } = this.config;
+    if (!key || !secret) return;
+    try {
+      const claim = await this.queries.findById(claimId);
+      const secrets = await this.queries.findSecretsById(claimId);
+      if (!claim || !secrets?.contact) return;
+      const to = decryptJson<string>(key, secrets.contact);
+      if (!LOOKS_LIKE_EMAIL.test(to)) return;
+
+      const locale = toLocale(claim.locale);
+      const code = formatClaimCode(claim.publicCode);
+      const link =
+        `${this.config.adminWebBaseUrl}/claim/status?code=${encodeURIComponent(code)}` +
+        `&key=${encodeURIComponent(claimViewKeyFor(secret, claim.id))}`;
+      const delivered =
+        kind === 'RECEIPT'
+          ? await this.mailer.sendReceipt({
+              to,
+              locale,
+              code,
+              amount: formatAmount(claim.amount),
+              currency: claim.currency,
+              deadline: formatVnDateTime(this.slaDueAt(claim)),
+              link,
+            })
+          : await this.mailer.sendClosed({
+              to,
+              locale,
+              code,
+              outcome: claim.status as ClaimOutcome,
+              link,
+            });
+
+      await this.audit.log({
+        actorType: 'SYSTEM',
+        brandId: claim.brandId,
+        action: 'ord.refund_claim.customer_notified',
+        targetType: 'RefundClaim',
+        targetId: claim.id,
+        severity: delivered ? 'INFO' : 'WARNING',
+        metadata: { kind, status: claim.status, delivered },
+      });
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Không gửi được email ${kind} cho phiếu ${claimId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  private slaDueAt(claim: Pick<RefundClaimRecord, 'createdAt'>): Date {
+    const slaMs = this.config.constraint('REFUND_CLAIM_SLA_HOURS') * 60 * 60 * 1000;
+    return new Date(claim.createdAt.getTime() + slaMs);
+  }
+
   private async requireClaim(id: string): Promise<RefundClaimRecord> {
     const claim = await this.queries.findById(id);
     if (!claim) throw new AppError('NOT_FOUND', 'ord.claimNotFound');
@@ -442,9 +602,9 @@ export class RefundClaimsService {
   }
 
   private toDto(claim: RefundClaimRecord): RefundClaim {
-    const slaMs = this.config.constraint('REFUND_CLAIM_SLA_HOURS') * 60 * 60 * 1000;
     return {
       id: claim.id,
+      code: formatClaimCode(claim.publicCode),
       orderId: claim.orderId,
       paymentReference: claim.paymentReference,
       status: claim.status,
@@ -458,7 +618,17 @@ export class RefundClaimsService {
       resolutionNote: claim.resolutionNote,
       createdAt: claim.createdAt.toISOString(),
       closedAt: claim.closedAt?.toISOString() ?? null,
-      slaDueAt: new Date(claim.createdAt.getTime() + slaMs).toISOString(),
+      slaDueAt: this.slaDueAt(claim).toISOString(),
     };
   }
+}
+
+function toLocale(value: string): Locale {
+  return (LOCALES as readonly string[]).includes(value) ? (value as Locale) : DEFAULT_LOCALE;
+}
+
+/** 23505 trên đúng ràng buộc mã khiếu nại — trùng đơn (uq_refund_claim_order) đã xử lý bằng ON CONFLICT. */
+function isPublicCodeConflict(err: unknown): boolean {
+  const e = err as { code?: string; constraint?: string } | null;
+  return e?.code === '23505' && e.constraint === 'uq_refund_claim_public_code';
 }

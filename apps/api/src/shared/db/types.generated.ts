@@ -27,6 +27,10 @@ export type CredentialStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 export type DispenseType = "CUSTOMER" | "DIAGNOSTIC";
 
+export type EvidenceKind = "IMAGE" | "VIDEO";
+
+export type FootageRequestStatus = "FULFILLED" | "OPEN" | "UNAVAILABLE";
+
 export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
@@ -322,6 +326,40 @@ export interface BrandShipmentDeclarations {
   updated_at: Generated<Timestamp>;
 }
 
+export interface CameraEvidence {
+  camera_label: string;
+  /**
+   * Giờ trên hình trừ giờ thật, giây — người tải đọc dấu giờ trên hình và đối chiếu khi tải lên.
+   */
+  clock_offset_sec: Generated<number>;
+  content_type: string;
+  id: Generated<string>;
+  kind: EvidenceKind;
+  note: string | null;
+  purged_at: Timestamp | null;
+  /**
+   * Đầu khoảng ghi, theo giờ hệ thống (đã trừ clock_offset_sec). Phải giao khung giờ hệ thống đề xuất.
+   */
+  recorded_from: Timestamp;
+  recorded_to: Timestamp;
+  refill_session_id: string | null;
+  refund_claim_id: string | null;
+  removed_at: Timestamp | null;
+  removed_by: string | null;
+  removed_reason: string | null;
+  /**
+   * SHA-256 (hex) của đúng tệp đã lưu, tính lúc tải lên — chứng minh hình không bị sửa sau đó.
+   */
+  sha256: string;
+  size_bytes: number;
+  /**
+   * Khóa đối tượng ở kho riêng tư. NULL khi tệp đã bị gỡ (removed_*) hoặc job xóa theo hạn (purged_at).
+   */
+  storage_key: string | null;
+  uploaded_at: Generated<Timestamp>;
+  uploaded_by: string;
+}
+
 export interface DeviceCredentials {
   certificate_fingerprint: string | null;
   credential_identifier: string;
@@ -408,6 +446,19 @@ export interface EmailVerifications {
   updated_at: Generated<Timestamp>;
   user_id: string;
   verified_at: Timestamp | null;
+}
+
+export interface FootageRequests {
+  brand_id: string;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  reason: string;
+  refill_session_id: string;
+  requested_by: string;
+  resolved_at: Timestamp | null;
+  resolved_by: string | null;
+  response_note: string | null;
+  status: Generated<FootageRequestStatus>;
 }
 
 export interface FragranceProducts {
@@ -508,6 +559,10 @@ export interface Locations {
 }
 
 export interface Machines {
+  /**
+   * Nhãn camera an ninh quay máy này (ADR-0032, FR-MCH-20) — để người đi lấy hình biết tua đầu ghi nào.
+   */
+  camera_label: string | null;
   configuration_version: Generated<number>;
   created_at: Generated<Timestamp>;
   display_name: string;
@@ -840,13 +895,17 @@ export interface RefundClaims {
    */
   consented_at: Timestamp;
   /**
-   * Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa.
+   * Email liên hệ (phiếu trước ADR-0031 có thể là số điện thoại), mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa.
    */
   contact_ciphertext: Buffer | null;
   contact_purged_at: Timestamp | null;
   created_at: Generated<Timestamp>;
   currency: string;
   id: Generated<string>;
+  /**
+   * Ngôn ngữ trang khiếu nại lúc khách gửi — email gửi khách theo ngôn ngữ này (FR-ORD-37).
+   */
+  locale: Generated<string>;
   order_id: string;
   /**
    * Mã giao dịch chuyển khoản hoàn tiền nhân viên nhập khi ghi nhận đã hoàn. Bắt buộc khi REFUNDED.
@@ -856,6 +915,10 @@ export interface RefundClaims {
    * Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ.
    */
   pii_key_version: number;
+  /**
+   * Mã khiếu nại khách dùng để tra cứu (ADR-0031): 10 ký tự Crockford Base32 ngẫu nhiên, hiển thị dạng KN-XXXXX-XXXXX. Không phải dữ liệu cá nhân — không bị xóa khi xóa khối tài khoản hay liên hệ.
+   */
+  public_code: string;
   /**
    * TRUE: hoàn cả tiền đơn (khách không nhận được lượt xịt) — ghi nhận hoàn thì đơn chuyển REFUNDED. FALSE: chỉ hoàn tiền chuyển khoản thừa (EXTRA_TRANSFER), trạng thái đơn giữ nguyên.
    */
@@ -1149,11 +1212,13 @@ export interface DB {
   brand_payouts: BrandPayouts;
   brand_shipment_declarations: BrandShipmentDeclarations;
   brands: Brands;
+  camera_evidence: CameraEvidence;
   device_credentials: DeviceCredentials;
   device_events: DeviceEvents;
   dispense_commands: DispenseCommands;
   dispense_results: DispenseResults;
   email_verifications: EmailVerifications;
+  footage_requests: FootageRequests;
   fragrance_products: FragranceProducts;
   inventory_adjustments: InventoryAdjustments;
   inventory_batches: InventoryBatches;

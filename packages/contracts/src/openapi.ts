@@ -650,6 +650,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/machines/{id}/camera-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Ghi nhãn camera an ninh của máy
+         * @description FR-MCH-20 (ADR-0032 mục 5): Platform Super Admin (machine.manage). Ghi AuditLog.
+         */
+        put: operations["setMachineCameraLabel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/machines/{id}/mode": {
         parameters: {
             query?: never;
@@ -2111,6 +2133,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/refill-sessions/{id}/evidence-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Khung giờ cần tua camera cho phiếu nạp
+         * @description FR-INV-38: từ lúc mở tới lúc đóng (hoặc hủy) phiếu, nới CAMERA_WINDOW_PADDING_SEC; phiếu đang mở thì tới hiện tại. Quyền machine.operate.
+         */
+        get: operations["getRefillSessionEvidenceWindow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refill-sessions/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Bằng chứng camera của phiếu nạp
+         * @description FR-INV-38: Operations Staff, Super Admin, và Brand Admin của thương hiệu sở hữu phiếu (thương hiệu khác trả FORBIDDEN_SCOPE). Inventory Staff không xem được. Mỗi lần cấp đường dẫn ghi AuditLog evd.evidence.viewed.
+         */
+        get: operations["listRefillSessionEvidence"];
+        put?: never;
+        /**
+         * Gắn bằng chứng camera vào phiếu nạp
+         * @description FR-INV-38: quyền machine.operate (Operations Staff, Super Admin); người đã thực hiện phiếu nạp trả EVIDENCE_SELF_REVIEW. Khoảng ghi phải giao khung giờ đề xuất; tối đa CAMERA_EVIDENCE_MAX_PER_TARGET tệp. Gắn được bất cứ lúc nào, không cần yêu cầu trích hình.
+         */
+        post: operations["addRefillSessionEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refill-sessions/{id}/footage-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Brand Admin yêu cầu trích hình phiếu nạp
+         * @description FR-INV-39: phiếu nạp của thương hiệu mình (FORBIDDEN_SCOPE), mở chưa quá CAMERA_FOOTAGE_REQUEST_MAX_DAYS ngày (FOOTAGE_REQUEST_EXPIRED), chưa có yêu cầu đang mở (FOOTAGE_REQUEST_ALREADY_OPEN). Thông báo trong ứng dụng cho người có quyền machine.operate.
+         */
+        post: operations["createFootageRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/footage-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Danh sách yêu cầu trích hình
+         * @description FR-INV-39: nhân sự nền tảng có machine.operate thấy mọi yêu cầu; Brand Admin chỉ thấy của thương hiệu mình. Cũ nhất trước.
+         */
+        get: operations["listFootageRequests"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/footage-requests/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Đóng yêu cầu trích hình
+         * @description FR-INV-39: quyền machine.operate. FULFILLED khi phiếu nạp đã có bằng chứng (thiếu thì EVIDENCE_REQUIRED); UNAVAILABLE bắt buộc note (camera hỏng, hình đã bị ghi đè…). Báo Brand Admin đã gửi yêu cầu. Yêu cầu đã đóng trả EVIDENCE_TARGET_CLOSED.
+         */
+        post: operations["resolveFootageRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/slots/{id}/bottle": {
         parameters: {
             query?: never;
@@ -2603,6 +2737,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/refund-claims/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mã khiếu nại, chấp nhận cả dạng viết thường, không dấu gạch. */
+                code: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Khách tra cứu tiến độ phiếu khiếu nại
+         * @description FR-ORD-36 (ADR-0031): trang công khai /claim/status. Mã sai hoặc không tồn tại trả NOT_FOUND. Giới hạn REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN lần mỗi phút cho mỗi địa chỉ IP.
+         */
+        get: operations["trackRefundClaim"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/refund-claims/{code}/evidence": {
+        parameters: {
+            query: {
+                /** @description Khóa xem trong liên kết email (ADR-0031 mục 4). */
+                key: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * Khách xem bằng chứng camera của phiếu bị từ chối
+         * @description FR-ORD-39 (ADR-0032 mục 6): chỉ khi phiếu REJECTED và `key` đúng; sai mã, sai khóa hoặc phiếu chưa bị từ chối đều trả NOT_FOUND. Dùng chung giới hạn REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN. Mỗi lần gọi ghi AuditLog evd.evidence.viewed với người xem ẩn danh.
+         */
+        get: operations["listPublicRefundClaimEvidence"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/refund-claims": {
         parameters: {
             query?: never;
@@ -2733,9 +2915,105 @@ export interface paths {
         put?: never;
         /**
          * Từ chối phiếu khiếu nại
-         * @description Người được phân công từ chối kèm lý do. Phiếu đóng REJECTED, tài khoản bị xóa.
+         * @description Người được phân công từ chối kèm lý do (khách đọc được ở trang tra cứu, ADR-0031). Phiếu đóng REJECTED, tài khoản bị xóa. Phiếu refundOrder = true phải có ít nhất một bằng chứng camera, thiếu thì EVIDENCE_REQUIRED (FR-ORD-38, ADR-0032).
          */
         post: operations["rejectRefundClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/evidence-window": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Khung giờ cần tua camera cho phiếu khiếu nại
+         * @description FR-ORD-38: từ lúc đơn trả tiền tới lúc có kết quả lệnh xịt, nới CAMERA_WINDOW_PADDING_SEC.
+         */
+        get: operations["getRefundClaimEvidenceWindow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/refund-claims/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Bằng chứng camera của phiếu khiếu nại
+         * @description FR-ORD-38: người có quyền order.refund. Mỗi lần cấp đường dẫn xem ghi AuditLog evd.evidence.viewed.
+         */
+        get: operations["listRefundClaimEvidence"];
+        put?: never;
+        /**
+         * Gắn bằng chứng camera vào phiếu khiếu nại
+         * @description FR-ORD-38: chỉ Operations Staff đang được phân công (CLAIM_NOT_ASSIGNED), phiếu còn OPEN (EVIDENCE_TARGET_CLOSED). Khoảng ghi sau khi trừ clockOffsetSec phải giao khung giờ đề xuất (VALIDATION_ERROR). Tối đa CAMERA_EVIDENCE_MAX_PER_TARGET tệp (EVIDENCE_LIMIT_REACHED).
+         */
+        post: operations["addRefundClaimEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evidence/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Gỡ bằng chứng tải nhầm
+         * @description ADR-0032 mục 8: chỉ người đã tải, khi hồ sơ còn mở (phiếu khiếu nại OPEN; phiếu nạp còn yêu cầu trích hình đang mở hoặc chưa có yêu cầu nào đã đóng). Hồ sơ đã đóng trả EVIDENCE_TARGET_CLOSED. Tệp bị xóa khỏi kho, dòng giữ lại kèm lý do. Ghi AuditLog.
+         */
+        post: operations["removeEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/evidence-files/{id}": {
+        parameters: {
+            query: {
+                /** @description Hạn của đường dẫn, giây Unix. */
+                exp: number;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Tải tệp bằng chứng qua đường dẫn ký
+         * @description ADR-0032 mục 8: đường dẫn do API cấp ở các endpoint danh sách bằng chứng, hết hạn sau CAMERA_EVIDENCE_URL_TTL_SEC. Chữ ký sai, hết hạn hay tệp đã gỡ/xóa đều trả NOT_FOUND. Hỗ trợ header Range để trình duyệt tua video.
+         */
+        get: operations["getEvidenceFile"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3899,6 +4177,8 @@ export interface components {
             slotCount?: number;
             /** @description Chỉ có khi operatingMode = DRAINING: số đơn và lệnh xịt máy còn phải phục vụ trước khi tự sang MAINTENANCE (FR-MCH-09, ADR-0017). Chỉ đọc — đọc máy không đổi chế độ. */
             drainingOrdersCount?: number;
+            /** @description Nhãn camera an ninh quay máy này (FR-MCH-20, ADR-0032). */
+            cameraLabel?: string | null;
         };
         MachineCreate: {
             /** Format: uuid */
@@ -5199,8 +5479,17 @@ export interface components {
             /** Format: uuid */
             orderId: string;
             claimToken: string;
-            /** @description Số điện thoại hoặc email để nhận kết quả. Mã hóa; xóa sau REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng. */
+            /**
+             * Format: email
+             * @description Email nhận mã khiếu nại và kết quả xử lý (ADR-0031, FR-ORD-37). Mã hóa; xóa sau REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng. Phiếu tạo trước ADR-0031 có thể là số điện thoại.
+             */
             contact: string;
+            /**
+             * @description Ngôn ngữ trang khiếu nại lúc gửi — email gửi khách theo ngôn ngữ này.
+             * @default vi
+             * @enum {string}
+             */
+            locale: "vi" | "en";
             refundAccount: components["schemas"]["RefundAccountInput"];
             /**
              * @description Khách đồng ý cho nền tảng xử lý dữ liệu cá nhân để hoàn tiền. Bắt buộc là true.
@@ -5208,10 +5497,16 @@ export interface components {
              */
             consent: true;
         };
+        /**
+         * @description Mã khiếu nại cho khách (ADR-0031): 10 ký tự Crockford Base32 ngẫu nhiên. Khi nhập, không phân biệt hoa thường, bỏ qua dấu gạch và khoảng trắng; I/L đọc thành 1, O đọc thành 0.
+         * @example KN-7F3K9-2QDXA
+         */
+        RefundClaimCode: string;
         /** @description Phản hồi cho khách sau khi gửi khiếu nại — không chứa dữ liệu cá nhân. */
         RefundClaimReceipt: {
             /** Format: uuid */
             id: string;
+            code: components["schemas"]["RefundClaimCode"];
             status: components["schemas"]["RefundClaimStatus"];
             amount: components["schemas"]["Money"];
             currency: components["schemas"]["Currency"];
@@ -5222,6 +5517,7 @@ export interface components {
         RefundClaim: {
             /** Format: uuid */
             id: string;
+            code: components["schemas"]["RefundClaimCode"];
             /** Format: uuid */
             orderId: string;
             paymentReference: string;
@@ -5236,6 +5532,7 @@ export interface components {
             /** Format: date-time */
             assignedAt?: string | null;
             payoutReference?: string | null;
+            /** @description Lý do từ chối hoặc ghi chú khi hoàn — khách đọc được ở trang tra cứu (ADR-0031). */
             resolutionNote?: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -5246,6 +5543,139 @@ export interface components {
              * @description createdAt + REFUND_CLAIM_SLA_HOURS — mục tiêu xử lý của BR-002.
              */
             slaDueAt: string;
+        };
+        /** @description Tiến độ phiếu cho khách tra cứu bằng mã khiếu nại (FR-ORD-36, ADR-0031). Không bao giờ chứa tài khoản ngân hàng, thông tin liên hệ hay tên nhân viên. */
+        RefundClaimTracking: {
+            code: components["schemas"]["RefundClaimCode"];
+            status: components["schemas"]["RefundClaimStatus"];
+            /**
+             * @description RECEIVED = phiếu mở, chưa có người nhận; PROCESSING = phiếu mở, đã phân công; ba giá trị còn lại trùng trạng thái đóng.
+             * @enum {string}
+             */
+            stage: "RECEIVED" | "PROCESSING" | "REFUNDED" | "REJECTED" | "EXPIRED";
+            amount: components["schemas"]["Money"];
+            currency: components["schemas"]["Currency"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description createdAt + REFUND_CLAIM_SLA_HOURS khi phiếu còn mở; null khi đã đóng.
+             */
+            dueAt?: string | null;
+            /** Format: date-time */
+            closedAt?: string | null;
+            /** @description Mã giao dịch chuyển khoản hoàn — chỉ khi REFUNDED. */
+            payoutReference?: string | null;
+            /** @description Lý do từ chối — chỉ khi REJECTED. */
+            resolutionNote?: string | null;
+            /** @description Phiếu REJECTED có hình ảnh đối chiếu từ camera (ADR-0032). Xem hình cần `key` trong liên kết email — GET /public/refund-claims/{code}/evidence. */
+            hasEvidence?: boolean;
+        };
+        /** @enum {string} */
+        EvidenceKind: "VIDEO" | "IMAGE";
+        /** @description Đoạn trích từ camera an ninh gắn vào phiếu khiếu nại hoặc phiếu nạp (ADR-0032). `url` là đường dẫn ký có hạn CAMERA_EVIDENCE_URL_TTL_SEC, tương đối với gốc API (dạng /evidence-files/{id}?exp=…&sig=…) — null khi tệp đã bị gỡ hoặc đã xóa theo hạn. */
+        CameraEvidence: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["EvidenceKind"];
+            contentType: string;
+            sizeBytes: number;
+            /** @description SHA-256 của tệp đã lưu, tính lúc tải lên. */
+            sha256: string;
+            cameraLabel: string;
+            /** Format: date-time */
+            recordedFrom: string;
+            /** Format: date-time */
+            recordedTo: string;
+            clockOffsetSec: number;
+            note?: string | null;
+            /** Format: uuid */
+            uploadedBy: string;
+            /** Format: date-time */
+            uploadedAt: string;
+            /** Format: date-time */
+            removedAt?: string | null;
+            removedReason?: string | null;
+            /** Format: date-time */
+            purgedAt?: string | null;
+            url?: string | null;
+            /** Format: date-time */
+            urlExpiresAt?: string | null;
+        };
+        /** @description Bằng chứng cho khách xem (FR-ORD-39) — không có người tải hay ghi chú nội bộ. */
+        PublicCameraEvidence: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["EvidenceKind"];
+            contentType: string;
+            /** Format: date-time */
+            recordedFrom: string;
+            /** Format: date-time */
+            recordedTo: string;
+            url: string;
+            /** Format: date-time */
+            urlExpiresAt: string;
+        };
+        /** @description Khung giờ cần tua camera (ADR-0032 mục 2), đã nới hai đầu CAMERA_WINDOW_PADDING_SEC. Khoảng ghi của bằng chứng tải lên (sau khi trừ độ lệch đồng hồ) phải giao khung này. */
+        EvidenceWindow: {
+            /** Format: uuid */
+            machineId: string;
+            machineName: string;
+            cameraLabel?: string | null;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+        };
+        EvidenceList: {
+            items: components["schemas"]["CameraEvidence"][];
+            /** @description CAMERA_EVIDENCE_MAX_PER_TARGET — gồm cả tệp đã gỡ. */
+            maxItems: number;
+        };
+        EvidenceRemove: {
+            reason: string;
+        };
+        /** @enum {string} */
+        FootageRequestStatus: "OPEN" | "FULFILLED" | "UNAVAILABLE";
+        /** @description Yêu cầu trích hình camera cho một phiếu nạp (FR-INV-39, ADR-0032). */
+        FootageRequest: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            refillSessionId: string;
+            /** Format: uuid */
+            brandId: string;
+            brandName?: string;
+            machineName?: string;
+            slotNumber?: number;
+            /** Format: date-time */
+            sessionStartedAt?: string;
+            status: components["schemas"]["FootageRequestStatus"];
+            reason: string;
+            /** Format: uuid */
+            requestedBy: string;
+            responseNote?: string | null;
+            /** Format: uuid */
+            resolvedBy?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            resolvedAt?: string | null;
+        };
+        FootageRequestCreate: {
+            reason: string;
+        };
+        FootageRequestResolve: {
+            /**
+             * @description FULFILLED cần phiếu nạp đã có ít nhất một bằng chứng; UNAVAILABLE bắt buộc note.
+             * @enum {string}
+             */
+            outcome: "FULFILLED" | "UNAVAILABLE";
+            note?: string;
+        };
+        CameraLabelUpdate: {
+            /** @description null hoặc chuỗi rỗng = xóa nhãn. */
+            cameraLabel: string | null;
         };
         RefundAccountView: {
             bankBin: string;
@@ -5702,6 +6132,14 @@ export interface components {
         };
     };
     parameters: {
+        /** @description Nhãn camera đã trích hình (ADR-0032). */
+        evidenceCameraLabel: string;
+        /** @description Đầu khoảng ghi theo giờ trên hình (chưa trừ độ lệch). */
+        evidenceRecordedFrom: string;
+        evidenceRecordedTo: string;
+        /** @description Giờ trên hình trừ giờ thật, giây. Mặc định 0. */
+        evidenceClockOffset: number;
+        evidenceNote: string;
         /** @description Trang, bắt đầu từ 1 */
         page: number;
         /** @description Số bản ghi mỗi trang */
@@ -6748,6 +7186,35 @@ export interface operations {
                     "application/json": components["schemas"]["Machine"];
                 };
             };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setMachineCameraLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CameraLabelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Đã ghi nhãn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Machine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
@@ -8877,6 +9344,204 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    getRefillSessionEvidenceWindow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Khung giờ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceWindow"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRefillSessionEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bằng chứng, cũ nhất trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceList"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addRefillSessionEvidence: {
+        parameters: {
+            query: {
+                /** @description Nhãn camera đã trích hình (ADR-0032). */
+                cameraLabel: components["parameters"]["evidenceCameraLabel"];
+                /** @description Đầu khoảng ghi theo giờ trên hình (chưa trừ độ lệch). */
+                recordedFrom: components["parameters"]["evidenceRecordedFrom"];
+                recordedTo: components["parameters"]["evidenceRecordedTo"];
+                /** @description Giờ trên hình trừ giờ thật, giây. Mặc định 0. */
+                clockOffsetSec?: components["parameters"]["evidenceClockOffset"];
+                note?: components["parameters"]["evidenceNote"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Video MP4 (≤ CAMERA_CLIP_MAX_BYTES, không chuyển mã) hoặc ảnh JPEG/PNG/WebP (≤ CAMERA_IMAGE_MAX_BYTES, mã hóa lại, bỏ EXIF).
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã gắn bằng chứng */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CameraEvidence"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Tệp vượt ngưỡng — mã FILE_TOO_LARGE */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Không phải MP4 hay ảnh hợp lệ — mã UNSUPPORTED_MEDIA_TYPE */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createFootageRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FootageRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Đã gửi yêu cầu */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FootageRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listFootageRequests: {
+        parameters: {
+            query?: {
+                /** @description Trang, bắt đầu từ 1 */
+                page?: components["parameters"]["page"];
+                /** @description Số bản ghi mỗi trang */
+                pageSize?: components["parameters"]["pageSize"];
+                status?: components["schemas"]["FootageRequestStatus"];
+                refillSessionId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Danh sách yêu cầu */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["FootageRequest"][];
+                        meta: components["schemas"]["PageMeta"];
+                    };
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    resolveFootageRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FootageRequestResolve"];
+            };
+        };
+        responses: {
+            /** @description Đã đóng */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FootageRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     removeBottleFromSlot: {
         parameters: {
             query?: never;
@@ -9574,6 +10239,72 @@ export interface operations {
             };
         };
     };
+    trackRefundClaim: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Mã khiếu nại, chấp nhận cả dạng viết thường, không dấu gạch. */
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Tiến độ phiếu */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefundClaimTracking"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Vượt REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listPublicRefundClaimEvidence: {
+        parameters: {
+            query: {
+                /** @description Khóa xem trong liên kết email (ADR-0031 mục 4). */
+                key: string;
+            };
+            header?: never;
+            path: {
+                code: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bằng chứng còn tệp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        items: components["schemas"]["PublicCameraEvidence"][];
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Vượt giới hạn tra cứu — mã RATE_LIMITED */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     listRefundClaims: {
         parameters: {
             query?: {
@@ -9583,6 +10314,8 @@ export interface operations {
                 pageSize?: components["parameters"]["pageSize"];
                 status?: components["schemas"]["RefundClaimStatus"];
                 assignedToMe?: boolean;
+                /** @description Tìm theo mã khiếu nại khách đọc qua điện thoại (ADR-0031); cùng quy tắc chuẩn hóa. */
+                code?: string;
             };
             header?: never;
             path?: never;
@@ -9750,6 +10483,178 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRefundClaimEvidenceWindow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Khung giờ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceWindow"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRefundClaimEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Bằng chứng, cũ nhất trước */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvidenceList"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addRefundClaimEvidence: {
+        parameters: {
+            query: {
+                /** @description Nhãn camera đã trích hình (ADR-0032). */
+                cameraLabel: components["parameters"]["evidenceCameraLabel"];
+                /** @description Đầu khoảng ghi theo giờ trên hình (chưa trừ độ lệch). */
+                recordedFrom: components["parameters"]["evidenceRecordedFrom"];
+                recordedTo: components["parameters"]["evidenceRecordedTo"];
+                /** @description Giờ trên hình trừ giờ thật, giây. Mặc định 0. */
+                clockOffsetSec?: components["parameters"]["evidenceClockOffset"];
+                note?: components["parameters"]["evidenceNote"];
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Video MP4 (≤ CAMERA_CLIP_MAX_BYTES, không chuyển mã) hoặc ảnh JPEG/PNG/WebP (≤ CAMERA_IMAGE_MAX_BYTES, mã hóa lại, bỏ EXIF).
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã gắn bằng chứng */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CameraEvidence"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description Tệp vượt ngưỡng — mã FILE_TOO_LARGE */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Không phải MP4 hay ảnh hợp lệ — mã UNSUPPORTED_MEDIA_TYPE */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeEvidence: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvidenceRemove"];
+            };
+        };
+        responses: {
+            /** @description Đã gỡ */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CameraEvidence"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getEvidenceFile: {
+        parameters: {
+            query: {
+                /** @description Hạn của đường dẫn, giây Unix. */
+                exp: number;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Nội dung tệp */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Một đoạn của tệp (Range) */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             404: components["responses"]["NotFound"];
         };
     };

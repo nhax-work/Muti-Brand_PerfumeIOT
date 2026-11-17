@@ -25,6 +25,9 @@ export interface ClaimOrderRecord {
 
 export interface RefundClaimRecord {
   readonly id: string;
+  /** Mã khiếu nại dạng lưu, 10 ký tự (ADR-0031). */
+  readonly publicCode: string;
+  readonly locale: string;
   readonly orderId: string;
   readonly brandId: string;
   readonly paymentReference: string;
@@ -42,6 +45,8 @@ export interface RefundClaimRecord {
 }
 
 export interface NewRefundClaim {
+  readonly publicCode: string;
+  readonly locale: string;
   readonly orderId: string;
   readonly brandId: string;
   readonly refundOrder: boolean;
@@ -58,6 +63,8 @@ export interface ClaimListFilter {
   readonly pageSize: number;
   readonly status?: RefundClaimStatus | undefined;
   readonly assignedTo?: string | undefined;
+  /** Mã khiếu nại đã chuẩn hóa (ADR-0031). */
+  readonly publicCode?: string | undefined;
 }
 
 const EXTRA_TRANSFER_RESULT = 'EXTRA_TRANSFER_REFUND_PENDING';
@@ -129,6 +136,8 @@ export class RefundClaimsQueries {
     const inserted = await executor
       .insertInto('refund_claims')
       .values({
+        public_code: claim.publicCode,
+        locale: claim.locale,
         order_id: claim.orderId,
         brand_id: claim.brandId,
         refund_order: claim.refundOrder,
@@ -151,6 +160,7 @@ export class RefundClaimsQueries {
       .innerJoin('orders as o', 'o.id', 'rc.order_id');
     if (filter.status) base = base.where('rc.status', '=', filter.status);
     if (filter.assignedTo) base = base.where('rc.assigned_to', '=', filter.assignedTo);
+    if (filter.publicCode) base = base.where('rc.public_code', '=', filter.publicCode);
     const [rows, count] = await Promise.all([
       base
         .select(PUBLIC_COLUMNS)
@@ -169,6 +179,17 @@ export class RefundClaimsQueries {
       .innerJoin('orders as o', 'o.id', 'rc.order_id')
       .select(PUBLIC_COLUMNS)
       .where('rc.id', '=', id)
+      .executeTakeFirst();
+    return row ? toRecord(row) : null;
+  }
+
+  /** Tra cứu của khách (FR-ORD-36) — `code` đã chuẩn hóa. */
+  async findByCode(code: string): Promise<RefundClaimRecord | null> {
+    const row = await this.db
+      .selectFrom('refund_claims as rc')
+      .innerJoin('orders as o', 'o.id', 'rc.order_id')
+      .select(PUBLIC_COLUMNS)
+      .where('rc.public_code', '=', code)
       .executeTakeFirst();
     return row ? toRecord(row) : null;
   }
@@ -235,6 +256,25 @@ export class RefundClaimsQueries {
       .execute();
   }
 
+  /**
+   * Bằng chứng camera chưa gỡ của phiếu (ADR-0032) — đọc chéo bảng của EVD. `stored` chỉ đếm tệp còn
+   * trong kho (chưa xóa theo hạn) — điều kiện để khách thấy mục "Hình ảnh đối chiếu".
+   */
+  async countEvidence(
+    claimId: string,
+    executor: Executor = this.db,
+  ): Promise<{ active: number; stored: number }> {
+    const row = await executor
+      .selectFrom('camera_evidence')
+      .select((eb) => [
+        eb.fn.countAll<string>().filterWhere('removed_by', 'is', null).as('active'),
+        eb.fn.countAll<string>().filterWhere('storage_key', 'is not', null).as('stored'),
+      ])
+      .where('refund_claim_id', '=', claimId)
+      .executeTakeFirstOrThrow();
+    return { active: Number(row.active), stored: Number(row.stored) };
+  }
+
   async isActiveOperationsStaff(userId: string): Promise<boolean> {
     const row = await this.db
       .selectFrom('users as u')
@@ -297,6 +337,8 @@ export class RefundClaimsQueries {
 
 const PUBLIC_COLUMNS = [
   'rc.id',
+  'rc.public_code',
+  'rc.locale',
   'rc.order_id',
   'rc.brand_id',
   'o.payment_reference',
@@ -315,6 +357,8 @@ const PUBLIC_COLUMNS = [
 
 function toRecord(row: {
   id: string;
+  public_code: string;
+  locale: string;
   order_id: string;
   brand_id: string;
   payment_reference: string;
@@ -332,6 +376,8 @@ function toRecord(row: {
 }): RefundClaimRecord {
   return {
     id: row.id,
+    publicCode: row.public_code,
+    locale: row.locale,
     orderId: row.order_id,
     brandId: row.brand_id,
     paymentReference: row.payment_reference,

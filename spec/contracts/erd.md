@@ -178,6 +178,7 @@ erDiagram
         machine_connection_status status "trục kết nối"
         machine_operating_mode operating_mode "trục chế độ"
         timestamptz last_seen_at
+        varchar camera_label "camera an ninh quay máy (ADR-0032)"
     }
     MACHINE_SLOTS {
         uuid id PK
@@ -502,6 +503,8 @@ erDiagram
         bytea contact_ciphertext "mã hóa, xóa sau 30 ngày"
         uuid assigned_to FK
         varchar payout_reference
+        char public_code UK "mã khiếu nại cho khách tra cứu (ADR-0031)"
+        varchar locale "ngôn ngữ email gửi khách"
     }
 
     ORDERS ||--o{ ORDER_STATUS_HISTORIES : "ghi lịch sử"
@@ -539,6 +542,8 @@ dụng thành hai khối riêng; `chk_refund_claim_account_purged_on_close` bắ
 khi phiếu đóng, còn khối liên hệ được job xóa sau `REFUND_CLAIM_CONTACT_RETENTION_DAYS`.
 `fk_refund_claim_order_same_brand` (cần `uq_order_id_brand`) giữ phiếu cùng thương hiệu với đơn.
 `refund_order = false` khi chỉ hoàn tiền chuyển khoản thừa — trạng thái đơn khi đó giữ nguyên.
+`public_code` (ADR-0031) là mã khiếu nại ngẫu nhiên khách dùng để tra cứu tiến độ; không phải dữ liệu
+cá nhân nên không bị xóa cùng hai khối mã hóa.
 
 `kiosk_interaction_events` tách khỏi `orders` vì ghi cả lượt xem và lượt chọn không dẫn tới đơn hàng
 — đây là nguồn dữ liệu cho xếp hạng sản phẩm (FR-RPT-06, BR-007). `kiosk_session_id` là phiên ẩn
@@ -652,6 +657,45 @@ máy một bộ thông tin xác thực riêng, không dùng chung (FR-MCH-02, NF
 
 `uq_device_event (machine_id, device_event_id)` là cơ chế khử trùng khi thiết bị gửi lại sự kiện đã
 lưu tạm sau lúc mất kết nối (FR-IOT-10, FR-IOT-11). Cấu trúc bản tin ở `spec/contracts/mqtt.md`.
+
+---
+
+## 7b. Bằng chứng camera an ninh (ADR-0032)
+
+```mermaid
+erDiagram
+    CAMERA_EVIDENCE {
+        uuid id PK
+        uuid refund_claim_id FK "một trong hai"
+        uuid refill_session_id FK "một trong hai"
+        evidence_kind kind
+        text storage_key "kho riêng tư, NULL khi gỡ hoặc xóa theo hạn"
+        char sha256
+        timestamptz recorded_from "giờ thật, đã trừ độ lệch"
+        timestamptz recorded_to
+        uuid uploaded_by FK
+        timestamptz removed_at
+        timestamptz purged_at
+    }
+    FOOTAGE_REQUESTS {
+        uuid id PK
+        uuid refill_session_id FK
+        uuid brand_id FK "cùng thương hiệu với phiếu nạp"
+        footage_request_status status
+        text reason
+        text response_note "bắt buộc khi UNAVAILABLE"
+    }
+
+    REFUND_CLAIMS ||--o{ CAMERA_EVIDENCE : "hình đối chiếu"
+    REFILL_SESSIONS ||--o{ CAMERA_EVIDENCE : "hình lúc nạp"
+    REFILL_SESSIONS ||--o{ FOOTAGE_REQUESTS : "thương hiệu yêu cầu trích hình"
+```
+
+Camera ghi độc lập với máy; hệ thống chỉ lưu đoạn trích người tải lên. `chk_evidence_one_target` bắt mỗi
+bằng chứng gắn đúng một hồ sơ. Gỡ hay xóa theo hạn thì giữ dòng (SHA-256, ai tải, lúc nào), chỉ bỏ tệp —
+`chk_evidence_file_present`. `uq_footage_request_open` giữ mỗi phiếu nạp tối đa một yêu cầu đang mở;
+`fk_footage_request_session_same_brand` (cần `uq_refill_session_id_brand`) giữ yêu cầu cùng thương hiệu
+với phiếu nạp.
 
 ---
 

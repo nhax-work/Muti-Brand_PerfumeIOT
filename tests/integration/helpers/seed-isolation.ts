@@ -546,6 +546,16 @@ export async function cleanupIsolationFixture(
 
   const statements: readonly (readonly [string, unknown[]])[] = [
     [`UPDATE machine_slots SET active_bottle_id = NULL WHERE machine_id = $1`, [fx.machineId]],
+    // Bằng chứng camera và yêu cầu trích hình (ADR-0032) — trỏ tới phiếu khiếu nại, phiếu nạp, users.
+    [
+      `DELETE FROM camera_evidence
+        WHERE refill_session_id IN (SELECT id FROM refill_sessions WHERE machine_id = $1)
+           OR refund_claim_id IN (
+                SELECT rc.id FROM refund_claims rc JOIN orders o ON o.id = rc.order_id
+                 WHERE o.machine_id = $1)`,
+      [fx.machineId],
+    ],
+    [`DELETE FROM footage_requests WHERE brand_id = ANY($1::uuid[])`, [brands]],
     [`DELETE FROM sensor_readings WHERE machine_id = $1`, [fx.machineId]],
     [`DELETE FROM device_events WHERE machine_id = $1`, [fx.machineId]],
     // Cảnh báo do test sinh ra (vd FR-ALR-04 tự tắt slot) trỏ tới máy và slot của fixture.

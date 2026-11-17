@@ -40,6 +40,7 @@ import {
   type SlotRental,
 } from './api';
 import { DiagnosticDispenseModal } from './components/DiagnosticDispenseModal';
+import { CameraLabelCard } from './components/CameraLabelCard';
 import { MachineCredentialsCard } from './components/MachineCredentialsCard';
 import { MachineModeModal } from './components/MachineModeModal';
 import { SlotCard } from './components/SlotCard';
@@ -503,6 +504,13 @@ export default function MachineDetailPage() {
         )}
 
         {isSuperAdmin && <MachineCredentialsCard machineId={machine.id} />}
+        {isSuperAdmin && (
+          <CameraLabelCard
+            key={machine.cameraLabel ?? ''}
+            machineId={machine.id}
+            cameraLabel={machine.cameraLabel ?? null}
+          />
+        )}
         <StatusHistoryCard machineId={machine.id} />
         <TelemetryCard machineId={machine.id} slots={slots ?? []} />
 

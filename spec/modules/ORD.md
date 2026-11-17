@@ -1,7 +1,7 @@
 # FR-ORD — Đơn hàng và thanh toán
 
 > Nguồn: `docs/FR_NFR_SCENTSTATION.md` mục A11 · 35 FR  
-> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012; FR-ORD-19 soát lại, FR-ORD-33÷35 thêm ngày 2026-10-17 theo ADR-0015 — dừng bán an toàn)  
+> Trạng thái AC: **hoàn thành** (FR-ORD-10, 17, 19 sửa và FR-ORD-24÷27 thêm ngày 2026-09-29 theo ADR-0007; FR-ORD-20 viết lại, FR-ORD-28÷32 thêm ngày 2026-10-13 theo ADR-0012; FR-ORD-19 soát lại, FR-ORD-33÷35 thêm ngày 2026-10-17 theo ADR-0015 — dừng bán an toàn; FR-ORD-29 sửa, FR-ORD-36÷37 thêm ngày 2026-11-17 theo ADR-0031 — khách theo dõi phiếu khiếu nại; FR-ORD-38÷39 thêm cùng ngày theo ADR-0032 — bằng chứng camera)  
 > Phụ trách: TV1 / Tài  
 
 Đọc kèm: `spec/glossary.md`, `spec/errors.md`, `spec/constraints.md`
@@ -456,7 +456,7 @@
 ---
 
 ## FR-ORD-29 — Khách gửi phiếu khiếu nại hoàn tiền
-* **Statement:** Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm thông tin liên hệ, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu.
+* **Statement:** Hệ thống phải cho phép khách gửi phiếu khiếu nại hoàn tiền qua trang công khai bằng mã khiếu nại, kèm email, tài khoản nhận hoàn tiền và đồng ý xử lý dữ liệu cá nhân; mỗi đơn có tối đa một phiếu; sau khi gửi hiển thị mã khiếu nại cho khách.
 * **Traces:** BR-002, BR-008 · **Priority:** M
 * **Acceptance criteria:**
   * **AC1:** Given mã khiếu nại đúng và đơn đủ điều kiện,
@@ -466,7 +466,8 @@
   * **AC3:** Given đơn đã có phiếu, When gửi lại, Then trả 409 `CLAIM_ALREADY_OPEN`. Given đơn không có gì để hoàn, Then trả 409 `ORDER_NOT_CLAIMABLE`. Thiếu đồng ý thì 400.
   * **AC4 (Chỉ hoàn phần thừa):** Given khách đã nhận lượt xịt nhưng chuyển khoản hai lần, When gửi khiếu nại, Then số tiền bằng phần chuyển thừa và `refundOrder = false`.
   * **AC5 (Giới hạn tần suất):** Given một địa chỉ IP đã gửi `REFUND_CLAIM_RATE_LIMIT_PER_MIN` lần trong một phút, When gửi thêm, Then trả 429 `RATE_LIMITED`.
-* **Test:** `test_FR_ORD_29_customer_submits_refund_claim`, `test_FR_ORD_29_reject_invalid_token_unclaimable_order_and_missing_consent`, `test_FR_ORD_29_extra_transfer_claim_refunds_only_the_extra_amount`, `test_FR_ORD_29_rate_limit_per_ip`
+  * **AC6 (Email và mã khiếu nại — ADR-0031):** Given `contact` không phải email, When gửi, Then trả 400. Given gửi hợp lệ, Then phản hồi có `code` dạng `KN-XXXXX-XXXXX` sinh ngẫu nhiên, và trang khiếu nại hiện mã này kèm đường tới trang tra cứu.
+* **Test:** `test_FR_ORD_29_customer_submits_refund_claim`, `test_FR_ORD_29_reject_invalid_token_unclaimable_order_and_missing_consent`, `test_FR_ORD_29_extra_transfer_claim_refunds_only_the_extra_amount`, `test_FR_ORD_29_rate_limit_per_ip`, `test_FR_ORD_29_requires_email_and_returns_claim_code`
 
 ---
 
@@ -555,3 +556,60 @@
     When gửi yêu cầu tạo đơn mới,  
     Then hệ thống chấp nhận và tạo đơn thành công.
 * **Test:** `test_FR_ORD_35_single_pending_order_per_machine`
+
+---
+
+## FR-ORD-36 — Khách tra cứu tiến độ phiếu khiếu nại
+* **Statement:** Hệ thống phải cho khách tra cứu tiến độ và kết quả phiếu khiếu nại trên trang công khai bằng mã khiếu nại, không hiển thị tài khoản ngân hàng hay thông tin liên hệ.
+* **Traces:** BR-002 · **Priority:** M · ADR-0031
+* **API:** `GET /public/refund-claims/{code}`
+* **Acceptance criteria:**
+  * **AC1:** Given phiếu `OPEN` chưa phân công, When khách tra bằng mã, Then trả `stage = RECEIVED`, số tiền, ngày gửi và hạn xử lý dự kiến (`createdAt + REFUND_CLAIM_SLA_HOURS`). Đã phân công thì `stage = PROCESSING`.
+  * **AC2:** Given phiếu `REFUNDED`, Then trả mã giao dịch chuyển khoản hoàn và ngày đóng; `REJECTED` thì trả lý do từ chối; `dueAt` là null khi phiếu đã đóng.
+  * **AC3:** Kết quả tra cứu không bao giờ chứa số tài khoản, tên chủ tài khoản, email, mã đơn hay người xử lý.
+  * **AC4 (Mã khách gõ):** Given mã viết thường, không dấu gạch, có `O`/`I`/`L` thay `0`/`1`, When tra, Then ra đúng phiếu. Given mã sai định dạng hoặc không tồn tại, Then trả 404 `NOT_FOUND` như nhau.
+  * **AC5 (Giới hạn tần suất):** Given một địa chỉ IP đã tra `REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN` lần trong một phút, When tra thêm, Then trả 429 `RATE_LIMITED`; IP khác không bị ảnh hưởng.
+  * **AC6 (Nhân viên):** `GET /refund-claims?code=` tìm được phiếu theo mã khách đọc, cùng quy tắc chuẩn hóa; mã sai định dạng trả danh sách rỗng.
+* **Test:** `test_FR_ORD_36_track_claim_progress_by_code_without_personal_data`, `test_FR_ORD_36_lookup_rate_limit_per_ip`, `test_FR_ORD_36_staff_finds_claim_by_code`, `test_FR_ORD_36_generated_codes_are_crockford_and_distinct`, `test_FR_ORD_36_normalize_accepts_what_customers_type`
+
+---
+
+## FR-ORD-37 — Email cho khách khi tạo và khi đóng phiếu
+* **Statement:** Hệ thống phải gửi email cho khách khi phiếu khiếu nại được tạo và khi phiếu đóng, kèm mã khiếu nại và liên kết tra cứu, không kèm tài khoản ngân hàng.
+* **Traces:** BR-002 · **Priority:** M · ADR-0031
+* **Acceptance criteria:**
+  * **AC1:** Given khách gửi phiếu, Then một email tới địa chỉ khách nhập, theo ngôn ngữ trang lúc gửi, có mã khiếu nại, số tiền, hạn xử lý và liên kết `/claim/status?code=…&key=…`.
+  * **AC2:** Given phiếu đóng `REFUNDED`, `REJECTED` hoặc `EXPIRED` (kể cả do job), Then đúng một email báo phiếu đã có kết quả kèm liên kết; không gửi lại khi job chạy lần nữa.
+  * **AC3:** Nội dung email không chứa số tài khoản, tên chủ tài khoản, mã giao dịch hay lý do từ chối. Email không đi qua bảng `notifications`.
+  * **AC4:** Given dịch vụ email lỗi, Then thao tác của khách hay nhân viên vẫn thành công; mỗi lần gửi ghi AuditLog `ord.refund_claim.customer_notified` với kết quả, không kèm địa chỉ email.
+  * **AC5:** Given liên hệ đã bị xóa hoặc là số điện thoại (phiếu trước ADR-0031), Then không gửi email.
+* **Test:** `test_FR_ORD_37_email_on_create_and_close_without_bank_account`, `test_FR_ORD_37_email_failure_never_blocks_and_is_audited`, `test_FR_ORD_37_expired_claim_notifies_customer_once`, `test_FR_ORD_37_view_key_bound_to_claim_and_secret`
+
+---
+
+## FR-ORD-38 — Bằng chứng camera cho phiếu khiếu nại
+* **Statement:** Hệ thống phải cho Operations Staff được phân công gắn đoạn video hoặc ảnh từ camera an ninh độc lập vào phiếu khiếu nại, với khoảng thời gian ghi khớp thời gian giao dịch của đơn, và bắt buộc có ít nhất một bằng chứng trước khi từ chối phiếu khách khai không nhận được lượt xịt.
+* **Traces:** BR-002 · **Priority:** M · ADR-0032
+* **API:** `GET /refund-claims/{id}/evidence-window`, `GET|POST /refund-claims/{id}/evidence`, `POST /evidence/{id}/remove`
+* **Acceptance criteria:**
+  * **AC1 (Khung giờ):** Given phiếu của đơn đã trả tiền, When xem khung giờ, Then hệ thống trả máy, nhãn camera và khoảng từ lúc trả tiền tới lúc có kết quả lệnh xịt, nới `CAMERA_WINDOW_PADDING_SEC` hai đầu.
+  * **AC2 (Khớp thời gian):** Given khoảng ghi (sau khi trừ độ lệch đồng hồ camera) không giao khung giờ, When tải lên, Then 400 `VALIDATION_ERROR`. Cùng đoạn đó kèm độ lệch đúng thì được nhận và lưu khoảng ghi theo giờ thật.
+  * **AC3 (Người tải):** Chỉ người được phân công tải lên được (`CLAIM_NOT_ASSIGNED`); phiếu đã đóng trả `EVIDENCE_TARGET_CLOSED`.
+  * **AC4 (Tệp):** Chỉ nhận MP4 (kiểm hộp `ftyp`) và ảnh JPEG/PNG/WebP, khác trả 415; ảnh được mã hóa lại sang WebP, mất EXIF; video lưu nguyên. Mỗi tệp lưu SHA-256 của nội dung đã lưu và ghi AuditLog `evd.evidence.uploaded`.
+  * **AC5 (Giới hạn, gỡ nhầm):** Tối đa `CAMERA_EVIDENCE_MAX_PER_TARGET` tệp, tính cả tệp đã gỡ (`EVIDENCE_LIMIT_REACHED`). Chỉ người đã tải gỡ được, khi phiếu còn mở; tệp bị xóa khỏi kho, dòng giữ lý do và SHA-256.
+  * **AC6 (Điều kiện từ chối):** Given phiếu `refundOrder = true` chưa có bằng chứng còn hiệu lực, When từ chối, Then 409 `EVIDENCE_REQUIRED`.
+  * **AC7 (Hạn lưu):** Given phiếu đã đóng quá `REFUND_CLAIM_CONTACT_RETENTION_DAYS` ngày (kể cả tắt dịch vụ qua mốc), When job chạy, Then tệp bị xóa khỏi kho, dòng còn SHA-256 và `purged_at`.
+* **Test:** `test_FR_ORD_38_assigned_staff_attaches_evidence_matching_transaction_time`, `test_FR_ORD_38_rejects_unsupported_files_and_reencodes_images`, `test_FR_ORD_38_limit_removal_and_closed_claim`, `test_FR_ORD_38_reject_needs_evidence_for_not_received_claims`, `test_FR_ORD_38_evidence_files_purged_with_claim_contact`, `test_FR_ORD_38_mp4_detected_by_content_not_name`, `test_FR_ORD_38_window_padding_and_camera_clock_offset`
+
+---
+
+## FR-ORD-39 — Khách xem bằng chứng của phiếu bị từ chối
+* **Statement:** Hệ thống phải cho khách xem bằng chứng hình ảnh của phiếu bị từ chối qua liên kết trong email, bằng đường dẫn có hạn, và ghi nhật ký mỗi lần xem.
+* **Traces:** BR-002, BR-008 · **Priority:** M · ADR-0032
+* **API:** `GET /public/refund-claims/{code}/evidence?key=`, `GET /evidence-files/{id}`
+* **Acceptance criteria:**
+  * **AC1:** Given phiếu chưa `REJECTED`, hoặc `key` sai, When khách gọi, Then 404 `NOT_FOUND` như mã sai — chỉ biết mã khiếu nại thì không xem được hình.
+  * **AC2:** Given phiếu `REJECTED` và `key` đúng, Then trả các tệp còn trong kho kèm đường dẫn hết hạn sau `CAMERA_EVIDENCE_URL_TTL_SEC`; không có người tải, ghi chú nội bộ hay SHA-256.
+  * **AC3:** Đường dẫn trả đúng tệp, `Cache-Control: private, no-store`, hỗ trợ `Range` (206); sửa chữ ký hoặc quá hạn trả 404.
+  * **AC4:** Mỗi lần khách gọi ghi AuditLog `evd.evidence.viewed` với người xem ẩn danh; tra cứu phiếu trả `hasEvidence = true`.
+* **Test:** `test_FR_ORD_39_customer_views_evidence_with_email_key_only_after_rejection`, `test_FR_ORD_39_signed_url_bound_to_file_and_expiry`, `test_FR_ORD_39_range_header_for_video_seeking`
