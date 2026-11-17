@@ -4,6 +4,7 @@ import {
   InboxOutlined,
   SafetyCertificateOutlined,
   ToolOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons';
 import { Card, Space, Tabs, Typography } from 'antd';
 import { useEffect, useState } from 'react';
@@ -14,6 +15,7 @@ import { useI18n } from '@/shared/i18n';
 import { PRODUCT_PARAM, RETURN_TO_PARAM, safeReturnTo } from '@/shared/return-to';
 import { BatchesTab } from './BatchesTab';
 import { BottlesTab } from './BottlesTab';
+import { FootageRequestsTab } from './FootageRequestsTab';
 import { InventoryReportTab } from './InventoryReportTab';
 import { RefillTab } from './RefillTab';
 import { ShipmentsTab } from './ShipmentsTab';
@@ -118,9 +120,32 @@ export default function ShipmentsPage() {
                   <RefillTab
                     canOperate={can('inventory.manage')}
                     canSeeMachines={can('machine.view')}
+                    canHandleEvidence={can('machine.operate')}
+                    isBrand={isBrand}
+                    currentUserId={user?.id ?? null}
                   />
                 ),
               },
+              // ADR-0032: yêu cầu trích hình camera phiếu nạp — nhân sự machine.operate và Brand Admin.
+              ...(can('machine.operate') || isBrand
+                ? [
+                    {
+                      key: 'footage',
+                      label: (
+                        <span>
+                          <VideoCameraOutlined /> {t('ui.footageRequests')}
+                        </span>
+                      ),
+                      children: (
+                        <FootageRequestsTab
+                          canOperate={can('machine.operate')}
+                          isBrand={isBrand}
+                          currentUserId={user?.id ?? null}
+                        />
+                      ),
+                    },
+                  ]
+                : []),
               {
                 key: 'inventoryReport',
                 label: (

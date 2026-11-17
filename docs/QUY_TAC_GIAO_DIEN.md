@@ -89,7 +89,7 @@ prettier cả thư mục sinh hàng trăm thay đổi giả). Commit theo Conven
 |---|---|---|
 | Màu chính — `colorPrimary` / `--color-primary` | `#0284c7` | Nút chính, liên kết, mục menu đang chọn |
 | Nền trang — `--bg-main` | `#f8fafc` | Nền vùng nội dung |
-| Nền menu trái | `#0f172a` | Chỉ thanh menu |
+| Nền menu trái — `--sider-bg` + `SIDER_THEME` (`src/app/theme.ts`) | `#111111` | Chỉ thanh menu; than chì cùng nền landing và favicon. Đổi thì đổi cả hai chỗ, không menu và nền bên dưới lệch màu |
 | Chữ chính | `#1e293b` | Thân bài |
 | Chữ phụ | `Typography.Text type="secondary"` | Mô tả, chú thích — không tự đặt màu xám |
 | Trực tuyến / chập chờn / ngoại tuyến | `--color-online` `#10b981` · `--color-unstable` `#f59e0b` · `--color-offline` `#94a3b8` | Chấm trạng thái kết nối máy |

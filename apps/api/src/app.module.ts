@@ -9,6 +9,7 @@ import { AudModule } from './modules/aud/index.js';
 import { AuthModule } from './modules/auth/index.js';
 import { BndModule } from './modules/bnd/index.js';
 import { DspModule } from './modules/dsp/index.js';
+import { EvdModule } from './modules/evd/index.js';
 import { MchModule } from './modules/mch/index.js';
 import { InvDoseConsumptionModule, InvModule } from './modules/inv/index.js';
 import { IotModule } from './modules/iot/iot.module.js';
@@ -34,6 +35,7 @@ import { ApiExceptionFilter } from './shared/http/exception.filter.js';
     MchModule,
     InvModule,
     RfqModule,
+    EvdModule,
     RptModule,
     RevModule,
     SltModule,

@@ -26,6 +26,8 @@ export const TEST_REFUND_CLAIM_TOKEN_SECRET = 'integration-test-refund-claim-sec
 /** Khóa checksum PayOS trong test — test tự ký webhook bằng `payosSignatureOf` với giá trị này. */
 /** Thư mục và URL công khai của driver local trong test tích hợp (ADR-0020). */
 export const TEST_MEDIA_DIR = join(tmpdir(), 'scentstation-test-media');
+/** Kho riêng tư của bằng chứng camera (ADR-0032) — tách khỏi thư mục ảnh công khai. */
+export const TEST_PRIVATE_MEDIA_DIR = join(tmpdir(), 'scentstation-test-private-media');
 export const TEST_MEDIA_PUBLIC_BASE_URL = 'http://localhost/api/v1/media';
 
 export const TEST_PAYOS_CHECKSUM_KEY = 'integration-test-payos-checksum-key';
@@ -55,6 +57,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestF
   // kể cả khi .env của máy đang chọn r2.
   process.env['MEDIA_STORAGE_DRIVER'] = 'local';
   process.env['MEDIA_DIR'] = TEST_MEDIA_DIR;
+  process.env['MEDIA_PRIVATE_DIR'] = TEST_PRIVATE_MEDIA_DIR;
   process.env['MEDIA_PUBLIC_BASE_URL'] = TEST_MEDIA_PUBLIC_BASE_URL;
   process.env['PAYOS_BASE_URL'] = 'https://payos.test.invalid';
   process.env['PAYOS_CLIENT_ID'] = 'test-client-id';

@@ -57,8 +57,8 @@ describe('Trang khiếu nại hoàn tiền (FR-ORD-29)', () => {
 
   it('test_FR_ORD_29_claim_page_requires_consent_before_submit', async () => {
     renderAt('/claim?o=order-1&t=tok-1');
-    fireEvent.change(screen.getByLabelText('Số điện thoại hoặc email'), {
-      target: { value: '0909123456' },
+    fireEvent.change(screen.getByLabelText('Email nhận thông báo'), {
+      target: { value: 'khach@example.com' },
     });
     fireEvent.change(screen.getByLabelText('Số tài khoản'), { target: { value: '0123456789' } });
     fireEvent.change(screen.getByLabelText('Tên chủ tài khoản'), {
@@ -73,6 +73,7 @@ describe('Trang khiếu nại hoàn tiền (FR-ORD-29)', () => {
     mockPost.mockResolvedValue({
       data: {
         id: 'abcdef12-0000-4000-8000-000000000000',
+        code: 'KN-7F3K9-2QDXA',
         status: 'OPEN',
         amount: '42000.0000',
         currency: 'VND',
@@ -82,8 +83,8 @@ describe('Trang khiếu nại hoàn tiền (FR-ORD-29)', () => {
     });
     renderAt('/claim?o=order-1&t=tok-1');
 
-    fireEvent.change(screen.getByLabelText('Số điện thoại hoặc email'), {
-      target: { value: '0909123456' },
+    fireEvent.change(screen.getByLabelText('Email nhận thông báo'), {
+      target: { value: 'khach@example.com' },
     });
     fireEvent.mouseDown(screen.getByLabelText('Ngân hàng nhận tiền'));
     fireEvent.click(await screen.findByText('MB Bank'));
@@ -99,7 +100,8 @@ describe('Trang khiếu nại hoàn tiền (FR-ORD-29)', () => {
       body: {
         orderId: 'order-1',
         claimToken: 'tok-1',
-        contact: '0909123456',
+        contact: 'khach@example.com',
+        locale: 'vi',
         refundAccount: {
           bankBin: '970422',
           accountNumber: '0123456789',
@@ -110,5 +112,18 @@ describe('Trang khiếu nại hoàn tiền (FR-ORD-29)', () => {
     });
     expect(await screen.findByText('Đã nhận yêu cầu hoàn tiền')).toBeTruthy();
     expect(screen.getByText(/42\.000 VND/)).toBeTruthy();
+    // ADR-0031: mã khiếu nại hiện to, kèm đường tới trang tra cứu.
+    expect(screen.getByText('KN-7F3K9-2QDXA')).toBeTruthy();
+    expect(screen.getByRole('link').getAttribute('href')).toBe('/claim/status?code=KN-7F3K9-2QDXA');
+  });
+
+  it('test_FR_ORD_29_claim_page_requires_valid_email', async () => {
+    renderAt('/claim?o=order-1&t=tok-1');
+    fireEvent.change(screen.getByLabelText('Email nhận thông báo'), {
+      target: { value: '0909123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu' }));
+    expect(await screen.findByText('Email không hợp lệ')).toBeTruthy();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });

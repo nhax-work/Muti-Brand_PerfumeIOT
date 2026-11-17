@@ -8,6 +8,10 @@ import {
   PublicRefundClaimsController,
   RefundClaimsController,
 } from './refund-claims/refund-claims.http.js';
+import {
+  DefaultRefundClaimMailer,
+  REFUND_CLAIM_MAILER,
+} from './refund-claims/refund-claim-mailer.js';
 import { RefundClaimsQueries } from './refund-claims/refund-claims.queries.js';
 import { RefundClaimsService } from './refund-claims/refund-claims.service.js';
 
@@ -29,7 +33,8 @@ import { RefundClaimsService } from './refund-claims/refund-claims.service.js';
     PaymentWebhookService,
     RefundClaimsQueries,
     RefundClaimsService,
+    { provide: REFUND_CLAIM_MAILER, useClass: DefaultRefundClaimMailer },
   ],
-  exports: [OrdService, RefundClaimsService],
+  exports: [OrdService, RefundClaimsService, REFUND_CLAIM_MAILER],
 })
 export class OrdModule {}

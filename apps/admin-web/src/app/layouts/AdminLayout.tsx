@@ -8,7 +8,17 @@ import {
   UserOutlined,
 } from '@ant-design/icons';
 import { LOCALES, translate, type Locale } from '@scentstation/i18n';
-import { Avatar, Button, Layout, Menu, Select, Space, Tooltip, Typography } from 'antd';
+import {
+  Avatar,
+  Button,
+  ConfigProvider,
+  Layout,
+  Menu,
+  Select,
+  Space,
+  Tooltip,
+  Typography,
+} from 'antd';
 import type { MenuProps } from 'antd';
 import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
@@ -16,6 +26,7 @@ import { FrameworkAgreementModal, useCurrentAgreement } from '@/shared/agreement
 import { useAuth } from '@/shared/auth';
 import { useI18n } from '@/shared/i18n';
 import { activeNavPath, groupOfPath, isNavGroup, visibleNav } from '../navigation';
+import { SIDER_THEME } from '../theme';
 import { BrandOnboardingTour } from '../onboarding/BrandOnboardingTour';
 import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { NotificationBell } from './NotificationBell';
@@ -126,14 +137,16 @@ export function AdminLayout() {
             </>
           )}
         </Typography.Title>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={activePath ? [activePath] : []}
-          defaultOpenKeys={activeGroup ? [activeGroup] : []}
-          items={items}
-          onClick={({ key }) => void navigate(key)}
-        />
+        <ConfigProvider theme={SIDER_THEME}>
+          <Menu
+            theme="dark"
+            mode="inline"
+            selectedKeys={activePath ? [activePath] : []}
+            defaultOpenKeys={activeGroup ? [activeGroup] : []}
+            items={items}
+            onClick={({ key }) => void navigate(key)}
+          />
+        </ConfigProvider>
       </Layout.Sider>
 
       {/* KHUNG NỘI DUNG CHÍNH (HEADER CỐ ĐỊNH, CHỈ CUỘN PHẦN BODY) */}

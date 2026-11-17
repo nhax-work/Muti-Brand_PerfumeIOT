@@ -30,6 +30,7 @@ import {
   shipmentStatus,
 } from './inv.js';
 import { dsp } from './dsp.js';
+import { evd, evidenceKind, footageRequestStatus } from './evd.js';
 import { kiosk } from './kiosk.js';
 import {
   machineOperatingMode,
@@ -98,4 +99,7 @@ export const vi = {
   ticketPriority,
   exp,
   bottleReturnMethod,
+  evd,
+  evidenceKind,
+  footageRequestStatus,
 } as const;

@@ -89,9 +89,12 @@ chuyển sở hữu về nền tảng. `SLOT_SWAP_WINDOW_HOURS` tính từ lúc 
 | `REFUND_CLAIM_MAX_OPEN_DAYS` | 30 | FR-ORD-32 |
 | `REFUND_CLAIM_RATE_LIMIT_PER_MIN` | 5 | FR-ORD-29 |
 | `REFUND_CLAIM_CONTACT_RETENTION_DAYS` | 30 | FR-ORD-31 |
+| `REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN` | 10 | FR-ORD-36, ADR-0031 |
 
 Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 — quá hạn thì cảnh báo, không tự
 đóng phiếu. `REFUND_CLAIM_RATE_LIMIT_PER_MIN` tính theo địa chỉ IP gửi khiếu nại trên trang công khai.
+`REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN` tính theo địa chỉ IP tra cứu phiếu trên trang công khai
+(ADR-0031).
 
 ## Tồn kho và cảnh báo
 
@@ -108,6 +111,23 @@ Theo ADR-0012. `REFUND_CLAIM_SLA_HOURS` là mục tiêu xử lý của BR-002 �
 | `SHIPMENT_PHOTO_MAX_EDGE_PX` | 1600 | FR-INV-22, ADR-0024 |
 | `SHIPMENT_RECEIVE_MAX_BOTTLES` | 2000 | FR-INV-26, ADR-0025 |
 | `SHIPMENT_MIN_TOTAL_VOLUME_ML` | 500 | FR-INV-22 |
+
+## Bằng chứng camera an ninh
+
+| Hằng | Giá trị | FR |
+|---|---|---|
+| `CAMERA_WINDOW_PADDING_SEC` | 60 | FR-ORD-38, FR-INV-38, ADR-0032 |
+| `CAMERA_CLIP_MAX_BYTES` | 20971520 | FR-ORD-38, FR-INV-38, ADR-0032 |
+| `CAMERA_IMAGE_MAX_BYTES` | 5242880 | FR-ORD-38, FR-INV-38, ADR-0032 |
+| `CAMERA_IMAGE_MAX_EDGE_PX` | 1920 | FR-ORD-38, FR-INV-38, ADR-0032 |
+| `CAMERA_EVIDENCE_MAX_PER_TARGET` | 5 | FR-ORD-38, FR-INV-38, ADR-0032 |
+| `CAMERA_EVIDENCE_URL_TTL_SEC` | 300 | FR-ORD-39, FR-INV-38, ADR-0032 |
+| `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` | 14 | FR-INV-39, ADR-0032 |
+| `CAMERA_REFILL_EVIDENCE_RETENTION_DAYS` | 90 | FR-INV-38, ADR-0032 |
+
+`CAMERA_WINDOW_PADDING_SEC` nới hai đầu khung giờ hệ thống đề xuất (đơn: từ lúc trả tiền tới lúc có kết
+quả lệnh xịt; phiếu nạp: từ lúc mở tới lúc đóng). `CAMERA_FOOTAGE_REQUEST_MAX_DAYS` không được lớn hơn số
+ngày đầu ghi giữ hình. Bằng chứng phiếu khiếu nại xóa theo `REFUND_CLAIM_CONTACT_RETENTION_DAYS`.
 
 ## Sản phẩm
 

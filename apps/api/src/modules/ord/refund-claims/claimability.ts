@@ -3,7 +3,7 @@
  * và mã khiếu nại dùng một lần trên QR sự cố.
  */
 
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { OrderStatus } from '../../../shared/db/types.generated.js';
 
 export interface ClaimableOrderFacts {
@@ -63,7 +63,60 @@ export function claimTokenFor(secret: string, orderId: string): string {
 }
 
 export function isValidClaimToken(secret: string, orderId: string, token: string): boolean {
-  const expected = Buffer.from(claimTokenFor(secret, orderId));
-  const given = Buffer.from(token);
+  return safeEqual(claimTokenFor(secret, orderId), token);
+}
+
+// -------------------------------------------------------------------------------------
+// Mã khiếu nại cho khách tra cứu (ADR-0031)
+// -------------------------------------------------------------------------------------
+
+/** Crockford Base32: không có I, L, O, U — không nhầm với 1, 0 và không thành từ tục. */
+const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const CODE_LENGTH = 10;
+const CODE_PREFIX = 'KN';
+const RAW_CODE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
+
+/** 10 ký tự ngẫu nhiên từ bộ sinh số mật mã — 50 bit, không đoán được mã phiếu kế bên. */
+export function generateClaimCode(): string {
+  // 32 giá trị chia hết 256 nên lấy 5 bit thấp của mỗi byte không lệch phân phối.
+  return Array.from(randomBytes(CODE_LENGTH), (b) => CROCKFORD[b & 31]).join('');
+}
+
+/** `KN-XXXXX-XXXXX` — dạng khách đọc, chép và dán. */
+export function formatClaimCode(raw: string): string {
+  return `${CODE_PREFIX}-${raw.slice(0, 5)}-${raw.slice(5)}`;
+}
+
+/**
+ * Mã khách nhập → dạng lưu (10 ký tự), `null` nếu không phải mã hợp lệ. Bỏ dấu gạch, khoảng trắng,
+ * tiền tố `KN`; không phân biệt hoa thường; I/L đọc thành 1, O đọc thành 0 (quy ước Crockford).
+ */
+export function normalizeClaimCode(input: string): string | null {
+  let code = input.toUpperCase().replace(/[\s-]/g, '');
+  if (code.length === CODE_LENGTH + CODE_PREFIX.length && code.startsWith(CODE_PREFIX)) {
+    code = code.slice(CODE_PREFIX.length);
+  }
+  code = code.replace(/[IL]/g, '1').replace(/O/g, '0');
+  return RAW_CODE.test(code) ? code : null;
+}
+
+/**
+ * Khóa xem bằng chứng trong liên kết email (ADR-0031 mục 4, dùng ở ADR-0032). Như mã khiếu nại trong
+ * QR: HMAC tính lại khi kiểm, không lưu. Tiền tố khác để hai loại mã không thay được cho nhau.
+ */
+export function claimViewKeyFor(secret: string, claimId: string): string {
+  return createHmac('sha256', secret)
+    .update(`refund-claim-view:${claimId}`)
+    .digest('base64url')
+    .slice(0, 32);
+}
+
+export function isValidClaimViewKey(secret: string, claimId: string, key: string): boolean {
+  return safeEqual(claimViewKeyFor(secret, claimId), key);
+}
+
+function safeEqual(expectedText: string, givenText: string): boolean {
+  const expected = Buffer.from(expectedText);
+  const given = Buffer.from(givenText);
   return given.length === expected.length && timingSafeEqual(given, expected);
 }

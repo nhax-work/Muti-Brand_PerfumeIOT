@@ -16,5 +16,12 @@ export {
   type NormalizedImage,
 } from './normalize-image.js';
 export { LocalMediaStorage } from './local-media-storage.js';
+export {
+  LocalPrivateMediaStorage,
+  PRIVATE_MEDIA_STORAGE,
+  R2PrivateMediaStorage,
+  type PrivateMediaStorage,
+  type PrivateS3Sender,
+} from './private-media-storage.js';
 export { R2MediaStorage, r2Endpoint, type S3Sender } from './r2-media-storage.js';
 export { LOCAL_MEDIA_ROUTE, registerMediaRoutes } from './register-media-routes.js';

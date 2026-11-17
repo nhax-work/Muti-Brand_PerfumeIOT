@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import type { components } from '@scentstation/contracts';
 import { Alert, Button, Card, Checkbox, Form, Input, Result, Select, Typography } from 'antd';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { api, errorMessage, unwrap } from '@/shared/api';
 import { VIETQR_BANKS } from '@/shared/banks';
 import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
@@ -22,9 +22,10 @@ interface ClaimFormValues {
 /**
  * Trang khiếu nại hoàn tiền công khai — khách mở bằng điện thoại sau khi quét QR sự cố trên kiosk
  * (FR-ORD-29, ADR-0012). Không cần đăng nhập; mã đơn và mã khiếu nại nằm trên đường dẫn (?o=…&t=…).
+ * Gửi xong hiện mã khiếu nại để khách tự tra cứu tiến độ, dù email không tới (ADR-0031).
  */
 export default function ClaimPage() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [params] = useSearchParams();
   const orderId = params.get('o');
   const claimToken = params.get('t');
@@ -48,7 +49,19 @@ export default function ClaimPage() {
         <Result
           status="success"
           title={t('ui.claimSubmitted')}
-          subTitle={t('ui.claimSubmittedDetail', { amount, id: submit.data.id.slice(0, 8) })}
+          subTitle={t('ui.claimSubmittedDetail', { amount })}
+          extra={
+            <>
+              <Typography.Text type="secondary">{t('ui.claimCodeLabel')}</Typography.Text>
+              <Typography.Title level={2} copyable className="claim-code">
+                {submit.data.code}
+              </Typography.Title>
+              <Typography.Paragraph type="secondary">{t('ui.claimCodeKeep')}</Typography.Paragraph>
+              <Link to={`/claim/status?code=${encodeURIComponent(submit.data.code)}`}>
+                <Button type="primary">{t('ui.claimTrackLink')}</Button>
+              </Link>
+            </>
+          }
         />
       </Card>
     );
@@ -59,6 +72,7 @@ export default function ClaimPage() {
       orderId,
       claimToken,
       contact: values.contact.trim(),
+      locale,
       refundAccount: {
         bankBin: values.bankBin,
         accountNumber: values.accountNumber.trim(),
@@ -89,9 +103,12 @@ export default function ClaimPage() {
           name="contact"
           label={t('ui.claimContact')}
           extra={t('ui.claimContactHint')}
-          rules={[{ required: true, min: 5, message: t('ui.claimFieldRequired') }]}
+          rules={[
+            { required: true, message: t('ui.claimFieldRequired') },
+            { type: 'email', message: t('validation.invalidEmail') },
+          ]}
         >
-          <Input autoComplete="tel" maxLength={200} />
+          <Input type="email" inputMode="email" autoComplete="email" maxLength={200} />
         </Form.Item>
         <Form.Item
           name="bankBin"
