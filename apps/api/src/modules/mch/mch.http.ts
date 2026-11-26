@@ -124,6 +124,9 @@ const MachineUpdateBody = z.object({
   locationId: z.string().uuid().optional(),
 });
 
+/** openapi `CameraLabelUpdate` (ADR-0032). */
+const CameraLabelBody = z.object({ cameraLabel: z.string().max(100).nullable() });
+
 const MachineModeBody = z.object({
   operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']),
   reason: z.string().optional(),
@@ -174,6 +177,18 @@ export class MachinesController {
     const validatedId = parseBody(IdParam, id);
     const input = parseBody(MachineUpdateBody, body);
     return this.mch.updateMachine(validatedId, input);
+  }
+
+  /** FR-MCH-20 (ADR-0032): nhãn camera an ninh — Super Admin (machine.manage ở mức lớp). */
+  @Put(':id/camera-label')
+  setCameraLabel(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const validatedId = parseBody(IdParam, id);
+    const { cameraLabel } = parseBody(CameraLabelBody, body);
+    return this.mch.setCameraLabel(actor, validatedId, cameraLabel);
   }
 
   /** FR-MCH-11, FR-MNT-05, FR-MNT-17: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */

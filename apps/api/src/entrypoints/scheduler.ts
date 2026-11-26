@@ -8,6 +8,7 @@
 import { Logger, type INestApplicationContext } from '@nestjs/common';
 import { AlrService } from '../modules/alr/index.js';
 import { DspJobs } from '../modules/dsp/index.js';
+import { EvdService } from '../modules/evd/index.js';
 import { ExpJobs } from '../modules/exp/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { RevService } from '../modules/rev/index.js';
@@ -157,6 +158,23 @@ export function startScheduler(
         })
         .catch((e: unknown) => logger.error(`Bảo trì phiếu khiếu nại lỗi: ${String(e)}`))
         .finally(() => (maintainingClaims = false));
+    }, REFUND_CLAIM_TICK_MS),
+  );
+
+  // ADR-0032 mục 9: xóa tệp bằng chứng camera tới hạn — quét theo mốc, bù được sau downtime.
+  const evidence = app.get(EvdService);
+  let purgingEvidence = false;
+  timers.push(
+    setInterval(() => {
+      if (purgingEvidence) return;
+      purgingEvidence = true;
+      evidence
+        .runMaintenance()
+        .then(({ purged }) => {
+          if (purged > 0) logger.log(`Bằng chứng camera: xóa ${purged} tệp tới hạn`);
+        })
+        .catch((e: unknown) => logger.error(`Xóa bằng chứng camera lỗi: ${String(e)}`))
+        .finally(() => (purgingEvidence = false));
     }, REFUND_CLAIM_TICK_MS),
   );
 

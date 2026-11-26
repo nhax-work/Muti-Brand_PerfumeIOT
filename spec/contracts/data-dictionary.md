@@ -16,7 +16,7 @@ Sơ đồ quan hệ: `spec/contracts/erd.md` · Lược đồ thi hành: `spec/c
 | Thể tích | `numeric(14,4)` mililít |
 | Loại tiền | `char(3)` mã ISO-4217, mặc định `VND` |
 
-Tổng: **48 bảng**, **31 kiểu enum**.
+Tổng: **50 bảng**, **33 kiểu enum**.
 
 ---
 
@@ -35,6 +35,8 @@ Tổng: **48 bảng**, **31 kiểu enum**.
 | `command_status` | `CREATED` · `SENT` · `ACKNOWLEDGED` · `SUCCEEDED` · `FAILED` · `REJECTED` · `EXPIRED` · `UNKNOWN` |
 | `credential_status` | `ACTIVE` · `REVOKED` · `EXPIRED` |
 | `dispense_type` | `CUSTOMER` · `DIAGNOSTIC` |
+| `evidence_kind` | `VIDEO` · `IMAGE` |
+| `footage_request_status` | `OPEN` · `FULFILLED` · `UNAVAILABLE` |
 | `kiosk_interaction_type` | `PRODUCT_IMPRESSION` · `PRODUCT_SELECTED` |
 | `machine_connection_status` | `ONLINE` · `UNSTABLE` · `OFFLINE` |
 | `machine_operating_mode` | `NORMAL` · `DRAINING` · `MAINTENANCE` · `DISABLED` |
@@ -362,6 +364,7 @@ Máy thuộc nền tảng, KHÔNG có brand_id. Một máy chứa slot của nhi
 | `simulator_enabled` | `boolean` | — | `false` |  |
 | `created_at` | `timestamp with time zone` | — | `now()` |  |
 | `updated_at` | `timestamp with time zone` | — | `now()` |  |
+| `camera_label` | `character varying(100)` | có |  | Nhãn camera an ninh quay máy này (ADR-0032, FR-MCH-20) — để người đi lấy hình biết tua đầu ghi nào. |
 
 **Khóa ngoại**
 
@@ -968,6 +971,7 @@ Hàng này CHÍNH LÀ phiếu nạp. status=STARTED/started_at = mở phiếu (F
 
 - `idx_refill_sessions_brand_machine` — `USING btree (brand_id, machine_id, started_at)`
 - `refill_sessions_pkey` (UNIQUE) — `USING btree (id)`
+- `uq_refill_session_id_brand` (UNIQUE) — `USING btree (id, brand_id)`
 - `uq_slot_open_refill_session` (UNIQUE) — `USING btree (slot_id) WHERE (status = 'STARTED'::refill_status)`
 
 ### `inventory_adjustments`
@@ -1364,7 +1368,7 @@ Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT đư
 | `amount` | `numeric(19,4)` | — |  | Số tiền phải hoàn, tính lúc tạo phiếu: tiền đơn (nếu refund_order) cộng các khoản chuyển thừa. |
 | `currency` | `character(3)` | — |  |  |
 | `account_ciphertext` | `bytea` | có |  | Tài khoản nhận hoàn tiền (mã ngân hàng, số tài khoản, tên chủ tài khoản), AES-256-GCM tầng ứng dụng. Chỉ Operations Staff được phân công giải mã, sau khi xác thực lại. NULL ngay khi phiếu đóng. |
-| `contact_ciphertext` | `bytea` | có |  | Số điện thoại hoặc email liên hệ, mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa. |
+| `contact_ciphertext` | `bytea` | có |  | Email liên hệ (phiếu trước ADR-0031 có thể là số điện thoại), mã hóa riêng. Giữ thêm REFUND_CLAIM_CONTACT_RETENTION_DAYS ngày sau khi đóng phiếu rồi job xóa. |
 | `pii_key_version` | `smallint` | — |  | Phiên bản khóa đã mã hóa hai khối trên — để xoay khóa mà vẫn đọc được phiếu cũ. |
 | `consented_at` | `timestamp with time zone` | — |  | Thời điểm khách tick đồng ý xử lý dữ liệu cá nhân trên trang khiếu nại. |
 | `assigned_to` | `uuid` | có |  |  |
@@ -1377,6 +1381,8 @@ Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT đư
 | `closed_at` | `timestamp with time zone` | có |  |  |
 | `account_purged_at` | `timestamp with time zone` | có |  |  |
 | `contact_purged_at` | `timestamp with time zone` | có |  |  |
+| `public_code` | `character(10)` | — |  | Mã khiếu nại khách dùng để tra cứu (ADR-0031): 10 ký tự Crockford Base32 ngẫu nhiên, hiển thị dạng KN-XXXXX-XXXXX. Không phải dữ liệu cá nhân — không bị xóa khi xóa khối tài khoản hay liên hệ. |
+| `locale` | `character varying(5)` | — | `'vi'::character varying` | Ngôn ngữ trang khiếu nại lúc khách gửi — email gửi khách theo ngôn ngữ này (FR-ORD-37). |
 
 **Ràng buộc kiểm tra**
 
@@ -1385,7 +1391,9 @@ Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT đư
 - `chk_refund_claim_assignment` — `CHECK (((assigned_to IS NULL) = (assigned_at IS NULL)))`
 - `chk_refund_claim_closed_at` — `CHECK (((status = 'OPEN'::refund_claim_status) = (closed_at IS NULL)))`
 - `chk_refund_claim_contact_purge` — `CHECK (((contact_purged_at IS NULL) OR (contact_ciphertext IS NULL)))`
+- `chk_refund_claim_locale` — `CHECK (((locale)::text = ANY ((ARRAY['vi'::character varying, 'en'::character varying])::text[])))`
 - `chk_refund_claim_open_has_account` — `CHECK (((status <> 'OPEN'::refund_claim_status) OR (account_ciphertext IS NOT NULL)))`
+- `chk_refund_claim_public_code` — `CHECK ((public_code ~ '^[0-9A-HJKMNP-TV-Z]{10}$'::text))`
 - `chk_refund_claim_refunded_has_payout` — `CHECK (((status <> 'REFUNDED'::refund_claim_status) OR (payout_reference IS NOT NULL)))`
 - `chk_refund_claim_rejected_has_note` — `CHECK (((status <> 'REJECTED'::refund_claim_status) OR (resolution_note IS NOT NULL)))`
 
@@ -1403,6 +1411,90 @@ Phiếu khiếu nại hoàn tiền thủ công (ADR-0012). Chỗ DUY NHẤT đư
 - `idx_refund_claims_status` — `USING btree (status, created_at)`
 - `refund_claims_pkey` (UNIQUE) — `USING btree (id)`
 - `uq_refund_claim_order` (UNIQUE) — `USING btree (order_id)`
+- `uq_refund_claim_public_code` (UNIQUE) — `USING btree (public_code)`
+
+### `camera_evidence`
+
+Đoạn video hoặc ảnh trích từ camera an ninh độc lập với máy, gắn vào phiếu khiếu nại hoặc phiếu nạp (ADR-0032). Tệp nằm ở kho riêng tư, chỉ đọc qua đường dẫn ký có hạn. Xóa tệp thì giữ dòng: ai tải, lúc nào, SHA-256, purged_at.
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `refund_claim_id` | `uuid` | có |  |  |
+| `refill_session_id` | `uuid` | có |  |  |
+| `kind` | `evidence_kind` | — |  |  |
+| `storage_key` | `text` | có |  | Khóa đối tượng ở kho riêng tư. NULL khi tệp đã bị gỡ (removed_*) hoặc job xóa theo hạn (purged_at). |
+| `content_type` | `character varying(50)` | — |  |  |
+| `size_bytes` | `integer` | — |  |  |
+| `sha256` | `character(64)` | — |  | SHA-256 (hex) của đúng tệp đã lưu, tính lúc tải lên — chứng minh hình không bị sửa sau đó. |
+| `camera_label` | `character varying(100)` | — |  |  |
+| `recorded_from` | `timestamp with time zone` | — |  | Đầu khoảng ghi, theo giờ hệ thống (đã trừ clock_offset_sec). Phải giao khung giờ hệ thống đề xuất. |
+| `recorded_to` | `timestamp with time zone` | — |  |  |
+| `clock_offset_sec` | `integer` | — | `0` | Giờ trên hình trừ giờ thật, giây — người tải đọc dấu giờ trên hình và đối chiếu khi tải lên. |
+| `note` | `text` | có |  |  |
+| `uploaded_by` | `uuid` | — |  |  |
+| `uploaded_at` | `timestamp with time zone` | — | `now()` |  |
+| `removed_by` | `uuid` | có |  |  |
+| `removed_at` | `timestamp with time zone` | có |  |  |
+| `removed_reason` | `text` | có |  |  |
+| `purged_at` | `timestamp with time zone` | có |  |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_evidence_file_present` — `CHECK (((storage_key IS NULL) = ((purged_at IS NOT NULL) OR (removed_by IS NOT NULL))))`
+- `chk_evidence_one_target` — `CHECK ((num_nonnulls(refund_claim_id, refill_session_id) = 1))`
+- `chk_evidence_recorded_range` — `CHECK ((recorded_to > recorded_from))`
+- `chk_evidence_removed` — `CHECK ((((removed_by IS NULL) = (removed_at IS NULL)) AND ((removed_by IS NULL) = (removed_reason IS NULL))))`
+- `chk_evidence_sha256` — `CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text))`
+- `chk_evidence_size_positive` — `CHECK ((size_bytes > 0))`
+
+**Khóa ngoại**
+
+- `camera_evidence_refill_session_id_fkey` — `FOREIGN KEY (refill_session_id) REFERENCES refill_sessions(id)`
+- `camera_evidence_refund_claim_id_fkey` — `FOREIGN KEY (refund_claim_id) REFERENCES refund_claims(id)`
+- `camera_evidence_removed_by_fkey` — `FOREIGN KEY (removed_by) REFERENCES users(id)`
+- `camera_evidence_uploaded_by_fkey` — `FOREIGN KEY (uploaded_by) REFERENCES users(id)`
+
+**Index**
+
+- `camera_evidence_pkey` (UNIQUE) — `USING btree (id)`
+- `idx_evidence_claim` — `USING btree (refund_claim_id) WHERE (refund_claim_id IS NOT NULL)`
+- `idx_evidence_refill` — `USING btree (refill_session_id) WHERE (refill_session_id IS NOT NULL)`
+- `idx_evidence_stored` — `USING btree (uploaded_at) WHERE (storage_key IS NOT NULL)`
+
+### `footage_requests`
+
+Yêu cầu trích hình camera cho một phiếu nạp, do Brand Admin gửi (ADR-0032, FR-INV-39). Đóng FULFILLED khi đã gắn bằng chứng, UNAVAILABLE khi không có hình (bắt buộc response_note).
+
+| Cột | Kiểu | Null | Mặc định | Mô tả |
+|---|---|---|---|---|
+| `id` | `uuid` | — | `gen_random_uuid()` |  |
+| `refill_session_id` | `uuid` | — |  |  |
+| `brand_id` | `uuid` | — |  |  |
+| `status` | `footage_request_status` | — | `'OPEN'::footage_request_status` |  |
+| `reason` | `text` | — |  |  |
+| `requested_by` | `uuid` | — |  |  |
+| `response_note` | `text` | có |  |  |
+| `resolved_by` | `uuid` | có |  |  |
+| `created_at` | `timestamp with time zone` | — | `now()` |  |
+| `resolved_at` | `timestamp with time zone` | có |  |  |
+
+**Ràng buộc kiểm tra**
+
+- `chk_footage_request_resolved` — `CHECK ((((status = 'OPEN'::footage_request_status) = (resolved_at IS NULL)) AND ((status = 'OPEN'::footage_request_status) = (resolved_by IS NULL))))`
+- `chk_footage_request_unavailable_has_note` — `CHECK (((status <> 'UNAVAILABLE'::footage_request_status) OR (response_note IS NOT NULL)))`
+
+**Khóa ngoại**
+
+- `fk_footage_request_session_same_brand` — `FOREIGN KEY (refill_session_id, brand_id) REFERENCES refill_sessions(id, brand_id)` — *ràng buộc cùng thương hiệu*
+- `footage_requests_requested_by_fkey` — `FOREIGN KEY (requested_by) REFERENCES users(id)`
+- `footage_requests_resolved_by_fkey` — `FOREIGN KEY (resolved_by) REFERENCES users(id)`
+
+**Index**
+
+- `footage_requests_pkey` (UNIQUE) — `USING btree (id)`
+- `idx_footage_requests_brand` — `USING btree (brand_id, created_at)`
+- `uq_footage_request_open` (UNIQUE) — `USING btree (refill_session_id) WHERE (status = 'OPEN'::footage_request_status)`
 
 ## Nhóm Operations
 

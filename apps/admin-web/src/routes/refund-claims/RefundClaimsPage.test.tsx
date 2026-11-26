@@ -53,6 +53,24 @@ vi.mock('./api', async () => {
   };
 });
 
+const mockCommandFor = vi.fn();
+
+vi.mock('@/routes/orders/api', () => ({
+  useOrderDispenseCommand: (orderId: string | undefined) => {
+    mockCommandFor(orderId);
+    return {
+      isLoading: false,
+      data: {
+        status: 'FAILED',
+        commandToken: 'cmd_2f8921c7',
+        sentAt: '2026-10-12T02:58:00Z',
+        acknowledgedAt: '2026-10-12T02:58:01Z',
+        result: { success: false, failureCode: 'ACTUATOR_FAULT' },
+      },
+    };
+  },
+}));
+
 beforeAll(() => {
   global.ResizeObserver = class {
     observe() {}
@@ -119,5 +137,15 @@ describe('Màn xử lý khiếu nại hoàn tiền (FR-ORD-20, FR-ORD-32)', () =
     expect(screen.queryByRole('button', { name: 'Nhận xử lý' })).toBeNull();
     expect(screen.getByText('Phân công cho')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Xem tài khoản nhận tiền' })).toBeNull();
+  });
+
+  it('test_FR_ORD_20_claim_detail_shows_dispense_command_of_order', () => {
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Chi tiết phiếu' }));
+    // Người xử lý đối chiếu kết quả máy báo về của đúng đơn bị khiếu nại.
+    expect(mockCommandFor).toHaveBeenCalledWith('order-1');
+    expect(screen.getByText('(Dữ liệu từ máy)')).toBeTruthy();
+    expect(screen.getByText('cmd_2f8921c7')).toBeTruthy();
+    expect(screen.getByText('Thất bại: Bơm xịt gặp sự cố')).toBeTruthy();
   });
 });

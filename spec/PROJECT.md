@@ -170,6 +170,7 @@ Mô hình cho thuê, theo các quyết định nghiệp vụ nền tảng:
   | ALR | `alerts`, `notifications` — chỉ ghi qua `AlrService.raiseAlert`, `notifyBrandAdmins`, `notifyUsers` |
   | MNT | `maintenance_tickets`, `maintenance_activities` |
   | REV | `brand_payouts` |
+  | EVD | `camera_evidence`, `footage_requests` (ADR-0032) |
   | `shared/audit` | `audit_logs` — chỉ thêm, qua `AuditService` |
 
   Các chỗ ghi chéo còn tồn tại (nợ kỹ thuật, ghi nhận 2026-10-29). Code mới không thêm chỗ ghi chéo

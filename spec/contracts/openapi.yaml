@@ -97,6 +97,8 @@ tags:
     description: Dashboard và báo cáo
   - name: AUD
     description: Nhật ký kiểm toán
+  - name: EVD
+    description: Bằng chứng camera an ninh độc lập với máy (ADR-0032)
 
 components:
   securitySchemes:
@@ -109,6 +111,32 @@ components:
         Token bị thu hồi trong `SESSION_REVOKE_MAX_SEC` khi tài khoản bị vô hiệu hóa (FR-AUTH-10).
 
   parameters:
+    evidenceCameraLabel:
+      name: cameraLabel
+      in: query
+      required: true
+      description: Nhãn camera đã trích hình (ADR-0032).
+      schema: { type: string, minLength: 1, maxLength: 100 }
+    evidenceRecordedFrom:
+      name: recordedFrom
+      in: query
+      required: true
+      description: Đầu khoảng ghi theo giờ trên hình (chưa trừ độ lệch).
+      schema: { type: string, format: date-time }
+    evidenceRecordedTo:
+      name: recordedTo
+      in: query
+      required: true
+      schema: { type: string, format: date-time }
+    evidenceClockOffset:
+      name: clockOffsetSec
+      in: query
+      description: Giờ trên hình trừ giờ thật, giây. Mặc định 0.
+      schema: { type: integer, minimum: -86400, maximum: 86400, default: 0 }
+    evidenceNote:
+      name: note
+      in: query
+      schema: { type: string, maxLength: 1000 }
     page:
       name: page
       in: query
@@ -761,6 +789,10 @@ components:
           description: >-
             Chỉ có khi operatingMode = DRAINING: số đơn và lệnh xịt máy còn phải phục vụ trước khi tự
             sang MAINTENANCE (FR-MCH-09, ADR-0017). Chỉ đọc — đọc máy không đổi chế độ.
+        cameraLabel:
+          type: [string, 'null']
+          maxLength: 100
+          description: Nhãn camera an ninh quay máy này (FR-MCH-20, ADR-0032).
     MachineCreate:
       type: object
       required: [locationId, serialNumber, displayName, slotCount]
@@ -2303,22 +2335,37 @@ components:
         claimToken: { type: string, minLength: 1, maxLength: 200 }
         contact:
           type: string
+          format: email
           minLength: 5
           maxLength: 200
           description: >-
-            Số điện thoại hoặc email để nhận kết quả. Mã hóa; xóa sau
-            REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng.
+            Email nhận mã khiếu nại và kết quả xử lý (ADR-0031, FR-ORD-37). Mã hóa; xóa sau
+            REFUND_CLAIM_CONTACT_RETENTION_DAYS kể từ khi phiếu đóng. Phiếu tạo trước ADR-0031 có thể
+            là số điện thoại.
+        locale:
+          type: string
+          enum: [vi, en]
+          default: vi
+          description: Ngôn ngữ trang khiếu nại lúc gửi — email gửi khách theo ngôn ngữ này.
         refundAccount: { $ref: '#/components/schemas/RefundAccountInput' }
         consent:
           type: boolean
           const: true
           description: Khách đồng ý cho nền tảng xử lý dữ liệu cá nhân để hoàn tiền. Bắt buộc là true.
+    RefundClaimCode:
+      type: string
+      pattern: '^KN-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$'
+      description: >-
+        Mã khiếu nại cho khách (ADR-0031): 10 ký tự Crockford Base32 ngẫu nhiên. Khi nhập, không phân
+        biệt hoa thường, bỏ qua dấu gạch và khoảng trắng; I/L đọc thành 1, O đọc thành 0.
+      example: KN-7F3K9-2QDXA
     RefundClaimReceipt:
       type: object
-      required: [id, status, amount, currency, createdAt]
+      required: [id, code, status, amount, currency, createdAt]
       description: Phản hồi cho khách sau khi gửi khiếu nại — không chứa dữ liệu cá nhân.
       properties:
         id: { type: string, format: uuid }
+        code: { $ref: '#/components/schemas/RefundClaimCode' }
         status: { $ref: '#/components/schemas/RefundClaimStatus' }
         amount: { $ref: '#/components/schemas/Money' }
         currency: { $ref: '#/components/schemas/Currency' }
@@ -2327,6 +2374,7 @@ components:
       type: object
       required:
         - id
+        - code
         - orderId
         - paymentReference
         - status
@@ -2341,6 +2389,7 @@ components:
         tiền hay thông tin liên hệ — xem tài khoản qua endpoint riêng, chỉ người được phân công.
       properties:
         id: { type: string, format: uuid }
+        code: { $ref: '#/components/schemas/RefundClaimCode' }
         orderId: { type: string, format: uuid }
         paymentReference: { type: string }
         status: { $ref: '#/components/schemas/RefundClaimStatus' }
@@ -2353,13 +2402,174 @@ components:
         assignedTo: { type: [string, 'null'], format: uuid }
         assignedAt: { type: [string, 'null'], format: date-time }
         payoutReference: { type: [string, 'null'] }
-        resolutionNote: { type: [string, 'null'] }
+        resolutionNote:
+          type: [string, 'null']
+          description: Lý do từ chối hoặc ghi chú khi hoàn — khách đọc được ở trang tra cứu (ADR-0031).
         createdAt: { type: string, format: date-time }
         closedAt: { type: [string, 'null'], format: date-time }
         slaDueAt:
           type: string
           format: date-time
           description: createdAt + REFUND_CLAIM_SLA_HOURS — mục tiêu xử lý của BR-002.
+    RefundClaimTracking:
+      type: object
+      required: [code, status, stage, amount, currency, createdAt]
+      description: >-
+        Tiến độ phiếu cho khách tra cứu bằng mã khiếu nại (FR-ORD-36, ADR-0031). Không bao giờ chứa
+        tài khoản ngân hàng, thông tin liên hệ hay tên nhân viên.
+      properties:
+        code: { $ref: '#/components/schemas/RefundClaimCode' }
+        status: { $ref: '#/components/schemas/RefundClaimStatus' }
+        stage:
+          type: string
+          enum: [RECEIVED, PROCESSING, REFUNDED, REJECTED, EXPIRED]
+          description: >-
+            RECEIVED = phiếu mở, chưa có người nhận; PROCESSING = phiếu mở, đã phân công; ba giá trị
+            còn lại trùng trạng thái đóng.
+        amount: { $ref: '#/components/schemas/Money' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        createdAt: { type: string, format: date-time }
+        dueAt:
+          type: [string, 'null']
+          format: date-time
+          description: createdAt + REFUND_CLAIM_SLA_HOURS khi phiếu còn mở; null khi đã đóng.
+        closedAt: { type: [string, 'null'], format: date-time }
+        payoutReference:
+          type: [string, 'null']
+          description: Mã giao dịch chuyển khoản hoàn — chỉ khi REFUNDED.
+        resolutionNote:
+          type: [string, 'null']
+          description: Lý do từ chối — chỉ khi REJECTED.
+        hasEvidence:
+          type: boolean
+          description: >-
+            Phiếu REJECTED có hình ảnh đối chiếu từ camera (ADR-0032). Xem hình cần `key` trong
+            liên kết email — GET /public/refund-claims/{code}/evidence.
+    EvidenceKind:
+      type: string
+      enum: [VIDEO, IMAGE]
+    CameraEvidence:
+      type: object
+      required:
+        - id
+        - kind
+        - contentType
+        - sizeBytes
+        - sha256
+        - cameraLabel
+        - recordedFrom
+        - recordedTo
+        - clockOffsetSec
+        - uploadedBy
+        - uploadedAt
+      description: >-
+        Đoạn trích từ camera an ninh gắn vào phiếu khiếu nại hoặc phiếu nạp (ADR-0032). `url` là đường
+        dẫn ký có hạn CAMERA_EVIDENCE_URL_TTL_SEC, tương đối với gốc API (dạng
+        /evidence-files/{id}?exp=…&sig=…) — null khi tệp đã bị gỡ hoặc đã xóa theo hạn.
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/EvidenceKind' }
+        contentType: { type: string }
+        sizeBytes: { type: integer }
+        sha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 của tệp đã lưu, tính lúc tải lên.
+        cameraLabel: { type: string }
+        recordedFrom: { type: string, format: date-time }
+        recordedTo: { type: string, format: date-time }
+        clockOffsetSec: { type: integer }
+        note: { type: [string, 'null'] }
+        uploadedBy: { type: string, format: uuid }
+        uploadedAt: { type: string, format: date-time }
+        removedAt: { type: [string, 'null'], format: date-time }
+        removedReason: { type: [string, 'null'] }
+        purgedAt: { type: [string, 'null'], format: date-time }
+        url: { type: [string, 'null'] }
+        urlExpiresAt: { type: [string, 'null'], format: date-time }
+    PublicCameraEvidence:
+      type: object
+      required: [id, kind, contentType, recordedFrom, recordedTo, url, urlExpiresAt]
+      description: Bằng chứng cho khách xem (FR-ORD-39) — không có người tải hay ghi chú nội bộ.
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: '#/components/schemas/EvidenceKind' }
+        contentType: { type: string }
+        recordedFrom: { type: string, format: date-time }
+        recordedTo: { type: string, format: date-time }
+        url: { type: string }
+        urlExpiresAt: { type: string, format: date-time }
+    EvidenceWindow:
+      type: object
+      required: [machineId, machineName, from, to]
+      description: >-
+        Khung giờ cần tua camera (ADR-0032 mục 2), đã nới hai đầu CAMERA_WINDOW_PADDING_SEC. Khoảng ghi
+        của bằng chứng tải lên (sau khi trừ độ lệch đồng hồ) phải giao khung này.
+      properties:
+        machineId: { type: string, format: uuid }
+        machineName: { type: string }
+        cameraLabel: { type: [string, 'null'] }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+    EvidenceList:
+      type: object
+      required: [items, maxItems]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/CameraEvidence' }
+        maxItems:
+          type: integer
+          description: CAMERA_EVIDENCE_MAX_PER_TARGET — gồm cả tệp đã gỡ.
+    EvidenceRemove:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    FootageRequestStatus:
+      type: string
+      enum: [OPEN, FULFILLED, UNAVAILABLE]
+    FootageRequest:
+      type: object
+      required: [id, refillSessionId, brandId, status, reason, requestedBy, createdAt]
+      description: Yêu cầu trích hình camera cho một phiếu nạp (FR-INV-39, ADR-0032).
+      properties:
+        id: { type: string, format: uuid }
+        refillSessionId: { type: string, format: uuid }
+        brandId: { type: string, format: uuid }
+        brandName: { type: string }
+        machineName: { type: string }
+        slotNumber: { type: integer }
+        sessionStartedAt: { type: string, format: date-time }
+        status: { $ref: '#/components/schemas/FootageRequestStatus' }
+        reason: { type: string }
+        requestedBy: { type: string, format: uuid }
+        responseNote: { type: [string, 'null'] }
+        resolvedBy: { type: [string, 'null'], format: uuid }
+        createdAt: { type: string, format: date-time }
+        resolvedAt: { type: [string, 'null'], format: date-time }
+    FootageRequestCreate:
+      type: object
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 1000 }
+    FootageRequestResolve:
+      type: object
+      required: [outcome]
+      properties:
+        outcome:
+          type: string
+          enum: [FULFILLED, UNAVAILABLE]
+          description: FULFILLED cần phiếu nạp đã có ít nhất một bằng chứng; UNAVAILABLE bắt buộc note.
+        note: { type: string, maxLength: 1000 }
+    CameraLabelUpdate:
+      type: object
+      required: [cameraLabel]
+      properties:
+        cameraLabel:
+          type: [string, 'null']
+          maxLength: 100
+          description: null hoặc chuỗi rỗng = xóa nhãn.
     RefundAccountView:
       type: object
       required: [bankBin, accountNumber, accountName, contact]
@@ -3646,6 +3856,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Machine' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/camera-label:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [MCH]
+      summary: Ghi nhãn camera an ninh của máy
+      operationId: setMachineCameraLabel
+      description: 'FR-MCH-20 (ADR-0032 mục 5): Platform Super Admin (machine.manage). Ghi AuditLog.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CameraLabelUpdate' }
+      responses:
+        '200':
+          description: Đã ghi nhãn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 
@@ -5575,6 +5808,173 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /refill-sessions/{id}/evidence-window:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [EVD]
+      summary: Khung giờ cần tua camera cho phiếu nạp
+      operationId: getRefillSessionEvidenceWindow
+      description: >-
+        FR-INV-38: từ lúc mở tới lúc đóng (hoặc hủy) phiếu, nới CAMERA_WINDOW_PADDING_SEC; phiếu đang
+        mở thì tới hiện tại. Quyền machine.operate.
+      responses:
+        '200':
+          description: Khung giờ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceWindow' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refill-sessions/{id}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [EVD]
+      summary: Bằng chứng camera của phiếu nạp
+      operationId: listRefillSessionEvidence
+      description: >-
+        FR-INV-38: Operations Staff, Super Admin, và Brand Admin của thương hiệu sở hữu phiếu
+        (thương hiệu khác trả FORBIDDEN_SCOPE). Inventory Staff không xem được. Mỗi lần cấp đường dẫn
+        ghi AuditLog evd.evidence.viewed.
+      responses:
+        '200':
+          description: Bằng chứng, cũ nhất trước
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceList' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [EVD]
+      summary: Gắn bằng chứng camera vào phiếu nạp
+      operationId: addRefillSessionEvidence
+      description: >-
+        FR-INV-38: quyền machine.operate (Operations Staff, Super Admin); người đã thực hiện phiếu nạp
+        trả EVIDENCE_SELF_REVIEW. Khoảng ghi phải giao khung giờ đề xuất; tối đa
+        CAMERA_EVIDENCE_MAX_PER_TARGET tệp. Gắn được bất cứ lúc nào, không cần yêu cầu trích hình.
+      parameters:
+        - $ref: '#/components/parameters/evidenceCameraLabel'
+        - $ref: '#/components/parameters/evidenceRecordedFrom'
+        - $ref: '#/components/parameters/evidenceRecordedTo'
+        - $ref: '#/components/parameters/evidenceClockOffset'
+        - $ref: '#/components/parameters/evidenceNote'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: >-
+                    Video MP4 (≤ CAMERA_CLIP_MAX_BYTES, không chuyển mã) hoặc ảnh JPEG/PNG/WebP
+                    (≤ CAMERA_IMAGE_MAX_BYTES, mã hóa lại, bỏ EXIF).
+      responses:
+        '201':
+          description: Đã gắn bằng chứng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CameraEvidence' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: Tệp vượt ngưỡng — mã FILE_TOO_LARGE
+        '415':
+          description: Không phải MP4 hay ảnh hợp lệ — mã UNSUPPORTED_MEDIA_TYPE
+
+  /refill-sessions/{id}/footage-requests:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [EVD]
+      summary: Brand Admin yêu cầu trích hình phiếu nạp
+      operationId: createFootageRequest
+      description: >-
+        FR-INV-39: phiếu nạp của thương hiệu mình (FORBIDDEN_SCOPE), mở chưa quá
+        CAMERA_FOOTAGE_REQUEST_MAX_DAYS ngày (FOOTAGE_REQUEST_EXPIRED), chưa có yêu cầu đang mở
+        (FOOTAGE_REQUEST_ALREADY_OPEN). Thông báo trong ứng dụng cho người có quyền machine.operate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FootageRequestCreate' }
+      responses:
+        '201':
+          description: Đã gửi yêu cầu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FootageRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /footage-requests:
+    get:
+      tags: [EVD]
+      summary: Danh sách yêu cầu trích hình
+      operationId: listFootageRequests
+      description: >-
+        FR-INV-39: nhân sự nền tảng có machine.operate thấy mọi yêu cầu; Brand Admin chỉ thấy của
+        thương hiệu mình. Cũ nhất trước.
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/pageSize'
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/FootageRequestStatus' }
+        - name: refillSessionId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Danh sách yêu cầu
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, meta]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/FootageRequest' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /footage-requests/{id}/resolve:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [EVD]
+      summary: Đóng yêu cầu trích hình
+      operationId: resolveFootageRequest
+      description: >-
+        FR-INV-39: quyền machine.operate. FULFILLED khi phiếu nạp đã có bằng chứng (thiếu thì
+        EVIDENCE_REQUIRED); UNAVAILABLE bắt buộc note (camera hỏng, hình đã bị ghi đè…). Báo Brand
+        Admin đã gửi yêu cầu. Yêu cầu đã đóng trả EVIDENCE_TARGET_CLOSED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FootageRequestResolve' }
+      responses:
+        '200':
+          description: Đã đóng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FootageRequest' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
   /slots/{id}/bottle:
     parameters:
       - $ref: '#/components/parameters/idPath'
@@ -6234,6 +6634,67 @@ paths:
         '429':
           description: Vượt REFUND_CLAIM_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED
 
+  /public/refund-claims/{code}:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        description: Mã khiếu nại, chấp nhận cả dạng viết thường, không dấu gạch.
+        schema: { type: string, minLength: 10, maxLength: 20 }
+    get:
+      tags: [ORD]
+      summary: Khách tra cứu tiến độ phiếu khiếu nại
+      operationId: trackRefundClaim
+      security: []
+      description: >-
+        FR-ORD-36 (ADR-0031): trang công khai /claim/status. Mã sai hoặc không tồn tại trả NOT_FOUND.
+        Giới hạn REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN lần mỗi phút cho mỗi địa chỉ IP.
+      responses:
+        '200':
+          description: Tiến độ phiếu
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundClaimTracking' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: Vượt REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN cho địa chỉ IP này — mã RATE_LIMITED
+
+  /public/refund-claims/{code}/evidence:
+    parameters:
+      - name: code
+        in: path
+        required: true
+        schema: { type: string, minLength: 10, maxLength: 20 }
+      - name: key
+        in: query
+        required: true
+        description: Khóa xem trong liên kết email (ADR-0031 mục 4).
+        schema: { type: string, maxLength: 100 }
+    get:
+      tags: [EVD]
+      summary: Khách xem bằng chứng camera của phiếu bị từ chối
+      operationId: listPublicRefundClaimEvidence
+      security: []
+      description: >-
+        FR-ORD-39 (ADR-0032 mục 6): chỉ khi phiếu REJECTED và `key` đúng; sai mã, sai khóa hoặc phiếu
+        chưa bị từ chối đều trả NOT_FOUND. Dùng chung giới hạn REFUND_CLAIM_LOOKUP_RATE_LIMIT_PER_MIN.
+        Mỗi lần gọi ghi AuditLog evd.evidence.viewed với người xem ẩn danh.
+      responses:
+        '200':
+          description: Bằng chứng còn tệp
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicCameraEvidence' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429':
+          description: Vượt giới hạn tra cứu — mã RATE_LIMITED
+
   /refund-claims:
     get:
       tags: [ORD]
@@ -6251,6 +6712,10 @@ paths:
         - name: assignedToMe
           in: query
           schema: { type: boolean }
+        - name: code
+          in: query
+          description: Tìm theo mã khiếu nại khách đọc qua điện thoại (ADR-0031); cùng quy tắc chuẩn hóa.
+          schema: { type: string, maxLength: 20 }
       responses:
         '200':
           description: Danh sách phiếu
@@ -6360,7 +6825,10 @@ paths:
       tags: [ORD]
       summary: Từ chối phiếu khiếu nại
       operationId: rejectRefundClaim
-      description: Người được phân công từ chối kèm lý do. Phiếu đóng REJECTED, tài khoản bị xóa.
+      description: >-
+        Người được phân công từ chối kèm lý do (khách đọc được ở trang tra cứu, ADR-0031). Phiếu đóng
+        REJECTED, tài khoản bị xóa. Phiếu refundOrder = true phải có ít nhất một bằng chứng camera,
+        thiếu thì EVIDENCE_REQUIRED (FR-ORD-38, ADR-0032).
       requestBody:
         required: true
         content:
@@ -6374,6 +6842,142 @@ paths:
               schema: { $ref: '#/components/schemas/RefundClaim' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refund-claims/{id}/evidence-window:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [EVD]
+      summary: Khung giờ cần tua camera cho phiếu khiếu nại
+      operationId: getRefundClaimEvidenceWindow
+      description: 'FR-ORD-38: từ lúc đơn trả tiền tới lúc có kết quả lệnh xịt, nới CAMERA_WINDOW_PADDING_SEC.'
+      responses:
+        '200':
+          description: Khung giờ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceWindow' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /refund-claims/{id}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    get:
+      tags: [EVD]
+      summary: Bằng chứng camera của phiếu khiếu nại
+      operationId: listRefundClaimEvidence
+      description: >-
+        FR-ORD-38: người có quyền order.refund. Mỗi lần cấp đường dẫn xem ghi AuditLog
+        evd.evidence.viewed.
+      responses:
+        '200':
+          description: Bằng chứng, cũ nhất trước
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceList' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [EVD]
+      summary: Gắn bằng chứng camera vào phiếu khiếu nại
+      operationId: addRefundClaimEvidence
+      description: >-
+        FR-ORD-38: chỉ Operations Staff đang được phân công (CLAIM_NOT_ASSIGNED), phiếu còn OPEN
+        (EVIDENCE_TARGET_CLOSED). Khoảng ghi sau khi trừ clockOffsetSec phải giao khung giờ đề xuất
+        (VALIDATION_ERROR). Tối đa CAMERA_EVIDENCE_MAX_PER_TARGET tệp (EVIDENCE_LIMIT_REACHED).
+      parameters:
+        - $ref: '#/components/parameters/evidenceCameraLabel'
+        - $ref: '#/components/parameters/evidenceRecordedFrom'
+        - $ref: '#/components/parameters/evidenceRecordedTo'
+        - $ref: '#/components/parameters/evidenceClockOffset'
+        - $ref: '#/components/parameters/evidenceNote'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: >-
+                    Video MP4 (≤ CAMERA_CLIP_MAX_BYTES, không chuyển mã) hoặc ảnh JPEG/PNG/WebP
+                    (≤ CAMERA_IMAGE_MAX_BYTES, mã hóa lại, bỏ EXIF).
+      responses:
+        '201':
+          description: Đã gắn bằng chứng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CameraEvidence' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413':
+          description: Tệp vượt ngưỡng — mã FILE_TOO_LARGE
+        '415':
+          description: Không phải MP4 hay ảnh hợp lệ — mã UNSUPPORTED_MEDIA_TYPE
+
+  /evidence/{id}/remove:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [EVD]
+      summary: Gỡ bằng chứng tải nhầm
+      operationId: removeEvidence
+      description: >-
+        ADR-0032 mục 8: chỉ người đã tải, khi hồ sơ còn mở (phiếu khiếu nại OPEN; phiếu nạp còn yêu cầu
+        trích hình đang mở hoặc chưa có yêu cầu nào đã đóng). Hồ sơ đã đóng trả EVIDENCE_TARGET_CLOSED.
+        Tệp bị xóa khỏi kho, dòng giữ lại kèm lý do. Ghi AuditLog.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceRemove' }
+      responses:
+        '200':
+          description: Đã gỡ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CameraEvidence' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /evidence-files/{id}:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - name: exp
+        in: query
+        required: true
+        description: Hạn của đường dẫn, giây Unix.
+        schema: { type: integer }
+      - name: sig
+        in: query
+        required: true
+        schema: { type: string }
+    get:
+      tags: [EVD]
+      summary: Tải tệp bằng chứng qua đường dẫn ký
+      operationId: getEvidenceFile
+      security: []
+      description: >-
+        ADR-0032 mục 8: đường dẫn do API cấp ở các endpoint danh sách bằng chứng, hết hạn sau
+        CAMERA_EVIDENCE_URL_TTL_SEC. Chữ ký sai, hết hạn hay tệp đã gỡ/xóa đều trả NOT_FOUND. Hỗ trợ
+        header Range để trình duyệt tua video.
+      responses:
+        '200':
+          description: Nội dung tệp
+          content:
+            video/mp4: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        '206':
+          description: Một đoạn của tệp (Range)
         '404': { $ref: '#/components/responses/NotFound' }
 
   # -----------------------------------------------------------------------------------

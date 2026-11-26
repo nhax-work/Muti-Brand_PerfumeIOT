@@ -434,6 +434,23 @@ export const en: SameKeysAs<typeof vi> = {
     manualReviewContent:
       'Order {orderId} was paid but its spray was not delivered normally. ' +
       'Check it under Orders needing review and refund if needed.',
+    claimLookupRateLimited: 'Too many lookups. Please try again in a minute.',
+    claimReceiptEmailSubject: 'ScentStation received your claim {code}',
+    claimReceiptEmailBody:
+      'We have received your refund claim.\n\n' +
+      'Claim code: {code}\n' +
+      'Amount: {amount} {currency}\n' +
+      'Expected by: {deadline}\n\n' +
+      'Track its progress at: {link}\n\n' +
+      'Please keep your claim code. This email was sent automatically; please do not reply.',
+    claimClosedEmailSubject: 'Your claim {code} has been resolved',
+    claimClosedEmailBody:
+      'Your refund claim {code} has a result: {outcome}.\n\n' +
+      'See the details at: {link}\n\n' +
+      'This email was sent automatically; please do not reply.',
+    claimOutcomeRefunded: 'refunded',
+    claimOutcomeRejected: 'not accepted',
+    claimOutcomeExpired: 'expired before it was processed',
   },
 
   dsp: {
@@ -772,21 +789,21 @@ export const en: SameKeysAs<typeof vi> = {
     claimPageTitle: 'Refund request',
     claimPageIntro:
       'Paid but did not receive your spray? Fill in the form below and our staff will transfer the refund within {hours} hours.',
-    claimContact: 'Phone number or email',
-    claimContactHint: 'So we can tell you the result.',
+    claimContact: 'Email for updates',
+    claimContactHint: 'We send your claim code and the result to this email.',
     claimBank: 'Receiving bank',
     claimAccountNumber: 'Account number',
     claimAccountName: 'Account holder name',
     claimAccountNameHint: 'Uppercase, without accents, exactly as shown in your banking app.',
     claimConsent:
-      'I agree that ScentStation stores the information above (encrypted) to process the refund. The bank account is deleted as soon as the claim is handled; contact details are deleted after {days} days.',
+      'I agree that ScentStation stores the information above (encrypted) to process the refund and email me progress updates. The bank account is deleted as soon as the claim is handled; the email is deleted after {days} days.',
     claimConsentRequired: 'Please agree so we can process the refund',
     claimFieldRequired: 'Please fill in this field',
     claimAccountNumberInvalid: 'Account numbers have 6–19 digits',
     claimSubmit: 'Submit request',
     claimSubmitted: 'Refund request received',
     claimSubmittedDetail:
-      'Amount to refund: {amount}. Request ID: {id}. We will contact you using the details you provided.',
+      'Amount to refund: {amount}. We have emailed you the claim code and a tracking link.',
     claimLinkInvalid: 'This link is invalid. Please scan the QR code on the machine again.',
     refundClaims: 'Refund claims',
     claimStatus: 'Status',
@@ -1308,6 +1325,7 @@ export const en: SameKeysAs<typeof vi> = {
     commandSucceeded: 'Succeeded',
     commandFailedWith: 'Failed: {code}',
     orderDispenseCommand: 'Dispense command',
+    orderDispenseCommandSource: '(Data from the machine)',
     orderNoDispenseCommand: 'This order has no dispense command yet',
     brandPayouts: 'Payouts',
     payoutHint:
@@ -1845,6 +1863,80 @@ export const en: SameKeysAs<typeof vi> = {
     loginNoAccount: "Don't have a brand account?",
     loginRegisterNow: 'Register now',
     authBackHome: 'Back to home',
+    claimCodeLabel: 'Claim code',
+    claimCodeKeep: 'Take a screenshot or copy this code — you need it to track your claim.',
+    claimTrackLink: 'Track progress',
+    claimTrackPageTitle: 'Track a claim',
+    claimTrackPageIntro:
+      'Enter your claim code (KN-XXXXX-XXXXX) from the email or the screen shown when you submitted.',
+    claimTrackCodeInvalid: 'A claim code has 10 letters and digits after "KN-".',
+    claimTrackSubmit: 'Track',
+    claimTrackAnother: 'Track another code',
+    claimStageReceived: 'Received',
+    claimStageProcessing: 'In progress',
+    claimStageResult: 'Resolved',
+    claimResultRefunded: 'Refunded',
+    claimResultRejected: 'Not accepted',
+    claimResultExpired: 'Expired',
+    claimTrackSubmittedAt: 'Submitted on',
+    claimTrackDueAt: 'Expected by',
+    claimTrackClosedAt: 'Resolved on',
+    claimTrackRefundedHint: 'Match the transaction code against your bank statement.',
+    claimTrackExpiredHint: 'This claim expired before it was processed. Please contact support.',
+    claimRejectReasonForCustomer: 'Reason for rejection (shown to the customer)',
+    claimSearchByCode: 'Search by claim code',
+    evidenceTitle: 'Camera evidence',
+    evidenceIntro:
+      'Rewind the camera recorder to the time window below, cut out the exact moment and upload it.',
+    evidenceWindow: 'Time window to review',
+    evidenceMachine: 'Machine',
+    evidenceCamera: 'Camera',
+    evidenceNoCameraLabel: 'No camera label set for this machine',
+    evidenceFile: 'MP4 video or image file',
+    evidenceFileHint:
+      'Videos up to {clipMb} MB (MP4 H.264), images up to {imageMb} MB. Cut only the moment in question; blur other customers caught on camera.',
+    evidenceNote: 'Internal note',
+    evidenceUpload: 'Upload evidence',
+    evidenceUploaded: 'Evidence attached',
+    evidenceEmpty: 'No evidence yet.',
+    evidenceCount: '{count}/{max} files',
+    evidenceRecorded: 'Recorded',
+    evidenceUploadedAt: 'Uploaded at {at}',
+    evidenceRemoved: 'Removed: {reason}',
+    evidencePurged: 'File deleted after the retention period',
+    evidenceRemove: 'Remove',
+    evidenceRemoveTitle: 'Remove evidence uploaded by mistake?',
+    evidenceRemoveReason: 'Reason for removal',
+    evidenceRemovedNotice: 'Evidence removed',
+    evidenceFileRequired: 'Please choose a file',
+    evidenceRequiredHint:
+      'The customer says the spray was not received — at least one camera evidence file is needed to reject.',
+    claimEvidenceTitle: 'Supporting footage',
+    claimEvidenceIntro: 'Footage from the security camera at the machine during your transaction.',
+    claimEvidenceNeedsEmail:
+      'This claim has supporting footage — open the link in your email to view it.',
+    refillEvidenceAction: 'Camera footage',
+    refillEvidenceDrawerTitle: 'Refill camera footage',
+    footageRequests: 'Footage requests',
+    footageRequestsHint:
+      'Brands asking to see camera footage of a refill. Attach footage to the refill session and mark it attached, or explain why none is available.',
+    footageRequestAction: 'Request footage',
+    footageRequestReason: 'Reason for the request',
+    footageRequestHint:
+      'Send within {days} days of the refill — after that the recorder may have overwritten the footage.',
+    footageRequestSent: 'Footage request sent',
+    footageRequestCurrent: 'Footage request',
+    footageResolveFulfilled: 'Footage attached',
+    footageResolveUnavailable: 'No footage',
+    footageResolveNote: 'Why no footage is available',
+    footageResolved: 'Request closed',
+    footageCreatedAt: 'Sent at',
+    footageResponse: 'Response',
+    footageEmpty: 'No footage requests yet.',
+    cameraLabel: 'Security camera label',
+    cameraLabelHint:
+      'For example "Cam-03 · Vincom Q1 · 2nd floor" — so staff know which recorder to rewind.',
+    cameraLabelSaved: 'Camera label saved',
   },
 
   kiosk: {
@@ -2198,5 +2290,47 @@ export const en: SameKeysAs<typeof vi> = {
   bottleReturnMethod: {
     WAREHOUSE_PICKUP: 'Pickup at warehouse',
     SHIP_TO_BRAND: 'Ship to brand',
+  },
+  evd: {
+    fileRequired: 'Please choose one MP4 video or image file.',
+    fileTooLarge: 'The file exceeds {maxMb} MB.',
+    fileUnsupported: 'Only MP4 videos or JPEG, PNG, WebP images are accepted.',
+    recordedRangeInvalid: 'The recording end time must be after its start time.',
+    recordedOutsideWindow:
+      "The recording time does not match the transaction's time window. Check the time shown on the footage and the camera clock offset.",
+    evidenceRequired: 'Attach at least one camera evidence file before rejecting this claim.',
+    evidenceLimitReached: 'This record already has {max} evidence files.',
+    targetClosed: 'This record is closed — evidence can no longer be added or removed.',
+    selfReview: 'The person who performed the refill cannot submit evidence for that refill.',
+    evidenceNotFound: 'Evidence not found.',
+    notUploader: 'Only the person who uploaded this evidence can remove it.',
+    refillNotFound: 'Refill session not found.',
+    brandAccountOnly: 'Only brand accounts can request footage.',
+    footageRequestExpired:
+      'The refill session was opened more than {days} days ago — the recorder may have overwritten the footage.',
+    footageRequestAlreadyOpen: 'This refill session already has a pending footage request.',
+    footageRequestNotFound: 'Footage request not found.',
+    footageRequestClosed: 'This footage request is closed.',
+    footageNoteRequired: 'Please explain why no footage is available.',
+    footageNeedsEvidence:
+      'The refill session has no evidence yet — attach footage before marking the request fulfilled.',
+    footageRequestedSubject: 'Footage requested for a refill: {brand}',
+    footageRequestedContent:
+      'Brand {brand} requested camera footage for the refill of slot {slot} on {machine}, opened at {startedAt}. Reason: {reason}',
+    footageFulfilledSubject: 'Camera footage is available for your refill',
+    footageFulfilledContent:
+      'Camera footage for the refill of slot {slot} on {machine} has been attached. Open the refill session to view it.',
+    footageUnavailableSubject: 'No camera footage for your refill',
+    footageUnavailableContent:
+      'Camera footage for the refill of slot {slot} on {machine} could not be retrieved: {note}',
+  },
+  evidenceKind: {
+    VIDEO: 'Video',
+    IMAGE: 'Image',
+  },
+  footageRequestStatus: {
+    OPEN: 'Pending',
+    FULFILLED: 'Footage attached',
+    UNAVAILABLE: 'No footage',
   },
 };

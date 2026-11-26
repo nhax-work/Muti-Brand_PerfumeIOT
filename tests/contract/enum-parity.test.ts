@@ -45,6 +45,8 @@ const ENUM_MAP: Record<string, string> = {
   BrandPayoutStatus: 'brand_payout_status',
   BottleReturnMethod: 'bottle_return_method',
   BatchAuthenticityStatus: 'batch_authenticity_status',
+  EvidenceKind: 'evidence_kind',
+  FootageRequestStatus: 'footage_request_status',
 };
 
 interface OpenApiDoc {
@@ -70,11 +72,12 @@ const sqlEnums = parseSqlEnums(readFileSync('spec/contracts/schema.sql', 'utf8')
 const openapi = loadYaml(readFileSync('spec/contracts/openapi.yaml', 'utf8')) as OpenApiDoc;
 
 describe('openapi.yaml khớp schema.sql', () => {
-  it('schema.sql khai báo đủ 31 enum', () => {
+  it('schema.sql khai báo đủ 33 enum', () => {
     // 24 enum ban đầu + storage_compensation_status (ADR-0006) + refund_claim_status (ADR-0012)
     // + agreement_kind, brand_payout_status (ADR-0013) + bottle_return_method (ADR-0014)
-    // + batch_authenticity_status (ADR-0017) + shipment_photo_kind (ADR-0024).
-    expect(sqlEnums.size).toBe(31);
+    // + batch_authenticity_status (ADR-0017) + shipment_photo_kind (ADR-0024)
+    // + evidence_kind, footage_request_status (ADR-0032).
+    expect(sqlEnums.size).toBe(33);
   });
 
   it('mọi enum trong schema.sql đều có schema tương ứng trong openapi.yaml', () => {

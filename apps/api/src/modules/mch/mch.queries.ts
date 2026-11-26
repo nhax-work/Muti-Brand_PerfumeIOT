@@ -44,6 +44,8 @@ export interface MachineRecord {
   readonly firmwareVersion: string | null;
   readonly configurationVersion: number;
   readonly simulatorEnabled: boolean;
+  /** Nhãn camera an ninh quay máy (ADR-0032, FR-MCH-20). */
+  readonly cameraLabel: string | null;
   readonly slotCount: number;
   readonly drainingOrdersCount?: number;
   readonly createdAt: Date;
@@ -325,6 +327,7 @@ export class MchQueries {
         firmwareVersion: r.firmware_version,
         configurationVersion: r.configuration_version,
         simulatorEnabled: r.simulator_enabled,
+        cameraLabel: r.camera_label,
         slotCount: Number(r.slot_count ?? 0),
         createdAt: r.created_at,
         updatedAt: r.updated_at,
@@ -359,6 +362,7 @@ export class MchQueries {
       firmwareVersion: row.firmware_version,
       configurationVersion: row.configuration_version,
       simulatorEnabled: row.simulator_enabled,
+      cameraLabel: row.camera_label,
       slotCount: Number(row.slot_count ?? 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -384,6 +388,7 @@ export class MchQueries {
       firmwareVersion: row.firmware_version,
       configurationVersion: row.configuration_version,
       simulatorEnabled: row.simulator_enabled,
+      cameraLabel: row.camera_label,
       slotCount: 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -438,6 +443,7 @@ export class MchQueries {
         firmwareVersion: machine.firmware_version,
         configurationVersion: machine.configuration_version,
         simulatorEnabled: machine.simulator_enabled,
+        cameraLabel: machine.camera_label,
         slotCount: data.slotCount,
         createdAt: machine.created_at,
         updatedAt: machine.updated_at,
@@ -465,6 +471,28 @@ export class MchQueries {
 
     if (!row) return null;
     return this.findMachineById(id);
+  }
+
+  /** FR-MCH-20: ghi nhãn camera; trả nhãn cũ để ghi AuditLog, `undefined` nếu không có máy. */
+  async setCameraLabel(
+    id: string,
+    label: string | null,
+  ): Promise<{ before: string | null } | undefined> {
+    return this.db.transaction().execute(async (tx) => {
+      const current = await tx
+        .selectFrom('machines')
+        .select('camera_label')
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!current) return undefined;
+      await tx
+        .updateTable('machines')
+        .set({ camera_label: label, updated_at: new Date() })
+        .where('id', '=', id)
+        .execute();
+      return { before: current.camera_label };
+    });
   }
 
   transaction<T>(work: (tx: Transaction<DB>) => Promise<T>): Promise<T> {
