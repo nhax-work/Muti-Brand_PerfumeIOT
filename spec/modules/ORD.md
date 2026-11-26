@@ -387,16 +387,17 @@
 ---
 
 ## FR-ORD-25 — Điều khoản bấm nút trước khi thanh toán
-* **Statement:** Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền.
+* **Statement:** Hệ thống phải hiển thị trên kiosk, trước khi khách thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền.
 * **Traces:** BR-001, BR-002 · **Priority:** M
 * **Acceptance criteria:**
-  * **AC1:** Given khách đã chọn sản phẩm và bấm xác nhận,  
-    When kiosk chuẩn bị hiện mã QR,  
-    Then kiosk hiện điều khoản kèm số giây lấy từ `DISPENSE_PRESS_WINDOW_SEC` và số nút sẽ sáng, bằng ngôn ngữ thông thường (NFR-USA-03), và chỉ hiện mã QR sau khi khách xác nhận đã đọc.
+  * **AC1:** Given khách đã chọn sản phẩm,  
+    When kiosk hiện trang chi tiết rồi màn mã QR,  
+    Then trang chi tiết hiện số nút sẽ sáng, và màn mã QR hiện điều khoản kèm số nút cùng số giây lấy từ `DISPENSE_PRESS_WINDOW_SEC`, bằng ngôn ngữ thông thường (NFR-USA-03), ngay cạnh mã QR — khách đọc được trước khi quét và vẫn hủy được đơn (FR-ORD-33).
+  * **Ghi chú (2026-11-26):** điều khoản chuyển từ trang chi tiết sang màn mã QR để trang chi tiết tối giản; căn cứ không hoàn tiền vẫn giữ vì khách đọc điều khoản trước khi trả tiền.
   * **AC2:** Given `DISPENSE_PRESS_WINDOW_SEC` được đổi trong cấu hình,  
     When kiosk hiện điều khoản,  
     Then số giây hiển thị là giá trị mới — không viết cứng trong chuỗi i18n.
-* **Test:** `test_FR_ORD_25_show_press_terms_before_qr`
+* **Test:** `test_FR_ORD_25_show_press_terms_before_payment`
 
 ---
 
@@ -613,3 +614,18 @@
   * **AC3:** Đường dẫn trả đúng tệp, `Cache-Control: private, no-store`, hỗ trợ `Range` (206); sửa chữ ký hoặc quá hạn trả 404.
   * **AC4:** Mỗi lần khách gọi ghi AuditLog `evd.evidence.viewed` với người xem ẩn danh; tra cứu phiếu trả `hasEvidence = true`.
 * **Test:** `test_FR_ORD_39_customer_views_evidence_with_email_key_only_after_rejection`, `test_FR_ORD_39_signed_url_bound_to_file_and_expiry`, `test_FR_ORD_39_range_header_for_video_seeking`
+
+---
+
+## FR-ORD-40 — Cảnh báo dị ứng trước khi thanh toán
+* **Statement:** Hệ thống phải hiển thị trên kiosk, ở trang chi tiết sản phẩm và trước khi hiện mã QR thanh toán, một cảnh báo dị ứng chung: nước hoa có thể gây kích ứng với người dị ứng, tránh xịt vào mắt và mặt.
+* **Traces:** BR-001, BR-002 · **Priority:** M
+* **Ghi chú:** Cảnh báo dùng chung cho mọi sản phẩm, lấy từ `packages/i18n` (khóa `kiosk.allergyWarning`). Danh sách chất gây dị ứng theo từng sản phẩm chưa làm vì `fragrance_products` không có cột thành phần — muốn làm phải qua ADR. Lý do hiện trước khi trả tiền: đơn đã thanh toán không hoàn tiền (ADR-0007).
+* **Acceptance criteria:**
+  * **AC1:** Given khách mở trang chi tiết của một slot đang khả dụng,  
+    When trang hiển thị,  
+    Then cảnh báo dị ứng hiện phía trên nút thanh toán, và chưa có đơn nào được tạo.
+  * **AC2:** Given kiosk đang ở tiếng Anh,  
+    When khách mở trang chi tiết,  
+    Then cảnh báo hiện bằng tiếng Anh; đổi ngôn ngữ thì cảnh báo đổi ngay không cần tải lại (NFR-USA-07).
+* **Test:** `test_FR_ORD_40_kiosk_allergy_warning_before_qr`

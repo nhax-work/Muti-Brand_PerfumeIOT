@@ -9,6 +9,11 @@ export function formatDateTime(iso: string | null | undefined): string {
   return iso ? new Date(iso).toLocaleString('vi-VN') : '—';
 }
 
+/** Như `formatDateTime` nhưng chỉ ngày — cho hạn tính theo ngày. */
+export function formatDate(value: string | Date | null | undefined): string {
+  return value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+}
+
 /** Định dạng số tiền VND cho InputNumber của Ant Design (dấu chấm phân tách hàng nghìn). */
 export function formatVndInput(value: number | string | undefined): string {
   if (value === undefined || value === null || value === '') return '';

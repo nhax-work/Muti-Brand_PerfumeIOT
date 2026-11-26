@@ -64,6 +64,11 @@ describe('Giá mỗi lượt xịt theo sản phẩm (FR-SLT-08, ADR-0023)', () 
 
   it('test_FR_SLT_08_assigning_product_takes_product_price', async () => {
     // rentals[1] đang bán products[1] giá 35.000; đổi sang products[0] thì nhận giá 41.000.
+    // Slot của fixture đã lắp chai — đã lắp thì không đổi được sản phẩm (ADR-0035). Fixture lắp chai
+    // không qua phiếu nạp, nên tháo chai khỏi slot là slot coi như chưa lắp cho hóa đơn.
+    await raw.query(`UPDATE machine_slots SET active_bottle_id = NULL WHERE id = $1`, [
+      fx.slots[1],
+    ]);
     const res = await asBrandA('PUT', `/slot-rentals/${fx.rentals[1]}/product`, {
       payload: { fragranceProductId: fx.products[0] },
     });

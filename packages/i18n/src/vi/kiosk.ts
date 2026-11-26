@@ -45,7 +45,6 @@ export const kiosk = {
   paymentReference: 'Mã thanh toán',
   amountLabel: 'Số tiền',
   paymentExpiresIn: 'Mã hết hạn sau {seconds} giây',
-  waitingForPayment: 'Đang chờ xác nhận thanh toán…',
   pressCountdown: 'Còn {seconds} giây',
   dispensedTitle: 'Cảm ơn bạn!',
   dispensedHint: 'Chúc bạn một ngày thơm tho.',
@@ -76,12 +75,15 @@ export const kiosk = {
   introScan: 'Quét mã',
   introPress: 'Nhấn nút trên máy',
   perSpray: '/ lượt xịt',
-  // Trang chi tiết: chỉ dẫn nút bấm hiện trước mã QR (FR-ORD-25)
-  pressGuide: 'Sau khi thanh toán, nhấn nút số {slot} trên máy trong {seconds} giây.',
-  pressNoRefund: 'Quá thời gian, lượt xịt bị hủy và không được hoàn tiền.',
+  // Màn mã QR: điều khoản bấm nút, khách đọc trước khi quét (FR-ORD-25)
+  pressAfterPay:
+    'Thanh toán xong, bấm nút số {slot} trong {seconds} giây. Quá giờ không hoàn tiền.',
+  // FR-ORD-40: cảnh báo dị ứng chung, hiện trước khi trả tiền vì đơn đã trả không hoàn
+  allergyWarning: 'Có thể gây kích ứng nếu bạn dị ứng nước hoa. Tránh xịt vào mắt và mặt.',
   payAmount: 'Thanh toán {price}',
   slotUnavailable: 'Tạm ngừng',
   buttonNumber: 'Nút số {slot}',
+  buttonCaption: 'Nút số',
   scrollLeft: 'Cuộn sang trái',
   scrollRight: 'Cuộn sang phải',
   productImageAlt: 'Ảnh chai nước hoa',
@@ -92,7 +94,6 @@ export const kiosk = {
   cancelAnyway: 'Vẫn hủy',
   cancelling: 'Đang hủy…',
   // Màn quét mã thanh toán (FR-ORD-08)
-  paymentMethod: 'VietQR · App ngân hàng',
   afterPayLookUp: 'Thanh toán xong, hãy nhìn lên máy — nút số {slot} sẽ sáng.',
   // Sau thanh toán: chuẩn bị, chờ lượt, nhấn nút, kết quả (FR-ORD-11, 21, 26, 27)
   paidTitle: 'Đã nhận thanh toán',

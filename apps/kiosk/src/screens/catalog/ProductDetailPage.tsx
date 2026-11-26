@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import type { components } from '@scentstation/contracts';
-import { config } from '@/shared/config';
 import { formatPrice } from '@/shared/format/price';
 import { useI18n } from '@/shared/i18n';
 import { Icon } from '@/shared/ui/Icon';
@@ -71,10 +70,26 @@ export function ProductDetailPage({
         </button>
 
         <div className={styles.scroll}>
-          {item.brandName && <p className={`caps ${styles.brand}`}>{item.brandName}</p>}
-          <h1 id="product-detail-name" className={styles.name}>
-            {product?.name}
-          </h1>
+          <div className={styles.head}>
+            <div className={styles.title}>
+              {item.brandName && <p className={`caps ${styles.brand}`}>{item.brandName}</p>}
+              <h1 id="product-detail-name" className={styles.name}>
+                {product?.name}
+              </h1>
+            </div>
+            {/* Số nút sẽ sáng sau khi thanh toán — khách nhìn là biết đứng trước nút nào. */}
+            <p
+              className={styles.slotTag}
+              aria-label={t('kiosk.buttonNumber', { slot: item.slotNumber })}
+            >
+              <span className={`caps ${styles.slotCaption}`} aria-hidden="true">
+                {t('kiosk.buttonCaption')}
+              </span>
+              <span className={styles.buttonNo} aria-hidden="true">
+                {item.slotNumber}
+              </span>
+            </p>
+          </div>
           {product?.description && <p className={styles.desc}>{product.description}</p>}
           {notes.length > 0 && (
             <dl className={styles.notes} aria-label={t('kiosk.fragranceNotes')}>
@@ -94,18 +109,11 @@ export function ProductDetailPage({
           </p>
         )}
 
-        {/* FR-ORD-25: số nút và số giây (DISPENSE_PRESS_WINDOW_SEC) hiện TRƯỚC khi có mã QR. */}
-        <div className={styles.guide}>
-          <span className={styles.buttonNo} aria-hidden="true">
-            {item.slotNumber}
-          </span>
-          <div>
-            <p className={styles.guideText}>
-              {t('kiosk.pressGuide', { slot: item.slotNumber, seconds: config.pressWindowSec })}
-            </p>
-            <p className={styles.guideNote}>{t('kiosk.pressNoRefund')}</p>
-          </div>
-        </div>
+        {/* FR-ORD-40: cảnh báo dị ứng chung, cũng phải đọc được trước khi trả tiền. */}
+        <p className={styles.allergy} role="note">
+          <Icon name="alert" size={24} className={styles.allergyIcon} />
+          <span>{t('kiosk.allergyWarning')}</span>
+        </p>
 
         <button type="button" className={styles.pay} onClick={onPay}>
           {t('kiosk.payAmount', { price })}

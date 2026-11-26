@@ -9,7 +9,14 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 import type { MessageKey } from '@scentstation/i18n';
-import { sql, type Expression, type Kysely, type SqlBool, type Transaction } from 'kysely';
+import {
+  sql,
+  type Expression,
+  type Kysely,
+  type RawBuilder,
+  type SqlBool,
+  type Transaction,
+} from 'kysely';
 import { DATABASE, type Database, type DB } from '../../shared/db/index.js';
 import type { BottleReturnMethod, SlotRentalStatus } from '../../shared/db/types.generated.js';
 import { brandScopedByColumn, type BrandScope } from '../../shared/scoping/index.js';
@@ -74,6 +81,67 @@ export interface SlotRentalRecord {
   readonly swappedAt: Date | null;
   readonly nonRenewalRequestedAt: Date | null;
   readonly returnMethod: BottleReturnMethod | null;
+  /** ADR-0035: lý do không đổi được sản phẩm đang gán — suy ra lúc đọc, không phải cột. */
+  readonly productLock: ProductLock | null;
+}
+
+/**
+ * ADR-0035 mục 1, theo thứ tự xét. Hai lý do cuối gộp thành `REFILL_IN_PROGRESS` ở openapi
+ * `SlotProductLockReason` nhưng trả mã lỗi khác nhau khi đổi sản phẩm.
+ */
+export type ProductLock =
+  'INSTALLED' | 'STOCK_IN_WAREHOUSE' | 'REFILL_SESSION_OPEN' | 'REFILL_REQUEST_PENDING';
+
+/**
+ * Lý do khóa đổi sản phẩm của hóa đơn `sr` (slot `ms`) — ADR-0035 mục 1. Một biểu thức dùng chung cho
+ * trường `productLockReason` của mọi lần đọc hóa đơn và cho kiểm tra lúc đổi, để màn hình và máy chủ
+ * không lệch nhau.
+ *
+ * - `INSTALLED`: slot đang có chai của thương hiệu, hoặc đã có phiếu nạp hoàn tất trên slot của thương
+ *   hiệu kể từ lúc thanh toán hóa đơn đầu chuỗi gia hạn — khóa tới hết hóa đơn, không phụ thuộc tồn kho.
+ * - `STOCK_IN_WAREHOUSE`: kho có chai lắp được của sản phẩm đang gán. Khác `NO_STOCK` của việc cần nạp
+ *   (ADR-0026) ở chỗ lô `REJECTED` không tính, để lô bị từ chối không khóa slot vào sản phẩm không bao
+ *   giờ lắp được.
+ */
+function productLockExpr(now: Date | RawBuilder<unknown>): RawBuilder<ProductLock | null> {
+  return sql<ProductLock | null>`CASE
+    WHEN sr.fragrance_product_id IS NULL THEN NULL
+    WHEN EXISTS (SELECT 1 FROM bottles ab
+                  WHERE ab.id = ms.active_bottle_id AND ab.brand_id = sr.brand_id)
+      OR EXISTS (
+        SELECT 1 FROM refill_sessions done
+         WHERE done.slot_id = sr.slot_id
+           AND done.brand_id = sr.brand_id
+           AND done.status = 'COMPLETED'
+           AND done.completed_at >= (
+             WITH RECURSIVE chain AS (
+               SELECT c.id, c.previous_rental_id, coalesce(c.paid_at, c.created_at) AS since
+                 FROM slot_rentals c
+                WHERE c.id = sr.id
+               UNION ALL
+               SELECT p.id, p.previous_rental_id, coalesce(p.paid_at, p.created_at)
+                 FROM slot_rentals p
+                 JOIN chain ON p.id = chain.previous_rental_id
+             )
+             SELECT min(since) FROM chain))
+      THEN 'INSTALLED'
+    WHEN EXISTS (SELECT 1 FROM bottles bt
+                   JOIN inventory_batches ib ON ib.id = bt.batch_id
+                  WHERE bt.brand_id = sr.brand_id
+                    AND bt.owner = 'BRAND'
+                    AND bt.fragrance_product_id = sr.fragrance_product_id
+                    AND bt.status = 'IN_STOCK'
+                    AND ib.authenticity_status <> 'REJECTED'
+                    AND (bt.expires_at IS NULL OR bt.expires_at > ${now}))
+      THEN 'STOCK_IN_WAREHOUSE'
+    WHEN EXISTS (SELECT 1 FROM refill_sessions op
+                  WHERE op.slot_id = sr.slot_id AND op.status = 'STARTED')
+      THEN 'REFILL_SESSION_OPEN'
+    WHEN EXISTS (SELECT 1 FROM refill_requests q
+                  WHERE q.slot_id = sr.slot_id
+                    AND q.status IN ('SUBMITTED', 'ACCEPTED', 'SCHEDULED'))
+      THEN 'REFILL_REQUEST_PENDING'
+  END`;
 }
 
 export interface SlotRentalFilter {
@@ -605,6 +673,7 @@ export class SltQueries {
         .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
         .selectAll('sr')
         .select(['ms.machine_id', 'rc.hold_expires_at'])
+        .select(productLockExpr(sql`now()`).as('product_lock'))
         .where('sr.checkout_id', '=', checkoutRow.id)
         .orderBy('sr.created_at', 'asc')
         .execute();
@@ -646,15 +715,88 @@ export class SltQueries {
     };
   }
 
+  /**
+   * ADR-0035 mục 2: khóa dòng máy rồi dòng slot — cùng thứ tự với mở và đóng phiếu nạp
+   * (`InvQueries.lockSlotAndMachine`) để đổi sản phẩm và mở phiếu không lọt nhau, không khóa chéo.
+   */
+  async lockSlotForProductChange(slotId: string, tx: Executor): Promise<void> {
+    const slot = await tx
+      .selectFrom('machine_slots')
+      .select('machine_id')
+      .where('id', '=', slotId)
+      .executeTakeFirst();
+    if (!slot) return;
+    await tx
+      .selectFrom('machines')
+      .select('id')
+      .where('id', '=', slot.machine_id)
+      .forUpdate()
+      .execute();
+    await tx
+      .selectFrom('machine_slots')
+      .select('id')
+      .where('id', '=', slotId)
+      .forUpdate()
+      .execute();
+  }
+
+  /** ADR-0035 mục 1: lý do khóa đổi sản phẩm, tính theo `now` của máy chủ. */
+  async findProductLock(id: string, now: Date, executor: Executor): Promise<ProductLock | null> {
+    const row = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .select(productLockExpr(now).as('product_lock'))
+      .where('sr.id', '=', id)
+      .executeTakeFirst();
+    return row?.product_lock ?? null;
+  }
+
+  /** Dữ kiện cho thông báo đổi sản phẩm gửi kho (ADR-0035 mục 4). */
+  async findProductChangeContext(
+    id: string,
+    fromProductId: string,
+    toProductId: string,
+    executor: Executor,
+  ): Promise<{
+    machineName: string;
+    slotNumber: number;
+    brandName: string;
+    fromName: string;
+    toName: string;
+  }> {
+    const slot = await executor
+      .selectFrom('slot_rentals as sr')
+      .innerJoin('machine_slots as ms', 'ms.id', 'sr.slot_id')
+      .innerJoin('machines as m', 'm.id', 'ms.machine_id')
+      .innerJoin('brands as b', 'b.id', 'sr.brand_id')
+      .select(['m.display_name', 'ms.slot_number', 'b.name as brand_name'])
+      .where('sr.id', '=', id)
+      .executeTakeFirstOrThrow();
+    const products = await executor
+      .selectFrom('fragrance_products')
+      .select(['id', 'name'])
+      .where('id', 'in', [fromProductId, toProductId])
+      .execute();
+    const nameOf = (productId: string) => products.find((p) => p.id === productId)?.name ?? '—';
+    return {
+      machineName: slot.display_name,
+      slotNumber: slot.slot_number,
+      brandName: slot.brand_name,
+      fromName: nameOf(fromProductId),
+      toName: nameOf(toProductId),
+    };
+  }
+
   /** Gán sản phẩm kèm giá của sản phẩm trong cùng một câu lệnh (ADR-0023). */
   async updateProduct(
     scope: BrandScope,
     id: string,
     fragranceProductId: string,
     pricePerSpray: string,
+    now: Date,
+    executor: Executor = this.db,
   ): Promise<SlotRentalRecord | null> {
-    const now = new Date();
-    await this.db
+    await executor
       .updateTable('slot_rentals')
       .set({
         fragrance_product_id: fragranceProductId,
@@ -666,7 +808,7 @@ export class SltQueries {
       .where(brandScopedByColumn(scope, 'brand_id'))
       .execute();
 
-    return this.findById(scope, id);
+    return this.findById(scope, id, executor);
   }
 
   /** Giá riêng của slot — chỉ còn dùng cho hàng thanh lý (FR-EXP-18, ADR-0023). */
@@ -749,6 +891,7 @@ export class SltQueries {
       .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
       .selectAll('sr')
       .select(['ms.machine_id', 'rc.hold_expires_at'])
+      .select(productLockExpr(sql`now()`).as('product_lock'))
       .where('sr.checkout_id', '=', checkoutId)
       .orderBy('sr.created_at', 'asc')
       .execute();
@@ -1243,6 +1386,7 @@ export class SltQueries {
         .leftJoin('rental_checkouts as rc', 'rc.id', 'sr.checkout_id')
         .selectAll('sr')
         .select(['ms.machine_id', 'rc.hold_expires_at'])
+        .select(productLockExpr(sql`now()`).as('product_lock'))
         .where('sr.id', '=', params.rentalId)
         .executeTakeFirstOrThrow();
 
@@ -2049,12 +2193,20 @@ export class SltQueries {
   }
 
   private selectColumns(query: ReturnType<SltQueries['base']>) {
-    return query.selectAll('sr').select(['ms.machine_id', 'rc.hold_expires_at']);
+    return query
+      .selectAll('sr')
+      .select(['ms.machine_id', 'rc.hold_expires_at'])
+      .select(productLockExpr(sql`now()`).as('product_lock'));
   }
 }
 
+type SlotRentalRow = Awaited<
+  ReturnType<ReturnType<SltQueries['selectColumns']>['executeTakeFirstOrThrow']>
+>;
+
+/** `product_lock` vắng ở dòng vừa tạo (hóa đơn gia hạn chưa thanh toán) — coi như không khóa. */
 function toRecord(
-  row: Awaited<ReturnType<ReturnType<SltQueries['selectColumns']>['executeTakeFirstOrThrow']>>,
+  row: Omit<SlotRentalRow, 'product_lock'> & { product_lock?: ProductLock | null },
 ): SlotRentalRecord {
   return {
     id: row.id,
@@ -2096,6 +2248,7 @@ function toRecord(
     swappedAt: row.swapped_at ?? null,
     nonRenewalRequestedAt: row.non_renewal_requested_at ?? null,
     returnMethod: row.return_method ?? null,
+    productLock: row.product_lock ?? null,
   };
 }
 

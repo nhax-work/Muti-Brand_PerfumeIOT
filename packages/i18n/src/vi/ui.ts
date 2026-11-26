@@ -1305,6 +1305,25 @@ export const ui = {
   slotSetupStepInstall: 'Lắp chai và mở bán',
   slotSetupInstallWaiting: 'Nhân viên nền tảng lắp chai, kiosk bắt đầu bán ngay sau đó.',
   slotSetupInstallDone: 'Slot đã lắp chai.',
+  slotSetupLockedInstalled: 'Slot đã lắp chai nên sản phẩm giữ nguyên tới hết hóa đơn.',
+  slotSetupLockedStock:
+    'Kho đã có hàng của sản phẩm này để lắp vào slot nên không đổi được sản phẩm nữa.',
+  slotSetupLockedRefill: 'Kho đang nạp chai cho slot nên chưa đổi được sản phẩm.',
+  slotSetupReadyInstall: 'Sẵn sàng lắp',
+  slotSetupReadyDocs: 'Kho có hàng · chờ giấy tờ',
+  slotSetupReadyShipping: 'Đang gửi về kho',
+  slotSetupReadyNone: 'Chưa gửi hàng',
+  slotSetupConfirmChangeTitle: 'Đổi sản phẩm của slot?',
+  slotSetupConfirmAssignTitle: 'Gán sản phẩm cho slot?',
+  slotSetupConfirmChange: 'Kho sẽ được báo để chuẩn bị lại hàng cho slot này.',
+  slotSetupConfirmNoStock:
+    '{product} chưa có hàng lắp được trong kho. Slot chỉ bán được sau khi bạn gửi hàng và giấy tờ ' +
+    'được duyệt. Hạn lắp chai vẫn là {deadline}; quá hạn, hóa đơn tự bắt đầu tính thời hạn dù slot ' +
+    'chưa bán.',
+  slotSetupConfirmDeclared: 'Lô {product} bạn đang gửi về kho sẽ không dùng cho slot này.',
+  slotSetupConfirmWillLock:
+    'Kho đã nhận hàng {product}. Khi kho còn hàng của sản phẩm này, bạn không đổi được sản phẩm ' +
+    'của slot nữa.',
   mySlotsInvoice: 'Hóa đơn',
   brandLogo: 'Logo',
   brandLogoHint: 'JPEG, PNG hoặc WebP, tối đa {maxMb} MB. Ảnh vuông, nền trơn hiển thị đẹp nhất.',

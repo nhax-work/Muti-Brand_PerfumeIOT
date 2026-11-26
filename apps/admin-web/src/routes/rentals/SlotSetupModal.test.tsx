@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { Modal } from 'antd';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { InventoryBatch, ShipmentDeclaration } from '@/routes/shipments/api';
 import { installDomStubs, renderScreen } from '@/test-utils';
@@ -53,6 +54,8 @@ const baseRental: SlotRental = {
 beforeAll(installDomStubs);
 
 afterEach(() => {
+  // Hộp xác nhận (Modal.confirm) gắn ngoài cây React — cleanup() không gỡ được.
+  Modal.destroyAll();
   cleanup();
   mockNavigate.mockReset();
   mockAssign.mockClear();
@@ -113,10 +116,8 @@ describe('SlotSetupModal — cấu hình slot (FR-SLT-27, ADR-0023)', () => {
   it('sản phẩm vừa tạo được chọn sẵn; Lưu chỉ gọi API gán sản phẩm', async () => {
     mockProducts = [product('p-1', 'Aurore Matinale'), product('p-new', 'Aurore Soir')];
     const onClose = vi.fn();
-    const dialog = await renderModal(
-      { ...baseRental, fragranceProductId: 'p-1' },
-      { onClose, initialProductId: 'p-new' },
-    );
+    // Gán lần đầu sản phẩm chưa có hàng: không có hậu quả gì cần hỏi lại (ADR-0035).
+    const dialog = await renderModal(baseRental, { onClose, initialProductId: 'p-new' });
     expect(within(dialog).getByText('Aurore Soir')).toBeTruthy();
     fireEvent.click(within(dialog).getByText('Lưu cấu hình'));
     await waitFor(() =>
@@ -162,5 +163,82 @@ describe('SlotSetupModal — cấu hình slot (FR-SLT-27, ADR-0023)', () => {
     const dialog = await renderModal({ ...baseRental, fragranceProductId: 'p-1' });
     expect(within(dialog).getByText('Giấy tờ đã được duyệt.')).toBeTruthy();
     expect(within(dialog).getByText(/Nhân viên nền tảng lắp chai/)).toBeTruthy();
+  });
+});
+
+/** Nút OK của hộp xác nhận — cùng chữ với nút Lưu ở chân pop-up, hộp xác nhận hiện sau nên nằm cuối. */
+function confirmOk(): HTMLElement {
+  return screen.getAllByText('Lưu cấu hình').at(-1)!.closest('button')!;
+}
+
+describe('SlotSetupModal — khóa và xác nhận đổi sản phẩm (FR-SLT-28, ADR-0035)', () => {
+  const paidRental: SlotRental = {
+    ...baseRental,
+    paidAt: '2026-11-11T12:00:00Z',
+    fragranceProductId: 'p-1',
+  };
+
+  it('slot đã lắp chai: chỉ xem sản phẩm, nêu lý do, không còn nút Lưu hay Tạo sản phẩm', async () => {
+    mockProducts = [product('p-1', 'Aurore Matinale'), product('p-2', 'Aurore Nocturne')];
+    const dialog = await renderModal({
+      ...paidRental,
+      status: 'ACTIVE',
+      stage: 'ACTIVE',
+      productLockReason: 'INSTALLED',
+    });
+    expect(
+      within(dialog).getByText('Slot đã lắp chai nên sản phẩm giữ nguyên tới hết hóa đơn.'),
+    ).toBeTruthy();
+    expect(within(dialog).queryByText('Lưu cấu hình')).toBeNull();
+    expect(within(dialog).queryByText('Tạo sản phẩm')).toBeNull();
+    expect(within(dialog).getByText('Đóng')).toBeTruthy();
+    expect(dialog.querySelector('.ant-select-disabled')).not.toBeNull();
+  });
+
+  it('kho đã có hàng hoặc đang nạp: nêu đúng lý do khóa', async () => {
+    mockProducts = [product('p-1', 'Aurore Matinale')];
+    const stock = await renderModal({ ...paidRental, productLockReason: 'STOCK_IN_WAREHOUSE' });
+    expect(within(stock).getByText(/Kho đã có hàng của sản phẩm này/)).toBeTruthy();
+    cleanup();
+
+    const refill = await renderModal({ ...paidRental, productLockReason: 'REFILL_IN_PROGRESS' });
+    expect(within(refill).getByText(/Kho đang nạp chai cho slot/)).toBeTruthy();
+  });
+
+  it('đổi sang sản phẩm chưa có hàng: xác nhận nêu kho chuẩn bị lại, hạn lắp chai và lô đang gửi', async () => {
+    mockProducts = [product('p-1', 'Aurore Matinale'), product('p-2', 'Aurore Nocturne')];
+    mockShipments = [{ id: 'd-1', fragranceProductId: 'p-1', status: 'DECLARED' }];
+    const dialog = await renderModal(paidRental, { initialProductId: 'p-2' });
+
+    fireEvent.click(within(dialog).getByText('Lưu cấu hình'));
+
+    // antd ghi tiêu đề hai lần: bản ẩn cho trình đọc màn hình và bản hiển thị.
+    expect((await screen.findAllByText('Đổi sản phẩm của slot?')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Kho sẽ được báo để chuẩn bị lại hàng/)).toBeTruthy();
+    // Thanh toán 11/11 + RENTAL_MAX_STOCKING_DAYS = 30 ngày.
+    expect(screen.getByText(/Hạn lắp chai vẫn là 11\/12\/2026/)).toBeTruthy();
+    expect(screen.getByText(/Lô Aurore Matinale bạn đang gửi về kho/)).toBeTruthy();
+    expect(mockAssign).not.toHaveBeenCalled();
+
+    fireEvent.click(confirmOk());
+    await waitFor(() =>
+      expect(mockAssign).toHaveBeenCalledWith({ rentalId: 'r-1', fragranceProductId: 'p-2' }),
+    );
+  });
+
+  it('gán sản phẩm đã có hàng trong kho: báo trước sau khi lưu sẽ không đổi được', async () => {
+    mockProducts = [product('p-1', 'Aurore Matinale')];
+    mockBatches = [{ id: 'b-1', fragranceProductId: 'p-1', authenticityStatus: 'PENDING' }];
+    const dialog = await renderModal(
+      { ...baseRental, paidAt: '2026-11-11T12:00:00Z' },
+      { initialProductId: 'p-1' },
+    );
+
+    fireEvent.click(within(dialog).getByText('Lưu cấu hình'));
+
+    // antd ghi tiêu đề hai lần: bản ẩn cho trình đọc màn hình và bản hiển thị.
+    expect((await screen.findAllByText('Gán sản phẩm cho slot?')).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Kho đã nhận hàng Aurore Matinale/)).toBeTruthy();
+    expect(screen.queryByText(/Kho sẽ được báo/)).toBeNull();
   });
 });

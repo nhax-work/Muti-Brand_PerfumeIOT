@@ -1181,7 +1181,7 @@ export interface paths {
         get?: never;
         /**
          * Gán hoặc đổi sản phẩm cho slot
-         * @description FR-SLT-07, FR-SLT-27, FR-SLT-28: gán đúng một sản phẩm đang kinh doanh của thương hiệu vào slot có hóa đơn đã thanh toán và chưa kết thúc, ghi nhận thời điểm đổi. Sản phẩm không thuộc thương hiệu thuê slot trả PRODUCT_NOT_OWNED; hóa đơn chưa thanh toán trả RENTAL_NOT_ACTIVE. Hóa đơn chưa gán sản phẩm thì slot không nhận đơn (FR-SLT-29). Ghi nhật ký (FR-AUD-04).
+         * @description FR-SLT-07, FR-SLT-27, FR-SLT-28: gán đúng một sản phẩm đang kinh doanh của thương hiệu vào slot có hóa đơn đã thanh toán và chưa kết thúc, ghi nhận thời điểm đổi. Sản phẩm không thuộc thương hiệu thuê slot trả PRODUCT_NOT_OWNED; hóa đơn chưa thanh toán trả RENTAL_NOT_ACTIVE. Hóa đơn chưa gán sản phẩm thì slot không nhận đơn (FR-SLT-29). Đổi sang sản phẩm khác bị từ chối khi slot đã lắp chai cho hóa đơn hoặc kho đã có hàng lắp được của sản phẩm đang gán (SLOT_PRODUCT_LOCKED), slot có phiếu nạp đang mở (REFILL_SESSION_OPEN) hoặc yêu cầu bổ sung chưa kết thúc (REFILL_REQUEST_PENDING) — ADR-0035; `SlotRental.productLockReason` báo trước lý do. Đổi thành công báo Inventory Staff; hạn RENTAL_MAX_STOCKING_DAYS vẫn tính từ lúc thanh toán. Ghi nhật ký (FR-AUD-04).
          */
         put: operations["assignSlotRentalProduct"];
         post?: never;
@@ -4359,7 +4359,16 @@ export interface components {
             swappedFromSlotId?: string | null;
             /** Format: date-time */
             swappedAt?: string | null;
+            /** @description Lý do không đổi được sản phẩm đang gán (FR-SLT-28, ADR-0035); null là đổi được (hoặc chưa gán sản phẩm). Chỉ đọc, suy ra lúc đọc — không phải cột trong CSDL. */
+            productLockReason?: components["schemas"]["SlotProductLockReason"] | null;
         };
+        /**
+         * @description ADR-0035. INSTALLED — slot đã lắp chai cho hóa đơn (hoặc chuỗi gia hạn của nó), khóa tới hết
+         *     hóa đơn. STOCK_IN_WAREHOUSE — kho có chai IN_STOCK còn hạn của sản phẩm đang gán, lô không bị
+         *     REJECTED. REFILL_IN_PROGRESS — slot có phiếu nạp đang mở hoặc yêu cầu bổ sung chưa kết thúc.
+         * @enum {string}
+         */
+        SlotProductLockReason: "INSTALLED" | "STOCK_IN_WAREHOUSE" | "REFILL_IN_PROGRESS";
         /** @description Báo không gia hạn, lấy hàng về (FR-EXP-23, ADR-0014). */
         SlotRentalNonRenewal: {
             returnMethod: components["schemas"]["BottleReturnMethod"];

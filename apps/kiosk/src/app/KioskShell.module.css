@@ -23,15 +23,6 @@
   background: var(--bg);
   color: var(--text);
   border-bottom: 1px solid var(--line);
-  transition:
-    background var(--dur) var(--ease),
-    color var(--dur) var(--ease);
-}
-
-.headerDark {
-  background: var(--action);
-  color: var(--on-action);
-  border-bottom-color: transparent;
 }
 
 .navLeft {

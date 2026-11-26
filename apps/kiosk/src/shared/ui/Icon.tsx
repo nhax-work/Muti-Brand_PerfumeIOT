@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
  * nút chứa nó.
  */
 const PATHS = {
+  alert: 'M12 3.5 2.5 20h19L12 3.5zM12 10v4.5M12 17.2v.3',
   arrowLeft: 'M19 12H5M11 6l-6 6 6 6',
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
   timerOff: 'M10 2h4M12 10v3M4 4l16 16M7.4 7.6A8 8 0 0 0 18.4 18.6M10 6.2A8 8 0 0 1 19.8 16',

@@ -9,7 +9,7 @@
   --tier: clamp(150px, 30dvh, 240px);
   --anim-h: calc(100dvh - var(--header-h) - var(--tier) - 230px);
   --card-w: calc(var(--anim-h) * 4 / 3 + 2 * var(--sp-2));
-  --card-bg: color-mix(in srgb, var(--on-action) 8%, var(--action));
+  --card-bg: var(--surface-2);
 
   flex: 1;
   min-height: 0;
@@ -19,8 +19,8 @@
   justify-content: center;
   gap: var(--sp-3);
   padding: var(--sp-3) var(--gutter);
-  background: var(--action);
-  color: var(--on-action);
+  background: var(--bg);
+  color: var(--text);
   animation: kiosk-enter var(--dur) var(--ease) both;
 }
 
@@ -47,7 +47,7 @@
   width: calc(100% + 2 * var(--sp-1));
   height: calc(100% + 2 * var(--sp-1));
   fill: none;
-  stroke: color-mix(in srgb, var(--on-action) 18%, transparent);
+  stroke: var(--line);
   stroke-width: 1.5;
   transform: rotate(-90deg);
 }
@@ -141,7 +141,7 @@
 .stepNo {
   font-size: var(--fs-small);
   font-variant-numeric: tabular-nums;
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 
 /* Tối đa hai dòng — chuỗi tiếng Anh dài hơn vẫn giữ thẻ cùng chiều cao. */

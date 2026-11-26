@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { STEP_SOURCES } from '@/assets/steps';
 import { config } from '@/shared/config';
 import { useI18n } from '@/shared/i18n';
-import { useDarkShell } from '@/shared/shell/chrome';
+import { useFocusShell } from '@/shared/shell/chrome';
 import { StepAnimation } from './StepAnimation';
 import styles from './PressScreen.module.css';
 
@@ -16,13 +16,13 @@ function prefersReducedMotion(): boolean {
 }
 
 /**
- * Màn "đèn đã sáng" (FR-ORD-26): nền tối cả header, số nút lớn màu đèn có vòng đếm ngược theo
+ * Màn "đèn đã sáng" (FR-ORD-26): nền sáng như các màn khác, số nút lớn màu đèn có vòng đếm ngược theo
  * `pressDeadline` máy chủ trả, "Nhấn nút số N · Còn S giây"; dưới là ba bước sáng lần lượt. Bật giảm
  * chuyển động thì không nháy, không hoạt ảnh — chỉ giữ bước 02 (nhấn nút) sáng tĩnh.
  */
 export function PressScreen({ slot, secondsLeft }: { slot: number; secondsLeft: number | null }) {
   const { t } = useI18n();
-  useDarkShell(true);
+  useFocusShell(true);
 
   const [still] = useState(prefersReducedMotion);
   const [step, setStep] = useState(still ? 1 : 0);

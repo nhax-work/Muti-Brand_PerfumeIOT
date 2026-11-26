@@ -48,6 +48,7 @@ thương hiệu (FR-BND-06).
 | `INVALID_RENTAL_PERIOD` | 400 | Ngày kết thúc trước ngày bắt đầu |
 | `HOLD_LIMIT_REACHED` | 409 | Tạo phiên thanh toán làm số slot chưa thanh toán thương hiệu đang giữ vượt `BRAND_MAX_HELD_SLOTS` (FR-SLT-56, ADR-0014) |
 | `SLOT_SWAP_NOT_ALLOWED` | 409 | Đổi slot khi đã quá `SLOT_SWAP_WINDOW_HOURS`, đã lắp chai, đã đổi một lần hoặc slot đích khác giá niêm yết (FR-SLT-55, ADR-0014) |
+| `SLOT_PRODUCT_LOCKED` | 409 | Đổi sản phẩm của slot đã lắp chai cho hóa đơn, hoặc kho đã có hàng lắp được của sản phẩm đang gán (FR-SLT-28, ADR-0035) |
 
 ## Đăng ký thương hiệu, hợp đồng và chi trả
 

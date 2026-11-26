@@ -63,12 +63,12 @@ function Harness(props: { view: OrderStatusView; phase?: CheckoutPhase; goHome: 
 
 const goHome = vi.fn();
 
-const setDarkHeader = vi.fn();
+const setFocusHeader = vi.fn();
 
 function renderFlow(v: OrderStatusView, phase?: CheckoutPhase) {
   const ui = (next: OrderStatusView) => (
     <I18nProvider>
-      <ShellChromeContext.Provider value={setDarkHeader}>
+      <ShellChromeContext.Provider value={setFocusHeader}>
         <Harness view={next} phase={phase} goHome={goHome} />
       </ShellChromeContext.Provider>
     </I18nProvider>
@@ -141,8 +141,8 @@ describe('DispenseFlow — ánh xạ trạng thái máy chủ sang màn (FR-ORD-
     expect(screen.getByLabelText('Nút số 2').textContent).toBe('2');
     expect(screen.getByRole('timer').textContent).toMatch(/Còn 4[45] giây/);
     expect(playChime).toHaveBeenCalledOnce();
-    // Header chuyển nền tối cùng màn, ẩn đổi ngôn ngữ.
-    expect(setDarkHeader).toHaveBeenLastCalledWith(true);
+    // Header ẩn đổi ngôn ngữ để khách không chạm nhầm.
+    expect(setFocusHeader).toHaveBeenLastCalledWith(true);
 
     advance(10_000);
     expect(screen.getByRole('timer').textContent).toMatch(/Còn 3[45] giây/);
