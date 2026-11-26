@@ -71,8 +71,15 @@ body {
   top: 0;
   left: 0;
   overflow-y: auto;
+  /* Ẩn thanh cuộn nhưng vẫn cuộn được bằng chuột/cảm ứng khi menu dài hơn màn hình. */
+  scrollbar-width: none;
   z-index: 100;
   flex-shrink: 0;
+}
+
+.admin-layout .ant-layout-sider::-webkit-scrollbar,
+.admin-sider::-webkit-scrollbar {
+  display: none;
 }
 
 .admin-main-layout {
