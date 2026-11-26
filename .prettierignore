@@ -28,3 +28,6 @@ AI gen/
 
 # Hồ sơ điện/PCB và dữ liệu xuất từ KiCad: giữ nguyên nội dung xuất để đối chiếu.
 hardware/driver15/
+
+# Ứng dụng Flutter cho Operations Staff & Inventory Staff (format bằng dart format)
+apps/staff-app/
