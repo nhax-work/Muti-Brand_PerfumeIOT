@@ -444,16 +444,43 @@ Inventory Staff lắp chai đầu tiên vào slot đó (FR-SLT-24).
 ---
 
 ## FR-SLT-28 — Đổi sản phẩm gán cho slot
-* **Statement:** Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot, ghi nhận thời điểm đổi.
-* **Traces:** BR-011 · **Priority:** M
+* **Statement:** Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot khi slot chưa lắp chai và kho chưa có hàng lắp được của sản phẩm đang gán, ghi nhận thời điểm đổi và báo Inventory Staff (ADR-0035).
+* **Traces:** BR-011 · **Priority:** M · ADR-0035 · **API:** `PUT /slot-rentals/{id}/product`
 * **Acceptance criteria:**
-  * **AC1:** Given hóa đơn `H` đang gán sản phẩm `P1`,  
+  * **AC1:** Given hóa đơn `H` đang gán sản phẩm `P1`, slot chưa lắp chai và kho không có hàng lắp được của `P1`,  
     When Brand Admin đổi sang sản phẩm `P2` cùng thương hiệu,  
     Then hệ thống cập nhật `fragrance_product_id = P2` và `product_assigned_at` về thời điểm đổi, ghi AuditLog.
   * **AC2 (Đơn đang chờ không bị ảnh hưởng):** Given có đơn hàng của `H` đang ở trạng thái `PENDING_PAYMENT` với sản phẩm `P1` đã chụp,  
     When đổi sản phẩm sang `P2`,  
     Then đơn đang chờ giữ nguyên `fragrance_product_id` và `product_name_snapshot` của `P1` (FR-ORD-06).
-* **Test:** `test_FR_SLT_28_change_slot_product`
+  * **AC3 (Đã lắp chai):** Given slot đang có chai của thương hiệu, hoặc đã có phiếu nạp `COMPLETED` trên slot của thương hiệu kể từ lúc thanh toán hóa đơn đầu chuỗi gia hạn của `H`,  
+    When Brand Admin đổi sang `P2`,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_PRODUCT_LOCKED` và `H.productLockReason = INSTALLED` — khóa tới hết hóa đơn, kể cả khi kho đã hết hàng; hóa đơn gia hạn kế thừa khóa.
+  * **AC4 (Kho đã có hàng):** Given kho có chai `IN_STOCK`, `owner = BRAND`, còn hạn của `P1` thuộc lô có giấy tờ khác `REJECTED`,  
+    When Brand Admin đổi sang `P2`,  
+    Then hệ thống từ chối với HTTP 409 `SLOT_PRODUCT_LOCKED` và `H.productLockReason = STOCK_IN_WAREHOUSE`.
+  * **AC5 (Hàng không lắp được thì mở khóa):** Given mọi chai `IN_STOCK` của `P1` đã hết hạn hoặc thuộc lô `REJECTED`,  
+    When Brand Admin đổi sang `P2`,  
+    Then hệ thống chấp nhận như AC1.
+  * **AC6 (Tự kích hoạt chưa lắp chai):** Given `H` đã tự kích hoạt sau `RENTAL_MAX_STOCKING_DAYS` mà chưa lắp chai và kho không có hàng lắp được của `P1`,  
+    When Brand Admin đổi sang `P2`,  
+    Then hệ thống chấp nhận như AC1.
+  * **AC7 (Kho đang nạp):** Given slot có phiếu nạp `STARTED`, hoặc yêu cầu bổ sung `SUBMITTED`, `ACCEPTED`, `SCHEDULED`,  
+    When Brand Admin đổi sang `P2`,  
+    Then hệ thống từ chối với HTTP 409 lần lượt `REFILL_SESSION_OPEN` hoặc `REFILL_REQUEST_PENDING`, và `H.productLockReason = REFILL_IN_PROGRESS`.
+  * **AC8 (Gán lần đầu, lưu lại cùng sản phẩm):** Given `H` chưa gán sản phẩm, hoặc Brand Admin gửi lại đúng `P1`,  
+    When lưu,  
+    Then các điều kiện khóa ở AC3, AC4, AC7 không áp dụng.
+  * **AC9 (Báo kho):** Given Brand Admin đổi thành công từ `P1` sang `P2`,  
+    When transaction ghi xong,  
+    Then mọi tài khoản nền tảng có quyền `inventory.manage` nhận thông báo trong ứng dụng `SLOT_PRODUCT_CHANGED`; gán lần đầu không gửi.
+  * **AC10 (Không dời hạn lắp chai):** Given `H` đổi sản phẩm khi còn chờ lắp chai,  
+    When tính hạn `RENTAL_MAX_STOCKING_DAYS`,  
+    Then hạn vẫn tính từ `paid_at` của `H`, không từ `product_assigned_at`.
+  * **AC11 (Đồng thời với mở phiếu nạp):** Given Brand Admin đổi sản phẩm cùng lúc Inventory Staff mở phiếu nạp cho slot,  
+    When hai giao dịch chạy song song,  
+    Then cả hai khóa dòng máy rồi dòng slot theo cùng thứ tự; nếu phiếu nạp mở trước thì đổi sản phẩm bị từ chối `REFILL_SESSION_OPEN`.
+* **Test:** `test_FR_SLT_28_change_slot_product`, `test_FR_SLT_28_reject_change_after_install`, `test_FR_SLT_28_renewal_inherits_install_lock`, `test_FR_SLT_28_reject_change_with_stock_in_warehouse`, `test_FR_SLT_28_reject_change_while_refilling`, `test_FR_SLT_28_notify_inventory_on_change`
 
 ---
 

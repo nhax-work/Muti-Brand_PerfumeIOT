@@ -38,6 +38,7 @@ import {
   type BottleReturnMethod,
   type CheckoutCreateItemData,
   type Executor,
+  type ProductLock,
   type RentalCheckoutRecord,
   type SlotRentalFilter,
   type SlotRentalRecord,
@@ -57,6 +58,34 @@ type Bottle = Schema<'Bottle'>;
 
 /** Quyền quản lý kho — người tháo chai và lập phiếu trả hàng (FR-EXP-26). */
 const INVENTORY_MANAGE = 'inventory.manage';
+
+/** ADR-0035 mục 1: mã lỗi và thông điệp khi đổi sản phẩm của slot đang bị khóa. */
+function productLockError(lock: ProductLock): AppError {
+  switch (lock) {
+    case 'INSTALLED':
+      return new AppError('SLOT_PRODUCT_LOCKED', 'slt.productLockedInstalled');
+    case 'STOCK_IN_WAREHOUSE':
+      return new AppError('SLOT_PRODUCT_LOCKED', 'slt.productLockedStock');
+    case 'REFILL_SESSION_OPEN':
+      return new AppError('REFILL_SESSION_OPEN', 'slt.productLockedRefillSession');
+    case 'REFILL_REQUEST_PENDING':
+      return new AppError('REFILL_REQUEST_PENDING', 'slt.productLockedRefillRequest');
+  }
+}
+
+/** openapi `SlotProductLockReason`: phiếu nạp mở và yêu cầu bổ sung gộp thành một lý do hiển thị. */
+function productLockReason(lock: ProductLock | null | undefined): SlotRental['productLockReason'] {
+  switch (lock) {
+    case 'INSTALLED':
+    case 'STOCK_IN_WAREHOUSE':
+      return lock;
+    case 'REFILL_SESSION_OPEN':
+    case 'REFILL_REQUEST_PENDING':
+      return 'REFILL_IN_PROGRESS';
+    default:
+      return null;
+  }
+}
 
 @Injectable()
 export class SltService {
@@ -447,7 +476,10 @@ export class SltService {
     };
   }
 
-  /** FR-SLT-27, FR-SLT-28: Gán hoặc đổi sản phẩm cho slot. */
+  /**
+   * FR-SLT-27, FR-SLT-28: Gán hoặc đổi sản phẩm cho slot. Đổi sang sản phẩm khác bị khóa khi slot đã
+   * lắp chai, kho đã có hàng lắp được, hoặc kho đang nạp (ADR-0035); đổi thành công báo kho.
+   */
   async assignProduct(
     actor: AuthenticatedUser,
     scope: BrandScope,
@@ -472,29 +504,78 @@ export class SltService {
       throw invalidField('fragranceProductId', 'slt.productDiscontinued');
     }
 
-    // ADR-0023: slot bán đúng giá của sản phẩm.
-    const updated = await this.queries.updateProduct(
-      scope,
-      id,
-      fragranceProductId,
-      product.defaultPrice,
-    );
-    const dto = toDto(updated!);
+    const now = this.clock.now();
+    const updated = await this.db.transaction().execute(async (tx) => {
+      // ADR-0035 mục 2: khóa slot rồi đọc lại, để không lọt ca kho mở phiếu nạp cùng lúc.
+      await this.queries.lockSlotForProductChange(rental.slotId, tx);
+      const current = await this.queries.findById(scope, id, tx);
+      if (!current) throw notFoundFor(actor);
+      const previousProductId = current.fragranceProductId;
+      // Gán lần đầu và lưu lại đúng sản phẩm đang gán không xét khóa (FR-SLT-28 AC8).
+      const changing = previousProductId !== null && previousProductId !== fragranceProductId;
+      if (changing) {
+        const lock = await this.queries.findProductLock(id, now, tx);
+        if (lock) throw productLockError(lock);
+      }
 
-    await this.audit.log({
-      actorType: 'USER',
-      actorId: actor.userId,
-      action: 'slt.slot_rental.product_assigned',
-      targetType: 'SlotRental',
-      targetId: id,
-      before: {
-        fragranceProductId: rental.fragranceProductId,
-        pricePerSpray: rental.pricePerSpray,
-      },
-      after: { fragranceProductId, pricePerSpray: dto.pricePerSpray },
+      // ADR-0023: slot bán đúng giá của sản phẩm.
+      const row = await this.queries.updateProduct(
+        scope,
+        id,
+        fragranceProductId,
+        product.defaultPrice,
+        now,
+        tx,
+      );
+
+      await this.audit.log(
+        {
+          actorType: 'USER',
+          actorId: actor.userId,
+          action: 'slt.slot_rental.product_assigned',
+          targetType: 'SlotRental',
+          targetId: id,
+          before: {
+            fragranceProductId: previousProductId,
+            pricePerSpray: current.pricePerSpray,
+          },
+          after: { fragranceProductId, pricePerSpray: row!.pricePerSpray },
+        },
+        tx,
+      );
+
+      // ADR-0035 mục 4: kho bỏ chuẩn bị hàng cũ, việc cần nạp tự tính theo sản phẩm mới.
+      if (changing) {
+        const ctx = await this.queries.findProductChangeContext(
+          id,
+          previousProductId,
+          fragranceProductId,
+          tx,
+        );
+        const params = {
+          brand: ctx.brandName,
+          machine: ctx.machineName,
+          slot: ctx.slotNumber,
+          from: ctx.fromName,
+          to: ctx.toName,
+        };
+        await this.alr.notifyPermissionHolders(
+          tx,
+          {
+            brandId: current.brandId,
+            type: 'SLOT_PRODUCT_CHANGED',
+            subject: translate(DEFAULT_LOCALE, 'slt.productChangedSubject', params),
+            content: translate(DEFAULT_LOCALE, 'slt.productChangedContent', params),
+            referenceId: id,
+            at: now,
+          },
+          INVENTORY_MANAGE,
+        );
+      }
+      return row!;
     });
 
-    return dto;
+    return toDto(updated);
   }
 
   /**
@@ -1631,6 +1712,7 @@ export function toDto(r: SlotRentalRecord): SlotRental {
     swappedAt: iso(r.swappedAt),
     nonRenewalRequestedAt: iso(r.nonRenewalRequestedAt),
     returnMethod: r.returnMethod,
+    productLockReason: productLockReason(r.productLock),
   };
 }
 

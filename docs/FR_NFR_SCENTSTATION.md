@@ -222,7 +222,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-SLT-25 | ~~Hệ thống phải cho phép Brand Admin xem trạng thái và lịch sử các yêu cầu thuê của thương hiệu mình~~ — bãi bỏ theo ADR-0006; thay bằng FR-SLT-41 | BR-011 | X |
 | FR-SLT-26 | ~~Hệ thống phải ngăn Brand Admin gửi yêu cầu thuê mới trên cùng slot khi đã tồn tại yêu cầu chưa xử lý xong~~ — bãi bỏ theo ADR-0006; thay bằng giữ chỗ ở FR-SLT-35 | BR-011 | X |
 | FR-SLT-27 | Hệ thống phải cho phép Brand Admin gán đúng một sản phẩm đang kinh doanh của thương hiệu mình vào slot có hóa đơn đã thanh toán và chưa kết thúc | BR-011 | M |
-| FR-SLT-28 | Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot, ghi nhận thời điểm đổi | BR-011 | M |
+| FR-SLT-28 | Hệ thống phải cho phép Brand Admin đổi sản phẩm gán cho slot khi slot chưa lắp chai và kho chưa có hàng lắp được của sản phẩm đang gán, ghi nhận thời điểm đổi và báo Inventory Staff (ADR-0035) | BR-011 | M |
 | FR-SLT-29 | Hệ thống phải từ chối tạo đơn hàng tại slot chưa được gán sản phẩm hoặc chưa đặt giá lượt xịt | BR-002, BR-011 | M |
 | FR-SLT-30 | Hệ thống phải cho phép Platform Super Admin quản lý danh mục gói thuê gồm tên, thời hạn theo tháng, tỷ lệ ưu đãi và trạng thái mở bán | BR-009, BR-011 | M |
 | FR-SLT-31 | Hệ thống phải cho phép Platform Super Admin quản lý danh mục gói bảo quản gồm tên, mô tả quyền lợi, giá mỗi tháng, tỷ lệ bồi thường theo giá bán lẻ chai, hạn mức bồi thường và trạng thái mở bán | BR-005, BR-009 | M |

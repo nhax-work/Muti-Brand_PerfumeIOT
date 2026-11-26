@@ -389,6 +389,18 @@ export const en: SameKeysAs<typeof vi> = {
     nonRenewalRequestedContent:
       'Invoice {invoiceNumber} will not be renewed and ends on {endsAt}. Return method: {method}. ' +
       'Prepare to remove the bottles and create a return ticket when the invoice ends.',
+    productLockedInstalled:
+      'A bottle has been installed in this slot for this invoice, so its product cannot change until the invoice ends.',
+    productLockedStock:
+      'The warehouse already holds installable stock of the assigned product for this slot, so the product cannot change.',
+    productLockedRefillSession:
+      'The warehouse is refilling this slot, so the product cannot change right now.',
+    productLockedRefillRequest:
+      'This slot has an unfinished refill request. Cancel it or wait for the refill before changing the product.',
+    productChangedSubject: '{brand} changed the product of slot {slot} on {machine}',
+    productChangedContent:
+      '{brand} changed the product of slot {slot} on {machine} from {from} to {to}. Stop preparing ' +
+      '{from} bottles for this slot; the refill worklist now follows the new product.',
   },
 
   storageCompensationStatus: {
@@ -1801,6 +1813,28 @@ export const en: SameKeysAs<typeof vi> = {
     slotSetupInstallWaiting:
       'Platform staff install the bottle; the kiosk starts selling right after.',
     slotSetupInstallDone: 'The bottle is installed.',
+    slotSetupLockedInstalled:
+      'A bottle is installed, so the product stays the same until the invoice ends.',
+    slotSetupLockedStock:
+      'The warehouse already holds stock of this product for the slot, so the product can no longer change.',
+    slotSetupLockedRefill:
+      'The warehouse is refilling this slot, so the product cannot change now.',
+    slotSetupReadyInstall: 'Ready to install',
+    slotSetupReadyDocs: 'In warehouse · awaiting documents',
+    slotSetupReadyShipping: 'Shipping to warehouse',
+    slotSetupReadyNone: 'Not shipped',
+    slotSetupConfirmChangeTitle: 'Change the product of this slot?',
+    slotSetupConfirmAssignTitle: 'Assign this product to the slot?',
+    slotSetupConfirmChange: 'The warehouse will be notified to prepare stock again for this slot.',
+    slotSetupConfirmNoStock:
+      '{product} has no installable stock in the warehouse. The slot sells only after you ship it and ' +
+      'its documents are approved. The installation deadline is still {deadline}; after that the ' +
+      'invoice starts its term even if the slot is not selling.',
+    slotSetupConfirmDeclared:
+      'The {product} shipment you are sending will not be used for this slot.',
+    slotSetupConfirmWillLock:
+      'The warehouse has received {product}. While it holds stock of this product, you cannot change ' +
+      'the product of this slot.',
     mySlotsInvoice: 'Invoice',
     brandLogo: 'Logo',
     brandLogoHint:

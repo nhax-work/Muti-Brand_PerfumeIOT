@@ -18,6 +18,7 @@ import {
   stageOf,
   type BottleReturnMethod,
   type CheckoutCreateItemData,
+  type ProductLock,
   type SlotRentalFilter,
   type SlotRentalRecord,
   type SlotRentalStatus,
@@ -86,6 +87,7 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
     swappedAt: null,
     nonRenewalRequestedAt: null,
     returnMethod: null,
+    productLock: null,
     ...overrides,
   };
 }
@@ -93,6 +95,9 @@ function rental(id: string, overrides: Partial<SlotRentalRecord> = {}): SlotRent
 class FakeSltQueries {
   rentals: SlotRentalRecord[] = [];
   products: Array<{ id: string; brandId: string; status: string; defaultPrice: string }> = [];
+  /** ADR-0035: lý do khóa đổi sản phẩm theo id hóa đơn — CSDL thật tính ở test tích hợp. */
+  productLocks = new Map<string, ProductLock>();
+  lockedSlots: string[] = [];
   lastFilter: SlotRentalFilter | null = null;
   currentAgreement: AgreementVersionRecord | null = {
     id: 'ag-1',
@@ -576,6 +581,24 @@ class FakeSltQueries {
     return this.products.find((p) => p.id === id) ?? null;
   }
 
+  async lockSlotForProductChange(slotId: string) {
+    this.lockedSlots.push(slotId);
+  }
+
+  async findProductLock(id: string) {
+    return this.productLocks.get(id) ?? null;
+  }
+
+  async findProductChangeContext(_id: string, fromProductId: string, toProductId: string) {
+    return {
+      machineName: 'Máy 1',
+      slotNumber: 1,
+      brandName: 'Thương hiệu A',
+      fromName: fromProductId,
+      toName: toProductId,
+    };
+  }
+
   async updateProduct(
     scope: BrandScope,
     id: string,
@@ -636,6 +659,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
   let catalogQueries: FakeCatalogQueries;
   let service: SltService;
   let audits: Array<Record<string, unknown>>;
+  let staffNotifications: Array<{ notification: Record<string, unknown>; permission: string }>;
 
   beforeEach(() => {
     queries = new FakeSltQueries();
@@ -643,6 +667,17 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     catalogQueries.packages = [pkg('pkg-1', true)];
     catalogQueries.plans = [plan('plan-1', true)];
     audits = [];
+    staffNotifications = [];
+    const alr = {
+      notifyPermissionHolders: async (
+        _tx: unknown,
+        notification: Record<string, unknown>,
+        permission: string,
+      ) => {
+        staffNotifications.push({ notification, permission });
+        return 1;
+      },
+    };
 
     const audit = {
       record: async (entry: Record<string, unknown>) => {
@@ -721,7 +756,7 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
       mchQueries,
       audit as never,
       paymentService as never,
-      {} as never,
+      alr as never,
       fakeClock as never,
       fakeDb as never,
       fakeConfig as never,
@@ -861,6 +896,112 @@ describe('SltService — đọc và thao tác hóa đơn thuê slot', () => {
     await expect(
       service.assignProduct(brandAdmin, { kind: 'BRAND', brandId: BRAND_A }, 'r-unpaid', 'p-1'),
     ).rejects.toMatchObject({ code: 'RENTAL_NOT_ACTIVE' });
+  });
+
+  describe('FR-SLT-28: Đổi sản phẩm gán cho slot (ADR-0035)', () => {
+    const scopeA: BrandScope = { kind: 'BRAND', brandId: BRAND_A };
+
+    beforeEach(() => {
+      queries.products = [
+        { id: 'p-1', brandId: BRAND_A, status: 'ACTIVE', defaultPrice: '25000.0000' },
+        { id: 'p-2', brandId: BRAND_A, status: 'ACTIVE', defaultPrice: '40000.0000' },
+      ];
+      queries.rentals = [
+        rental('r-1', {
+          paidAt: new Date('2026-10-02T00:00:00Z'),
+          fragranceProductId: 'p-1',
+          pricePerSpray: '25000.0000',
+        }),
+      ];
+    });
+
+    it('test_FR_SLT_28_change_slot_product', async () => {
+      const updated = await service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-2');
+
+      expect(updated.fragranceProductId).toBe('p-2');
+      expect(updated.pricePerSpray).toBe('40000.0000');
+      // Kiểm khóa trên dòng slot đã khóa (ADR-0035 mục 2).
+      expect(queries.lockedSlots).toEqual(['slot-1']);
+      expect(audits.at(-1)).toMatchObject({
+        action: 'slt.slot_rental.product_assigned',
+        before: { fragranceProductId: 'p-1' },
+        after: { fragranceProductId: 'p-2' },
+      });
+    });
+
+    it('test_FR_SLT_28_reject_change_after_install', async () => {
+      queries.productLocks.set('r-1', 'INSTALLED');
+      await expect(service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-2')).rejects.toMatchObject({
+        code: 'SLOT_PRODUCT_LOCKED',
+        messageKey: 'slt.productLockedInstalled',
+      });
+      expect(queries.rentals[0]!.fragranceProductId).toBe('p-1');
+      expect(staffNotifications).toHaveLength(0);
+    });
+
+    it('test_FR_SLT_28_reject_change_with_stock_in_warehouse', async () => {
+      queries.productLocks.set('r-1', 'STOCK_IN_WAREHOUSE');
+      await expect(service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-2')).rejects.toMatchObject({
+        code: 'SLOT_PRODUCT_LOCKED',
+        messageKey: 'slt.productLockedStock',
+      });
+    });
+
+    it('test_FR_SLT_28_reject_change_while_refilling', async () => {
+      const cases: Array<[ProductLock, string]> = [
+        ['REFILL_SESSION_OPEN', 'REFILL_SESSION_OPEN'],
+        ['REFILL_REQUEST_PENDING', 'REFILL_REQUEST_PENDING'],
+      ];
+      for (const [lock, code] of cases) {
+        queries.productLocks.set('r-1', lock);
+        await expect(service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-2')).rejects.toMatchObject(
+          { code },
+        );
+      }
+    });
+
+    it('test_FR_SLT_28_resave_same_product_ignores_lock', async () => {
+      // AC8: lưu lại đúng sản phẩm đang gán không bị chặn, không báo kho.
+      queries.productLocks.set('r-1', 'INSTALLED');
+      const updated = await service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-1');
+      expect(updated.fragranceProductId).toBe('p-1');
+      expect(staffNotifications).toHaveLength(0);
+    });
+
+    it('test_FR_SLT_28_notify_inventory_on_change', async () => {
+      await service.assignProduct(brandAdmin, scopeA, 'r-1', 'p-2');
+      expect(staffNotifications).toEqual([
+        {
+          permission: 'inventory.manage',
+          notification: expect.objectContaining({
+            brandId: BRAND_A,
+            type: 'SLOT_PRODUCT_CHANGED',
+            referenceId: 'r-1',
+          }),
+        },
+      ]);
+
+      // Gán lần đầu không báo kho (AC9).
+      staffNotifications = [];
+      queries.rentals.push(rental('r-new', { paidAt: new Date('2026-10-02T00:00:00Z') }));
+      await service.assignProduct(brandAdmin, scopeA, 'r-new', 'p-2');
+      expect(staffNotifications).toHaveLength(0);
+    });
+
+    it('productLockReason gộp phiếu nạp mở và yêu cầu bổ sung thành REFILL_IN_PROGRESS', async () => {
+      const cases: Array<[ProductLock | null, string | null]> = [
+        [null, null],
+        ['INSTALLED', 'INSTALLED'],
+        ['STOCK_IN_WAREHOUSE', 'STOCK_IN_WAREHOUSE'],
+        ['REFILL_SESSION_OPEN', 'REFILL_IN_PROGRESS'],
+        ['REFILL_REQUEST_PENDING', 'REFILL_IN_PROGRESS'],
+      ];
+      for (const [productLock, expected] of cases) {
+        queries.rentals = [rental('r-1', { productLock })];
+        const dto = await service.get(superAdmin, { kind: 'UNRESTRICTED' }, 'r-1');
+        expect(dto.productLockReason).toBe(expected);
+      }
+    });
   });
 
   it('test_FR_SLT_08_brand_cannot_set_slot_price_price_follows_product', async () => {

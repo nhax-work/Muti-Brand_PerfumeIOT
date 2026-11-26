@@ -86,6 +86,18 @@ export const slt = {
   nonRenewalRequestedContent:
     'Hóa đơn {invoiceNumber} sẽ không gia hạn và kết thúc ngày {endsAt}. Hình thức nhận hàng: ' +
     '{method}. Chuẩn bị tháo chai và lập phiếu trả hàng khi hóa đơn kết thúc.',
+  // ADR-0035: khóa đổi sản phẩm của slot.
+  productLockedInstalled:
+    'Slot đã lắp chai cho hóa đơn này nên không đổi được sản phẩm. Sản phẩm giữ nguyên tới hết hóa đơn.',
+  productLockedStock:
+    'Kho đã có hàng của sản phẩm đang gán để lắp vào slot này nên không đổi được sản phẩm.',
+  productLockedRefillSession: 'Kho đang nạp chai cho slot này nên chưa đổi được sản phẩm.',
+  productLockedRefillRequest:
+    'Slot còn yêu cầu bổ sung chưa hoàn tất. Hủy yêu cầu hoặc chờ kho nạp xong rồi mới đổi sản phẩm.',
+  productChangedSubject: '{brand} đổi sản phẩm slot {slot} trên {machine}',
+  productChangedContent:
+    '{brand} đổi sản phẩm của slot {slot} trên {machine} từ {from} sang {to}. Không chuẩn bị chai ' +
+    '{from} cho slot này nữa; việc cần nạp đã cập nhật theo sản phẩm mới.',
 } as const;
 
 export const storageCompensationStatus = {
