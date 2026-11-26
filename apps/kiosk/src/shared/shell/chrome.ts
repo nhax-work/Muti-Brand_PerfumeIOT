@@ -1,16 +1,16 @@
 import { createContext, useContext, useEffect } from 'react';
 
 /**
- * Màn con báo cho khung kiosk (KioskShell) đổi header: `dark` = header nền tối cùng màn, ẩn nút
- * đổi ngôn ngữ — dùng ở màn nhấn nút, khi cả màn chuyển nền tối để khách nhận ra đèn đã sáng.
+ * Màn con báo cho khung kiosk (KioskShell) thu gọn header: `focus` = ẩn nút đổi ngôn ngữ — dùng ở
+ * màn nhấn nút, khi khách chỉ cần nhìn số nút và đếm ngược, không được chạm nhầm.
  */
-export const ShellChromeContext = createContext<(dark: boolean) => void>(() => {});
+export const ShellChromeContext = createContext<(focus: boolean) => void>(() => {});
 
-/** Header tối trong lúc màn gọi hook này còn hiện và `dark` = true; rời màn là trả lại header sáng. */
-export function useDarkShell(dark: boolean): void {
-  const setDark = useContext(ShellChromeContext);
+/** Thu gọn header trong lúc màn gọi hook này còn hiện và `focus` = true; rời màn là trả lại như cũ. */
+export function useFocusShell(focus: boolean): void {
+  const setFocus = useContext(ShellChromeContext);
   useEffect(() => {
-    setDark(dark);
-    return () => setDark(false);
-  }, [dark, setDark]);
+    setFocus(focus);
+    return () => setFocus(false);
+  }, [focus, setFocus]);
 }

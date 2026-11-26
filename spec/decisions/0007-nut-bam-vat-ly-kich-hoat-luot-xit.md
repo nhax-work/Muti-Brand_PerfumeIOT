@@ -136,3 +136,7 @@ khách khác", màn "Đang chờ lượt" cho đơn `PAID` chờ máy rảnh, m�
 **Giới hạn đã biết:** khách không bấm là mất lượt — chấp nhận theo quyết định của nhóm, nhưng hội đồng
 có thể hỏi; câu trả lời là điều khoản được hiện trước khi thanh toán (FR-ORD-25) và thời gian chờ là
 hằng cấu hình được.
+
+**Cập nhật 2026-11-26 (giao diện kiosk):** điều khoản FR-ORD-25 không còn ở trang chi tiết sản phẩm mà
+hiện trên màn mã QR, cạnh mã và dòng "nút số N sẽ sáng". Khách vẫn đọc được trước khi quét và hủy được
+đơn (FR-ORD-33), nên câu trả lời cho hội đồng ở trên không đổi: điều khoản hiện **trước khi thanh toán**.

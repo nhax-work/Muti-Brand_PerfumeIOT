@@ -1,21 +1,19 @@
-/* Thông tin bên trái (mã đơn, công cụ dev ở cuối cột), mã QR + đồng hồ chiếm phần lớn bên phải. */
+/* Một cột căn giữa: tên + giá, mã QR + đồng hồ, một dòng điều khoản, nút Hủy. Cạnh mã QR lấy theo
+   phần cao còn lại sau các dòng chữ (--qr-reserve), nên cả cột luôn vừa một màn không cuộn. */
 .page {
+  --qr-reserve: 340px;
+
+  position: relative;
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: minmax(0, 1fr);
-  column-gap: var(--sp-8);
-  padding: var(--sp-3) var(--gutter);
-  animation: kiosk-enter var(--dur) var(--ease) both;
-}
-
-.info {
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: center;
   gap: var(--sp-2);
-  min-height: 0;
+  padding: var(--sp-3) var(--gutter);
+  text-align: center;
+  animation: kiosk-enter var(--dur) var(--ease) both;
 }
 
 .title {
@@ -26,58 +24,34 @@
   line-height: var(--lh-tight);
 }
 
-.product {
-  margin: var(--sp-2) 0 0;
-  font-family: var(--font-serif);
-  font-size: var(--fs-h2);
-}
-
-.amount {
+.summary {
   margin: 0;
-  font-size: var(--fs-h2);
-  font-weight: 500;
-}
-
-.method {
-  margin: 0;
+  font-size: var(--fs-body);
   color: var(--text-muted);
 }
 
-.lookUp {
-  margin: var(--sp-2) 0 0;
+.summary strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* FR-ORD-25: một dòng, đủ số nút, số giây và "không hoàn tiền". */
+.terms {
+  max-width: 36em;
+  margin: 0;
   font-size: var(--fs-body);
 }
 
 .status {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-1);
   margin: 0;
   font-size: var(--fs-small);
   color: var(--text-muted);
 }
 
-/* Chấm nhấp nháy nhẹ: đang chờ ngân hàng báo về. */
-.pulse {
-  width: var(--sp-1);
-  height: var(--sp-1);
-  border-radius: 50%;
-  background: var(--text-muted);
-  animation: pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.2;
-  }
-}
-
 /* Nút viền — lối thoát duy nhất. */
 .cancel {
-  align-self: flex-start;
   min-width: calc(var(--touch-min) * 3);
   min-height: var(--touch-min);
-  margin-top: var(--sp-3);
   padding: 0 var(--sp-4);
   border: 1px solid var(--text);
   border-radius: var(--radius);
@@ -97,17 +71,11 @@
   font-size: var(--fs-body);
 }
 
-.qrArea {
-  display: grid;
-  place-items: center;
-}
-
-/* Cạnh QR lấy theo phần cao còn lại (trừ header, lề, khối đồng hồ): ~560px ở 1280×800, vẫn vừa
-   1024×600. Khối đồng hồ cùng bề rộng với mã. */
+/* Khối đồng hồ cùng bề rộng với mã. */
 .qrFrame {
   display: grid;
-  gap: var(--sp-2);
-  width: clamp(240px, calc(100dvh - var(--header-h) - 176px), 560px);
+  gap: var(--sp-1);
+  width: clamp(200px, calc(100dvh - var(--header-h) - var(--qr-reserve)), 480px);
   margin: 0;
 }
 
@@ -178,22 +146,17 @@
   font-size: var(--fs-small);
 }
 
-.reference {
-  margin: var(--sp-2) 0 0;
-  font-size: var(--fs-small);
-  color: var(--text-muted);
-}
-
-.reference span {
-  font-variant-numeric: tabular-nums;
-  color: var(--text);
-}
-
+/* Công cụ tester ở góc dưới phải, ngoài cột chính — bản build cho máy thật không có. */
 .dev {
+  position: absolute;
+  right: var(--sp-3);
+  bottom: var(--sp-2);
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
+  max-width: 260px;
+  text-align: right;
   gap: var(--sp-2);
-  margin-top: var(--sp-1);
   font-size: var(--fs-small);
   color: var(--text-muted);
 }
@@ -251,28 +214,21 @@
   min-width: 0;
 }
 
-/* Màn thấp (1024×600): thu tiêu đề và khoảng cách để cột thông tin vừa cạnh mã QR. */
+/* Màn thấp (1024×600): thu tiêu đề, chữ và khoảng cách để mã QR còn đủ lớn cho app ngân hàng. */
 @media (max-height: 680px) {
-  .info {
+  .page {
+    --qr-reserve: 270px;
+
     gap: var(--sp-1);
+    padding: var(--sp-2) var(--gutter);
   }
 
   .title {
     font-size: var(--fs-h2);
   }
 
-  .product,
-  .amount {
-    font-size: var(--fs-body);
-  }
-
-  .cancel {
-    margin-top: var(--sp-1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .pulse {
-    animation: none;
+  .summary,
+  .terms {
+    font-size: var(--fs-small);
   }
 }

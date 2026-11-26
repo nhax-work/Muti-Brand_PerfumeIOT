@@ -22,10 +22,10 @@ function formatCountdown(seconds: number): string {
 }
 
 /**
- * Màn quét mã thanh toán (FR-ORD-08, FR-ORD-16, FR-ORD-33): mã QR là trung tâm, khối đồng hồ ngay
- * dưới đếm theo hạn máy chủ trả; một lối thoát duy nhất là nút "Hủy" — đã có mã thì hỏi lại trước
- * khi hủy đơn (máy chủ hủy luôn link ở cổng). Hiện chỉ có thanh toán QR qua PayOS (ADR-0016).
- * Máy đang bận với khách khác thì thay cả màn bằng MachineBusyPage.
+ * Màn quét mã thanh toán (FR-ORD-08, FR-ORD-16, FR-ORD-25, FR-ORD-33): một cột căn giữa, ít chữ —
+ * tên + giá, mã QR, khối đồng hồ đếm theo hạn máy chủ trả, một dòng điều khoản bấm nút, và một lối
+ * thoát duy nhất là nút "Hủy" — đã có mã thì hỏi lại trước khi hủy đơn (máy chủ hủy luôn link ở cổng). Hiện chỉ có thanh toán QR qua
+ * PayOS (ADR-0016). Máy đang bận với khách khác thì thay cả màn bằng MachineBusyPage.
  */
 export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: KioskOrderFlow }) {
   const { t, locale } = useI18n();
@@ -43,101 +43,87 @@ export function PaymentPage({ item, flow }: { item: KioskCatalogItem; flow: Kios
 
   return (
     <section className={styles.page} aria-labelledby="payment-title">
-      <div className={styles.info}>
-        <h1 id="payment-title" className={styles.title}>
-          {t('kiosk.scanToPay')}
-        </h1>
-        <p className={styles.product}>{item.product?.name}</p>
-        <p className={styles.amount}>{amount}</p>
-        <p className={`caps ${styles.method}`}>{t('kiosk.paymentMethod')}</p>
+      <h1 id="payment-title" className={styles.title}>
+        {t('kiosk.scanToPay')}
+      </h1>
+      <p className={styles.summary}>
+        {item.product?.name} · <strong>{amount}</strong>
+      </p>
 
-        {!qrExpired && (
-          <p className={styles.lookUp}>{t('kiosk.afterPayLookUp', { slot: item.slotNumber })}</p>
-        )}
-
-        {/* Hủy không được vì tiền đã/đang về — nói rõ để khách yên tâm đứng chờ. */}
-        {!qrExpired && created && (
-          <p className={styles.status} role="status">
-            {isNotCancellable(flow.cancelError) ? (
-              errorMessage(flow.cancelError, t)
-            ) : (
-              <>
-                <span className={styles.pulse} aria-hidden="true" />
-                {t('kiosk.waitingForPayment')}
-              </>
-            )}
+      {qrExpired && created ? (
+        <div className={styles.expired} role="status">
+          <Icon name="timerOff" size={40} />
+          <h2 className={styles.expiredTitle}>{t('kiosk.paymentExpiredTitle')}</h2>
+          <p>{t('kiosk.paymentExpiredHint')}</p>
+          {/* Tiền về sau hạn thì đơn sang REFUND_PENDING — không hứa "chưa bị trừ tiền". */}
+          <p className={styles.muted}>
+            {t('kiosk.paymentExpiredLatePayment', { reference: created.order.paymentReference })}
           </p>
-        )}
+        </div>
+      ) : created?.qrPayload ? (
+        <figure className={styles.qrFrame}>
+          {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08).
+              Luôn đen trên trắng, viền trắng rộng để app ngân hàng bắt được góc mã. */}
+          <QRCodeSVG
+            value={created.qrPayload}
+            size={512}
+            level="M"
+            marginSize={4}
+            className={styles.qr}
+            role="img"
+            aria-label={t('kiosk.scanToPay')}
+          />
+          {qrSecondsLeft !== null && (
+            <figcaption className={`${styles.clock} ${urgent ? styles.clockUrgent : ''}`}>
+              <span className={styles.clockLabel}>{t('kiosk.qrExpiresIn')}</span>
+              <span className={styles.clockTime}>{formatCountdown(qrSecondsLeft)}</span>
+            </figcaption>
+          )}
+        </figure>
+      ) : flow.createFailed ? (
+        <div className={styles.expired} role="alert">
+          <p>{errorMessage(flow.createError, t)}</p>
+          <button type="button" className={styles.retry} onClick={flow.retryCreate}>
+            {t('kiosk.retryCreateOrder')}
+          </button>
+        </div>
+      ) : (
+        <p className={styles.muted}>{t('kiosk.creatingOrder')}</p>
+      )}
 
-        <button type="button" className={styles.cancel} onClick={flow.requestCancel}>
-          {qrExpired ? t('kiosk.backToHome') : t('kiosk.cancel')}
-        </button>
+      {/* FR-ORD-25: điều khoản bấm nút hiện cạnh mã, khách đọc trước khi quét — vẫn hủy được (FR-ORD-33). */}
+      {!qrExpired && (
+        <p className={styles.terms}>
+          {t('kiosk.pressAfterPay', { slot: item.slotNumber, seconds: config.pressWindowSec })}
+        </p>
+      )}
 
-        {reference && (
-          <p className={styles.reference}>
-            {t('kiosk.paymentReference')}: <span>{reference}</span>
-          </p>
-        )}
+      {/* Hủy không được vì tiền đã/đang về — nói rõ để khách yên tâm đứng chờ. */}
+      {!qrExpired && created && isNotCancellable(flow.cancelError) && (
+        <p className={styles.status} role="status">
+          {errorMessage(flow.cancelError, t)}
+        </p>
+      )}
 
-        {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
-        {config.showDevTools && mockCommand && (
-          <div className={styles.dev}>
-            <code>{mockCommand}</code>
-            <button
-              type="button"
-              onClick={() => {
-                void navigator.clipboard?.writeText(mockCommand);
-                setCopied(true);
-              }}
-            >
-              {copied ? t('kiosk.copied') : t('kiosk.copyCommand')}
-            </button>
-          </div>
-        )}
-      </div>
+      <button type="button" className={styles.cancel} onClick={flow.requestCancel}>
+        {qrExpired ? t('kiosk.backToHome') : t('kiosk.cancel')}
+      </button>
 
-      <div className={styles.qrArea}>
-        {qrExpired && created ? (
-          <div className={styles.expired} role="status">
-            <Icon name="timerOff" size={40} />
-            <h2 className={styles.expiredTitle}>{t('kiosk.paymentExpiredTitle')}</h2>
-            <p>{t('kiosk.paymentExpiredHint')}</p>
-            {/* Tiền về sau hạn thì đơn sang REFUND_PENDING — không hứa "chưa bị trừ tiền". */}
-            <p className={styles.muted}>
-              {t('kiosk.paymentExpiredLatePayment', { reference: created.order.paymentReference })}
-            </p>
-          </div>
-        ) : created?.qrPayload ? (
-          <figure className={styles.qrFrame}>
-            {/* QR thật mã hoá đúng payload cổng thanh toán trả về — ngân hàng quét được (FR-ORD-08).
-                Luôn đen trên trắng, viền trắng rộng để app ngân hàng bắt được góc mã. */}
-            <QRCodeSVG
-              value={created.qrPayload}
-              size={512}
-              level="M"
-              marginSize={4}
-              className={styles.qr}
-              role="img"
-              aria-label={t('kiosk.scanToPay')}
-            />
-            {qrSecondsLeft !== null && (
-              <figcaption className={`${styles.clock} ${urgent ? styles.clockUrgent : ''}`}>
-                <span className={styles.clockLabel}>{t('kiosk.qrExpiresIn')}</span>
-                <span className={styles.clockTime}>{formatCountdown(qrSecondsLeft)}</span>
-              </figcaption>
-            )}
-          </figure>
-        ) : flow.createFailed ? (
-          <div className={styles.expired} role="alert">
-            <p>{errorMessage(flow.createError, t)}</p>
-            <button type="button" className={styles.retry} onClick={flow.retryCreate}>
-              {t('kiosk.retryCreateOrder')}
-            </button>
-          </div>
-        ) : (
-          <p className={styles.muted}>{t('kiosk.creatingOrder')}</p>
-        )}
-      </div>
+      {/* Lệnh thanh toán giả lập cho tester — chỉ có ở bản dev, khách không bao giờ thấy. */}
+      {config.showDevTools && mockCommand && (
+        <div className={styles.dev}>
+          <code>{mockCommand}</code>
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(mockCommand);
+              setCopied(true);
+            }}
+          >
+            {copied ? t('kiosk.copied') : t('kiosk.copyCommand')}
+          </button>
+        </div>
+      )}
 
       {/* Chạm ra ngoài = ở lại (lựa chọn an toàn cho khách có thể đã chuyển khoản), không phải hủy. */}
       {confirmingCancel && (

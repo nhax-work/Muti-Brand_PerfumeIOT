@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiRequestError, recordKioskInteraction, useKioskCatalog } from '@/shared/api';
 import { config } from '@/shared/config';
-import { I18nProvider } from '@/shared/i18n';
+import { I18nProvider, useI18n } from '@/shared/i18n';
 import { KioskSessionProvider } from '@/shared/session';
 import CatalogScreen from './CatalogScreen';
 
@@ -222,14 +222,53 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     fireEvent.click(screen.getByText(name).closest('button')!);
   }
 
-  it('test_FR_ORD_25_show_press_terms_before_qr — điều khoản bấm nút hiện ở modal chi tiết, chưa tạo đơn', () => {
+  it('test_FR_ORD_25_show_press_terms_before_payment — chi tiết hiện số nút; màn QR hiện điều khoản bấm nút cạnh mã', () => {
     renderCatalog();
     openDetail('Chanel No 5');
 
-    expect(screen.getByText(/nhấn nút số 1 trên máy/)).toBeTruthy();
-    expect(screen.getByText(/60 giây/)).toBeTruthy();
+    expect(screen.getByLabelText('Nút số 1')).toBeTruthy();
+    expect(screen.queryByText(/Quá giờ không hoàn tiền/)).toBeNull();
+    expect(mockMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Thanh toán 35\.000/ }));
+    expect(
+      screen.getByText('Thanh toán xong, bấm nút số 1 trong 60 giây. Quá giờ không hoàn tiền.'),
+    ).toBeTruthy();
+  });
+
+  it('test_FR_ORD_40_kiosk_allergy_warning_before_qr — cảnh báo dị ứng hiện ở trang chi tiết, trên nút thanh toán, chưa tạo đơn', () => {
+    renderCatalog();
+    openDetail('Chanel No 5');
+
+    const warning = screen.getByText(/Có thể gây kích ứng nếu bạn dị ứng nước hoa/);
+    const pay = screen.getByRole('button', { name: /^Thanh toán 35\.000/ });
+    expect(warning.compareDocumentPosition(pay) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.queryByRole('img', { name: 'Quét mã để thanh toán' })).toBeNull();
     expect(mockMutate).not.toHaveBeenCalled();
+  });
+
+  it('test_FR_ORD_40_kiosk_allergy_warning_follows_language — đổi sang tiếng Anh thì cảnh báo đổi ngay', () => {
+    function SwitchToEnglish() {
+      const { setLocale } = useI18n();
+      return (
+        <button type="button" onClick={() => setLocale('en')}>
+          EN
+        </button>
+      );
+    }
+    render(
+      <I18nProvider>
+        <KioskSessionProvider>
+          <SwitchToEnglish />
+          <CatalogScreen />
+        </KioskSessionProvider>
+      </I18nProvider>,
+    );
+    openDetail('Chanel No 5');
+    fireEvent.click(screen.getByRole('button', { name: 'EN' }));
+
+    expect(screen.getByText(/May irritate skin if you are allergic/)).toBeTruthy();
+    expect(screen.queryByText(/Có thể gây kích ứng nếu bạn dị ứng nước hoa/)).toBeNull();
   });
 
   it('test_FR_ORD_08_agree_goes_straight_to_qr — đồng ý là vào thẳng mã QR, không có bước chọn phương thức', () => {
@@ -261,11 +300,10 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     expect(screen.getByRole('img', { name: 'Quét mã để thanh toán' })).toBeTruthy();
     expect(screen.getByText(/^01:(30|29)$/)).toBeTruthy();
     expect(screen.getByText('Mã QR hết hạn sau')).toBeTruthy();
-    // Chỉ một phương thức đang có (ADR-0016) và lời báo trước nút sẽ sáng.
-    expect(screen.getByText('VietQR · App ngân hàng')).toBeTruthy();
+    // Màn tối giản: chỉ một phương thức (ADR-0016), không liệt kê ví khác, không hiện mã đơn cho khách.
     expect(screen.queryByText(/MOMO|ZALOPAY|VNPAY|NAPAS/)).toBeNull();
-    expect(screen.getByText(/nút số 1 sẽ sáng/)).toBeTruthy();
-    expect(screen.getByText('ORD-20261014-ABC123')).toBeTruthy();
+    expect(screen.getByText(/bấm nút số 1 trong 60 giây/)).toBeTruthy();
+    expect(screen.queryByText('Mã thanh toán:', { exact: false })).toBeNull();
   });
 
   it('test_FR_ORD_08_cancel_with_qr_asks_for_confirmation — đã có mã QR thì hủy phải xác nhận lại', () => {
@@ -608,6 +646,6 @@ describe('CatalogScreen (FR-ORD-01, FR-ORD-03)', () => {
     mockReset.mockClear();
     openDetail('Sauvage');
     expect(mockReset).toHaveBeenCalled();
-    expect(screen.getByText(/nhấn nút số 2 trên máy/)).toBeTruthy();
+    expect(screen.getByLabelText('Nút số 2')).toBeTruthy();
   });
 });

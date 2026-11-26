@@ -32,8 +32,8 @@ export function KioskShell() {
   const matches = useMatches();
   const outOfService = useOutOfService();
   const { startNewSession, activeOrder } = useKioskSession();
-  // Màn nhấn nút bật header tối (useDarkShell) — cả màn một nền, không còn dải trắng phía trên.
-  const [darkHeader, setDarkHeader] = useState(false);
+  // Màn nhấn nút thu gọn header (useFocusShell): ẩn đổi ngôn ngữ để khách không chạm nhầm.
+  const [focusHeader, setFocusHeader] = useState(false);
 
   // Chỉ giữ màn khi thật sự có đơn (khách đang quét mã, chờ lượt, chờ bấm, xem kết quả). Tạo đơn lỗi
   // ở màn thanh toán thì vẫn tự về màn chờ — khách bỏ đi không để kiosk đứng mãi ở màn lỗi.
@@ -68,7 +68,7 @@ export function KioskShell() {
 
   return (
     <div className={styles.shell}>
-      <header className={`${styles.header} ${darkHeader ? styles.headerDark : ''}`}>
+      <header className={styles.header}>
         <div className={styles.navLeft}>
           {isCatalog && (
             <button type="button" className={styles.backButton} onClick={() => void navigate('/')}>
@@ -87,7 +87,7 @@ export function KioskShell() {
 
         <div className={styles.navRight}>
           {/* Màn nhấn nút: khách chỉ cần nhìn nút số N — ẩn đổi ngôn ngữ để không chạm nhầm. */}
-          {!darkHeader && (
+          {!focusHeader && (
             <div className={styles.langToggle} role="group" aria-label={t('kiosk.language')}>
               {LOCALES.map((l) => (
                 <button
@@ -107,7 +107,7 @@ export function KioskShell() {
       </header>
 
       <main className={styles.content}>
-        <ShellChromeContext.Provider value={setDarkHeader}>
+        <ShellChromeContext.Provider value={setFocusHeader}>
           <Outlet />
         </ShellChromeContext.Provider>
       </main>

@@ -384,7 +384,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-22 | Hệ thống phải cho phép tìm kiếm giao dịch theo khoảng thời gian, máy, slot, địa điểm, sản phẩm, mã tham chiếu và trạng thái | BR-008 | M |
 | FR-ORD-23 | Hệ thống phải cho phép đối soát giao dịch nội bộ với dữ liệu từ nhà cung cấp thanh toán và liệt kê các mục lệch | BR-008, BR-009 | S |
 | FR-ORD-24 | Hệ thống phải từ chối tạo đơn hàng mới trên máy đang có lệnh xịt khách hàng chờ bấm nút | BR-002 | M |
-| FR-ORD-25 | Hệ thống phải hiển thị trên kiosk, trước khi hiện mã QR thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền | BR-001, BR-002 | M |
+| FR-ORD-25 | Hệ thống phải hiển thị trên kiosk, trước khi khách thanh toán, điều khoản: khách phải bấm nút sáng đèn trong `DISPENSE_PRESS_WINDOW_SEC`, quá thời gian thì mất lượt và không hoàn tiền | BR-001, BR-002 | M |
 | FR-ORD-26 | Hệ thống phải hiển thị trên kiosk, khi đèn nút đã sáng, lời nhắc bấm nút kèm số slot và đồng hồ đếm ngược thời gian chờ | BR-001 | M |
 | FR-ORD-27 | Hệ thống phải chuyển đơn hàng sang FORFEITED khi thiết bị báo khách không bấm nút trong thời gian chờ, không hoàn tiền và vẫn ghi nhận doanh thu theo chủ sở hữu doanh thu của đơn | BR-002, BR-009 | M |
 | FR-ORD-28 | Hệ thống phải hiển thị trên kiosk một mã QR sự cố cho đơn khách đã trả tiền mà không nhận được lượt xịt hoặc đã chuyển khoản thừa, dẫn tới trang khiếu nại công khai kèm mã khiếu nại dùng một lần | BR-002 | M |
@@ -399,6 +399,7 @@ Các FR trong nhóm DSP và IOT có chủ ngữ "Thiết bị phải…" là **r
 | FR-ORD-37 | Hệ thống phải gửi email cho khách khi phiếu khiếu nại được tạo và khi phiếu đóng, kèm mã khiếu nại và liên kết tra cứu, không kèm tài khoản ngân hàng | BR-002 | M |
 | FR-ORD-38 | Hệ thống phải cho Operations Staff được phân công gắn đoạn video hoặc ảnh từ camera an ninh độc lập vào phiếu khiếu nại, với khoảng thời gian ghi khớp thời gian giao dịch của đơn, và bắt buộc có ít nhất một bằng chứng trước khi từ chối phiếu khách khai không nhận được lượt xịt | BR-002 | M |
 | FR-ORD-39 | Hệ thống phải cho khách xem bằng chứng hình ảnh của phiếu bị từ chối qua liên kết trong email, bằng đường dẫn có hạn, và ghi nhật ký mỗi lần xem | BR-002, BR-008 | M |
+| FR-ORD-40 | Hệ thống phải hiển thị trên kiosk, ở trang chi tiết sản phẩm và trước khi hiện mã QR thanh toán, một cảnh báo dị ứng chung: nước hoa có thể gây kích ứng với người dị ứng, tránh xịt vào mắt và mặt | BR-001, BR-002 | M |
 
 ## A12. FR-DSP — Điều khiển lượt xịt an toàn
 
