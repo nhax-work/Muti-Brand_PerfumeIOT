@@ -793,6 +793,17 @@ components:
           type: [string, 'null']
           maxLength: 100
           description: Nhãn camera an ninh quay máy này (FR-MCH-20, ADR-0032).
+        periodicMaintenanceStaffId:
+          type: [string, 'null']
+          format: uuid
+        periodicMaintenanceIntervalDays:
+          type: integer
+        nextPeriodicMaintenanceAt:
+          type: [string, 'null']
+          format: date-time
+        lastPeriodicMaintenanceAt:
+          type: [string, 'null']
+          format: date-time
     MachineCreate:
       type: object
       required: [locationId, serialNumber, displayName, slotCount]
@@ -2582,6 +2593,13 @@ components:
           type: [string, 'null']
           maxLength: 100
           description: null hoặc chuỗi rỗng = xóa nhãn.
+    PeriodicMaintenanceUpdate:
+      type: object
+      required: [staffId, intervalDays]
+      properties:
+        staffId: { type: [string, 'null'], format: uuid }
+        intervalDays: { type: integer, minimum: 1, maximum: 365 }
+        nextDueAt: { type: [string, 'null'], format: date-time }
     RefundAccountView:
       type: object
       required: [bankBin, accountNumber, accountName, contact]
@@ -2831,6 +2849,15 @@ components:
         fromStatus: { oneOf: [{ $ref: '#/components/schemas/TicketStatus' }, { type: 'null' }] }
         toStatus: { oneOf: [{ $ref: '#/components/schemas/TicketStatus' }, { type: 'null' }] }
         notes: { type: [string, 'null'] }
+        attachments:
+          type: [array, 'null']
+          items:
+            type: object
+            required: [url]
+            properties:
+              url: { type: string }
+              contentType: { type: string }
+              uploadedAt: { type: string }
         createdAt: { type: string, format: date-time }
 
     # ---------------------------------------------------------------------------------
@@ -3887,6 +3914,29 @@ paths:
       responses:
         '200':
           description: Đã ghi nhãn
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Machine' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /machines/{id}/periodic-maintenance:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    put:
+      tags: [MCH]
+      summary: Cấu hình bảo trì định kỳ cho máy
+      operationId: setMachinePeriodicMaintenance
+      description: Gán nhân viên bảo trì định kỳ cố định, chu kỳ (ngày) và mốc bảo trì tiếp theo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PeriodicMaintenanceUpdate' }
+      responses:
+        '200':
+          description: Đã cập nhật lịch bảo trì định kỳ
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Machine' }
@@ -7462,6 +7512,56 @@ paths:
         '400': { $ref: '#/components/responses/BadRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '409': { $ref: '#/components/responses/Conflict' }
+
+  /maintenance-tickets/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+    post:
+      tags: [MNT]
+      summary: Mở phiếu bảo trì tại máy
+      operationId: startMaintenanceTicket
+      description: Chuyển phiếu sang IN_PROGRESS và đưa máy sang chế độ MAINTENANCE.
+      responses:
+        '200':
+          description: Đã mở phiếu bảo trì
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceTicket' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /maintenance-tickets/{id}/evidence:
+    parameters:
+      - $ref: '#/components/parameters/idPath'
+      - name: notes
+        in: query
+        required: false
+        schema: { type: string, maxLength: 1000 }
+    post:
+      tags: [MNT]
+      summary: Tải lên ảnh bằng chứng bảo trì
+      operationId: uploadMaintenanceEvidence
+      description: Tải lên ảnh bằng chứng hoàn thành/xử lý bảo trì (multipart field `file`).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Đã tải lên ảnh bằng chứng
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MaintenanceActivity' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
 
   /maintenance-tickets/{id}/activities:
     parameters:

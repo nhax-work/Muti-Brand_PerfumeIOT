@@ -682,7 +682,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Cấu hình bảo trì định kỳ cho máy */
+        /**
+         * Cấu hình bảo trì định kỳ cho máy
+         * @description Gán nhân viên bảo trì định kỳ cố định, chu kỳ (ngày) và mốc bảo trì tiếp theo.
+         */
         put: operations["setMachinePeriodicMaintenance"];
         post?: never;
         delete?: never;
@@ -3401,25 +3404,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/maintenance-tickets/{id}/start": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["idPath"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Mở phiếu bảo trì tại máy */
-        post: operations["startMaintenanceTicket"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/maintenance-tickets/{id}/resolve": {
         parameters: {
             query?: never;
@@ -3464,7 +3448,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/maintenance-tickets/{id}/evidence": {
+    "/maintenance-tickets/{id}/start": {
         parameters: {
             query?: never;
             header?: never;
@@ -3475,7 +3459,34 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Tải lên ảnh bằng chứng bảo trì */
+        /**
+         * Mở phiếu bảo trì tại máy
+         * @description Chuyển phiếu sang IN_PROGRESS và đưa máy sang chế độ MAINTENANCE.
+         */
+        post: operations["startMaintenanceTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maintenance-tickets/{id}/evidence": {
+        parameters: {
+            query?: {
+                notes?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tải lên ảnh bằng chứng bảo trì
+         * @description Tải lên ảnh bằng chứng hoàn thành/xử lý bảo trì (multipart field `file`).
+         */
         post: operations["uploadMaintenanceEvidence"];
         delete?: never;
         options?: never;
@@ -11213,30 +11224,6 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    startMaintenanceTicket: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: components["parameters"]["idPath"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Đã mở phiếu bảo trì */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MaintenanceTicket"];
-                };
-            };
-            403: components["responses"]["Forbidden"];
-            404: components["responses"]["NotFound"];
-        };
-    };
     assignMaintenanceTicket: {
         parameters: {
             query?: never;
@@ -11320,6 +11307,30 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    startMaintenanceTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã mở phiếu bảo trì */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceTicket"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     uploadMaintenanceEvidence: {
