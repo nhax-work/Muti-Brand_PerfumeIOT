@@ -2273,6 +2273,9 @@ export const en: SameKeysAs<typeof vi> = {
     postTestIncomplete:
       'Machine has an active ticket with incomplete post-maintenance checklist (PASS required to restore NORMAL)',
     ticketClosed: 'Maintenance ticket is closed',
+    evidenceFileRequired: 'Please select an evidence image file',
+    evidenceFileTooLarge: 'Evidence image file exceeds maximum allowed size',
+    evidenceUnsupported: 'Unsupported evidence image format (JPEG, PNG, WebP only)',
     ticketAssignedSubject: 'Maintenance ticket {ticket} has been assigned to you',
     ticketAssignedContent:
       'You have been assigned maintenance ticket {ticket} at machine {machine}, priority {priority}. Deadline: {deadline}.',

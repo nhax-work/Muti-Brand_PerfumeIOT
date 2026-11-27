@@ -211,6 +211,7 @@ export class MntQueries {
     ticketId: string,
     assignedTo: string,
     actorId: string,
+    notes?: string | null,
     executor: Executor = this.db,
   ): Promise<MaintenanceTicketRecord> {
     const current = await this.findTicketById(ticketId, executor);
@@ -236,7 +237,42 @@ export class MntQueries {
         activity_type: 'ASSIGNED',
         from_status: current?.status ?? null,
         to_status: nextStatus,
-        notes: `Phân công cho nhân viên ${assignedTo}`,
+        notes: notes?.trim() ? notes.trim() : `Phân công cho nhân viên ${assignedTo}`,
+      })
+      .execute();
+
+    return mapTicket(updated);
+  }
+
+  async startTicket(
+    ticketId: string,
+    actorId: string,
+    executor: Executor = this.db,
+  ): Promise<MaintenanceTicketRecord> {
+    const current = await this.findTicketById(ticketId, executor);
+    const nextStatus: TicketStatus = 'IN_PROGRESS';
+
+    const updated = await executor
+      .updateTable('maintenance_tickets')
+      .set({
+        status: nextStatus,
+        started_at: sql`COALESCE(started_at, now())`,
+        assigned_to: sql`COALESCE(assigned_to, ${actorId}::uuid)`,
+        updated_at: sql`now()`,
+      })
+      .where('id', '=', ticketId)
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    await executor
+      .insertInto('maintenance_activities')
+      .values({
+        ticket_id: ticketId,
+        actor_id: actorId,
+        activity_type: 'STARTED',
+        from_status: current?.status ?? null,
+        to_status: nextStatus,
+        notes: 'Mở phiếu bảo trì — máy chuyển sang chế độ bảo trì',
       })
       .execute();
 
@@ -322,6 +358,55 @@ export class MntQueries {
       .execute();
 
     return mapTicket(updated);
+  }
+
+  async addEvidenceActivity(
+    ticketId: string,
+    actorId: string,
+    status: TicketStatus,
+    url: string,
+    notes?: string | null,
+    executor: Executor = this.db,
+  ): Promise<MaintenanceActivityRecord> {
+    const attachments = [
+      {
+        url,
+        contentType: 'image/webp',
+        uploadedAt: new Date().toISOString(),
+      },
+    ];
+
+    const inserted = await executor
+      .insertInto('maintenance_activities')
+      .values({
+        ticket_id: ticketId,
+        actor_id: actorId,
+        activity_type: 'EVIDENCE_UPLOADED',
+        from_status: status,
+        to_status: status,
+        notes: notes?.trim() ? notes.trim() : 'Tải lên ảnh bằng chứng bảo trì',
+        attachments: JSON.stringify(attachments),
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    await executor
+      .updateTable('maintenance_tickets')
+      .set({ updated_at: sql`now()` })
+      .where('id', '=', ticketId)
+      .execute();
+
+    return {
+      id: inserted.id,
+      ticketId: inserted.ticket_id,
+      actorId: inserted.actor_id,
+      activityType: inserted.activity_type,
+      fromStatus: inserted.from_status,
+      toStatus: inserted.to_status,
+      notes: inserted.notes,
+      attachments: inserted.attachments,
+      createdAt: new Date(inserted.created_at),
+    };
   }
 
   async listActivities(

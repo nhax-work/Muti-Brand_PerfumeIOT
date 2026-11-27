@@ -10,6 +10,7 @@ import { AlrService } from '../modules/alr/index.js';
 import { DspJobs } from '../modules/dsp/index.js';
 import { EvdService } from '../modules/evd/index.js';
 import { ExpJobs } from '../modules/exp/index.js';
+import { MntService } from '../modules/mnt/index.js';
 import { OrdService, RefundClaimsService } from '../modules/ord/index.js';
 import { RevService } from '../modules/rev/index.js';
 import { SltJobs } from '../modules/slt/index.js';
@@ -254,6 +255,20 @@ export function startScheduler(
   };
   sweepReturns();
   timers.push(setInterval(sweepReturns, BOTTLE_RETURN_TICK_MS));
+
+  const mnt = app.get(MntService);
+  let sweepingPeriodic = false;
+  const sweepPeriodic = () => {
+    if (sweepingPeriodic) return;
+    sweepingPeriodic = true;
+    mnt
+      .sendPeriodicMaintenanceReminders()
+      .then((n) => n > 0 && logger.log(`Đã gửi ${n} nhắc nhở bảo trì định kỳ`))
+      .catch((e: unknown) => logger.error(`Quét bảo trì định kỳ lỗi: ${String(e)}`))
+      .finally(() => (sweepingPeriodic = false));
+  };
+  sweepPeriodic();
+  timers.push(setInterval(sweepPeriodic, RENTAL_CHECKOUT_EXPIRY_TICK_MS));
 
   logger.log(
     `Đã bật job: hết hạn đơn, hết hạn phiên thuê slot, tự kích hoạt hóa đơn quá hạn lưu kho, phiếu khiếu nại, kỳ chi trả, gửi email, quét cảnh báo, nhắc hết hạn hợp đồng, phiếu trả hàng${options.dispense ? ', điều phối lệnh xịt' : ''}`,

@@ -124,3 +124,24 @@ export function useSubmitPostTest() {
     },
   });
 }
+
+export function useUploadMaintenanceEvidence() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, file, notes }: { id: string; file: File; notes?: string }) => {
+      const form = new FormData();
+      form.append('file', file);
+      return unwrap(
+        api.POST('/maintenance-tickets/{id}/evidence', {
+          params: { path: { id }, ...(notes ? { query: { notes } } : {}) },
+          body: form as unknown as { file: string },
+        }),
+      );
+    },
+    onSuccess: (_, { id }) => {
+      void qc.invalidateQueries({ queryKey: ['maintenance-tickets'] });
+      void qc.invalidateQueries({ queryKey: ['maintenance-ticket', id] });
+      void qc.invalidateQueries({ queryKey: ['maintenance-activities', id] });
+    },
+  });
+}

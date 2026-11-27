@@ -376,7 +376,12 @@ CREATE TABLE machines (
     simulator_enabled     boolean                   NOT NULL DEFAULT false,
     created_at            timestamptz               NOT NULL DEFAULT now(),
     updated_at            timestamptz               NOT NULL DEFAULT now(),
-    camera_label          varchar(100)
+    camera_label          varchar(100),
+    periodic_maintenance_staff_id       uuid        REFERENCES users (id),
+    periodic_maintenance_interval_days  int         NOT NULL DEFAULT 30,
+    next_periodic_maintenance_at        timestamptz,
+    last_periodic_maintenance_at        timestamptz,
+    last_periodic_reminder_for          timestamptz
 );
 
 CREATE INDEX idx_machines_location_status ON machines (location_id, status);

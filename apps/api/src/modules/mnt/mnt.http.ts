@@ -2,8 +2,11 @@
  * Controller HTTP cho module MNT (Bảo trì) — FR-MNT-01 ÷ 14.
  */
 
-import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Inject, Param, Post, Query, Req } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
+import { readImageFile } from '../../shared/http/multipart.js';
 import { parseBody } from '../../shared/http/validation.js';
 import { CurrentUser, RequirePermissions, type AuthenticatedUser } from '../auth/index.js';
 import {
@@ -52,6 +55,7 @@ const CreateTicketBody = z
 const AssignTicketBody = z
   .object({
     assignedTo: z.string().uuid(),
+    notes: z.string().max(1000).optional(),
   })
   .strict();
 
@@ -72,9 +76,18 @@ const PostTestBody = z
   })
   .strict();
 
+const EvidenceQuery = z
+  .object({
+    notes: z.string().trim().max(1000).optional(),
+  })
+  .strict();
+
 @Controller('maintenance-tickets')
 export class MntController {
-  constructor(@Inject(MntService) private readonly mnt: MntService) {}
+  constructor(
+    @Inject(MntService) private readonly mnt: MntService,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'constraint'>,
+  ) {}
 
   /** FR-MNT-03, FR-MNT-04, FR-MNT-14: Danh sách phiếu bảo trì. */
   @Get()
@@ -114,6 +127,14 @@ export class MntController {
     return this.mnt.assignTicket(actor, validId, input);
   }
 
+  /** Mở phiếu bảo trì tại máy: chuyển phiếu sang IN_PROGRESS và đưa máy sang MAINTENANCE. */
+  @Post(':id/start')
+  @HttpCode(200)
+  @RequirePermissions(MAINTENANCE_HANDLE)
+  startTicket(@CurrentUser() actor: AuthenticatedUser, @Param('id') id: string) {
+    return this.mnt.startTicket(actor, parseBody(IdParam, id));
+  }
+
   /** FR-MNT-10, FR-MNT-13: Ghi kết quả xử lý phiếu bảo trì. */
   @Post(':id/resolve')
   @HttpCode(200)
@@ -140,6 +161,29 @@ export class MntController {
     const validId = parseBody(IdParam, id);
     const input = parseBody(PostTestBody, body) as PostTestSubmit;
     return this.mnt.submitPostTest(actor, validId, input);
+  }
+
+  /** Tải lên ảnh bằng chứng hoàn thành/xử lý bảo trì (multipart field `file`). */
+  @Post(':id/evidence')
+  @HttpCode(200)
+  @RequirePermissions(MAINTENANCE_HANDLE)
+  async uploadEvidence(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query() rawQuery: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const validId = parseBody(IdParam, id);
+    const { notes } = parseBody(EvidenceQuery, rawQuery);
+    const data = await readImageFile(
+      request,
+      this.config.constraint('SHIPMENT_PHOTO_MAX_BYTES'),
+      {
+        required: 'mnt.evidenceFileRequired',
+        tooLarge: 'mnt.evidenceFileTooLarge',
+      },
+    );
+    return this.mnt.uploadEvidence(actor, validId, data, notes);
   }
 
   /** FR-MNT-14: Nhật ký hoạt động của phiếu. */

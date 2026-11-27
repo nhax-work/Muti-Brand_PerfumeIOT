@@ -127,6 +127,14 @@ const MachineUpdateBody = z.object({
 /** openapi `CameraLabelUpdate` (ADR-0032). */
 const CameraLabelBody = z.object({ cameraLabel: z.string().max(100).nullable() });
 
+const PeriodicMaintenanceBody = z
+  .object({
+    staffId: z.string().uuid().nullable(),
+    intervalDays: z.number().int().min(1).max(365).default(30),
+    nextDueAt: z.string().datetime({ offset: true }).nullable().optional(),
+  })
+  .strict();
+
 const MachineModeBody = z.object({
   operatingMode: z.enum(['NORMAL', 'DRAINING', 'MAINTENANCE', 'DISABLED']),
   reason: z.string().optional(),
@@ -189,6 +197,18 @@ export class MachinesController {
     const validatedId = parseBody(IdParam, id);
     const { cameraLabel } = parseBody(CameraLabelBody, body);
     return this.mch.setCameraLabel(actor, validatedId, cameraLabel);
+  }
+
+  /** Cấu hình bảo trì định kỳ cho máy (nhân viên cố định, chu kỳ, mốc bảo trì tiếp theo). */
+  @Put(':id/periodic-maintenance')
+  setPeriodicMaintenance(
+    @CurrentUser() actor: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() body: unknown,
+  ) {
+    const validatedId = parseBody(IdParam, id);
+    const input = parseBody(PeriodicMaintenanceBody, body);
+    return this.mch.setPeriodicMaintenance(actor, validatedId, input);
   }
 
   /** FR-MCH-11, FR-MNT-05, FR-MNT-17: Đổi chế độ hoạt động máy. Thao tác nhạy cảm (FR-AUTH-09). */

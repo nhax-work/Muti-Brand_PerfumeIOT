@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../core/api/api_exception.dart';
 import '../../core/auth/auth_scope.dart';
 import '../../core/theme/app_theme.dart';
@@ -21,9 +23,11 @@ class TicketDetailScreen extends StatefulWidget {
 
 class _TicketDetailScreenState extends State<TicketDetailScreen> {
   bool _loading = true;
+  bool _uploadingPhoto = false;
   String? _error;
   Map<String, dynamic>? _ticket;
   List<Map<String, dynamic>> _activities = [];
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void didChangeDependencies() {
@@ -80,12 +84,126 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
+  Future<void> _startTicket() async {
+    try {
+      await AuthScope.of(context).api.post('/maintenance-tickets/${widget.ticketId}/start');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Đã mở phiếu bảo trì — máy đã chuyển sang chế độ bảo trì'),
+        ),
+      );
+      await _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red.shade700),
+      );
+    }
+  }
+
+  Future<void> _uploadPendingPhotos(List<_PendingPhoto> photos, String notes) async {
+    if (photos.isEmpty) return;
+    final api = AuthScope.of(context).api;
+    for (final p in photos) {
+      await api.uploadFile(
+        '/maintenance-tickets/${widget.ticketId}/evidence',
+        fieldName: 'file',
+        bytes: p.bytes,
+        filename: p.name,
+        query: {'notes': notes},
+      );
+    }
+  }
+
+  Future<void> _pickAndUploadSingleEvidence() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('Chụp ảnh mới'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Chọn ảnh từ thư viện'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null || !mounted) return;
+    final picked = await _picker.pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+    if (picked == null || !mounted) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+
+    setState(() => _uploadingPhoto = true);
+    try {
+      await AuthScope.of(context).api.uploadFile(
+        '/maintenance-tickets/${widget.ticketId}/evidence',
+        fieldName: 'file',
+        bytes: bytes,
+        filename: picked.name,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Đã tải lên ảnh bằng chứng bảo trì')),
+      );
+      await _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red.shade700),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
+  void _showImagePreview(String url) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              child: Image.network(
+                url,
+                fit: BoxFit.contain,
+                errorBuilder: (_, _, _) => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('Không thể tải ảnh bằng chứng'),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: IconButton.filledTonal(
+                onPressed: () => Navigator.pop(ctx),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openResolveDialog() async {
     final diagCtrl = TextEditingController(text: _ticket?['diagnosis'] as String? ?? '');
     final actionCtrl = TextEditingController(text: _ticket?['correctiveAction'] as String? ?? '');
     final partsCtrl = TextEditingController(
       text: (_ticket?['replacementParts'] as List?)?.join(', ') ?? '',
     );
+    final pendingPhotos = <_PendingPhoto>[];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -129,6 +247,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       hintText: 'VD: Van phun v2, Gioăng cao su',
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _PhotoPickerSection(
+                    label: 'Ảnh bằng chứng xử lý (tùy chọn)',
+                    photos: pendingPhotos,
+                    picker: _picker,
+                    onChanged: () => setDialogState(() {}),
+                  ),
                 ],
               ),
             ),
@@ -159,6 +284,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                               'correctiveAction': actionCtrl.text.trim(),
                               if (parts.isNotEmpty) 'replacementParts': parts,
                             },
+                          );
+                          await _uploadPendingPhotos(
+                            pendingPhotos,
+                            'Ảnh bằng chứng xử lý bảo trì',
                           );
                           if (ctx.mounted) Navigator.pop(ctx, true);
                         } on ApiException catch (e) {
@@ -196,6 +325,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     ];
     String result = 'PASS';
     final notesCtrl = TextEditingController();
+    final pendingPhotos = <_PendingPhoto>[];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -242,6 +372,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                       maxLines: 2,
                       decoration: const InputDecoration(labelText: 'Ghi chú kiểm tra (tùy chọn)'),
                     ),
+                    const SizedBox(height: 12),
+                    _PhotoPickerSection(
+                      label: 'Ảnh bằng chứng hoàn thành (tùy chọn)',
+                      photos: pendingPhotos,
+                      picker: _picker,
+                      onChanged: () => setDialogState(() {}),
+                    ),
                     if (error != null) ...[
                       const SizedBox(height: 8),
                       Text(error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
@@ -267,6 +404,10 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                 'result': result,
                                 if (notesCtrl.text.trim().isNotEmpty) 'notes': notesCtrl.text.trim(),
                               },
+                            );
+                            await _uploadPendingPhotos(
+                              pendingPhotos,
+                              'Ảnh bằng chứng kiểm tra sau bảo trì',
                             );
                             if (ctx.mounted) Navigator.pop(ctx, true);
                           } on ApiException catch (e) {
@@ -375,6 +516,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                   style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
                                 ),
                                 const SizedBox(height: 10),
+                                if (status == 'OPEN' || status == 'ASSIGNED' || status == 'REOPENED')
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: FilledButton.icon(
+                                      onPressed: _startTicket,
+                                      icon: const Icon(Icons.play_arrow),
+                                      label: const Text('Mở phiếu bảo trì'),
+                                    ),
+                                  ),
                                 if (assignedTo != currentUserId)
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
@@ -401,10 +551,28 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                         : 'Cần ghi kết quả xử lý trước khi Post-test',
                                   ),
                                 ),
+                                const SizedBox(height: 8),
+                                OutlinedButton.icon(
+                                  onPressed: _uploadingPhoto ? null : _pickAndUploadSingleEvidence,
+                                  icon: _uploadingPhoto
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.add_a_photo_outlined),
+                                  label: Text(
+                                    _uploadingPhoto
+                                        ? 'Đang tải ảnh bằng chứng...'
+                                        : 'Chụp / Tải ảnh bằng chứng',
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ),
+                      const SizedBox(height: 12),
+                      _buildEvidenceCard(context),
                       const SizedBox(height: 12),
                       Card(
                         child: Padding(
@@ -451,6 +619,47 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                                                     color: AppTheme.textSecondary,
                                                   ),
                                                 ),
+                                              if (act['attachments'] is List &&
+                                                  (act['attachments'] as List).isNotEmpty)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 6, bottom: 4),
+                                                  child: Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    children: [
+                                                      for (final att in (act['attachments'] as List))
+                                                        if (att is Map && att['url'] is String)
+                                                          GestureDetector(
+                                                            onTap: () => _showImagePreview(
+                                                              AuthScope.of(context)
+                                                                  .api
+                                                                  .resolveMediaUrl(att['url'] as String),
+                                                            ),
+                                                            child: ClipRRect(
+                                                              borderRadius: BorderRadius.circular(6),
+                                                              child: Image.network(
+                                                                AuthScope.of(context)
+                                                                    .api
+                                                                    .resolveMediaUrl(att['url'] as String),
+                                                                width: 64,
+                                                                height: 64,
+                                                                fit: BoxFit.cover,
+                                                                errorBuilder: (_, _, _) =>
+                                                                    Container(
+                                                                  width: 64,
+                                                                  height: 64,
+                                                                  color: Colors.grey.shade200,
+                                                                  child: const Icon(
+                                                                    Icons.broken_image_outlined,
+                                                                    size: 20,
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                    ],
+                                                  ),
+                                                ),
                                               Text(
                                                 formatDateTime(act['createdAt'] as String?),
                                                 style: const TextStyle(
@@ -472,6 +681,165 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _buildEvidenceCard(BuildContext context) {
+    final api = AuthScope.of(context).api;
+    final urls = <String>[];
+    for (final act in _activities) {
+      final atts = act['attachments'];
+      if (atts is List) {
+        for (final att in atts) {
+          if (att is Map && att['url'] is String) {
+            urls.add(api.resolveMediaUrl(att['url'] as String));
+          }
+        }
+      }
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Bằng chứng hình ảnh',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14.5),
+            ),
+            const SizedBox(height: 10),
+            if (urls.isEmpty)
+              const Text(
+                'Chưa có ảnh bằng chứng nào',
+                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final url in urls)
+                    GestureDetector(
+                      onTap: () => _showImagePreview(url),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          url,
+                          width: 84,
+                          height: 84,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => Container(
+                            width: 84,
+                            height: 84,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.broken_image_outlined),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingPhoto {
+  final String name;
+  final Uint8List bytes;
+
+  _PendingPhoto({required this.name, required this.bytes});
+}
+
+class _PhotoPickerSection extends StatelessWidget {
+  final String label;
+  final List<_PendingPhoto> photos;
+  final ImagePicker picker;
+  final VoidCallback onChanged;
+
+  const _PhotoPickerSection({
+    required this.label,
+    required this.photos,
+    required this.picker,
+    required this.onChanged,
+  });
+
+  Future<void> _pick(ImageSource source) async {
+    final picked = await picker.pickImage(source: source, imageQuality: 85, maxWidth: 1600);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    photos.add(_PendingPhoto(name: picked.name, bytes: bytes));
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: photos.length >= 5 ? null : () => _pick(ImageSource.camera),
+              icon: const Icon(Icons.camera_alt_outlined, size: 18),
+              label: const Text('Chụp ảnh'),
+            ),
+            OutlinedButton.icon(
+              onPressed: photos.length >= 5 ? null : () => _pick(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined, size: 18),
+              label: const Text('Thư viện'),
+            ),
+          ],
+        ),
+        if (photos.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (int idx = 0; idx < photos.length; idx++)
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        photos[idx].bytes,
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: GestureDetector(
+                        onTap: () {
+                          photos.removeAt(idx);
+                          onChanged();
+                        },
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.black54,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ],
     );
   }
 }

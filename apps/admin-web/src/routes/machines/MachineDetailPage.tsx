@@ -43,6 +43,7 @@ import { DiagnosticDispenseModal } from './components/DiagnosticDispenseModal';
 import { CameraLabelCard } from './components/CameraLabelCard';
 import { MachineCredentialsCard } from './components/MachineCredentialsCard';
 import { MachineModeModal } from './components/MachineModeModal';
+import { PeriodicMaintenanceCard } from './components/PeriodicMaintenanceCard';
 import { SlotCard } from './components/SlotCard';
 import { SlotConfigModal } from './components/SlotConfigModal';
 import { StatusHistoryCard } from './components/StatusHistoryCard';
@@ -509,6 +510,16 @@ export default function MachineDetailPage() {
             key={machine.cameraLabel ?? ''}
             machineId={machine.id}
             cameraLabel={machine.cameraLabel ?? null}
+          />
+        )}
+        {isSuperAdmin && (
+          <PeriodicMaintenanceCard
+            key={`${machine.periodicMaintenanceStaffId ?? ''}-${machine.nextPeriodicMaintenanceAt ?? ''}`}
+            machineId={machine.id}
+            staffId={machine.periodicMaintenanceStaffId ?? null}
+            intervalDays={machine.periodicMaintenanceIntervalDays ?? 30}
+            nextDueAt={machine.nextPeriodicMaintenanceAt ?? null}
+            lastDoneAt={machine.lastPeriodicMaintenanceAt ?? null}
           />
         )}
         <StatusHistoryCard machineId={machine.id} />

@@ -83,6 +83,7 @@ vi.mock('./api', () => ({
   useAssignMaintenanceTicket: () => mockMutation(),
   useResolveMaintenanceTicket: () => mockMutation(),
   useSubmitPostTest: () => mockMutation(),
+  useUploadMaintenanceEvidence: () => mockMutation(),
 }));
 
 vi.mock('@/shared/lookups', () => ({

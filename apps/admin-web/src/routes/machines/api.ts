@@ -48,6 +48,7 @@ export function useMachines(params: MachineFilterParams = {}) {
         meta: { page: number; pageSize: number; total: number };
       };
     },
+    refetchInterval: 10_000,
   });
 }
 
@@ -78,6 +79,7 @@ export function useMachine(id: string | undefined) {
       return res as Machine;
     },
     enabled: Boolean(id),
+    refetchInterval: 10_000,
   });
 }
 
@@ -176,6 +178,34 @@ export function useSetCameraLabel() {
       ),
     onSuccess: (_, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ['machine', id] });
+    },
+  });
+}
+
+/** Cấu hình nhân viên bảo trì định kỳ cố định & lịch bảo trì theo máy. */
+export function useSetPeriodicMaintenance() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      staffId,
+      intervalDays,
+      nextDueAt,
+    }: {
+      id: string;
+      staffId: string | null;
+      intervalDays: number;
+      nextDueAt?: string | null;
+    }) =>
+      unwrap(
+        api.PUT('/machines/{id}/periodic-maintenance', {
+          params: { path: { id } },
+          body: { staffId, intervalDays, nextDueAt },
+        }),
+      ),
+    onSuccess: (_, { id }) => {
+      void queryClient.invalidateQueries({ queryKey: ['machine', id] });
+      void queryClient.invalidateQueries({ queryKey: ['machines'] });
     },
   });
 }

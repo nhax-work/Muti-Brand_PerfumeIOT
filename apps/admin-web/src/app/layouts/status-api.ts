@@ -9,7 +9,7 @@ export type BellNotification = components['schemas']['Notification'];
  * Nhịp hỏi lại của chuông và banner đầu trang (ADR-0028). Cả hai là số tổng hợp rẻ; 30 giây đủ để
  * người đang mở trang thấy máy dừng bán hay thông báo mới mà không cần tải lại.
  */
-const POLL_MS = 30_000;
+const POLL_MS = 10_000;
 
 /** ADR-0028: máy đang dừng bán — máy chủ lọc theo phạm vi thương hiệu. */
 export function useMachineSalesStops(enabled: boolean) {

@@ -20,10 +20,12 @@ const MODE_COLOR_MAP: Record<MachineOperatingMode, string> = {
 export function getMachineColumns({
   t,
   locationsMap,
+  refillMachineIds,
   onViewDetail,
 }: {
   t: (key: MessageKey, params?: MessageParams) => string;
   locationsMap: ReadonlyMap<string, Location>;
+  refillMachineIds?: ReadonlySet<string>;
   onViewDetail: (machine: Machine) => void;
 }): ColumnsType<Machine> {
   return [
@@ -73,18 +75,25 @@ export function getMachineColumns({
       dataIndex: 'operatingMode',
       key: 'operatingMode',
       align: 'center',
-      render: (mode: MachineOperatingMode, record: Machine) => (
-        <Space size={4} wrap>
-          <Tag color={MODE_COLOR_MAP[mode]}>{t(`machineOperatingMode.${mode}`)}</Tag>
-          {mode === 'DRAINING' &&
-            record.drainingOrdersCount !== undefined &&
-            record.drainingOrdersCount > 0 && (
-              <Tag color="gold" style={{ fontWeight: 600 }}>
-                {t('ui.drainingOrdersCountBadge', { count: record.drainingOrdersCount })}
-              </Tag>
+      render: (mode: MachineOperatingMode, record: Machine) => {
+        const isRefilling = mode === 'NORMAL' && Boolean(refillMachineIds?.has(record.id));
+        return (
+          <Space size={4} wrap>
+            {isRefilling ? (
+              <Tag color="orange">{t('machineOperatingMode.MAINTENANCE')} (Đang nạp)</Tag>
+            ) : (
+              <Tag color={MODE_COLOR_MAP[mode]}>{t(`machineOperatingMode.${mode}`)}</Tag>
             )}
-        </Space>
-      ),
+            {mode === 'DRAINING' &&
+              record.drainingOrdersCount !== undefined &&
+              record.drainingOrdersCount > 0 && (
+                <Tag color="gold" style={{ fontWeight: 600 }}>
+                  {t('ui.drainingOrdersCountBadge', { count: record.drainingOrdersCount })}
+                </Tag>
+              )}
+          </Space>
+        );
+      },
     },
     {
       title: t('ui.lastSeenAt'),

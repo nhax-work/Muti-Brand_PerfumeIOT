@@ -35,6 +35,20 @@ class ApiClient {
     return uri.replace(queryParameters: qp.isEmpty ? null : qp);
   }
 
+  String resolveMediaUrl(String url) {
+    final base = Uri.parse(baseUrl);
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      final parsed = Uri.parse(url);
+      if ((parsed.host == 'localhost' || parsed.host == '127.0.0.1') && base.host != parsed.host) {
+        return parsed.replace(scheme: base.scheme, host: base.host, port: base.port).toString();
+      }
+      return url;
+    }
+    final origin = '${base.scheme}://${base.authority}';
+    final clean = url.startsWith('/') ? url : '/$url';
+    return '$origin$clean';
+  }
+
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) {
     return _send('GET', path, query: query);
   }
@@ -193,6 +207,68 @@ class ApiClient {
       code: code,
       message: message,
       details: details,
+    );
+  }
+
+  Future<dynamic> uploadFile(
+    String path, {
+    required String fieldName,
+    required List<int> bytes,
+    required String filename,
+    Map<String, dynamic>? query,
+    bool retriedRefresh = false,
+  }) async {
+    final uri = _buildUri(path, query);
+    final req = http.MultipartRequest('POST', uri);
+    req.headers['Accept'] = 'application/json';
+    final token = getAccessToken();
+    if (token != null && token.isNotEmpty) {
+      req.headers['Authorization'] = 'Bearer $token';
+    }
+    req.files.add(http.MultipartFile.fromBytes(fieldName, bytes, filename: filename));
+
+    late final http.Response res;
+    try {
+      final streamed = await _http.send(req);
+      res = await http.Response.fromStream(streamed);
+    } catch (e) {
+      throw ApiException(
+        statusCode: 0,
+        code: 'NETWORK_ERROR',
+        message: 'Không thể kết nối tới máy chủ ($uri). Vui lòng kiểm tra mạng hoặc API URL.',
+      );
+    }
+
+    if (res.statusCode == 401 && !retriedRefresh && path != '/auth/login' && path != '/auth/refresh') {
+      final refreshed = await onRefreshToken();
+      if (refreshed) {
+        return uploadFile(
+          path,
+          fieldName: fieldName,
+          bytes: bytes,
+          filename: filename,
+          query: query,
+          retriedRefresh: true,
+        );
+      }
+    }
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      if (res.body.isEmpty) return null;
+      return jsonDecode(res.body);
+    }
+
+    Map<String, dynamic>? errorJson;
+    try {
+      final parsed = jsonDecode(res.body);
+      if (parsed is Map<String, dynamic>) errorJson = parsed;
+    } catch (_) {}
+
+    throw ApiException(
+      statusCode: res.statusCode,
+      code: errorJson?['code'] as String? ?? 'HTTP_${res.statusCode}',
+      message: errorJson?['message'] as String? ?? 'Tải tệp thất bại (${res.statusCode})',
+      details: errorJson?['details'] as Map<String, dynamic>?,
     );
   }
 }

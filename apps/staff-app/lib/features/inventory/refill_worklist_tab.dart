@@ -253,7 +253,15 @@ class _RefillWorklistTabState extends State<RefillWorklistTab> {
         final now = DateTime.now();
 
         final filtered = bottleItems.where((b) {
+          if (b['status'] != 'IN_STOCK') return false;
           if (!approvedBatchIds.contains(b['batchId'])) return false;
+          // Loại bỏ chai đã qua sử dụng (từng lắp vào máy / tháo ra / đã tiêu hao dung tích)
+          if (b['installedAt'] != null || b['removedAt'] != null) return false;
+          final currentMl = double.tryParse('${b['currentEstimatedMl'] ?? ''}') ?? 0;
+          final initialMl = double.tryParse('${b['initialVolumeMl'] ?? ''}');
+          if (currentMl <= 0) return false;
+          if (initialMl != null && currentMl < initialMl) return false;
+          // Loại bỏ chai đã hết hạn
           final exp = b['expiresAt'] as String?;
           if (exp != null) {
             final dt = DateTime.tryParse(exp);
@@ -317,7 +325,7 @@ class _RefillWorklistTabState extends State<RefillWorklistTab> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
-                          'Không có chai hợp lệ trong kho (cần IN_STOCK, còn hạn và lô đã duyệt giấy tờ chính hãng - FR-INV-35).',
+                          'Không có chai mới hợp lệ trong kho (cần chai mới chưa qua sử dụng, IN_STOCK, còn hạn và lô đã duyệt giấy tờ chính hãng - FR-INV-35).',
                           style: TextStyle(fontSize: 12.5, color: Color(0xFFB91C1C)),
                         ),
                       )

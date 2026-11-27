@@ -364,6 +364,21 @@ class _MachineDetailScreenState extends State<MachineDetailScreen> {
                                   ),
                                 ],
                               ),
+                              if (m?['nextPeriodicMaintenanceAt'] != null) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.event_repeat, size: 16, color: AppTheme.primary),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Bảo trì định kỳ (${m?['periodicMaintenanceIntervalDays'] ?? 30} ngày/lần): ${formatDateTime(m?['nextPeriodicMaintenanceAt'] as String?)}',
+                                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 14),
                               Wrap(
                                 spacing: 8,
