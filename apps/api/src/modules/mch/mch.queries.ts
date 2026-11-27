@@ -528,13 +528,16 @@ export class MchQueries {
   async setPeriodicMaintenance(
     id: string,
     input: { staffId: string | null; intervalDays: number; nextDueAt: Date | null },
-  ): Promise<{
-    before: {
-      staffId: string | null;
-      intervalDays: number;
-      nextDueAt: string | null;
-    };
-  } | undefined> {
+  ): Promise<
+    | {
+        before: {
+          staffId: string | null;
+          intervalDays: number;
+          nextDueAt: string | null;
+        };
+      }
+    | undefined
+  > {
     return this.db.transaction().execute(async (tx) => {
       const current = await tx
         .selectFrom('machines')

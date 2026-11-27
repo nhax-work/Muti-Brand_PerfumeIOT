@@ -175,14 +175,10 @@ export class MntController {
   ) {
     const validId = parseBody(IdParam, id);
     const { notes } = parseBody(EvidenceQuery, rawQuery);
-    const data = await readImageFile(
-      request,
-      this.config.constraint('SHIPMENT_PHOTO_MAX_BYTES'),
-      {
-        required: 'mnt.evidenceFileRequired',
-        tooLarge: 'mnt.evidenceFileTooLarge',
-      },
-    );
+    const data = await readImageFile(request, this.config.constraint('SHIPMENT_PHOTO_MAX_BYTES'), {
+      required: 'mnt.evidenceFileRequired',
+      tooLarge: 'mnt.evidenceFileTooLarge',
+    });
     return this.mnt.uploadEvidence(actor, validId, data, notes);
   }
 

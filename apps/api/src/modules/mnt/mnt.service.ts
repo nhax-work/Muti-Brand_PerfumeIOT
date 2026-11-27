@@ -205,7 +205,12 @@ export class MntService {
       throw new AppError('VALIDATION_ERROR', 'mnt.invalidStaff');
     }
 
-    const updated = await this.queries.assignTicket(id, input.assignedTo, actor.userId, input.notes);
+    const updated = await this.queries.assignTicket(
+      id,
+      input.assignedTo,
+      actor.userId,
+      input.notes,
+    );
 
     await this.audit.log({
       actorType: 'USER',
@@ -271,7 +276,10 @@ export class MntService {
         .forUpdate()
         .executeTakeFirst();
 
-      if (machine && (machine.operating_mode === 'NORMAL' || machine.operating_mode === 'DRAINING')) {
+      if (
+        machine &&
+        (machine.operating_mode === 'NORMAL' || machine.operating_mode === 'DRAINING')
+      ) {
         await tx
           .updateTable('machines')
           .set({ operating_mode: 'MAINTENANCE', updated_at: now })
@@ -391,16 +399,14 @@ export class MntService {
         if (ticket.category === 'PERIODIC_INSPECTION') {
           const intervalDays = Math.max(1, machine.periodic_maintenance_interval_days ?? 30);
           updates.last_periodic_maintenance_at = now;
-          updates.next_periodic_maintenance_at = new Date(now.getTime() + intervalDays * 86_400_000);
+          updates.next_periodic_maintenance_at = new Date(
+            now.getTime() + intervalDays * 86_400_000,
+          );
           updates.last_periodic_reminder_for = null;
         }
 
         if (Object.keys(updates).length > 1) {
-          await this.db
-            .updateTable('machines')
-            .set(updates)
-            .where('id', '=', machine.id)
-            .execute();
+          await this.db.updateTable('machines').set(updates).where('id', '=', machine.id).execute();
         }
 
         if (restoredToNormal) {

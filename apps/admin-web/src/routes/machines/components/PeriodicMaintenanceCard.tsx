@@ -1,5 +1,16 @@
 import { CalendarOutlined } from '@ant-design/icons';
-import { Button, Card, Col, DatePicker, InputNumber, Row, Select, Space, Typography, message } from 'antd';
+import {
+  Button,
+  Card,
+  Col,
+  DatePicker,
+  InputNumber,
+  Row,
+  Select,
+  Space,
+  Typography,
+  message,
+} from 'antd';
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { errorMessage } from '@/shared/api';
@@ -111,8 +122,8 @@ export function PeriodicMaintenanceCard({
         </Col>
       </Row>
       <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-        Hệ thống tự động gửi thông báo nhắc nhở đến nhân viên phụ trách trên App trước hạn 3 ngày
-        và tạo phiếu kiểm tra & vệ sinh định kỳ.
+        Hệ thống tự động gửi thông báo nhắc nhở đến nhân viên phụ trách trên App trước hạn 3 ngày và
+        tạo phiếu kiểm tra & vệ sinh định kỳ.
         {lastDoneAt ? ` Lần bảo trì định kỳ gần nhất: ${formatDateTime(lastDoneAt)}.` : ''}
       </Typography.Paragraph>
     </Card>
