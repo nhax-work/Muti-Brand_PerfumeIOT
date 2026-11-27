@@ -66,6 +66,10 @@ function toMachineDto(r: MachineRecord): MachineDto {
     configurationVersion: r.configurationVersion,
     slotCount: r.slotCount,
     cameraLabel: r.cameraLabel,
+    periodicMaintenanceStaffId: r.periodicMaintenanceStaffId,
+    periodicMaintenanceIntervalDays: r.periodicMaintenanceIntervalDays,
+    nextPeriodicMaintenanceAt: r.nextPeriodicMaintenanceAt?.toISOString() ?? null,
+    lastPeriodicMaintenanceAt: r.lastPeriodicMaintenanceAt?.toISOString() ?? null,
     ...(r.drainingOrdersCount !== undefined ? { drainingOrdersCount: r.drainingOrdersCount } : {}),
   };
 }
@@ -297,6 +301,52 @@ export class MchService {
         after: { cameraLabel: value },
       });
     }
+    return this.getMachine(id);
+  }
+
+  /** Cấu hình nhân viên bảo trì định kỳ cố định, chu kỳ và mốc bảo trì tiếp theo cho máy. */
+  async setPeriodicMaintenance(
+    actor: AuthenticatedUser,
+    id: string,
+    input: { staffId: string | null; intervalDays: number; nextDueAt?: string | null | undefined },
+  ): Promise<MachineDto> {
+    if (input.staffId) {
+      const valid = await this.queries.isActiveUser(input.staffId);
+      if (!valid) {
+        throw new AppError('VALIDATION_ERROR', 'mnt.invalidStaff');
+      }
+    }
+
+    const nextDueAtDate =
+      input.nextDueAt !== undefined
+        ? input.nextDueAt
+          ? new Date(input.nextDueAt)
+          : null
+        : input.staffId
+          ? new Date(Date.now() + input.intervalDays * 86_400_000)
+          : null;
+
+    const changed = await this.queries.setPeriodicMaintenance(id, {
+      staffId: input.staffId,
+      intervalDays: input.intervalDays,
+      nextDueAt: nextDueAtDate,
+    });
+    if (!changed) throw new AppError('NOT_FOUND', 'mch.machineNotFound');
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mch.machine.periodic_maintenance_updated',
+      targetType: 'Machine',
+      targetId: id,
+      before: changed.before,
+      after: {
+        staffId: input.staffId,
+        intervalDays: input.intervalDays,
+        nextDueAt: nextDueAtDate?.toISOString() ?? null,
+      },
+    });
+
     return this.getMachine(id);
   }
 

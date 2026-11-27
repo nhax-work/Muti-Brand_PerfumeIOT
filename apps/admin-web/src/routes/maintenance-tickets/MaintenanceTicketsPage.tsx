@@ -1,10 +1,12 @@
 import {
+  CameraOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   EyeOutlined,
   PlusOutlined,
   ReloadOutlined,
   ToolOutlined,
+  UploadOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import {
@@ -17,6 +19,7 @@ import {
   Descriptions,
   Drawer,
   Form,
+  Image,
   Input,
   Modal,
   Radio,
@@ -27,15 +30,20 @@ import {
   Tag,
   Timeline,
   Typography,
+  Upload,
   message,
+  type UploadFile,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import { useMemo, useState } from 'react';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useMachines } from '@/routes/machines/api';
+import { errorMessage } from '@/shared/api';
+import { SPEC_CONSTRAINTS } from '@/shared/constraints.generated';
 import { formatDateTime } from '@/shared/format';
 import { useI18n } from '@/shared/i18n';
+import { ACCEPTED_IMAGE_TYPES, bytesToMb, validateImageFile } from '@/shared/image-upload';
 import { useAssignableStaff } from '@/shared/lookups';
 import {
   type AlertSeverity,
@@ -52,6 +60,7 @@ import {
   useMaintenanceTickets,
   useResolveMaintenanceTicket,
   useSubmitPostTest,
+  useUploadMaintenanceEvidence,
 } from './api';
 
 export default function MaintenanceTicketsPage() {
@@ -85,6 +94,7 @@ export default function MaintenanceTicketsPage() {
   const assignMutation = useAssignMaintenanceTicket();
   const resolveMutation = useResolveMaintenanceTicket();
   const postTestMutation = useSubmitPostTest();
+  const uploadEvidenceMutation = useUploadMaintenanceEvidence();
 
   // Modals state
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -92,6 +102,8 @@ export default function MaintenanceTicketsPage() {
   const [resolveTicketId, setResolveTicketId] = useState<string | null>(null);
   const [postTestTicketId, setPostTestTicketId] = useState<string | null>(null);
   const [viewTicketId, setViewTicketId] = useState<string | null>(null);
+  const [resolvePhotos, setResolvePhotos] = useState<UploadFile[]>([]);
+  const [postTestPhotos, setPostTestPhotos] = useState<UploadFile[]>([]);
 
   // Forms
   const [createForm] = Form.useForm<MaintenanceTicketCreate & { dueAtDate?: dayjs.Dayjs }>();
@@ -137,8 +149,36 @@ export default function MaintenanceTicketsPage() {
       message.success(t('ui.success') ?? 'Thành công');
       setAssignTicketId(null);
       assignForm.resetFields();
-    } catch {
-      // Error
+    } catch (err) {
+      if (err && typeof err === 'object' && 'errorFields' in err) return;
+      message.error(errorMessage(err, t));
+    }
+  };
+
+  const checkEvidenceFile = (file: File): boolean => {
+    const err = validateImageFile(file, SPEC_CONSTRAINTS.SHIPMENT_PHOTO_MAX_BYTES);
+    if (err === 'type') {
+      message.error('Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP');
+      return false;
+    }
+    if (err === 'size') {
+      message.error(
+        `Kích thước ảnh tối đa ${bytesToMb(SPEC_CONSTRAINTS.SHIPMENT_PHOTO_MAX_BYTES)} MB`,
+      );
+      return false;
+    }
+    return true;
+  };
+
+  const uploadEvidenceList = async (ticketId: string, files: UploadFile[], notes: string) => {
+    for (const item of files) {
+      if (item.originFileObj) {
+        await uploadEvidenceMutation.mutateAsync({
+          id: ticketId,
+          file: item.originFileObj,
+          notes,
+        });
+      }
     }
   };
 
@@ -164,8 +204,10 @@ export default function MaintenanceTicketsPage() {
           cost: values.costAmount ? String(values.costAmount) : undefined,
         },
       });
+      await uploadEvidenceList(resolveTicketId, resolvePhotos, 'Ảnh bằng chứng xử lý bảo trì');
       message.success(t('ui.success') ?? 'Thành công');
       setResolveTicketId(null);
+      setResolvePhotos([]);
       resolveForm.resetFields();
     } catch {
       // Error
@@ -184,8 +226,14 @@ export default function MaintenanceTicketsPage() {
           notes: values.notes,
         },
       });
+      await uploadEvidenceList(
+        postTestTicketId,
+        postTestPhotos,
+        'Ảnh bằng chứng kiểm tra sau bảo trì',
+      );
       message.success(t('ui.success') ?? 'Thành công');
       setPostTestTicketId(null);
+      setPostTestPhotos([]);
       postTestForm.resetFields();
     } catch {
       // Error
@@ -444,7 +492,6 @@ export default function MaintenanceTicketsPage() {
             onChange: setPage,
           }}
         />
-
         {/* Modal Tạo phiếu bảo trì */}
         <Modal
           title={t('ui.createTicket') ?? 'Tạo phiếu bảo trì'}
@@ -552,8 +599,11 @@ export default function MaintenanceTicketsPage() {
           title={t('ui.ticketResolveTitle') ?? 'Ghi nhận kết quả xử lý'}
           open={Boolean(resolveTicketId)}
           onOk={handleResolve}
-          onCancel={() => setResolveTicketId(null)}
-          confirmLoading={resolveMutation.isPending}
+          onCancel={() => {
+            setResolveTicketId(null);
+            setResolvePhotos([]);
+          }}
+          confirmLoading={resolveMutation.isPending || uploadEvidenceMutation.isPending}
         >
           <Form form={resolveForm} layout="vertical">
             <Form.Item
@@ -579,6 +629,24 @@ export default function MaintenanceTicketsPage() {
             <Form.Item name="costAmount" label={t('ui.ticketCost') ?? 'Chi phí sửa chữa (VND)'}>
               <Input placeholder="350000" />
             </Form.Item>
+            <Form.Item label="Ảnh bằng chứng xử lý (tùy chọn)">
+              <Upload
+                listType="picture-card"
+                accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                multiple
+                maxCount={5}
+                fileList={resolvePhotos}
+                beforeUpload={(file) => (checkEvidenceFile(file) ? false : Upload.LIST_IGNORE)}
+                onChange={({ fileList }) => setResolvePhotos(fileList)}
+              >
+                {resolvePhotos.length < 5 && (
+                  <div>
+                    <CameraOutlined />
+                    <div style={{ marginTop: 4, fontSize: 12 }}>Thêm ảnh</div>
+                  </div>
+                )}
+              </Upload>
+            </Form.Item>
           </Form>
         </Modal>
 
@@ -587,8 +655,11 @@ export default function MaintenanceTicketsPage() {
           title={t('ui.ticketPostTestTitle') ?? 'Checklist kiểm tra sau bảo trì'}
           open={Boolean(postTestTicketId)}
           onOk={handlePostTest}
-          onCancel={() => setPostTestTicketId(null)}
-          confirmLoading={postTestMutation.isPending}
+          onCancel={() => {
+            setPostTestTicketId(null);
+            setPostTestPhotos([]);
+          }}
+          confirmLoading={postTestMutation.isPending || uploadEvidenceMutation.isPending}
         >
           <div style={{ marginBottom: 16 }}>
             <Alert
@@ -643,6 +714,24 @@ export default function MaintenanceTicketsPage() {
             </Form.Item>
             <Form.Item name="notes" label={t('ui.notes') ?? 'Ghi chú kiểm tra'}>
               <Input.TextArea rows={2} />
+            </Form.Item>
+            <Form.Item label="Ảnh bằng chứng hoàn thành (tùy chọn)">
+              <Upload
+                listType="picture-card"
+                accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                multiple
+                maxCount={5}
+                fileList={postTestPhotos}
+                beforeUpload={(file) => (checkEvidenceFile(file) ? false : Upload.LIST_IGNORE)}
+                onChange={({ fileList }) => setPostTestPhotos(fileList)}
+              >
+                {postTestPhotos.length < 5 && (
+                  <div>
+                    <CameraOutlined />
+                    <div style={{ marginTop: 4, fontSize: 12 }}>Thêm ảnh</div>
+                  </div>
+                )}
+              </Upload>
             </Form.Item>
           </Form>
         </Modal>
@@ -703,6 +792,70 @@ export default function MaintenanceTicketsPage() {
               </Descriptions>
 
               <div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginBottom: 12,
+                  }}
+                >
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    Bằng chứng hình ảnh
+                  </Typography.Title>
+                  {viewingTicket.status !== 'CLOSED' && (
+                    <Upload
+                      accept={ACCEPTED_IMAGE_TYPES.join(',')}
+                      showUploadList={false}
+                      beforeUpload={(file) => {
+                        if (!checkEvidenceFile(file)) return Upload.LIST_IGNORE;
+                        void uploadEvidenceMutation
+                          .mutateAsync({ id: viewingTicket.id, file })
+                          .then(() => message.success('Đã tải lên ảnh bằng chứng'))
+                          .catch(() => message.error('Tải lên ảnh thất bại'));
+                        return false;
+                      }}
+                    >
+                      <Button
+                        size="small"
+                        icon={<UploadOutlined />}
+                        loading={uploadEvidenceMutation.isPending}
+                      >
+                        Tải ảnh bằng chứng
+                      </Button>
+                    </Upload>
+                  )}
+                </div>
+                {(() => {
+                  const evidenceUrls = (activities ?? []).flatMap(
+                    (act) => act.attachments?.map((a) => a.url) ?? [],
+                  );
+                  if (evidenceUrls.length === 0) {
+                    return (
+                      <Typography.Text type="secondary">
+                        Chưa có ảnh bằng chứng nào.
+                      </Typography.Text>
+                    );
+                  }
+                  return (
+                    <Image.PreviewGroup>
+                      <Space wrap size={8}>
+                        {evidenceUrls.map((url, idx) => (
+                          <Image
+                            key={`${url}-${idx}`}
+                            src={url}
+                            width={88}
+                            height={88}
+                            style={{ objectFit: 'cover', borderRadius: 6 }}
+                          />
+                        ))}
+                      </Space>
+                    </Image.PreviewGroup>
+                  );
+                })()}
+              </div>
+
+              <div>
                 <Typography.Title level={5}>
                   {t('ui.ticketActivities') ?? 'Nhật ký hoạt động'}
                 </Typography.Title>
@@ -720,6 +873,23 @@ export default function MaintenanceTicketsPage() {
                           {formatDateTime(act.createdAt)}
                         </span>
                         {act.notes && <p style={{ margin: '4px 0 0' }}>{act.notes}</p>}
+                        {act.attachments && act.attachments.length > 0 && (
+                          <div style={{ marginTop: 6 }}>
+                            <Image.PreviewGroup>
+                              <Space wrap size={6}>
+                                {act.attachments.map((att, idx) => (
+                                  <Image
+                                    key={`${att.url}-${idx}`}
+                                    src={att.url}
+                                    width={56}
+                                    height={56}
+                                    style={{ objectFit: 'cover', borderRadius: 4 }}
+                                  />
+                                ))}
+                              </Space>
+                            </Image.PreviewGroup>
+                          </div>
+                        )}
                       </div>
                     ),
                   }))}

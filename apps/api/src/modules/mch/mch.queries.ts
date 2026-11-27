@@ -46,6 +46,10 @@ export interface MachineRecord {
   readonly simulatorEnabled: boolean;
   /** Nhãn camera an ninh quay máy (ADR-0032, FR-MCH-20). */
   readonly cameraLabel: string | null;
+  readonly periodicMaintenanceStaffId: string | null;
+  readonly periodicMaintenanceIntervalDays: number;
+  readonly nextPeriodicMaintenanceAt: Date | null;
+  readonly lastPeriodicMaintenanceAt: Date | null;
   readonly slotCount: number;
   readonly drainingOrdersCount?: number;
   readonly createdAt: Date;
@@ -328,6 +332,10 @@ export class MchQueries {
         configurationVersion: r.configuration_version,
         simulatorEnabled: r.simulator_enabled,
         cameraLabel: r.camera_label,
+        periodicMaintenanceStaffId: r.periodic_maintenance_staff_id,
+        periodicMaintenanceIntervalDays: r.periodic_maintenance_interval_days,
+        nextPeriodicMaintenanceAt: r.next_periodic_maintenance_at,
+        lastPeriodicMaintenanceAt: r.last_periodic_maintenance_at,
         slotCount: Number(r.slot_count ?? 0),
         createdAt: r.created_at,
         updatedAt: r.updated_at,
@@ -363,6 +371,10 @@ export class MchQueries {
       configurationVersion: row.configuration_version,
       simulatorEnabled: row.simulator_enabled,
       cameraLabel: row.camera_label,
+      periodicMaintenanceStaffId: row.periodic_maintenance_staff_id,
+      periodicMaintenanceIntervalDays: row.periodic_maintenance_interval_days,
+      nextPeriodicMaintenanceAt: row.next_periodic_maintenance_at,
+      lastPeriodicMaintenanceAt: row.last_periodic_maintenance_at,
       slotCount: Number(row.slot_count ?? 0),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -389,6 +401,10 @@ export class MchQueries {
       configurationVersion: row.configuration_version,
       simulatorEnabled: row.simulator_enabled,
       cameraLabel: row.camera_label,
+      periodicMaintenanceStaffId: row.periodic_maintenance_staff_id,
+      periodicMaintenanceIntervalDays: row.periodic_maintenance_interval_days,
+      nextPeriodicMaintenanceAt: row.next_periodic_maintenance_at,
+      lastPeriodicMaintenanceAt: row.last_periodic_maintenance_at,
       slotCount: 0,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -444,6 +460,10 @@ export class MchQueries {
         configurationVersion: machine.configuration_version,
         simulatorEnabled: machine.simulator_enabled,
         cameraLabel: machine.camera_label,
+        periodicMaintenanceStaffId: machine.periodic_maintenance_staff_id,
+        periodicMaintenanceIntervalDays: machine.periodic_maintenance_interval_days,
+        nextPeriodicMaintenanceAt: machine.next_periodic_maintenance_at,
+        lastPeriodicMaintenanceAt: machine.last_periodic_maintenance_at,
         slotCount: data.slotCount,
         createdAt: machine.created_at,
         updatedAt: machine.updated_at,
@@ -492,6 +512,64 @@ export class MchQueries {
         .where('id', '=', id)
         .execute();
       return { before: current.camera_label };
+    });
+  }
+
+  async isActiveUser(userId: string): Promise<boolean> {
+    const row = await this.db
+      .selectFrom('users')
+      .select(['id', 'status'])
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    return Boolean(row && row.status === 'ACTIVE');
+  }
+
+  /** Cập nhật cấu hình bảo trì định kỳ cho máy (nhân viên cố định, chu kỳ, mốc tiếp theo). */
+  async setPeriodicMaintenance(
+    id: string,
+    input: { staffId: string | null; intervalDays: number; nextDueAt: Date | null },
+  ): Promise<
+    | {
+        before: {
+          staffId: string | null;
+          intervalDays: number;
+          nextDueAt: string | null;
+        };
+      }
+    | undefined
+  > {
+    return this.db.transaction().execute(async (tx) => {
+      const current = await tx
+        .selectFrom('machines')
+        .select([
+          'periodic_maintenance_staff_id',
+          'periodic_maintenance_interval_days',
+          'next_periodic_maintenance_at',
+        ])
+        .where('id', '=', id)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!current) return undefined;
+
+      await tx
+        .updateTable('machines')
+        .set({
+          periodic_maintenance_staff_id: input.staffId,
+          periodic_maintenance_interval_days: input.intervalDays,
+          next_periodic_maintenance_at: input.nextDueAt,
+          last_periodic_reminder_for: null,
+          updated_at: new Date(),
+        })
+        .where('id', '=', id)
+        .execute();
+
+      return {
+        before: {
+          staffId: current.periodic_maintenance_staff_id,
+          intervalDays: current.periodic_maintenance_interval_days,
+          nextDueAt: current.next_periodic_maintenance_at?.toISOString() ?? null,
+        },
+      };
     });
   }
 

@@ -5,8 +5,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Schema } from '@scentstation/contracts';
 import { DEFAULT_LOCALE, translate } from '@scentstation/i18n';
+import {
+  IMMUTABLE_CACHE_CONTROL,
+  MEDIA_STORAGE,
+  normalizeImage,
+  type MediaStorage,
+} from '../../adapters/media/index.js';
 import { AuditService } from '../../shared/audit/index.js';
 import { CLOCK, type Clock } from '../../shared/clock.js';
+import { APP_CONFIG, type AppConfig } from '../../shared/config/index.js';
 import { DATABASE, type Database } from '../../shared/db/index.js';
 import { AppError } from '../../shared/errors/index.js';
 import { formatVnDateTime } from '../../shared/format/index.js';
@@ -52,7 +59,34 @@ function toTicketDto(r: MaintenanceTicketRecord): MaintenanceTicket {
   };
 }
 
+function parseAttachments(
+  raw: unknown,
+): Array<{ url: string; contentType?: string; uploadedAt?: string }> | undefined {
+  let list: unknown = raw;
+  if (typeof raw === 'string') {
+    try {
+      list = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return undefined;
+  const result: Array<{ url: string; contentType?: string; uploadedAt?: string }> = [];
+  for (const item of list) {
+    if (item && typeof item === 'object' && 'url' in item && typeof item.url === 'string') {
+      const rec = item as Record<string, unknown>;
+      result.push({
+        url: rec.url as string,
+        contentType: typeof rec.contentType === 'string' ? rec.contentType : undefined,
+        uploadedAt: typeof rec.uploadedAt === 'string' ? rec.uploadedAt : undefined,
+      });
+    }
+  }
+  return result.length > 0 ? result : undefined;
+}
+
 function toActivityDto(a: MaintenanceActivityRecord): MaintenanceActivity {
+  const attachments = parseAttachments(a.attachments);
   return {
     id: a.id,
     ticketId: a.ticketId,
@@ -61,6 +95,7 @@ function toActivityDto(a: MaintenanceActivityRecord): MaintenanceActivity {
     fromStatus: a.fromStatus ?? undefined,
     toStatus: a.toStatus ?? undefined,
     notes: a.notes ?? undefined,
+    ...(attachments ? { attachments } : {}),
     createdAt: a.createdAt.toISOString(),
   };
 }
@@ -73,6 +108,8 @@ export class MntService {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(AlrService) private readonly alr: Pick<AlrService, 'notifyUsers'>,
+    @Inject(MEDIA_STORAGE) private readonly storage: MediaStorage,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'constraint'>,
   ) {}
 
   async listTickets(filter: TicketFilter): Promise<{
@@ -148,7 +185,7 @@ export class MntService {
   async assignTicket(
     actor: AuthenticatedUser,
     id: string,
-    input: AlertAssign,
+    input: AlertAssign & { notes?: string },
   ): Promise<MaintenanceTicket> {
     const ticket = await this.queries.findTicketById(id);
     if (!ticket) {
@@ -168,7 +205,12 @@ export class MntService {
       throw new AppError('VALIDATION_ERROR', 'mnt.invalidStaff');
     }
 
-    const updated = await this.queries.assignTicket(id, input.assignedTo, actor.userId);
+    const updated = await this.queries.assignTicket(
+      id,
+      input.assignedTo,
+      actor.userId,
+      input.notes,
+    );
 
     await this.audit.log({
       actorType: 'USER',
@@ -207,6 +249,70 @@ export class MntService {
         [input.assignedTo],
       );
     }
+
+    return toTicketDto(updated);
+  }
+
+  /**
+   * Nhân viên vận hành mở phiếu bảo trì tại máy: chuyển phiếu sang IN_PROGRESS
+   * và tự động đưa máy sang chế độ MAINTENANCE (dừng nhận đơn mới trên Kiosk).
+   */
+  async startTicket(actor: AuthenticatedUser, id: string): Promise<MaintenanceTicket> {
+    const ticket = await this.queries.findTicketById(id);
+    if (!ticket) {
+      throw new AppError('NOT_FOUND', 'mnt.ticketNotFound');
+    }
+    if (ticket.status === 'CLOSED') {
+      throw new AppError('NOTIFICATION_NOT_RETRYABLE', 'mnt.ticketClosed');
+    }
+
+    const now = this.clock.now();
+    const updated = await this.queries.transaction(async (tx) => {
+      const nextTicket = await this.queries.startTicket(id, actor.userId, tx);
+      const machine = await tx
+        .selectFrom('machines')
+        .select(['id', 'status', 'operating_mode'])
+        .where('id', '=', ticket.machineId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (
+        machine &&
+        (machine.operating_mode === 'NORMAL' || machine.operating_mode === 'DRAINING')
+      ) {
+        await tx
+          .updateTable('machines')
+          .set({ operating_mode: 'MAINTENANCE', updated_at: now })
+          .where('id', '=', machine.id)
+          .execute();
+        await tx
+          .insertInto('machine_status_histories')
+          .values({
+            machine_id: machine.id,
+            from_connection_status: machine.status,
+            to_connection_status: machine.status,
+            from_operating_mode: machine.operating_mode,
+            to_operating_mode: 'MAINTENANCE',
+            source: 'MAINTENANCE_TICKET',
+            changed_by: actor.userId,
+            reason: `Mở phiếu bảo trì ${ticket.ticketNumber}`,
+            occurred_at: now,
+          })
+          .execute();
+      }
+
+      return nextTicket;
+    });
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mnt.ticket.started',
+      targetType: 'MaintenanceTicket',
+      targetId: id,
+      before: { status: ticket.status },
+      after: { status: updated.status },
+    });
 
     return toTicketDto(updated);
   }
@@ -273,6 +379,55 @@ export class MntService {
 
     const updated = await this.queries.submitPostTest(id, actor.userId, input.result, input.notes);
 
+    if (input.result === 'PASS') {
+      const now = this.clock.now();
+      const machine = await this.db
+        .selectFrom('machines')
+        .select(['id', 'status', 'operating_mode', 'periodic_maintenance_interval_days'])
+        .where('id', '=', ticket.machineId)
+        .executeTakeFirst();
+      if (machine) {
+        const updates: Record<string, unknown> = { updated_at: now };
+        let restoredToNormal = false;
+
+        const stillUnfinished = await this.queries.hasUnfinishedPostTest(machine.id);
+        if (!stillUnfinished && machine.operating_mode === 'MAINTENANCE') {
+          updates.operating_mode = 'NORMAL';
+          restoredToNormal = true;
+        }
+
+        if (ticket.category === 'PERIODIC_INSPECTION') {
+          const intervalDays = Math.max(1, machine.periodic_maintenance_interval_days ?? 30);
+          updates.last_periodic_maintenance_at = now;
+          updates.next_periodic_maintenance_at = new Date(
+            now.getTime() + intervalDays * 86_400_000,
+          );
+          updates.last_periodic_reminder_for = null;
+        }
+
+        if (Object.keys(updates).length > 1) {
+          await this.db.updateTable('machines').set(updates).where('id', '=', machine.id).execute();
+        }
+
+        if (restoredToNormal) {
+          await this.db
+            .insertInto('machine_status_histories')
+            .values({
+              machine_id: machine.id,
+              from_connection_status: machine.status,
+              to_connection_status: machine.status,
+              from_operating_mode: 'MAINTENANCE',
+              to_operating_mode: 'NORMAL',
+              source: 'MAINTENANCE_TICKET',
+              changed_by: actor.userId,
+              reason: `Hoàn tất bảo trì ${ticket.ticketNumber}`,
+              occurred_at: now,
+            })
+            .execute();
+        }
+      }
+    }
+
     await this.audit.log({
       actorType: 'USER',
       actorId: actor.userId,
@@ -289,6 +444,53 @@ export class MntService {
     return toTicketDto(updated);
   }
 
+  async uploadEvidence(
+    actor: AuthenticatedUser,
+    id: string,
+    data: Buffer,
+    notes?: string,
+  ): Promise<MaintenanceActivity> {
+    const ticket = await this.queries.findTicketById(id);
+    if (!ticket) {
+      throw new AppError('NOT_FOUND', 'mnt.ticketNotFound');
+    }
+    if (ticket.status === 'CLOSED') {
+      throw new AppError('NOTIFICATION_NOT_RETRYABLE', 'mnt.ticketClosed');
+    }
+
+    const image = await normalizeImage(
+      data,
+      this.config.constraint('SHIPMENT_PHOTO_MAX_EDGE_PX'),
+      'mnt.evidenceUnsupported',
+    );
+    const key = `maintenance/${ticket.id}-${image.hash}.webp`;
+    const url = await this.storage.put({
+      key,
+      body: image.body,
+      contentType: 'image/webp',
+      cacheControl: IMMUTABLE_CACHE_CONTROL,
+    });
+
+    const activity = await this.queries.addEvidenceActivity(
+      id,
+      actor.userId,
+      ticket.status,
+      url,
+      notes,
+    );
+
+    await this.audit.log({
+      actorType: 'USER',
+      actorId: actor.userId,
+      action: 'mnt.ticket.evidence_uploaded',
+      targetType: 'MaintenanceTicket',
+      targetId: id,
+      after: { activityId: activity.id, url },
+    });
+
+    return toActivityDto(activity);
+  }
+
   async listActivities(id: string): Promise<MaintenanceActivity[]> {
     const ticket = await this.queries.findTicketById(id);
     if (!ticket) {
@@ -296,5 +498,101 @@ export class MntService {
     }
     const activities = await this.queries.listActivities(id);
     return activities.map(toActivityDto);
+  }
+
+  /**
+   * Quét các máy sắp đến hạn / quá hạn bảo trì định kỳ (trước hạn 3 ngày),
+   * gửi thông báo nhắc nhở cho nhân viên cố định phụ trách máy đó và tạo phiếu bảo trì định kỳ nếu chưa có.
+   */
+  async sendPeriodicMaintenanceReminders(): Promise<number> {
+    const now = this.clock.now();
+    const horizon = new Date(now.getTime() + 3 * 86_400_000);
+
+    const dueMachines = await this.db
+      .selectFrom('machines')
+      .select([
+        'id',
+        'display_name',
+        'serial_number',
+        'periodic_maintenance_staff_id',
+        'next_periodic_maintenance_at',
+        'last_periodic_reminder_for',
+      ])
+      .where('periodic_maintenance_staff_id', 'is not', null)
+      .where('next_periodic_maintenance_at', 'is not', null)
+      .where('operating_mode', '!=', 'DISABLED')
+      .where('next_periodic_maintenance_at', '<=', horizon)
+      .where((eb) =>
+        eb.or([
+          eb('last_periodic_reminder_for', 'is', null),
+          eb('last_periodic_reminder_for', '<', eb.ref('next_periodic_maintenance_at')),
+        ]),
+      )
+      .execute();
+
+    let reminded = 0;
+    for (const m of dueMachines) {
+      const staffId = m.periodic_maintenance_staff_id;
+      const dueAt = m.next_periodic_maintenance_at;
+      if (!staffId || !dueAt) continue;
+
+      const existingTicket = await this.db
+        .selectFrom('maintenance_tickets')
+        .select('id')
+        .where('machine_id', '=', m.id)
+        .where('category', '=', 'PERIODIC_INSPECTION')
+        .where('status', 'in', ['OPEN', 'ASSIGNED', 'IN_PROGRESS', 'POST_TEST'])
+        .executeTakeFirst();
+
+      if (!existingTicket) {
+        const dateStr = now.toISOString().slice(0, 10).replace(/-/g, '');
+        const rand = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const ticketNumber = `MNT-${dateStr}-${rand}`;
+        const created = await this.queries.createTicket(
+          {
+            machineId: m.id,
+            category: 'PERIODIC_INSPECTION',
+            severity: 'INFO',
+            priority: 'MEDIUM',
+            dueAt,
+            description: 'Bảo trì định kỳ: kiểm tra lỗi và vệ sinh máy',
+          },
+          staffId,
+          ticketNumber,
+        );
+        await this.queries.assignTicket(
+          created.id,
+          staffId,
+          staffId,
+          'Tự động phân công bảo trì định kỳ theo lịch máy',
+        );
+      }
+
+      const dueText = formatVnDateTime(dueAt);
+      const isOverdue = dueAt.getTime() < now.getTime();
+      await this.alr.notifyUsers(
+        this.db,
+        {
+          brandId: null,
+          type: 'PERIODIC_MAINTENANCE_REMINDER',
+          subject: isOverdue
+            ? `Quá hạn bảo trì định kỳ: ${m.display_name} (${m.serial_number})`
+            : `Nhắc nhở bảo trì định kỳ: ${m.display_name} (${m.serial_number})`,
+          content: `Máy ${m.display_name} (${m.serial_number}) có lịch kiểm tra & vệ sinh định kỳ vào ${dueText}. Vui lòng thực hiện bảo trì và chụp ảnh bằng chứng.`,
+          referenceId: m.id,
+          at: now,
+        },
+        [staffId],
+      );
+
+      await this.db
+        .updateTable('machines')
+        .set({ last_periodic_reminder_for: dueAt, updated_at: now })
+        .where('id', '=', m.id)
+        .execute();
+
+      reminded++;
+    }
+    return reminded;
   }
 }

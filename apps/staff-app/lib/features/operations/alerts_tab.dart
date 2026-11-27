@@ -18,6 +18,8 @@ class _AlertsTabState extends State<AlertsTab> {
   String? _error;
   String _statusFilter = 'OPEN';
   List<Map<String, dynamic>> _alerts = [];
+  List<Map<String, dynamic>> _periodicReminders = [];
+  List<Map<String, dynamic>> _dueMachines = [];
   List<SalesStopItem> _salesStops = [];
   Map<String, String> _machineNames = {};
 
@@ -30,7 +32,9 @@ class _AlertsTabState extends State<AlertsTab> {
   }
 
   Future<void> _load() async {
-    final api = AuthScope.of(context).api;
+    final auth = AuthScope.of(context);
+    final api = auth.api;
+    final userId = auth.user?.id;
     setState(() {
       _loading = true;
       _error = null;
@@ -44,20 +48,44 @@ class _AlertsTabState extends State<AlertsTab> {
         }),
         api.get('/machine-sales-stops'),
         api.get('/machines', query: {'page': 1, 'pageSize': 200}),
+        api.get('/notifications', query: {'page': 1, 'pageSize': 20}),
       ]);
       final alertRes = results[0] as Map<String, dynamic>;
       final stopsRes = results[1] as Map<String, dynamic>;
       final machinesRes = results[2] as Map<String, dynamic>;
+      final notifRes = results[3] as Map<String, dynamic>;
 
       final mMap = <String, String>{};
+      final dueList = <Map<String, dynamic>>[];
+      final now = DateTime.now();
+      final horizon = now.add(const Duration(days: 3));
+
       for (final m in (machinesRes['items'] as List? ?? [])) {
         final mm = m as Map<String, dynamic>;
         mMap[mm['id'] as String] = '${mm['displayName']} (${mm['serialNumber']})';
+        if (userId != null &&
+            mm['periodicMaintenanceStaffId'] == userId &&
+            mm['nextPeriodicMaintenanceAt'] is String) {
+          final dueAt = DateTime.tryParse(mm['nextPeriodicMaintenanceAt'] as String);
+          if (dueAt != null && !dueAt.isAfter(horizon)) {
+            dueList.add(mm);
+          }
+        }
+      }
+
+      final reminders = <Map<String, dynamic>>[];
+      for (final n in (notifRes['items'] as List? ?? [])) {
+        final nm = n as Map<String, dynamic>;
+        if (nm['type'] == 'PERIODIC_MAINTENANCE_REMINDER' && nm['readAt'] == null) {
+          reminders.add(nm);
+        }
       }
 
       if (!mounted) return;
       setState(() {
         _alerts = List<Map<String, dynamic>>.from(alertRes['items'] as List? ?? []);
+        _periodicReminders = reminders;
+        _dueMachines = dueList;
         _salesStops = (stopsRes['items'] as List? ?? [])
             .map((e) => SalesStopItem.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -70,6 +98,18 @@ class _AlertsTabState extends State<AlertsTab> {
         _error = e.message;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _markReminderRead(String notifId) async {
+    try {
+      await AuthScope.of(context).api.post('/notifications/$notifId/read');
+      await _load();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red.shade700),
+      );
     }
   }
 
@@ -130,6 +170,84 @@ class _AlertsTabState extends State<AlertsTab> {
         padding: const EdgeInsets.all(14),
         children: [
           SalesStopsBanner(items: _salesStops),
+          if (_periodicReminders.isNotEmpty || _dueMachines.isNotEmpty) ...[
+            Card(
+              color: const Color(0xFFEFF6FF),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: const BorderSide(color: Color(0xFF93C5FD)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.event_repeat, color: Color(0xFF1D4ED8), size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Nhắc nhở bảo trì định kỳ',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                            color: Color(0xFF1E3A8A),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    for (final n in _periodicReminders)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    n['subject'] as String? ?? 'Nhắc nhở bảo trì định kỳ',
+                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                  ),
+                                  if (n['content'] != null)
+                                    Text(
+                                      n['content'] as String,
+                                      style: const TextStyle(fontSize: 12.5, color: AppTheme.textSecondary),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => _markReminderRead(n['id'] as String),
+                              child: const Text('Đã xem'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    for (final m in _dueMachines)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.precision_manufacturing_outlined, size: 16, color: Color(0xFF1D4ED8)),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                '${m['displayName']} (${m['serialNumber']}) · Hạn: ${formatDateTime(m['nextPeriodicMaintenanceAt'] as String?)}',
+                                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(

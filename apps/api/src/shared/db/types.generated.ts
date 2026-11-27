@@ -568,12 +568,17 @@ export interface Machines {
   display_name: string;
   firmware_version: string | null;
   id: Generated<string>;
+  last_periodic_maintenance_at: Timestamp | null;
+  last_periodic_reminder_for: Timestamp | null;
   last_seen_at: Timestamp | null;
   location_id: string;
+  next_periodic_maintenance_at: Timestamp | null;
   /**
    * Trục chế độ, do người vận hành đặt (FR-MCH-09, FR-MNT-05/12). Độc lập với status. DRAINING (ADR-0015): đã yêu cầu bảo trì, không nhận đơn mới nhưng phục vụ nốt đơn đã trả tiền, rồi tự sang MAINTENANCE; chỉ tồn tại ở backend — thiết bị vẫn nhận chế độ NORMAL.
    */
   operating_mode: Generated<MachineOperatingMode>;
+  periodic_maintenance_interval_days: Generated<number>;
+  periodic_maintenance_staff_id: string | null;
   serial_number: string;
   simulator_enabled: Generated<boolean>;
   /**

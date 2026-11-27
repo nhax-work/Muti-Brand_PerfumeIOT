@@ -14,6 +14,7 @@ import {
 import type { MachineConnectionStatus, MachineOperatingMode } from '@scentstation/contracts';
 import { RequireRole } from '@/app/guards/RequireRole';
 import { useAuth } from '@/shared/auth';
+import { useMachineSalesStops } from '@/app/layouts/status-api';
 import { useI18n } from '@/shared/i18n';
 import { useLocations, useMachines, type Location, type Machine } from './api';
 import { getMachineColumns } from './columns';
@@ -78,26 +79,40 @@ export default function MachinesPage() {
     );
   }, [machinesData, searchTerm]);
 
+  const { data: salesStopsRes } = useMachineSalesStops(true);
+  const refillMachineIds = useMemo(
+    () =>
+      new Set(
+        (salesStopsRes?.items ?? [])
+          .filter((s) => s.reason === 'REFILL_SESSION')
+          .map((s) => s.machineId),
+      ),
+    [salesStopsRes],
+  );
+
   // Thống kê nhanh tổng quan
   const stats = useMemo(() => {
     const items = machinesData?.items ?? [];
     const total = machinesData?.meta?.total ?? items.length;
     const online = items.filter((m) => m.status === 'ONLINE').length;
-    const normal = items.filter((m) => m.operatingMode === 'NORMAL').length;
+    const normal = items.filter(
+      (m) => m.operatingMode === 'NORMAL' && !refillMachineIds.has(m.id),
+    ).length;
     const totalSlots = items.reduce((acc, m) => acc + (m.slotCount ?? 0), 0);
     return { total, online, normal, totalSlots };
-  }, [machinesData]);
+  }, [machinesData, refillMachineIds]);
 
   const columns = useMemo(
     () =>
       getMachineColumns({
         t,
         locationsMap,
+        refillMachineIds,
         onViewDetail: (machine: Machine) => {
           void navigate(`/machines/${machine.id}`);
         },
       }),
-    [t, locationsMap, navigate],
+    [t, locationsMap, refillMachineIds, navigate],
   );
 
   const handleResetFilters = () => {

@@ -9,6 +9,9 @@ export const mnt = {
   postTestIncomplete:
     'Máy còn phiếu bảo trì chưa hoàn tất checklist sau bảo trì (yêu cầu PASS để trở lại NORMAL)',
   ticketClosed: 'Phiếu bảo trì đã đóng',
+  evidenceFileRequired: 'Vui lòng chọn tệp ảnh bằng chứng',
+  evidenceFileTooLarge: 'Kích thước ảnh bằng chứng vượt quá giới hạn cho phép',
+  evidenceUnsupported: 'Định dạng ảnh bằng chứng không được hỗ trợ (chỉ nhận JPEG, PNG, WebP)',
   // ADR-0029: phân công phiếu bảo trì
   ticketAssignedSubject: 'Bạn được giao phiếu bảo trì {ticket}',
   ticketAssignedContent:

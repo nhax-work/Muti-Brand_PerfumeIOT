@@ -672,6 +672,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/machines/{id}/periodic-maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Cấu hình bảo trì định kỳ cho máy
+         * @description Gán nhân viên bảo trì định kỳ cố định, chu kỳ (ngày) và mốc bảo trì tiếp theo.
+         */
+        put: operations["setMachinePeriodicMaintenance"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/machines/{id}/mode": {
         parameters: {
             query?: never;
@@ -3426,6 +3448,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/maintenance-tickets/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mở phiếu bảo trì tại máy
+         * @description Chuyển phiếu sang IN_PROGRESS và đưa máy sang chế độ MAINTENANCE.
+         */
+        post: operations["startMaintenanceTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/maintenance-tickets/{id}/evidence": {
+        parameters: {
+            query?: {
+                notes?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tải lên ảnh bằng chứng bảo trì
+         * @description Tải lên ảnh bằng chứng hoàn thành/xử lý bảo trì (multipart field `file`).
+         */
+        post: operations["uploadMaintenanceEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/maintenance-tickets/{id}/activities": {
         parameters: {
             query?: never;
@@ -4179,6 +4247,13 @@ export interface components {
             drainingOrdersCount?: number;
             /** @description Nhãn camera an ninh quay máy này (FR-MCH-20, ADR-0032). */
             cameraLabel?: string | null;
+            /** Format: uuid */
+            periodicMaintenanceStaffId?: string | null;
+            periodicMaintenanceIntervalDays?: number;
+            /** Format: date-time */
+            nextPeriodicMaintenanceAt?: string | null;
+            /** Format: date-time */
+            lastPeriodicMaintenanceAt?: string | null;
         };
         MachineCreate: {
             /** Format: uuid */
@@ -5686,6 +5761,13 @@ export interface components {
             /** @description null hoặc chuỗi rỗng = xóa nhãn. */
             cameraLabel: string | null;
         };
+        PeriodicMaintenanceUpdate: {
+            /** Format: uuid */
+            staffId: string | null;
+            intervalDays: number;
+            /** Format: date-time */
+            nextDueAt?: string | null;
+        };
         RefundAccountView: {
             bankBin: string;
             accountNumber: string;
@@ -5919,6 +6001,11 @@ export interface components {
             fromStatus?: components["schemas"]["TicketStatus"] | null;
             toStatus?: components["schemas"]["TicketStatus"] | null;
             notes?: string | null;
+            attachments?: {
+                url: string;
+                contentType?: string;
+                uploadedAt?: string;
+            }[] | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -7215,6 +7302,35 @@ export interface operations {
         };
         responses: {
             /** @description Đã ghi nhãn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Machine"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setMachinePeriodicMaintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeriodicMaintenanceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Đã cập nhật lịch bảo trì định kỳ */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -11191,6 +11307,64 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    startMaintenanceTicket: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Đã mở phiếu bảo trì */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceTicket"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    uploadMaintenanceEvidence: {
+        parameters: {
+            query?: {
+                notes?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["idPath"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Đã tải lên ảnh bằng chứng */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaintenanceActivity"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listMaintenanceActivities: {
